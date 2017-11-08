@@ -1179,7 +1179,7 @@ Possible extra rowspan handling
 </style>
   <meta content="Bikeshed version 67155cabad72a8ab669a7d4421c90e2999a29b68" name="generator">
   <link href="https://cor3ntin.github.io/CPPProposals/unified_concept_declaration_syntax/concepts.html" rel="canonical">
-  <meta content="d994b4e5e2b8180ab2c709d984babd02fa343fc7" name="document-revision">
+  <meta content="324952cda07fb875a9eb4534075faec113e8ed1b" name="document-revision">
 <style>
 
 .table1-decls table {
@@ -1471,7 +1471,12 @@ pre .property::before, pre .property::after {
        </ol>
      </ol>
     <li><a href="#multiple-parameters-constrained-by-the-same-concept"><span class="secno">3</span> <span class="content">Multiple Parameters constrained by the same concept</span></a>
-    <li><a href="#auto-in-template-function-and-template-parameters"><span class="secno">4</span> <span class="content"><code class="highlight"><span class="k">auto</span></code> in template function and template parameters</span></a>
+    <li>
+     <a href="#on-whether-auto-should-be-optional"><span class="secno">4</span> <span class="content">On whether <code class="highlight"><span class="k">auto</span></code> should be optional.</span></a>
+     <ol class="toc">
+      <li><a href="#auto-in-functions"><span class="secno">4.1</span> <span class="content">As the type of a callable template parameter ( <code class="highlight"><span class="k">auto</span></code> means generic )</span></a>
+      <li><a href="#as-the-type-of-a-return-type-or-variable-declaration-auto-means-inferred"><span class="secno">4.2</span> <span class="content">As the type of a return type or variable declaration ( <code class="highlight"><span class="k">auto</span></code> means inferred )</span></a>
+     </ol>
     <li><a href="#acknowledgments-and-thanks"><span class="secno">5</span> <span class="content">Acknowledgments and Thanks</span></a>
     <li>
      <a href="#references"><span class="secno"></span> <span class="content">References</span></a>
@@ -1547,18 +1552,18 @@ consistent with lambdas and for the sake of being terse, the declaration of <cod
 function is in fact a function template.</p>
    <p><code class="highlight"><span class="k">template</span><span class="o">&lt;</span><span class="p">...</span><span class="o">></span> <span class="kt">void</span> <span class="n">f</span><span class="p">(</span><span class="k">auto</span> <span class="n">a</span><span class="p">)</span></code> (as proposed by P0587r0) does not offer any
 extra information to the user of the function ( nor the compiler ).</p>
-   <p>There is a wording inconsistency between <code class="highlight"><span class="n">function</span> <span class="k">template</span></code> and <code class="highlight"><span class="n">generic</span> <span class="n">lambda</span></code>. That may need to be addressed. I would suggest that <code class="highlight"><span class="n">lambda</span> <span class="k">template</span></code> would be a more accurate and consistent description</p>
+   <p>There is a wording inconsistency between <code class="highlight"><span class="n">function</span> <span class="k">template</span></code> and <code class="highlight"><span class="n">generic</span> <span class="n">lambda</span></code>. That may need to be addressed. I would suggest that <code class="highlight"><span class="n">lambda</span> <span class="k">template</span></code> would be a more accurate and consistent wording.</p>
    <h3 class="heading settled" data-level="2.2" id="consistent-use-of-auto-and-typename"><span class="secno">2.2. </span><span class="content">Consistent use of auto and typename</span><a class="self-link" href="#consistent-use-of-auto-and-typename"></a></h3>
    <ul>
     <li data-md="">
      <p>As it is already the case, <code class="highlight"><span class="k">typename</span></code> is a placeholder for a type, while <code class="highlight"><span class="k">auto</span></code> is the placeholder of a value of an inferred type. This behaviour
  should remain consistent.</p>
     <li data-md="">
-     <p>Moreover, <code class="highlight"><span class="k">typename</span></code> or <code class="highlight"><span class="k">auto</span></code> should <em>always</em> be usable, even in the
+     <p>Moreover, <code class="highlight"><span class="k">typename</span></code> or <code class="highlight"><span class="k">auto</span></code> should <em>always</em> be usable where they are usable today, even in the
 presence of a concept declaration.</p>
    </ul>
    <p>However they are not required in a template parameter declaration. For
-example, <code class="highlight"><span class="n">Even</span> <span class="n">T</span></code> and <code class="highlight"><span class="n">Even</span> <span class="k">auto</span> <span class="n">T</span></code> are unambigous declarations and the latter
+example, <code class="highlight"><span class="n">Even</span> <span class="n">T</span></code> and <code class="highlight"><span class="n">Even</span> <span class="k">auto</span> <span class="n">T</span></code> are unambiguous declarations and the latter
 can be deduced from the former. Therefore, both declaration are
 well-formed.
 It is important to note that a given concept can not be applied to both a type
@@ -1573,26 +1578,33 @@ equivalent declarations</p>
      <p><code class="highlight"><span class="k">template</span> <span class="o">&lt;</span><span class="n">Even</span> <span class="k">auto</span> <span class="n">T</span><span class="o">></span></code> and <code class="highlight"><span class="k">template</span> <span class="o">&lt;</span><span class="n">Even</span> <span class="n">T</span><span class="o">></span></code> are both valid,
 equivalent declarations</p>
     <li data-md="">
-     <p><code class="highlight"><span class="k">template</span> <span class="o">&lt;</span><span class="n">Even</span> <span class="kt">int</span> <span class="n">T</span><span class="o">></span></code> can be used in the same fashion to restrict a
-literal on its value while specifying its type.</p>
+     <p><code class="highlight"><span class="k">template</span> <span class="o">&lt;</span><span class="n">Even</span> <span class="kt">int</span> <span class="n">N</span><span class="o">></span></code> can be used in the same fashion to restrict a
+literal on its value while specifying its type.  In this context <code class="highlight"><span class="kt">int</span></code> can be thought of as a
+constraint on the type the value <code class="highlight"><span class="n">N</span></code> can have.</p>
    </ul>
    <h3 class="heading settled" data-level="2.3" id="allow-multiple-constraints-for-each-type"><span class="secno">2.3. </span><span class="content">Allow Multiple constraints for each type</span><a class="self-link" href="#allow-multiple-constraints-for-each-type"></a></h3>
    <ul>
     <li data-md="">
-     <p>As proposed by both <a data-link-type="biblio" href="#biblio-p0807r0">[p0807r0]</a> and <a data-link-type="biblio" href="#biblio-p0791r0">[p0791r0]</a>, a declaration can have multiple
-constraints</p>
+     <p>As proposed by both <a data-link-type="biblio" href="#biblio-p0807r0">[p0807r0]</a> and <a data-link-type="biblio" href="#biblio-p0791r0">[p0791r0]</a>, a declaration can be constrained by multiple
+concepts in conjunction, such that the following declarations are semantically equivalent.</p>
    </ul>
+   <p>A template instantiation must satisfy each and every constrained to be well-formed.</p>
    <p>For example:</p>
    <ul>
     <li data-md="">
-     <p><code class="highlight"><span class="k">template</span> <span class="o">&lt;</span><span class="n">CopyConstructible</span> <span class="n">MoveConstructible</span> <span class="n">Foo</span><span class="o">></span></code></p>
+     <p><code class="highlight"><span class="k">template</span> <span class="o">&lt;</span><span class="n">C1</span> <span class="n">C2</span> <span class="n">Foo</span><span class="o">></span></code> and <code class="highlight"><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">Foo</span><span class="o">></span> <span class="n">requires</span> <span class="n">C1</span><span class="o">&lt;</span><span class="n">T</span><span class="o">></span> <span class="o">&amp;&amp;</span> <span class="n">C2</span><span class="o">&lt;</span><span class="n">T</span><span class="o">></span></code> are semantically
+equivalent.</p>
    </ul>
-   <p>A template instantiation must satisfy each and every constrained to be
-well-formed.</p>
-   <p><a data-link-type="biblio" href="#biblio-p0791r0">[p0791r0]</a> further suggests to allow passing concepts as parameters to template to
-compose various logic construct to check a concept, in addition to the require
-clause. However this is a separate issue that probably needs its own paper, as
-it is an orthogonal consideration.</p>
+   <p><a data-link-type="biblio" href="#biblio-p0791r0">[p0791r0]</a> further suggests to allow passing concepts as parameters to templates in order to
+compose various logic constructs, in addition to the existing <code class="highlight"><span class="n">requires</span></code> clause. However this is a
+separate issue that probably needs its own paper, as it is an orthogonal consideration.</p>
+   <p>I don’t think however that allowing complex concept-based logic constructs in abbreviated function
+templates or variable declarations would lead to more readable code.</p>
+   <p>Consider <code class="highlight"><span class="n">Iterable</span> <span class="o">!</span><span class="n">ForwardIterable</span> <span class="k">auto</span> <span class="n">f</span><span class="p">(</span><span class="n">Movable</span><span class="o">&amp;&amp;</span><span class="p">(</span><span class="n">CopyConstructible</span><span class="o">||</span><span class="n">Swappable</span><span class="p">)</span> <span class="n">foo</span><span class="p">);</span></code></p>
+   <p>I would argue that this declaration is <em>less</em> readable. The terse, "abbreviated function
+template" form should handle simple cases. If a type needs to be constrained on complex
+requirements, then it is certainly better to either introduce a new concept for these specific
+requirements or to write a proper requires-clause.</p>
    <h3 class="heading settled" data-level="2.4" id="allow-use-of-concepts-consistently-and-uniformly"><span class="secno">2.4. </span><span class="content">Allow use of concepts consistently and uniformly.</span><a class="self-link" href="#allow-use-of-concepts-consistently-and-uniformly"></a></h3>
    <h4 class="heading settled" data-level="2.4.1" id="function-parameters"><span class="secno">2.4.1. </span><span class="content">Function parameters</span><a class="self-link" href="#function-parameters"></a></h4>
    <p>Of course, template functions and lambdas can be constrained.</p>
@@ -1605,26 +1617,26 @@ constrained parameter</p>
 constrained parameter</p>
    </ul>
    <p>In both function templates and lambda templates, the keyword auto is required to denote that the
-callable entity is a template and will need to be instanciated. This is explained more further
-in : <a href="#auto-in-template-function-and-template-parameters">§4 auto in template function and template parameters</a>.</p>
+callable entity is a template and will need to be instantiated. This is explained more further
+in : <a href="#auto-in-functions">§4.1 As the type of a callable template parameter ( auto means generic )</a> .</p>
    <h4 class="heading settled" data-level="2.4.2" id="function-return-type"><span class="secno">2.4.2. </span><span class="content">Function return type</span><a class="self-link" href="#function-return-type"></a></h4>
-   <p>The 4 following declaration declare a non-template function with an
+   <p>The following declaration declare a non-template function with an
 automatically deduced type which satisfies the <code class="highlight"><span class="n">Sortable</span></code> constraint:</p>
    <ul>
     <li data-md="">
      <p><code class="highlight"><span class="n">Sortable</span> <span class="k">auto</span> <span class="nf">f</span><span class="p">();</span></code></p>
     <li data-md="">
-     <p><code class="highlight"><span class="k">auto</span> <span class="nf">f</span><span class="p">()</span> <span class="o">-></span> <span class="n">Sortable</span> <span class="k">auto</span><span class="p">;</span></code></p>
+     <p><code class="highlight"><span class="n">Sortable</span> <span class="k">auto</span> <span class="nf">f</span><span class="p">();</span></code></p>
     <li data-md="">
-     <p><code class="highlight"><span class="n">Sortable</span> <span class="nf">f</span><span class="p">();</span></code></p>
+     <p><code class="highlight"><span class="k">auto</span> <span class="nf">f</span><span class="p">()</span> <span class="o">-></span> <span class="n">Sortable</span> <span class="k">auto</span><span class="p">;</span></code></p>
     <li data-md="">
      <p><code class="highlight"><span class="k">auto</span> <span class="nf">f</span><span class="p">()</span> <span class="o">-></span> <span class="n">Sortable</span><span class="p">;</span></code></p>
    </ul>
-   <p>This is a function with a deduced return type, therefore <code class="highlight"><span class="k">auto</span></code> in the type of
-the return type is not necessary, but it is allowed, there again for
-consistency’s sake.</p>
    <p>A program is ill-formed if the deduced type of the function does not satisfies
-one of the constraints declared in the return type.</p>
+one of the constraints declared in the return type.
+For the sake of sanity, specifying different concepts in both the return type and the trailing
+return type should be ill-formed.</p>
+   <p><code class="highlight"><span class="n">Sortable</span> <span class="k">auto</span> <span class="nf">f</span><span class="p">()</span> <span class="o">-></span> <span class="n">Iterable</span> <span class="k">auto</span> <span class="p">{};</span> <span class="c1">// ill-formed</span></code></p>
    <h4 class="heading settled" data-level="2.4.3" id="variable-declaration"><span class="secno">2.4.3. </span><span class="content">Variable declaration</span><a class="self-link" href="#variable-declaration"></a></h4>
    <p>Constraints can be used to refine the type of a variable declaration.</p>
    <ul>
@@ -1641,17 +1653,16 @@ one of the constraints declared in the return type.</p>
    <p>As a generalization, and maybe as a mean to generate better diagnostic, I
 propose that constraints can be applied to non-template or instantiated type.
 It would serve as a sort of static_assert ensuring that a type keeps the
-proprieties the user is expecting.</p>
+properties the user is expecting.</p>
    <ul>
     <li data-md="">
      <p><code class="highlight"><span class="n">Iterable</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span></code></p>
    </ul>
    <h5 class="heading settled" data-level="2.4.3.1" id="a-note-on-usage-of-concepts-constraints-in-non-template-context"><span class="secno">2.4.3.1. </span><span class="content">A note on usage of concepts constraints in non-template context.</span><a class="self-link" href="#a-note-on-usage-of-concepts-constraints-in-non-template-context"></a></h5>
    <p><code class="highlight"><span class="n">Iterable</span> <span class="n">vector</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">></span></code> mays seems odd in first approach, but, it’s a nice way
-to ensure that library and client code remain compatible, and to easily
-diagnostic what may have been modified and what why the type change its
-property.</p>
-   <p>It also provide documentation about what the type is going to be used for.</p>
+to ensure that library and client code remain compatible, and to easily diagnostic what may have
+been modified and what why the type’s expected properties changed.</p>
+   <p>It also provides documentation about what the type is going to be used for.</p>
    <p>And most importantly, it allow to generalize the notion of constraint and make
 it consistent through the language.</p>
    <p>Specifying concepts that a concrete type is expected to satisfy is not
@@ -1681,16 +1692,17 @@ definition of a template, instead of in addition to <code class="highlight"><spa
    <p>Of course, <code class="highlight"><span class="k">typename</span></code> is a valid optional extra token, meaning the following
 construct is valid too. Note that we refer to the type <code class="highlight"><span class="n">T</span><span class="o">::</span><span class="n">Bar</span></code> and not to an
 instance of <code class="highlight"><span class="n">T</span><span class="o">::</span><span class="n">Bar</span></code>, so the valid token is <code class="highlight"><span class="k">typename</span></code> and not <code class="highlight"><span class="k">auto</span></code>.</p>
-   <p>The program is ill-formed if the dependant type does not respect the
-constraint(s).
-We can, and probably should, convey the same requirements in a requires-clause.
-A constraint that cannot be satisfied in the body of a template
-instantiation causes the program to be ill-formed, SFINAE is not engaged.</p>
 <pre class="highlight"><span class="k">template</span> <typename t="">
 <span class="k">auto</span> <span class="k">constexpr</span> <span class="nf">f</span><span class="p">(</span><span class="n">T</span> <span class="n">t</span><span class="p">)</span> <span class="p">{</span>
     <span class="k">return</span> <span class="n">Unsigned</span> <span class="k">typename</span> <span class="n">T</span><span class="o">::</span><span class="n">Bar</span><span class="p">(</span><span class="mi">42</span><span class="p">);</span>
 <span class="p">}</span>
 </typename></pre>
+   <p>Both these declarations have identical semantics <code class="highlight"><span class="k">using</span> <span class="n">Foo</span> <span class="o">=</span> <span class="n">Unsigned</span> <span class="k">typename</span> <span class="n">T</span><span class="o">::</span><span class="n">Bar</span></code> <code class="highlight"><span class="k">using</span> <span class="n">Foo</span> <span class="o">=</span> <span class="n">Unsigned</span> <span class="n">T</span><span class="o">::</span><span class="n">Bar</span></code></p>
+   <p>The program is ill-formed if the dependant type does not respect the
+constraint(s).
+We can, and probably should, convey the same requirements in a requires-clause.
+A constraint that cannot be satisfied in the body of a template
+instantiation causes the program to be ill-formed, SFINAE is not engaged.</p>
    <h4 class="heading settled" data-level="2.4.5" id="type-id-alias-declarations"><span class="secno">2.4.5. </span><span class="content">type-id alias declarations</span><a class="self-link" href="#type-id-alias-declarations"></a></h4>
    <p>Allow the use of Constraints in using directives, in the same manner:</p>
    <p><code class="highlight"><span class="k">using</span> <span class="n">CopyConstructible</span> <span class="n">Foo</span> <span class="o">=</span> <span class="n">Bar</span><span class="p">;</span></code></p>
@@ -1698,15 +1710,16 @@ instantiation causes the program to be ill-formed, SFINAE is not engaged.</p>
    <p>The program is ill-formed if the constraints can not be satisfied.</p>
    <p>Additionally, it may be interesting to constraints parameters of template
 using-directives</p>
-   <p><code class="highlight"><span class="k">template</span><span class="o">&lt;</span><span class="n">Serializable</span> <span class="n">T</span><span class="o">></span> <span class="k">using</span> <span class="n">Stream</span><span class="o">&lt;</span><span class="n">T</span><span class="o">></span><span class="p">;</span></code></p>
+   <p><code class="highlight"><span class="k">template</span><span class="o">&lt;</span><span class="n">Serializable</span> <span class="n">T</span><span class="o">></span> <span class="k">using</span> <span class="n">Stream</span><span class="o">&lt;</span><span class="n">T</span><span class="o">></span> <span class="o">=</span> <span class="n">Iterable</span><span class="o">&lt;</span><span class="n">T</span><span class="o">></span><span class="p">;</span></code></p>
+   <p>Here, the <code class="highlight"><span class="n">Stream</span></code> type can only be specialized using types that satisfy the <code class="highlight"><span class="n">Serializable</span></code> constraint.</p>
    <h4 class="heading settled" data-level="2.4.6" id="dont-allow-constraints-everywhere"><span class="secno">2.4.6. </span><span class="content">Don’t allow Constraints everywhere</span><a class="self-link" href="#dont-allow-constraints-everywhere"></a></h4>
    <p>There is a number of places where allowing concepts in front of a type would
 either make no sense or be actually harmful.</p>
    <ul>
     <li data-md="">
-     <p>sizeof and cast expression : It probably don’t make a lot of sense</p>
+     <p>sizeof and cast expression : It doesn’t make a lot of sense</p>
     <li data-md="">
-     <p>class/struct/union/enum definition.</p>
+     <p>class/struct/union/enum definition</p>
    </ul>
    <h3 class="heading settled" data-level="2.5" id="grammar"><span class="secno">2.5. </span><span class="content">Grammar</span><a class="self-link" href="#grammar"></a></h3>
    <p>In the situations illustrated above, the type-id can be preceded by one or more
@@ -1715,9 +1728,9 @@ The sequence of concept-names and type form the entities to which attributes,
 and qualifiers are applied.</p>
 <pre class="highlight"><span class="n">Swappable</span> <span class="n">Sortable</span> <span class="n">Writable</span> <span class="n">foo</span> <span class="o">=</span> <span class="p">{};</span>
 <span class="k">const</span> <span class="n">Swappable</span> <span class="n">Sortable</span> <span class="n">Writable</span> <span class="o">&amp;</span> <span class="n">foo</span> <span class="o">=</span> <span class="p">{};</span>
-<span class="k">volatile</span> <span class="n">Swappable</span> <span class="n">Sortable</span> <span class="n">Writable</span><span class="o">*</span> <span class="n">foo</span> <span class="o">=</span> <span class="p">{};</span>
-<span class="n">Swappable</span> <span class="n">Sortable</span> <span class="n">Writable</span><span class="o">*</span> <span class="k">const</span><span class="o">*</span> <span class="n">foo</span> <span class="o">=</span> <span class="p">{};</span>
-<span class="n">Swappable</span> <span class="n">Sortable</span> <span class="n">Writable</span> <span class="k">auto</span> <span class="o">&amp;&amp;</span> <span class="n">foo</span><span class="p">;</span>
+<span class="k">volatile</span> <span class="n">Swappable</span> <span class="n">Sortable</span> <span class="n">Writable</span> <span class="k">auto</span><span class="o">*</span> <span class="n">foo</span> <span class="o">=</span> <span class="p">{};</span>
+<span class="n">Swappable</span> <span class="n">Sortable</span> <span class="n">Writable</span> <span class="k">auto</span><span class="o">*</span> <span class="k">const</span><span class="o">*</span> <span class="n">foo</span> <span class="o">=</span> <span class="p">{};</span>
+<span class="n">Swappable</span> <span class="n">Sortable</span> <span class="n">Writable</span> <span class="o">&amp;&amp;</span> <span class="n">foo</span><span class="p">;</span>
 <span class="k">extern</span> <span class="n">std</span><span class="o">::</span><span class="n">EquallyComparable</span> <span class="n">boost</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">></span> <span class="n">baz</span><span class="p">;</span>
 </pre>
    <p><a data-link-type="biblio" href="#biblio-p0791r0">[p0791r0]</a> gives a good justification for this order, in that constraints are like adjectives
@@ -1736,18 +1749,17 @@ arguments beside the type of which we are checking the constraints.</p>
    <h4 class="heading settled" data-level="2.5.1" id="summary"><span class="secno">2.5.1. </span><span class="content">Summary</span><a class="self-link" href="#summary"></a></h4>
    <ul>
     <li data-md="">
-     <p>Variable declaration : <code class="highlight"><span class="p">[</span><span class="n">concept</span><span class="o">-</span><span class="n">name</span><span class="p">]</span><span class="o">*</span> <span class="n">type</span><span class="o">-</span><span class="n">id</span><span class="o">|</span><span class="p">[</span><span class="k">auto</span><span class="p">]</span><span class="o">|</span><span class="k">decltype</span><span class="o">-</span><span class="n">expression</span></code></p>
+     <p>Variable declaration : <code class="highlight"><span class="p">[</span><span class="n">concept</span><span class="o">-</span><span class="n">name</span><span class="p">]</span><span class="o">*</span> <span class="n">type</span><span class="o">-</span><span class="n">id</span><span class="o">|</span><span class="k">auto</span><span class="o">|</span><span class="k">decltype</span><span class="o">-</span><span class="n">expression</span></code></p>
     <li data-md="">
-     <p>Function and lambda parameters  : <code class="highlight"><span class="p">[</span><span class="n">concept</span><span class="o">-</span><span class="n">name</span><span class="p">]</span><span class="o">*</span> <span class="n">type</span><span class="o">-</span><span class="n">id</span><span class="o">|</span><span class="p">[</span><span class="k">auto</span><span class="p">]</span><span class="o">|</span><span class="k">decltype</span><span class="o">-</span><span class="n">expression</span></code></p>
+     <p>Function and lambda parameters  : <code class="highlight"><span class="p">[</span><span class="n">concept</span><span class="o">-</span><span class="n">name</span><span class="p">]</span><span class="o">*</span> <span class="n">type</span><span class="o">-</span><span class="n">id</span><span class="o">|</span><span class="k">auto</span><span class="o">|</span><span class="k">decltype</span><span class="o">-</span><span class="n">expression</span></code></p>
     <li data-md="">
      <p>Function and lambda return type : <code class="highlight"><span class="p">[</span><span class="n">concept</span><span class="o">-</span><span class="n">name</span><span class="p">]</span><span class="o">*</span> <span class="n">type</span><span class="o">-</span><span class="n">id</span><span class="o">|</span><span class="p">[</span><span class="k">auto</span><span class="p">]</span><span class="o">|</span><span class="k">decltype</span><span class="o">-</span><span class="n">expression</span></code></p>
     <li data-md="">
-     <p>Template parameter ( including variables, function,
-lambdas...): <code class="highlight"><span class="p">[</span><span class="n">concept</span><span class="o">-</span><span class="n">name</span><span class="p">]</span><span class="o">*</span> <span class="p">[</span><span class="k">typename</span><span class="o">|</span><span class="k">auto</span><span class="p">]</span><span class="o">|</span><span class="n">literal</span> <span class="n">type</span><span class="o">-</span><span class="n">id</span> <span class="n">name</span></code></p>
+     <p>Template parameter: <code class="highlight"><span class="p">[</span><span class="n">concept</span><span class="o">-</span><span class="n">name</span><span class="p">]</span><span class="o">*</span> <span class="p">[</span><span class="k">typename</span><span class="o">|</span><span class="k">auto</span><span class="p">]</span><span class="o">|</span><span class="n">literal</span><span class="o">-</span><span class="n">type</span><span class="o">-</span><span class="n">id</span> <span class="n">name</span></code></p>
     <li data-md="">
      <p>Alias declaration : <code class="highlight"><span class="k">using</span> <span class="p">[</span><span class="n">concept</span><span class="o">-</span><span class="n">name</span><span class="p">]</span><span class="o">*</span> <span class="n">name</span> <span class="o">=</span> <span class="cm">/*...*/</span><span class="p">;</span></code></p>
     <li data-md="">
-     <p>Desambiguation in template definition : <code class="highlight"><span class="p">[</span><span class="n">concept</span><span class="o">-</span><span class="n">name</span><span class="p">]</span><span class="o">*</span> <span class="p">[</span><span class="k">typename</span><span class="p">]</span> <span class="o">=</span> <span class="cm">/*...*/</span><span class="p">;</span></code></p>
+     <p>Disambiguation in template definition : <code class="highlight"><span class="p">[</span><span class="n">concept</span><span class="o">-</span><span class="n">name</span><span class="p">]</span><span class="o">*</span> <span class="p">[</span><span class="k">typename</span><span class="p">]</span> <span class="o">=</span> <span class="cm">/*...*/</span><span class="p">;</span></code></p>
    </ul>
    <h2 class="heading settled" data-level="3" id="multiple-parameters-constrained-by-the-same-concept"><span class="secno">3. </span><span class="content">Multiple Parameters constrained by the same concept</span><a class="self-link" href="#multiple-parameters-constrained-by-the-same-concept"></a></h2>
    <p>The meaning of <code class="highlight"><span class="kt">void</span> <span class="n">foo</span><span class="p">(</span><span class="n">ConceptName</span> <span class="k">auto</span><span class="p">,</span> <span class="n">ConceptName</span> <span class="k">auto</span><span class="p">)</span></code> has been the
@@ -1763,7 +1775,7 @@ In fact, the Ranges TS provides a similar utility called <code class="highlight"
 <span class="n">concept</span> <span class="kt">bool</span> <span class="n">SameType</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">is_same_v</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">decay_t</span><span class="o">&lt;</span><span class="n">U</span><span class="o">></span><span class="p">,</span> <span class="n">std</span><span class="o">::</span><span class="n">decay_t</span><span class="o">&lt;</span><span class="n">T</span><span class="o">>></span><span class="p">;</span>
 
 <span class="c1">//</span>
-<span class="c1"></span><span class="kt">void</span> <span class="nf">f</span><span class="p">(</span><span class="n">Concept</span> <span class="k">auto</span> <span class="n">a</span><span class="p">,</span> <span class="n">SameType</span><span class="o">&lt;</span><span class="k">decltype</span><span class="p">(</span><span class="n">a</span><span class="p">)</span><span class="o">></span> <span class="n">b</span><span class="p">);</span>
+<span class="c1"></span><span class="kt">void</span> <span class="nf">f</span><span class="p">(</span><span class="n">Concept</span> <span class="k">auto</span> <span class="n">a</span><span class="p">,</span> <span class="n">SameType</span><span class="o">&lt;</span><span class="k">decltype</span><span class="p">(</span><span class="n">a</span><span class="p">)</span><span class="o">></span> <span class="k">auto</span> <span class="n">b</span><span class="p">);</span>
 </pre>
    <p>This syntax makes it clear that we want identic types and is, in fact, self documenting.</p>
    <p>Finally, all of these reasons aside, we described how constraints could be used outside of template
@@ -1772,21 +1784,41 @@ functions parameters were to be treated differently that would create inconsiste
 ultimately lead to confusion and bugs.</p>
    <p>Beside, if the "same type" semantic is used, it won’t be easy, or even possible to express that the
 function allow different parameter types.</p>
-   <h2 class="heading settled" data-level="4" id="auto-in-template-function-and-template-parameters"><span class="secno">4. </span><span class="content"><code class="highlight"><span class="k">auto</span></code> in template function and template parameters</span><a class="self-link" href="#auto-in-template-function-and-template-parameters"></a></h2>
+   <h2 class="heading settled" data-level="4" id="on-whether-auto-should-be-optional"><span class="secno">4. </span><span class="content">On whether <code class="highlight"><span class="k">auto</span></code> should be optional.</span><a class="self-link" href="#on-whether-auto-should-be-optional"></a></h2>
    <p>As described above, in functions ( and lambdas ) parameters templates are
-introduced by the <code class="highlight"><span class="k">auto</span></code> keyword.
-When in presence of one or more concepts names, <code class="highlight"><span class="k">auto</span></code> is not strictly
-necessary.</p>
-   <p>However people expressed a strong desire to differentiate function template
-from regular non-template functions, I will therefore not attempt to convince
-that auto should be optional is such context.</p>
-   <p>I feel like <code class="highlight"><span class="kt">void</span><span class="p">(</span><span class="n">ConceptName</span> <span class="k">auto</span> <span class="n">foo</span><span class="p">);</span></code> is a terse enough syntax.
-Moreover, making <code class="highlight"><span class="k">auto</span></code> optional in a future iteration would not be a breaking
-change.</p>
-   <p>That means that when preceded by a concept-name, <code class="highlight"><span class="k">auto</span></code> is required when it means
-"template/generic" and optional when it means "inferred".</p>
+introduced by the <code class="highlight"><span class="k">auto</span></code> keyword. <code class="highlight"><span class="k">auto</span></code> also lets the compiler infer the type of a declaration
+or a function return type.</p>
+   <p>When in presence of one or more concepts names, <code class="highlight"><span class="k">auto</span></code> is not necessary in that it does not add any
+semantically significant information for the statement/expression to be parsed correctly and
+unambiguously.</p>
+   <p><code class="highlight"><span class="k">auto</span></code> may either signify generic/template parameter or deduced/inferred type depending on the
+context. The two scenarios should be analysed separately.</p>
+   <h3 class="heading settled" data-level="4.1" id="auto-in-functions"><span class="secno">4.1. </span><span class="content">As the type of a callable template parameter ( <code class="highlight"><span class="k">auto</span></code> means generic )</span><a class="self-link" href="#auto-in-functions"></a></h3>
+   <p>People expressed a strong desire to differentiate function templates from regular non-template
+functions. One of the reasons is that functions and functions templates don’t behave identically.</p>
+   <p>This argument lead to the abbreviated functions being removed from the current Concept TS <a data-link-type="biblio" href="#biblio-p0696r1">[P0696R1]</a>.</p>
+   <p>Given these concerns, it’s reasonable to expect <code class="highlight"><span class="k">auto</span></code> <em>not</em> to be optional in the declaration of
+a function template parameter.</p>
+   <p><code class="highlight"><span class="kt">void</span> <span class="nf">f</span><span class="p">(</span><span class="n">ConceptName</span> <span class="k">auto</span> <span class="n">foo</span><span class="p">);</span></code> is a terse enough syntax, that conveys that <code class="highlight"><span class="n">f</span></code> is a function
+template and that <code class="highlight"><span class="n">foo</span></code> expect to satisfies a concept.</p>
+   <h3 class="heading settled" data-level="4.2" id="as-the-type-of-a-return-type-or-variable-declaration-auto-means-inferred"><span class="secno">4.2. </span><span class="content">As the type of a return type or variable declaration ( <code class="highlight"><span class="k">auto</span></code> means inferred )</span><a class="self-link" href="#as-the-type-of-a-return-type-or-variable-declaration-auto-means-inferred"></a></h3>
+   <p>Consider <code class="highlight"><span class="n">ConceptName</span> <span class="k">auto</span> <span class="n">foo</span> <span class="o">=</span> <span class="cm">/*...*/</span><span class="p">;</span></code> and <code class="highlight"><span class="n">ConceptName</span> <span class="n">foo</span> <span class="o">=</span> <span class="cm">/*...*/</span><span class="p">;</span></code> Both statements are
+semantically identical as far as the compiler is concerned.</p>
+   <p>But, for the reader, they convey slightly different meanings.</p>
+   <p>In the first case, <code class="highlight"><span class="n">ConceptName</span> <span class="k">auto</span> <span class="n">foo</span> <span class="o">=</span> <span class="cm">/*...*/</span><span class="p">;</span></code> , our attention is attracted to the fact that
+the type of <code class="highlight"><span class="n">foo</span></code> is inferred from the RHS expression, and we should probably be mindful of what
+that expression’s type is.</p>
+   <p>In the second case <code class="highlight"><span class="n">ConceptName</span> <span class="n">foo</span> <span class="o">=</span> <span class="cm">/*...*/</span><span class="p">;</span></code> however, what matters is that <code class="highlight"><span class="n">foo</span></code> has the
+behaviour of <code class="highlight"><span class="n">ConceptName</span></code>.  Here <code class="highlight"><span class="n">ConceptName</span></code> is seen not as a constraint of the type of <code class="highlight"><span class="n">foo</span></code> but rather as a polymorphic type which exposes a known set of behaviours. The actual type of <code class="highlight"><span class="n">foo</span></code> does not matter. This is why there is no need in that scenario to distinguish concepts from
+concrete types, as they have the same expected properties.</p>
+   <p>A developer may wish to express either of these intents and so I think that both constructs should
+be well-formed, and therefore <code class="highlight"><span class="k">auto</span></code> should be optional when declaring a variable or return type.</p>
+   <p>It also make teaching either as both inference and concepts can be introduced independently of each
+other. Ultimately, some people may expect <code class="highlight"><span class="k">auto</span></code> to be required while some may not. Making it
+optional makes the language more intuitive for all.</p>
    <h2 class="heading settled" data-level="5" id="acknowledgments-and-thanks"><span class="secno">5. </span><span class="content">Acknowledgments and Thanks</span><a class="self-link" href="#acknowledgments-and-thanks"></a></h2>
-   <p>This proposal was inspired by Jakob Riedle’s <a data-link-type="biblio" href="#biblio-p0791r0">[p0791r0]</a> proposal.</p>
+   <p>This proposal was inspired by Jakob Riedle’s <a data-link-type="biblio" href="#biblio-p0791r0">[p0791r0]</a> proposal.
+Valuable feedbacks from Michael Caisse, Arthur O’Dwyer, Adi Shavit, Agustín Bergé, Simon Brand.</p>
   </main>
 <script>
 (function() {
@@ -1926,6 +1958,8 @@ change.</p>
    <dd>Tony Van Eerd, Botond Ballo. <a href="https://wg21.link/p0464r2">Revisiting the meaning of "foo(ConceptName,ConceptName)"</a>. URL: <a href="https://wg21.link/p0464r2">https://wg21.link/p0464r2</a>
    <dt id="biblio-p0587r0">[P0587r0]
    <dd>Richard Smith, James Dennett. <a href="https://wg21.link/p0587r0">Concepts TS revisited</a>. 5 February 2017. URL: <a href="https://wg21.link/p0587r0">https://wg21.link/p0587r0</a>
+   <dt id="biblio-p0696r1">[P0696R1]
+   <dd>Tom Honermann. <a href="https://wg21.link/p0696r1">Remove abbreviated functions and template-introduction syntax from the Concepts TS</a>. URL: <a href="https://wg21.link/p0696r1">https://wg21.link/p0696r1</a>
    <dt id="biblio-p0734r0">[P0734R0]
    <dd>Andrew Sutton. <a href="https://wg21.link/p0734r0">Wording Paper, C++ extensions for Concepts</a>. URL: <a href="https://wg21.link/p0734r0">https://wg21.link/p0734r0</a>
    <dt id="biblio-p0791r0">[P0791R0]

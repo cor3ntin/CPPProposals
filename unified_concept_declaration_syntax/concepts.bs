@@ -153,7 +153,7 @@ extra information to the user of the function ( nor the compiler ).
 
 There is a wording inconsistency between `function template` and `generic
 lambda`. That may need to be addressed. I would suggest that `lambda template`
-would be a more accurate and consistent description
+would be a more accurate and consistent wording.
 
 
 ## Consistent use of auto and typename
@@ -161,11 +161,11 @@ would be a more accurate and consistent description
  * As it is already the case, `typename` is a placeholder for a type, while
     `auto` is the placeholder of a value of an inferred type. This behaviour
      should remain consistent.
- * Moreover, `typename` or `auto` should *always* be usable, even in the
+ * Moreover, `typename` or `auto` should *always* be usable where they are usable today, even in the
     presence of a concept declaration.
 
 However they are not required in a template parameter declaration. For
-example, `Even T` and `Even auto T` are unambigous declarations and the latter
+example, `Even T` and `Even auto T` are unambiguous declarations and the latter
 can be deduced from the former. Therefore, both declaration are
 well-formed.
 It is important to note that a given concept can not be applied to both a type
@@ -178,27 +178,37 @@ Notably:
     equivalent declarations
  * `template <Even auto T>` and `template <Even T>` are both valid,
     equivalent declarations
- * `template <Even int T>` can be used in the same fashion to restrict a
-    literal on its value while specifying its type.
+ * `template <Even int N>` can be used in the same fashion to restrict a
+    literal on its value while specifying its type.  In this context `int` can be thought of as a
+    constraint on the type the value `N` can have.
 
 
 ## Allow Multiple constraints for each type
 
- * As proposed by both [[p0807r0]] and [[p0791r0]], a declaration can have multiple
-    constraints
+ * As proposed by both [[p0807r0]] and [[p0791r0]], a declaration can be constrained by multiple
+    concepts in conjunction, such that the following declarations are semantically equivalent.
+
+A template instantiation must satisfy each and every constrained to be well-formed.
 
 For example:
- * `template <CopyConstructible MoveConstructible Foo>`
+ * `template <C1 C2 Foo>` and `template <typename Foo> requires C1<T> && C2<T>` are semantically
+    equivalent.
 
 
-A template instantiation must satisfy each and every constrained to be
-well-formed.
 
+[[p0791r0]] further suggests to allow passing concepts as parameters to templates in order to
+compose various logic constructs, in addition to the existing `requires` clause. However this is a
+separate issue that probably needs its own paper, as it is an orthogonal consideration.
 
-[[p0791r0]] further suggests to allow passing concepts as parameters to template to
-compose various logic construct to check a concept, in addition to the require
-clause. However this is a separate issue that probably needs its own paper, as
-it is an orthogonal consideration.
+I don't think however that allowing complex concept-based logic constructs in abbreviated function
+templates or variable declarations would lead to more readable code.
+
+Consider `Iterable !ForwardIterable auto f(Movable&&(CopyConstructible||Swappable) foo);`
+
+I would argue that this declaration is *less* readable. The terse, "abbreviated function
+template" form should handle simple cases. If a type needs to be constrained on complex
+requirements, then it is certainly better to either introduce a new concept for these specific
+requirements or to write a proper requires-clause.
 
 
 
@@ -217,27 +227,25 @@ Of course, template functions and lambdas can be constrained.
 
 
 In both function templates and lambda templates, the keyword auto is required to denote that the
-callable entity is a template and will need to be instanciated. This is explained more further
-in : [[#auto-in-template-function-and-template-parameters]].
+callable entity is a template and will need to be instantiated. This is explained more further
+in : [[#auto-in-functions]] .
 
 
 ### Function return type
 
-
-The 4 following declaration declare a non-template function with an
+The following declaration declare a non-template function with an
 automatically deduced type which satisfies the `Sortable` constraint:
  * `Sortable auto f();`
+ * `Sortable auto f();`
  * `auto f() -> Sortable auto;`
- * `Sortable f();`
  * `auto f() -> Sortable;`
-
-This is a function with a deduced return type, therefore `auto` in the type of
-the return type is not necessary, but it is allowed, there again for
-consistency's sake.
 
 A program is ill-formed if the deduced type of the function does not satisfies
 one of the constraints declared in the return type.
+For the sake of sanity, specifying different concepts in both the return type and the trailing
+return type should be ill-formed.
 
+`Sortable auto f() -> Iterable auto {}; // ill-formed`
 
 ### Variable declaration
 
@@ -253,7 +261,7 @@ The program is ill-formed if one of the constraint is not satisfied.
 As a generalization, and maybe as a mean to generate better diagnostic, I
 propose that constraints can be applied to non-template or instantiated type.
 It would serve as a sort of static_assert ensuring that a type keeps the
-proprieties the user is expecting.
+properties the user is expecting.
 
  * `Iterable std::string`
 
@@ -262,11 +270,10 @@ proprieties the user is expecting.
 
 
 `Iterable vector<int>` mays seems odd in first approach, but, it's a nice way
-to ensure that library and client code remain compatible, and to easily
-diagnostic what may have been modified and what why the type change its
-property.
+to ensure that library and client code remain compatible, and to easily diagnostic what may have
+been modified and what why the type's expected properties changed.
 
-It also provide documentation about what the type is going to be used for.
+It also provides documentation about what the type is going to be used for.
 
 And most importantly, it allow to generalize the notion of constraint and make
 it consistent through the language.
@@ -312,13 +319,6 @@ Of course, `typename` is a valid optional extra token, meaning the following
 construct is valid too. Note that we refer to the type `T::Bar` and not to an
 instance of `T::Bar`, so the valid token is `typename` and not `auto`.
 
-The program is ill-formed if the dependant type does not respect the
-constraint(s).
-We can, and probably should, convey the same requirements in a requires-clause.
-A constraint that cannot be satisfied in the body of a template
-instantiation causes the program to be ill-formed, SFINAE is not engaged.
-
-
 <pre>
 template <typename T>
 auto constexpr f(T t) {
@@ -326,6 +326,17 @@ auto constexpr f(T t) {
 }
 </pre>
 
+
+Both these declarations have identical semantics
+    `using Foo = Unsigned typename T::Bar`
+    `using Foo = Unsigned T::Bar`
+
+
+The program is ill-formed if the dependant type does not respect the
+constraint(s).
+We can, and probably should, convey the same requirements in a requires-clause.
+A constraint that cannot be satisfied in the body of a template
+instantiation causes the program to be ill-formed, SFINAE is not engaged.
 
 ### type-id alias declarations
 
@@ -340,15 +351,18 @@ The program is ill-formed if the constraints can not be satisfied.
 Additionally, it may be interesting to constraints parameters of template
 using-directives
 
-`template<Serializable T> using Stream<T>;`
+`template<Serializable T> using Stream<T> = Iterable<T>;`
+
+Here, the `Stream` type can only be specialized using types that satisfy the `Serializable`
+constraint.
 
 
 ### Don't allow Constraints everywhere
 
 There is a number of places where allowing concepts in front of a type would
 either make no sense or be actually harmful.
- * sizeof and cast expression : It probably don't make a lot of sense
- * class/struct/union/enum definition.
+ * sizeof and cast expression : It doesn't make a lot of sense
+ * class/struct/union/enum definition
 
 
 ## Grammar
@@ -361,9 +375,9 @@ and qualifiers are applied.
 ```
 Swappable Sortable Writable foo = {};
 const Swappable Sortable Writable & foo = {};
-volatile Swappable Sortable Writable* foo = {};
-Swappable Sortable Writable* const* foo = {};
-Swappable Sortable Writable auto && foo;
+volatile Swappable Sortable Writable auto* foo = {};
+Swappable Sortable Writable auto* const* foo = {};
+Swappable Sortable Writable && foo;
 extern std::EquallyComparable boost::vector<int> baz;
 ```
 
@@ -390,17 +404,16 @@ Callable<int(int)> f = { /*...*/ };
 
 ### Summary
 
- * Variable declaration : `[concept-name]* type-id|[auto]|decltype-expression`
+ * Variable declaration : `[concept-name]* type-id|auto|decltype-expression`
  * Function and lambda parameters  : `[concept-name]*
-    type-id|[auto]|decltype-expression`
+    type-id|auto|decltype-expression`
  * Function and lambda return type : `[concept-name]*
     type-id|[auto]|decltype-expression`
 
- * Template parameter ( including variables, function,
-    lambdas...): `[concept-name]* [typename|auto]|literal type-id name`
+ * Template parameter:  `[concept-name]* [typename|auto]|literal-type-id name`
 
  * Alias declaration : `using [concept-name]*  name = /*...*/;`
- * Desambiguation in template definition : `[concept-name]* [typename]
+ * Disambiguation in template definition : `[concept-name]* [typename]
     = /*...*/;`
 
 
@@ -429,7 +442,7 @@ template <typename T, typename U>
 concept bool SameType = std::is_same_v<std::decay_t<U>, std::decay_t<T>>;
 
 //
-void f(Concept auto a, SameType<decltype(a)> b);
+void f(Concept auto a, SameType<decltype(a)> auto b);
 
 ```
 
@@ -446,29 +459,71 @@ function allow different parameter types.
 
 
 
-# `auto` in template function and template parameters
+# On whether `auto` should be optional.
 
 As described above, in functions ( and lambdas ) parameters templates are
-introduced by the  `auto` keyword.
-When in presence of one or more concepts names, `auto` is not strictly
-necessary.
+introduced by the  `auto` keyword. `auto` also lets the compiler infer the type of a declaration
+or a function return type.
 
-However people expressed a strong desire to differentiate function template
-from regular non-template functions, I will therefore not attempt to convince
-that auto should be optional is such context.
+When in presence of one or more concepts names, `auto` is not necessary in that it does not add any
+semantically significant information for the statement/expression to be parsed correctly and
+unambiguously.
 
-I feel like `void(ConceptName auto foo);` is a terse enough syntax.
-Moreover, making `auto` optional in a future iteration would not be a breaking
-change.
 
-That means that when preceded by a concept-name, `auto` is required when it means
-"template/generic" and optional when it means "inferred".
+`auto` may either signify generic/template parameter or deduced/inferred type depending on the
+context. The two scenarios should be analysed separately.
+
+
+As the type of a callable template parameter ( `auto` means generic ) {#auto-in-functions}
+------------------------------------------------------------------------------------------
+
+People expressed a strong desire to differentiate function templates from regular non-template
+functions. One of the reasons is that functions and functions templates don't behave identically.
+
+This argument lead to the abbreviated functions being removed from the current Concept TS
+[[P0696R1]].
+
+Given these concerns, it's reasonable to expect `auto` *not* to be optional in the declaration of
+a function template parameter.
+
+`void f(ConceptName auto foo);` is a terse enough syntax, that conveys that `f` is a function
+template and that `foo` expect to satisfies a concept.
+
+
+
+## As the type of a return type or variable declaration ( `auto` means inferred )
+
+
+Consider `ConceptName auto foo = /*...*/;`  and `ConceptName foo = /*...*/;` Both statements are
+semantically identical as far as the compiler is concerned.
+
+
+But, for the reader, they convey slightly different meanings.
+
+In the first case, `ConceptName auto foo = /*...*/;` , our attention is attracted to the fact that
+the type of `foo` is inferred from the RHS expression, and we should probably be mindful of what
+that expression's type is.
+
+In the second case  `ConceptName foo = /*...*/;` however, what matters is that `foo` has the
+behaviour of `ConceptName`.  Here `ConceptName` is seen not as a constraint of the type of `foo`
+but rather as a polymorphic type which exposes a known set of behaviours. The actual type of `foo`
+does not matter. This is why there is no need in that scenario to distinguish concepts from
+concrete types, as they have the same expected properties.
+
+
+A developer may wish to express either of these intents and so I think that both constructs should
+be well-formed, and therefore `auto` should be optional when declaring a variable or return type.
+
+It also make teaching either as both inference and concepts can be introduced independently of each
+other. Ultimately, some people may expect `auto` to be required while some may not. Making it
+optional makes the language more intuitive for all.
+
 
 
 # Acknowledgments and Thanks
 
 This proposal was inspired by Jakob Riedle's [[p0791r0]] proposal.
-
+Valuable feedbacks from Michael Caisse, Arthur O'Dwyer, Adi Shavit, Agustín Bergé, Simon Brand.
 
 
 
