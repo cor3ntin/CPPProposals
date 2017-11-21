@@ -1,0 +1,163 @@
+<pre class='metadata'>
+Title: Syntax to anonymously refer to the current declaration contexts
+Shortname: DXXX
+Level: 0
+Status: D
+Group: wg21
+Editor: Corentin jabot, corentin.jabot@gmail.com
+URL: https://cor3ntin.github.io/CPPProposals/anonymous_context_access/anonymous_context_access.html
+Abstract: A way to refer to the current class or namespae without naming them.
+Audience: EWG, SG7
+Markup Shorthands: markdown yes
+Default Highlight: CPP
+Line Numbers: no
+Date: 2017-11-20
+</pre>
+
+Introduction {#intro}
+=====================
+
+To refer to a class name from within itself, one needs to know its name. This is usually fine,
+however it makes writing and using macros that depend on knowing the class name slightly more
+cumbersome.
+
+Macros that define or declare class constructors, destructors or otherwhise manipulate a class'
+name from inside the class are quite frequent. Such macros are often used to avoid duplicating
+repetitive code stubs, and have been found in large projects such as LLVM and Chromium.
+
+As they rely on knowing the class name, they have to been defined as `#define EvilMacro(ClassName
+/*,...*/)` and used in the same fashion.
+
+Having a consistent way to refer to a class name without an identifier would simplify the use of
+such macros.
+
+And while defining class members in macros is certainly not something that should be encouraged,
+it has its uses in large code base.
+
+Code injection will certainly make the need for such macros less frequent.  However, it has been
+identified that a facility akin to the one this paper proposes is one of the features required for
+The Qt framework to benefit from code injection without having to modify millions of lines of code.
+That is one of the driving motivation behind this proposal.
+
+
+Having a way to refer to both the current class and the current namespace also offers a simple way
+to resolve ambiguities
+
+```
+namespace foo {
+    constexpr static int bar = 0;
+    class foo {
+        constexpr static int bar = 1;
+        void f() {
+            static_assert(typename(namespace)::bar == 0);
+        }
+    };
+}
+
+```
+
+
+Lastly, it would allow providing constructors and destructors for anonymous classes. I have gotten
+a lot of positive feedbacks and interests for that.
+
+
+
+
+Syntax
+=======
+
+`typename(namespace)` is valid in a scope identifier and refers to the current namespace, or the
+global namespace.
+
+
+As a scope identifier, `typename(class)` refers to the identifier of the current `class`, `struct`,
+or `union`.
+
+`typename(class)` can refer to the declaration of a constructor, and `~typename(class)` can
+similiraly refer to the declaration of the class destructor.
+
+Otherwise,  `typename(class)` refers to the type of the  `class`, `struct`, or `union` in which it
+is used.
+
+In the rest of this document, a <dfn id="typename-id-expression">typename id expression</dfn>
+refers to either `typename(class)` or `typename(namespace)`.
+
+Using `typename(class)` outside of a `class`, `struct` or `union` is ill-formed.
+
+As a [=typename id expression=] unambiguisly designs the entity in which it is used, whether that is
+the current namespace, or the current record, it can not be preceeded by a nested-name-specifier,
+nor can it be used through an object. The following expressions are therefore ill-formed:
+
+`::typename(namespace)` `Foo::typename(class)` - ill-formed because a scope-specifier is specified.
+
+`foo->typename(class)/*...*/` : ill-formed, call through an object.
+
+
+Templates
+---------
+
+In a template class definition, `typename(class)` behaves like the *injected-class-name*.
+`typename(class)` can be followed by a template arguments list, like a type-id
+
+`typename(class)<Foo> /*...*/`
+
+
+
+Code injection
+==============
+
+While this syntax is not directly related to code injection, code injection may benefit from it.
+
+In a code fragment `typename(class)` and `typename(namespace)` should refer to the scope the
+fragment will be injected in, alleviating the need to inject names in the scope of the code
+fragment for that purpose.
+
+[[p0712r0]] suggests using `typename(reflection-expression)`  to get a type from a reflection.
+While I believe there are arguably better approaches ( including using the same syntax for code
+injection and "reversing" a reflection), this proposal would not prevent that syntaxe, and it would
+be cohesive and logical
+
+```
+typename(class)
+typename(namespace)
+typename(reflection-expression)
+```
+
+These three expression return, depending on the context, either a type, or a scope specifier.
+
+
+[[p0712r0]] further suggests `namespace(reflection-expression)` as a mean to get a scope specifier
+from a reflection on a namespace. The same semantic could be achieve with the
+typename(reflection-expression) syntax, depending on the context.
+
+
+Alternatives approaches
+=======================
+
+Some GCC versions allow `decltype(*this)` to be evaluated in the context of a static member
+declaration. This can be used to the same effect than the proposed `typename(class)`. However this
+non standard behaviour relies on an unatural semantic and does not solve the problem of adressing
+the current namespace. It also requires introducing a static member in the class for the purpose of
+querrying the class type.
+
+
+Different names have been discussed, including `decltype(class)`, `typename(typename)`
+`namespace(namespace)` or the introduction of new keywords like `__classname`. However these
+syntaxes either make no sense semantically (`decltype(class)`), are absurdly convoluted or are
+__ugly.
+
+
+`(class)` and `(namespace)` could also be viable, more terse expressions.
+
+
+Implementation
+==============
+
+A proof-of-concept (for the `typename(class|namespace)` syntax) was implemented in clang and is
+available <a href="https://github.com/cor3ntin/clang/tree/typename_id_expression"> on Github</a>.
+No particular difficulty was encountered.
+
+
+
+
+
