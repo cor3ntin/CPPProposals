@@ -126,8 +126,8 @@ As things stands, we notice a number of inconsistencies:
     ceremonious
 
 <xmp>
-template <Regular r>
-void foo(Regular & r);
+template <Regular R>
+void foo(R & r);
 </xmp>
 
  * A single constraint can be applied to a template parameter, while variables
@@ -358,8 +358,18 @@ using-directives
 
 `template<Serializable T> using Stream<T> = Iterable<T>;`
 
+
 Here, the `Stream` type can only be specialized using types that satisfy the `Serializable`
 constraint.
+We use the alias syntax to create a type alias more constrained than the original type.
+An alias created in this way is neither a specialization nor a new type. `Stream` is exactly of the
+type `Iterable`, aka `std::is_same_v<Stream<T>, Iterable<T> == true`.
+However, the alias has additional constraints that are checked upon instantiation.
+The constraits on the alias are checked before the constraints on the type it is created from.
+
+This system would allow the creation of fine-tuned constrained type alias without having to
+introduce new types, factories or inheritance.
+
 
 
 ### Don't allow Constraints everywhere

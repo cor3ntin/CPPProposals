@@ -1179,7 +1179,7 @@ Possible extra rowspan handling
 </style>
   <meta content="Bikeshed version 67155cabad72a8ab669a7d4421c90e2999a29b68" name="generator">
   <link href="https://cor3ntin.github.io/CPPProposals/unified_concept_declaration_syntax/concepts.html" rel="canonical">
-  <meta content="23159bf00e304f547e08a73168ab236ed62ea0c8" name="document-revision">
+  <meta content="22cabad96568037083909acaceb572ab834df939" name="document-revision">
 <style>
 
 .table1-decls table {
@@ -1535,8 +1535,8 @@ in declarations</p>
      <p>Lambdas can be made generic with <code class="highlight"><span class="k">auto</span></code> parameters, while functions can not.
 a side effect of that is that function template declaration is needlessly
 ceremonious</p>
-<pre class="highlight"><span class="k">template</span> <span class="o">&lt;</span><span class="n">Regular</span> <span class="n">r</span><span class="o">></span>
-<span class="kt">void</span> <span class="n">foo</span><span class="p">(</span><span class="n">Regular</span> <span class="o">&amp;</span> <span class="n">r</span><span class="p">);</span>
+<pre class="highlight"><span class="k">template</span> <span class="o">&lt;</span><span class="n">Regular</span> <span class="n">R</span><span class="o">></span>
+<span class="kt">void</span> <span class="n">foo</span><span class="p">(</span><span class="n">R</span> <span class="o">&amp;</span> <span class="n">r</span><span class="p">);</span>
 </pre>
     <li data-md="">
      <p>A single constraint can be applied to a template parameter, while variables
@@ -1713,7 +1713,14 @@ instantiation causes the program to be ill-formed, SFINAE is not engaged.</p>
    <p>Additionally, it may be interesting to constraints parameters of template
 using-directives</p>
    <p><code class="highlight"><span class="k">template</span><span class="o">&lt;</span><span class="n">Serializable</span> <span class="n">T</span><span class="o">></span> <span class="k">using</span> <span class="n">Stream</span><span class="o">&lt;</span><span class="n">T</span><span class="o">></span> <span class="o">=</span> <span class="n">Iterable</span><span class="o">&lt;</span><span class="n">T</span><span class="o">></span><span class="p">;</span></code></p>
-   <p>Here, the <code class="highlight"><span class="n">Stream</span></code> type can only be specialized using types that satisfy the <code class="highlight"><span class="n">Serializable</span></code> constraint.</p>
+   <p>Here, the <code class="highlight"><span class="n">Stream</span></code> type can only be specialized using types that satisfy the <code class="highlight"><span class="n">Serializable</span></code> constraint.
+We use the alias syntax to create a type alias more constrained than the original type.
+An alias created in this way is neither a specialization nor a new type. <code class="highlight"><span class="n">Stream</span></code> is exactly of the
+type <code class="highlight"><span class="n">Iterable</span></code>, aka <code class="highlight"><span class="n">std</span><span class="o">::</span><span class="n">is_same_v</span><span class="o">&lt;</span><span class="n">Stream</span><span class="o">&lt;</span><span class="n">T</span><span class="o">></span><span class="p">,</span> <span class="n">Iterable</span><span class="o">&lt;</span><span class="n">T</span><span class="o">></span> <span class="o">==</span> true</code>.
+However, the alias has additional constraints that are checked upon instantiation.
+The constraits on the alias are checked before the constraints on the type it is created from.</p>
+   <p>This system would allow the creation of fine-tuned constrained type alias without having to
+introduce new types, factories or inheritance.</p>
    <h4 class="heading settled" data-level="2.4.6" id="dont-allow-constraints-everywhere"><span class="secno">2.4.6. </span><span class="content">Don’t allow Constraints everywhere</span><a class="self-link" href="#dont-allow-constraints-everywhere"></a></h4>
    <p>There is a number of places where allowing concepts in front of a type would
 either make no sense or be actually harmful.</p>
