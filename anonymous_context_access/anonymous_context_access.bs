@@ -17,9 +17,62 @@ Date: 2017-11-20
 Introduction {#intro}
 =====================
 
-To refer to a class name from within itself, one needs to know its name. This is usually fine,
-however it makes writing and using macros that depend on knowing the class name slightly more
-cumbersome.
+
+There are cases where refering to a class/struct from withing itself is either cumbersome ( macro
+definition ), or not possible ( anonymous entities ).
+It also forces the code injection/metaclasse proposal to inject a name in a class or namespace code
+fragment, in order to refer to the injected declaration contex.
+
+
+This proposal introduces a syntax to refer to the class, struct, union or namespace in which the
+syntax is used, independant of the entity's name.
+
+
+Anonymous struct / class
+------------------------
+
+There has been a strong interest for being able to provide constructors and destructors for
+anonymous classes and structs.
+
+
+Resolving ambiguity
+------------------
+
+Having a way to refer to both the current class and the current namespace offers a simple way
+to resolve ambiguities between a name that exist both in a class and its enclosing namespace.
+
+```
+namespace long::namespace_declaration::foo {
+    constexpr static int bar = 0;
+    class foo {
+        constexpr static int bar = 1;
+        void f() {
+            static_assert(typename(namespace)::bar == 0);
+        }
+    };
+}
+
+```
+
+
+
+Code Injection
+--------------
+
+[[p0712r0]] proposes to introduce a name in a code fragment to refer to the entity in which it will
+be injected.
+For example   `-> namespace Foo {  };`  use the placeholder `Foo` to refer to the the class in
+which it will be injected. This has a few drawbacks. The developer needs to comme with a
+placeholder name, which will probably end up being `C` or `N` most of the time.
+It make the intent of the code less clear to a reader. Is `Foo` the name of the code-fragment ? are
+we created an object `Foo` in the current scope ?
+
+These issies can be solved if we have a consistent way to refer to an anonymous class or a current
+namespace.
+
+
+Macros
+-----
 
 Macros that define or declare class constructors, destructors or otherwhise manipulate a class'
 name from inside the class are quite frequent. Such macros are often used to avoid duplicating
@@ -38,29 +91,6 @@ Code injection will certainly make the need for such macros less frequent.  Howe
 identified that a facility akin to the one this paper proposes is one of the features required for
 The Qt framework to benefit from code injection without having to modify millions of lines of code.
 That is one of the driving motivation behind this proposal.
-
-
-Having a way to refer to both the current class and the current namespace also offers a simple way
-to resolve ambiguities
-
-```
-namespace foo {
-    constexpr static int bar = 0;
-    class foo {
-        constexpr static int bar = 1;
-        void f() {
-            static_assert(typename(namespace)::bar == 0);
-        }
-    };
-}
-
-```
-
-
-Lastly, it would allow providing constructors and destructors for anonymous classes. I have gotten
-a lot of positive feedbacks and interests for that.
-
-
 
 
 Syntax
@@ -83,6 +113,11 @@ In the rest of this document, a <dfn id="typename-id-expression">typename id exp
 refers to either `typename(class)` or `typename(namespace)`.
 
 Using `typename(class)` outside of a `class`, `struct` or `union` is ill-formed.
+
+
+Constructors and destructors using this syntax in unions, whether they are anonymous or not,
+remains invalid.
+
 
 As a [=typename id expression=] unambiguisly designs the entity in which it is used, whether that is
 the current namespace, or the current record, it can not be preceeded by a nested-name-specifier,
@@ -147,7 +182,9 @@ syntaxes either make no sense semantically (`decltype(class)`), are absurdly con
 __ugly.
 
 
-`(class)` and `(namespace)` could also be viable, more terse expressions.
+`(class)` and `(namespace)` could also be viable, more terse expressions. However that requires
+expressions such as `decltype((class))` to have 2 pairs of parentheses which may be confusing and
+error prone.
 
 
 Implementation

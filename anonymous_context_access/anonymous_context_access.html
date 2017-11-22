@@ -1179,7 +1179,7 @@ Possible extra rowspan handling
 </style>
   <meta content="Bikeshed version 67155cabad72a8ab669a7d4421c90e2999a29b68" name="generator">
   <link href="https://cor3ntin.github.io/CPPProposals/anonymous_context_access/anonymous_context_access.html" rel="canonical">
-  <meta content="31813a5b2b06e6f8803eb9dd428c271fe97e6298" name="document-revision">
+  <meta content="df3c5f10c68a69be0bd23eae39ac6e639f255711" name="document-revision">
 <style>/* style-md-lists */
 
 /* This is a weird hack for me not yet following the commonmark spec
@@ -1450,13 +1450,20 @@ pre.highlight, pre > code.highlight { display: block; padding: 1em; margin: .5em
   <nav data-fill-with="table-of-contents" id="toc">
    <h2 class="no-num no-toc no-ref" id="contents">Table of Contents</h2>
    <ol class="toc" role="directory">
-    <li><a href="#intro"><span class="secno">1</span> <span class="content">Introduction</span></a>
+    <li>
+     <a href="#intro"><span class="secno">1</span> <span class="content">Introduction</span></a>
+     <ol class="toc">
+      <li><a href="#anonymous-struct-class"><span class="secno">1.1</span> <span class="content">Anonymous struct / class</span></a>
+      <li><a href="#resolving-ambiguity"><span class="secno">1.2</span> <span class="content">Resolving ambiguity</span></a>
+      <li><a href="#code-injection"><span class="secno">1.3</span> <span class="content">Code Injection</span></a>
+      <li><a href="#macros"><span class="secno">1.4</span> <span class="content">Macros</span></a>
+     </ol>
     <li>
      <a href="#syntax"><span class="secno">2</span> <span class="content">Syntax</span></a>
      <ol class="toc">
       <li><a href="#templates"><span class="secno">2.1</span> <span class="content">Templates</span></a>
      </ol>
-    <li><a href="#code-injection"><span class="secno">3</span> <span class="content">Code injection</span></a>
+    <li><a href="#code-injection①"><span class="secno">3</span> <span class="content">Code injection</span></a>
     <li><a href="#alternatives-approaches"><span class="secno">4</span> <span class="content">Alternatives approaches</span></a>
     <li><a href="#implementation"><span class="secno">5</span> <span class="content">Implementation</span></a>
     <li>
@@ -1473,9 +1480,39 @@ pre.highlight, pre > code.highlight { display: block; padding: 1em; margin: .5em
   </nav>
   <main>
    <h2 class="heading settled" data-level="1" id="intro"><span class="secno">1. </span><span class="content">Introduction</span><a class="self-link" href="#intro"></a></h2>
-   <p>To refer to a class name from within itself, one needs to know its name. This is usually fine,
-however it makes writing and using macros that depend on knowing the class name slightly more
-cumbersome.</p>
+   <p>There are cases where refering to a class/struct from withing itself is either cumbersome ( macro
+definition ), or not possible ( anonymous entities ).
+It also forces the code injection/metaclasse proposal to inject a name in a class or namespace code
+fragment, in order to refer to the injected declaration contex.</p>
+   <p>This proposal introduces a syntax to refer to the class, struct, union or namespace in which the
+syntax is used, independant of the entity’s name.</p>
+   <h3 class="heading settled" data-level="1.1" id="anonymous-struct-class"><span class="secno">1.1. </span><span class="content">Anonymous struct / class</span><a class="self-link" href="#anonymous-struct-class"></a></h3>
+   <p>There has been a strong interest for being able to provide constructors and destructors for
+anonymous classes and structs.</p>
+   <h3 class="heading settled" data-level="1.2" id="resolving-ambiguity"><span class="secno">1.2. </span><span class="content">Resolving ambiguity</span><a class="self-link" href="#resolving-ambiguity"></a></h3>
+   <p>Having a way to refer to both the current class and the current namespace offers a simple way
+to resolve ambiguities between a name that exist both in a class and its enclosing namespace.</p>
+<pre class="highlight"><span class="k">namespace</span> <span class="kt">long</span><span class="o">::</span><span class="n">namespace_declaration</span><span class="o">::</span><span class="n">foo</span> <span class="p">{</span>
+    <span class="k">constexpr</span> <span class="k">static</span> <span class="kt">int</span> <span class="n">bar</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="k">class</span> <span class="nc">foo</span> <span class="p">{</span>
+        <span class="k">constexpr</span> <span class="k">static</span> <span class="kt">int</span> <span class="n">bar</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+        <span class="kt">void</span> <span class="nf">f</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">static_assert</span><span class="p">(</span><span class="k">typename</span><span class="p">(</span><span class="k">namespace</span><span class="p">)</span><span class="o">::</span><span class="n">bar</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span>
+        <span class="p">}</span>
+    <span class="p">};</span>
+<span class="p">}</span>
+</pre>
+   <h3 class="heading settled" data-level="1.3" id="code-injection"><span class="secno">1.3. </span><span class="content">Code Injection</span><a class="self-link" href="#code-injection"></a></h3>
+   <p><a data-link-type="biblio" href="#biblio-p0712r0">[p0712r0]</a> proposes to introduce a name in a code fragment to refer to the entity in which it will
+be injected.
+For example <code class="highlight"><span class="o">-></span> <span class="k">namespace</span> <span class="n">Foo</span> <span class="p">{</span> <span class="p">};</span></code> use the placeholder <code class="highlight"><span class="n">Foo</span></code> to refer to the the class in
+which it will be injected. This has a few drawbacks. The developer needs to comme with a
+placeholder name, which will probably end up being <code class="highlight"><span class="n">C</span></code> or <code class="highlight"><span class="n">N</span></code> most of the time.
+It make the intent of the code less clear to a reader. Is <code class="highlight"><span class="n">Foo</span></code> the name of the code-fragment ? are
+we created an object <code class="highlight"><span class="n">Foo</span></code> in the current scope ?</p>
+   <p>These issies can be solved if we have a consistent way to refer to an anonymous class or a current
+namespace.</p>
+   <h3 class="heading settled" data-level="1.4" id="macros"><span class="secno">1.4. </span><span class="content">Macros</span><a class="self-link" href="#macros"></a></h3>
    <p>Macros that define or declare class constructors, destructors or otherwhise manipulate a class'
 name from inside the class are quite frequent. Such macros are often used to avoid duplicating
 repetitive code stubs, and have been found in large projects such as LLVM and Chromium.</p>
@@ -1488,20 +1525,6 @@ it has its uses in large code base.</p>
 identified that a facility akin to the one this paper proposes is one of the features required for
 The Qt framework to benefit from code injection without having to modify millions of lines of code.
 That is one of the driving motivation behind this proposal.</p>
-   <p>Having a way to refer to both the current class and the current namespace also offers a simple way
-to resolve ambiguities</p>
-<pre class="highlight"><span class="k">namespace</span> <span class="n">foo</span> <span class="p">{</span>
-    <span class="k">constexpr</span> <span class="k">static</span> <span class="kt">int</span> <span class="n">bar</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
-    <span class="k">class</span> <span class="nc">foo</span> <span class="p">{</span>
-        <span class="k">constexpr</span> <span class="k">static</span> <span class="kt">int</span> <span class="n">bar</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
-        <span class="kt">void</span> <span class="nf">f</span><span class="p">()</span> <span class="p">{</span>
-            <span class="k">static_assert</span><span class="p">(</span><span class="k">typename</span><span class="p">(</span><span class="k">namespace</span><span class="p">)</span><span class="o">::</span><span class="n">bar</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span>
-        <span class="p">}</span>
-    <span class="p">};</span>
-<span class="p">}</span>
-</pre>
-   <p>Lastly, it would allow providing constructors and destructors for anonymous classes. I have gotten
-a lot of positive feedbacks and interests for that.</p>
    <h2 class="heading settled" data-level="2" id="syntax"><span class="secno">2. </span><span class="content">Syntax</span><a class="self-link" href="#syntax"></a></h2>
    <p><code class="highlight"><span class="k">typename</span><span class="p">(</span><span class="k">namespace</span><span class="p">)</span></code> is valid in a scope identifier and refers to the current namespace, or the
 global namespace.</p>
@@ -1513,6 +1536,8 @@ similiraly refer to the declaration of the class destructor.</p>
 is used.</p>
    <p>In the rest of this document, a <dfn class="dfn-paneled" data-dfn-type="dfn" data-noexport="" id="typename-id-expression">typename id expression</dfn> refers to either <code class="highlight"><span class="k">typename</span><span class="p">(</span><span class="n">class</span><span class="p">)</span></code> or <code class="highlight"><span class="k">typename</span><span class="p">(</span><span class="k">namespace</span><span class="p">)</span></code>.</p>
    <p>Using <code class="highlight"><span class="k">typename</span><span class="p">(</span><span class="n">class</span><span class="p">)</span></code> outside of a <code class="highlight"><span class="k">class</span></code>, <code class="highlight"><span class="k">struct</span></code> or <code class="highlight"><span class="k">union</span></code> is ill-formed.</p>
+   <p>Constructors and destructors using this syntax in unions, whether they are anonymous or not,
+remains invalid.</p>
    <p>As a <a data-link-type="dfn" href="#typename-id-expression" id="ref-for-typename-id-expression">typename id expression</a> unambiguisly designs the entity in which it is used, whether that is
 the current namespace, or the current record, it can not be preceeded by a nested-name-specifier,
 nor can it be used through an object. The following expressions are therefore ill-formed:</p>
@@ -1521,7 +1546,7 @@ nor can it be used through an object. The following expressions are therefore il
    <h3 class="heading settled" data-level="2.1" id="templates"><span class="secno">2.1. </span><span class="content">Templates</span><a class="self-link" href="#templates"></a></h3>
    <p>In a template class definition, <code class="highlight"><span class="k">typename</span><span class="p">(</span><span class="n">class</span><span class="p">)</span></code> behaves like the <em>injected-class-name</em>. <code class="highlight"><span class="k">typename</span><span class="p">(</span><span class="n">class</span><span class="p">)</span></code> can be followed by a template arguments list, like a type-id</p>
    <p><code class="highlight"><span class="k">typename</span><span class="p">(</span><span class="n">class</span><span class="p">)</span><span class="o">&lt;</span><span class="n">Foo</span><span class="o">></span> <span class="cm">/*...*/</span></code></p>
-   <h2 class="heading settled" data-level="3" id="code-injection"><span class="secno">3. </span><span class="content">Code injection</span><a class="self-link" href="#code-injection"></a></h2>
+   <h2 class="heading settled" data-level="3" id="code-injection①"><span class="secno">3. </span><span class="content">Code injection</span><a class="self-link" href="#code-injection①"></a></h2>
    <p>While this syntax is not directly related to code injection, code injection may benefit from it.</p>
    <p>In a code fragment <code class="highlight"><span class="k">typename</span><span class="p">(</span><span class="n">class</span><span class="p">)</span></code> and <code class="highlight"><span class="k">typename</span><span class="p">(</span><span class="k">namespace</span><span class="p">)</span></code> should refer to the scope the
 fragment will be injected in, alleviating the need to inject names in the scope of the code
@@ -1547,7 +1572,9 @@ querrying the class type.</p>
    <p>Different names have been discussed, including <code class="highlight"><span class="k">decltype</span><span class="p">(</span><span class="n">class</span><span class="p">)</span></code>, <code class="highlight"><span class="k">typename</span><span class="p">(</span><span class="k">typename</span><span class="p">)</span></code> <code class="highlight"><span class="k">namespace</span><span class="p">(</span><span class="k">namespace</span><span class="p">)</span></code> or the introduction of new keywords like <code class="highlight"><span class="n">__classname</span></code>. However these
 syntaxes either make no sense semantically (<code class="highlight"><span class="k">decltype</span><span class="p">(</span><span class="n">class</span><span class="p">)</span></code>), are absurdly convoluted or are
 __ugly.</p>
-   <p><code class="highlight"><span class="p">(</span><span class="n">class</span><span class="p">)</span></code> and <code class="highlight"><span class="p">(</span><span class="k">namespace</span><span class="p">)</span></code> could also be viable, more terse expressions.</p>
+   <p><code class="highlight"><span class="p">(</span><span class="n">class</span><span class="p">)</span></code> and <code class="highlight"><span class="p">(</span><span class="k">namespace</span><span class="p">)</span></code> could also be viable, more terse expressions. However that requires
+expressions such as <code class="highlight"><span class="k">decltype</span><span class="p">((</span><span class="n">class</span><span class="p">))</span></code> to have 2 pairs of parentheses which may be confusing and
+error prone.</p>
    <h2 class="heading settled" data-level="5" id="implementation"><span class="secno">5. </span><span class="content">Implementation</span><a class="self-link" href="#implementation"></a></h2>
    <p>A proof-of-concept (for the <code class="highlight"><span class="k">typename</span><span class="p">(</span><span class="n">class</span><span class="o">|</span><span class="k">namespace</span><span class="p">)</span></code> syntax) was implemented in clang and is
 available <a href="https://github.com/cor3ntin/clang/tree/typename_id_expression"> on Github</a>.
