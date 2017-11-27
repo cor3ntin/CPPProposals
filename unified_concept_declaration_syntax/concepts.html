@@ -1179,7 +1179,7 @@ Possible extra rowspan handling
 </style>
   <meta content="Bikeshed version 67155cabad72a8ab669a7d4421c90e2999a29b68" name="generator">
   <link href="https://cor3ntin.github.io/CPPProposals/unified_concept_declaration_syntax/concepts.html" rel="canonical">
-  <meta content="c3def2e464a44a7747da9d2b884f26488ed48994" name="document-revision">
+  <meta content="4931261ef04829a6b67aac324e4f142b84a1e57e" name="document-revision">
 <style>
 
 .table1-decls table {
@@ -1550,9 +1550,14 @@ declaration and lambda cannot be constrained.</p>
 consistent with lambdas and for the sake of being terse, the declaration of <code class="highlight"><span class="n">f</span><span class="p">(</span><span class="k">auto</span> <span class="n">a</span><span class="p">)</span></code> should be valid.</p>
    <p>Note that the presence of <code class="highlight"><span class="k">auto</span></code> is enough to inform the reader that the
 function is in fact a function template.</p>
-   <p><code class="highlight"><span class="k">template</span><span class="o">&lt;</span><span class="p">...</span><span class="o">></span> <span class="kt">void</span> <span class="n">f</span><span class="p">(</span><span class="k">auto</span> <span class="n">a</span><span class="p">)</span></code> (as proposed by P0587r0) does not offer any
+   <p><code class="highlight"><span class="k">template</span><span class="o">&lt;</span><span class="p">...</span><span class="o">></span> <span class="kt">void</span> <span class="n">f</span><span class="p">(</span><span class="k">auto</span> <span class="n">a</span><span class="p">)</span></code> (as proposed by <a data-link-type="biblio" href="#biblio-p0587r0">[P0587r0]</a>) does not offer any
 extra information to the user of the function ( nor the compiler ).</p>
-   <p>There is a wording inconsistency between <code class="highlight"><span class="n">function</span> <span class="k">template</span></code> and <code class="highlight"><span class="n">generic</span> <span class="n">lambda</span></code>. That may need to be addressed. I would suggest that <code class="highlight"><span class="n">lambda</span> <span class="k">template</span></code> would be a more accurate and consistent wording.</p>
+   <p>Lambda now accepts either a template parameters list, auto parameters or any combination of the
+two, with great effect. It’s a syntax that developers are already familiar with and it would only
+be natural for it to be used for functions too, for consistency and simplicity.</p>
+   <p>There is a wording inconsistency between <code class="highlight"><span class="n">function</span> <span class="k">template</span></code> and <code class="highlight"><span class="n">generic</span> <span class="n">lambda</span></code>. That may need to
+be addressed. I would suggest that <code class="highlight"><span class="n">lambda</span> <span class="k">template</span></code> would be a more accurate and consistent
+wording.</p>
    <h3 class="heading settled" data-level="2.2" id="consistent-use-of-auto-and-typename"><span class="secno">2.2. </span><span class="content">Consistent use of auto and typename</span><a class="self-link" href="#consistent-use-of-auto-and-typename"></a></h3>
    <ul>
     <li data-md="">
@@ -1674,8 +1679,8 @@ bases that are fast changing.</p>
    <p>Constraints could be used to better document the use of a dependant names in
 definition of a template, instead of in addition to <code class="highlight"><span class="k">typename</span></code></p>
    <p>consider the following code</p>
-<pre class="highlight"><span class="k">template</span> <typename t="">
-<span class="k">auto</span> <span class="k">constexpr</span> <span class="nf">f</span><span class="p">(</span><span class="n">T</span> <span class="n">t</span><span class="p">)</span> <span class="p">{</span>
+<pre class="highlight"><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">></span>
+<span class="k">auto</span> <span class="k">constexpr</span> <span class="n">f</span><span class="p">(</span><span class="n">T</span> <span class="n">t</span><span class="p">)</span> <span class="p">{</span>
     <span class="k">return</span> <span class="k">typename</span> <span class="n">T</span><span class="o">::</span><span class="n">Bar</span><span class="p">(</span><span class="mi">42</span><span class="p">);</span>
 <span class="p">}</span>
 
@@ -1684,21 +1689,21 @@ definition of a template, instead of in addition to <code class="highlight"><spa
 <span class="p">};</span>
 
 <span class="k">constexpr</span> <span class="kt">int</span> <span class="n">x</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">S</span><span class="p">{});</span>
-</typename></pre>
+</pre>
    <p>We can replace <code class="highlight"><span class="k">typename</span></code> by a constraint.</p>
-<pre class="highlight"><span class="k">template</span> <typename t="">
-<span class="k">auto</span> <span class="k">constexpr</span> <span class="nf">f</span><span class="p">(</span><span class="n">T</span> <span class="n">t</span><span class="p">)</span> <span class="p">{</span>
+<pre class="highlight"><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">></span>
+<span class="k">auto</span> <span class="k">constexpr</span> <span class="n">f</span><span class="p">(</span><span class="n">T</span> <span class="n">t</span><span class="p">)</span> <span class="p">{</span>
     <span class="k">return</span> <span class="n">Unsigned</span> <span class="n">T</span><span class="o">::</span><span class="n">Bar</span><span class="p">(</span><span class="mi">42</span><span class="p">);</span>
 <span class="p">}</span>
-</typename></pre>
+</pre>
    <p>Of course, <code class="highlight"><span class="k">typename</span></code> is a valid optional extra token, meaning the following
 construct is valid too. Note that we refer to the type <code class="highlight"><span class="n">T</span><span class="o">::</span><span class="n">Bar</span></code> and not to an
 instance of <code class="highlight"><span class="n">T</span><span class="o">::</span><span class="n">Bar</span></code>, so the valid token is <code class="highlight"><span class="k">typename</span></code> and not <code class="highlight"><span class="k">auto</span></code>.</p>
-<pre class="highlight"><span class="k">template</span> <typename t="">
-<span class="k">auto</span> <span class="k">constexpr</span> <span class="nf">f</span><span class="p">(</span><span class="n">T</span> <span class="n">t</span><span class="p">)</span> <span class="p">{</span>
+<pre class="highlight"><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">></span>
+<span class="k">auto</span> <span class="k">constexpr</span> <span class="n">f</span><span class="p">(</span><span class="n">T</span> <span class="n">t</span><span class="p">)</span> <span class="p">{</span>
     <span class="k">return</span> <span class="n">Unsigned</span> <span class="k">typename</span> <span class="n">T</span><span class="o">::</span><span class="n">Bar</span><span class="p">(</span><span class="mi">42</span><span class="p">);</span>
 <span class="p">}</span>
-</typename></pre>
+</pre>
    <p>Both these declarations have identical semantics <code class="highlight"><span class="k">using</span> <span class="n">Foo</span> <span class="o">=</span> <span class="n">Unsigned</span> <span class="k">typename</span> <span class="n">T</span><span class="o">::</span><span class="n">Bar</span></code> <code class="highlight"><span class="k">using</span> <span class="n">Foo</span> <span class="o">=</span> <span class="n">Unsigned</span> <span class="n">T</span><span class="o">::</span><span class="n">Bar</span></code></p>
    <p>The program is ill-formed if the dependant type does not respect the
 constraint(s).
