@@ -1,10 +1,10 @@
 <pre class='metadata'>
 Title: A plea for a consistent, terse and intuitive declaration syntax
 Shortname: P0873
-Level: 0
-Status: P
+Level: 1
+Status: D
 Group: wg21
-URL: https://cor3ntin.github.io/CPPProposals/unified_concept_declaration_syntax/concepts.html
+URL: https://cor3ntin.github.io/CPPProposals/unified_concept_declaration_syntax/P0873.html
 Editor: Corentin jabot, corentin.jabot@gmail.com
 Abstract: A unified variables and parameters declaration syntax for concepts
 Audience: EWG, SG8
@@ -30,6 +30,7 @@ These factors contribute to make C++ harder to teach and encourage juniors
 developers to mindlessly
 add token until “it compiles”, regardless of whether the final program is
 semantically correct.
+
 
 
 ## Existing declaration syntaxes in C++17
@@ -131,10 +132,20 @@ void foo(R & r);
 </xmp>
 
  * A single constraint can be applied to a template parameter, while variables
-    declaration and lambda cannot be constrained.
+    declaration cannot be constrained.
 
  * It is not possible to specify multiple constraints.
 
+Changes from Previous revision {#changes}
+=========================================
+
+## Changes from P0873R0
+
+ * Examples based on [[n4685]]
+ * More details regarding dependent names
+ * More details regarding alias declarations
+ * More details regarding `constexpr` variables
+ * More details regarding the meening if having more than one concept-name in a declaration
 
 # Proposed Solution
 
@@ -158,6 +169,9 @@ be natural for it to be used for functions too, for consistency and simplicity.
 There is a wording inconsistency between `function template` and `generic lambda`. That may need to
 be addressed. I would suggest that `lambda template` would be a more accurate and consistent
 wording.
+Both form of lamba templates ( using auto and using a parameter list) - are currently called "generic",
+so they are at least some consistency there, but they are a template entity behaving like a template and
+should therefore be refered as such.
 
 
 ## Consistent use of auto and typename
@@ -170,7 +184,7 @@ wording.
 
 However they are not required in a template parameter declaration. For
 example, `Even T` and `Even auto T` are unambiguous declarations and the latter
-can be deduced from the former. Therefore, both declaration are
+can be deduced from the former. Therefore, both declarations are
 well-formed.
 A set of concepts can be defined or provided by the standard library to further constrain the
 nature of the non-type non-template template parameters a template accepts.
@@ -220,6 +234,17 @@ requirements, then it is certainly better to either introduce a new concept for 
 requirements or to write a proper requires-clause.
 
 
+So I think we should allow any number (>= 0) of concept name to preceed an type.
+If more than one concept-name is present, the type shall satisfies each constraints.
+The relation between each concept name is conjective.
+No other logical between concept shall be expressible without the use of a requiere clause.
+The idea here is not to be able to construct complexes requirements in a parameter/variable declaration
+expression, but to select a type or value based on several of its properties.
+
+Imagine a function returning a sorted copy of a container.
+The container must be simultanously `Sortable` and `Copyable`
+
+
 
 ## Allow use of concepts consistently and uniformly.
 
@@ -231,7 +256,7 @@ Of course, template functions and lambdas can be constrained.
 
  * `void f(Sortable auto & foo)` : A template function with a
     constrained parameter
- * `[](Dividable Multipliable auto & foo);`  : A template lambda with a
+ * `[](CopyConstructible EqualityComparable<Bar> auto & foo);`  : A template lambda with a
     constrained parameter
 
 
@@ -242,7 +267,7 @@ in : [[#auto-in-functions]] .
 
 ### Function return type
 
-The following declaration declare a non-template function with an
+The following declaration declares a non-template function with an
 automatically deduced type which satisfies the `Sortable` constraint:
  * `Sortable auto f();`
  * `Sortable auto f();`
@@ -251,10 +276,11 @@ automatically deduced type which satisfies the `Sortable` constraint:
 
 A program is ill-formed if the deduced type of the function does not satisfies
 one of the constraints declared in the return type.
-For the sake of sanity, specifying different concepts in both the return type and the trailing
-return type should be ill-formed.
+For the sake of sanity, specifying concept names in both the return type and the trailing
+return typeshould be ill-formed.
 
 `Sortable auto f() -> Iterable auto {}; // ill-formed`
+`Foo auto f() -> Foo auto {}; // ill-formed`
 
 ### Variable declaration
 
@@ -262,13 +288,28 @@ Constraints can be used to refine the type of a variable declaration.
 
  * `AssociativeContainer<std::string, int> auto map = getMap();`
  * `Iterable AssociativeContainer<std::string, int> map = getMap();`
+
+If a variable is `constexpr`, we can ensure its value satisfies a value concept:
+
  * `constexpr Even int answer = 42;`
  * `constexpr Even answer = 42;`
 
+If a concept-name-list contains both type-constraining concepts and
+value-constraining concepts, they are checked against the type and the value respectively of the
+declaration to which they apply.
+
+ * `constexpr Even Integer answer = 42;`
+
+
 The program is ill-formed if one of the constraint is not satisfied.
 
+Of course, no casting or implicit conversion takes place. The left-hand side expression
+type is evaluated and and affected to the variables using the usual rules for `auto`,
+then compiler checks whether the types satisfies all the constraints introduced by each of the concept
+name.
+
 As a generalization, and maybe as a mean to generate better diagnostic, I
-propose that constraints can be applied to non-template or instantiated type.
+propose that constraints can be applied to any non-template or instantiated type.
 It would serve as a sort of static_assert ensuring that a type keeps the
 properties the user is expecting.
 
@@ -278,7 +319,7 @@ properties the user is expecting.
 #### A note on usage of concepts constraints in non-template context.
 
 
-`Iterable vector<int>` mays seems odd in first approach, but, it's a nice way
+`Iterable vector<int>` may seem odd in first approach, but, it's a nice way
 to ensure that library and client code remain compatible, and to easily diagnostic what may have
 been modified and what why the type's expected properties changed.
 
@@ -293,12 +334,10 @@ bases that are fast changing.
 
 
 
-### Dependant names
+### Dependent names
 
-Constraints could be used to better document the use of a dependant names in
-definition of a template, instead of in addition to `typename`
-
-consider the following code
+Constraints could be used to better document the use of a dependent names in
+definition of a template, instead of in addition to `typename` consider the following code
 
 <xmp>
 template <typename T>
@@ -341,35 +380,57 @@ Both these declarations have identical semantics
     `using Foo = Unsigned T::Bar`
 
 
-The program is ill-formed if the dependant type does not respect the
+The program is ill-formed if the dependent type does not respect the
 constraint(s).
 We can, and probably should, convey the same requirements in a requires-clause.
 A constraint that cannot be satisfied in the body of a template
 instantiation causes the program to be ill-formed, SFINAE is not engaged.
+
+`typename` when used to resolved dependent names convey little meaning to the reader,
+even when it's needed by the compiler. People, expecially less experienced developers, tend to add it
+mechanically where the compiler tell them to. [[p0634r1]] proposes to not requiere it in places it's
+not strictly needed.
+
+In places where there are still ambiguities, using a concept name rather that `typename` add informations
+for the reader while still indicating to the compiler the nature of the name it is applied to - a given
+concept can never applies to both a type and a non-type entity.
+
+Using concept names instead of `typename` where a suitable concept name exists to represent the dependent type
+would increase the readability and self-documenting properties of the program and encourage people to think about
+their type more
+
 
 ### type-id alias declarations
 
 Allow the use of Constraints in using directives, in the same manner:
 
 `using CopyConstructible Foo = Bar;`
-
 `template<typename T> using Swappable Foo = Bar<T>;`
 
-The program is ill-formed if the constraints can not be satisfied.
+In both cases, `Foo` is exactly an alias of `Bar`.
+However the program is ill-formed if the constraints can not be satisfied.
 
 Additionally, it may be interesting to constraints parameters of template
 using-directives
 
-`template<Serializable T> using Stream<T> = Iterable<T>;`
+`template<Copyable T> using copyable_vector<T>   = std::vector<T>; //constrained alias on type`
+`template<Copyable T> using CopyableContainer<T> = Container<T>;   //constrained alias on concept`
 
 
-Here, the `Stream` type can only be specialized using types that satisfy the `Serializable`
-constraint.
+
+Here, the `MovableContainer` type can only be constructed using types that satisfy the `Movable`
+concept.
 We use the alias syntax to create a type alias more constrained than the original type.
-An alias created in this way is neither a specialization nor a new type. `Stream` is exactly of the
-type `Iterable`, aka `std::is_same_v<Stream<T>, Iterable<T> == true`.
-However, the alias has additional constraints that are checked upon instantiation.
+An alias created in this way is neither a specialization nor a new type. `copyable_vector<T>` is exactly of the
+type `std::vector<T>`, aka `std::is_same_v<copyable_vector<T>, std::vector<T>> == true` for any given `T`.
+However, the alias has additional constraints on its parameters that are checked upon instantiation.
 The constraits on the alias are checked before the constraints on the type it is created from.
+
+```
+copyable_vector<std::string>  ;  // Ok
+copyable_vector<std::fstream> ; // Ill formed : fstream is not copyable
+```
+
 
 This system would allow the creation of fine-tuned constrained type alias without having to
 introduce new types, factories or inheritance.
@@ -382,6 +443,11 @@ There is a number of places where allowing concepts in front of a type would
 either make no sense or be actually harmful.
  * sizeof and cast expression : It doesn't make a lot of sense
  * class/struct/union/enum definition
+
+Specifying one or several concepts on a class definition has the result of thightly
+coupling a type and a concept and I feel that may be defeating the very
+notion of concepts. It would look more like regular inheritance that an implicit
+interface that exists independantly of any type.
 
 
 ## Grammar
@@ -403,7 +469,7 @@ extern std::EquallyComparable boost::vector<int> baz;
 [[p0791r0]] gives a good justification for this order, in that constraints are like adjectives
 applied to a type.
 
-A simpler explanation is that constraints are applied to an unqualified type-id. And qualifiers
+A simpler explanation is that constraints are applied to a type-id. And qualifiers
 are applied to a constrained type.
 Beside the parallel with English grammar rules, putting the concept-names after the type-id would
 create ambiguities as to whether the constraints are applied on the type or on a value.
@@ -549,7 +615,7 @@ optional makes the language more intuitive for all.
 # Acknowledgments and Thanks
 
 This proposal was inspired by Jakob Riedle's [[p0791r0]] proposal.
-Valuable feedbacks from Michael Caisse, Arthur O'Dwyer, Adi Shavit, Simon Brand.
+Valuable feedbacks from Jakob Riedle, Christopher Di Bella, Michael Caisse, Arthur O'Dwyer, Adi Shavit, Simon Brand and others.
 
 
 
