@@ -1,0 +1,136 @@
+<pre class='metadata'>
+Title: Deprecate uses of the comma operator in subscripting expressions
+Shortname: P0000
+Level: 0
+Status: D
+Group: wg21
+Editor: Corentin Jabot, corentin.jabot@gmail.com
+URL: https://cor3ntin.github.io/CPPProposals/deprecate_comma_subscript/P0000.html
+Abstract: We propose to deprecate the use of the comma operator in subscripting expressions as they are not very useful, confusing and limit futures evolutions of the standard.
+Audience: EWG
+Markup Shorthands: markdown yes
+Default Highlight: CPP
+Line Numbers: no
+Date: 2018-07-01
+</pre>
+
+<style>
+
+.tony-table table {
+    width:100%;
+}
+
+.tony-table th {
+    text-align: center;
+    padding-right:20px;
+}
+
+.tony-table  td {
+    vertical-align:top;
+}
+
+.wording-add {
+    background-color: #F6F9ED;
+}
+
+</style>
+
+
+Introduction {#intro}
+=====================
+
+This paper proposes that the use of a comma operator within a subscripting expression should be deprecated.
+
+<table class="tony-table">
+<tr> <th> Current </th> <th> Proposed </th </tr>
+<!-- C++17 -->
+<tr> <td>
+<pre>
+
+ array[x]     // Ok
+ array[(x,y)] // Ok, uses y as index/key
+ array[x,y]   // Ok, uses y as index/key
+
+</pre>
+</td>
+
+<td>
+<pre>
+
+array[x]      // Ok
+array[(x,y)]  // Ok, uses y as index/key
+array[x,y]   // <b>Deprecated</b> , uses y as index/key
+
+</pre> </td> </tr>
+</table>
+
+
+Motivation
+==========
+
+Currently, a comma can appear in subscript expressions such as `auto z = foo[x, y]` calls the comma operator.
+While this is currently unambiguous, it is confusing and error-prone when used and encountered.
+
+The authors think this syntax would be more useful and suited to index multidimensional classes such as `mdspan`.
+
+<pre>
+  mdspan<int, 3> foo;
+  int value = foo[1, 2, 3];
+</pre>
+
+The authors do not propose to make this possible until a reasonable deprecation period has passed.
+
+
+Impact on existing code bases
+=============================
+
+The author analyzed several large open source codebases and did not find a significant use of this pattern.
+<a href="https://github.com/cor3ntin/clang-tools-extra/tree/detect-comma-in-subscript">The tool used</a> is available
+on Github and automatic refactoring of large code bases is possible.
+In all cases, `array[x,y,z]` can be refactored in `array[(x,y,z)]` without alteration of semantic and behavior.
+
+
+// More numbers!
+
+Alternatives approaches
+=======================
+
+To maintain compatibility with C, it would be possible to deprecate the use of the comma operator only in overloaded operators.
+Example:
+<pre>
+  int c_array[1];
+  c_array[1,0];   // <b>not</b> deprecated
+
+  std::array<int, 1> cpp_array;
+  cpp_array[1,0];   // <b>deprecated</b>
+</pre>
+
+
+
+Proposed Wording
+================
+
+In annex D, add a new Paragraph
+
+<div class="wording-add">
+<b> Comma operator in subscript expressions</b>
+Comma operator expressions in subscript expressions are deprecated.
+[Note: a comma appearing in parenthesis is not deprecated]
+<br />
+[Example:
+<pre>
+    a[b,c];   //deprecated
+    a[(b,c)]; // Note deprecated
+</pre>]
+</div>
+
+In 8.5.19 [expr.comma], add a paragraph
+<div class="wording-add">
+[Note: In subscript expressions, the comma operator is deprecated. See [depr.comma-subscript]]
+</div>
+
+Add a paragraph after 8.5.1.1.2 [expr.sub]
+
+<div class="wording-add">
+[Note: In subscript expressions, the comma operator is deprecated. See [depr.comma-subscript]]
+</div>
