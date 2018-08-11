@@ -1179,7 +1179,7 @@ Possible extra rowspan handling
 </style>
   <meta content="Bikeshed version 67155cabad72a8ab669a7d4421c90e2999a29b68" name="generator">
   <link href="https://cor3ntin.github.io/CPPProposals/deprecate_comma_subscript/P0000.html" rel="canonical">
-  <meta content="4e3c9b6a85730e6b83b787964d382284ac2ae0e5" name="document-revision">
+  <meta content="65be17670b809c221d2e6a7518b474cd9bf3577b" name="document-revision">
 <style>
 
 .tony-table table {
@@ -1437,15 +1437,15 @@ pre .property::before, pre .property::after {
     <li>
      <a href="#motivation"><span class="secno">2</span> <span class="content">Motivation</span></a>
      <ol class="toc">
-      <li><a href="#the-need-for-a-multi-dimensionnal-subscript-operator"><span class="secno">2.1</span> <span class="content">The need for a multi-dimensionnal subscript operator</span></a>
-      <li><a href="#what-a-multi-dimensionnal-subscript-operator-would-look-like"><span class="secno">2.2</span> <span class="content">What a multi-dimensionnal subscript operator would look like</span></a>
+      <li><a href="#the-need-for-a-multidimensional-subscript-operator"><span class="secno">2.1</span> <span class="content">The need for a multidimensional subscript operator</span></a>
+      <li><a href="#what-a-multidimensional-subscript-operator-would-look-like"><span class="secno">2.2</span> <span class="content">What a multidimensional subscript operator would look like</span></a>
      </ol>
     <li><a href="#impact-on-existing-code-bases"><span class="secno">3</span> <span class="content">Impact on existing code bases</span></a>
     <li>
      <a href="#alternatives-approaches"><span class="secno">4</span> <span class="content">Alternatives approaches</span></a>
      <ol class="toc">
       <li><a href="#allow-comma-expression-only-in-c-arrays"><span class="secno">4.1</span> <span class="content">Allow comma expression only in C arrays</span></a>
-      <li><a href="#alternative-syntax-for-multi-dimensionnal-subscript-expressions"><span class="secno">4.2</span> <span class="content">Alternative syntax for multi-dimensionnal subscript expressions</span></a>
+      <li><a href="#alternative-syntax-for-multidimensional-subscript-expressions"><span class="secno">4.2</span> <span class="content">Alternative syntax for multidimensional subscript expressions</span></a>
      </ol>
     <li><a href="#proposed-wording"><span class="secno">5</span> <span class="content">Proposed Wording</span></a>
    </ol>
@@ -1472,43 +1472,43 @@ Doing so opens the door to multidimensional subscript operators such as <code cl
 <span class="c1"></span></pre>
    </table>
    <h2 class="heading settled" data-level="2" id="motivation"><span class="secno">2. </span><span class="content">Motivation</span><a class="self-link" href="#motivation"></a></h2>
-   <p>Currently, a comma can appear in subscript expressions such as <code class="highlight"><span class="k">auto</span> <span class="n">z</span> <span class="o">=</span> <span class="n">foo</span><span class="p">[</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">]</span></code> calls the comma operator.
+   <p>Currently, a comma can appear in subscript expressions such that <code class="highlight"><span class="k">auto</span> <span class="n">z</span> <span class="o">=</span> <span class="n">foo</span><span class="p">[</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">]</span></code> calls the comma operator.
 While this is currently unambiguous, it is confusing and error-prone when used and encountered.</p>
    <p>The authors think this syntax would be more useful and suited to index multidimensional classes such as <code class="highlight"><span class="n">mdspan</span></code>.</p>
-<pre class="highlight"><span class="n">mdspan</span><intU0002C U00033U0002C="" U00035="" array_propertyU0003AU0003AdimensionU0003C2U0002C=""><span class="o">></span> <span class="n">foo</span><span class="p">(</span><span class="cm">/*...*/</span><span class="p">);</span>
+<pre class="highlight"><span class="n">mdspan</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span> <span class="n">array_property</span><span class="o">::</span><span class="n">dimension</span><span class="o">&lt;</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="o">>></span> <span class="n">foo</span><span class="p">(</span><span class="cm">/*...*/</span><span class="p">);</span>
 <span class="kt">int</span> <span class="n">value</span> <span class="o">=</span> <span class="n">foo</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">];</span>
-</intU0002C></pre>
+</pre>
    <p>We do not propose to make this possible until a reasonable deprecation period has passed.</p>
    <p>It is important to note that the goal is not to special-casing the meaning of a comma within a subscript expression.
-Indeed, the standard defines that</p>
-   <quote>In contexts where comma is given a special meaning, 
-[ Example: in lists of arguments to functions ([expr.call]) and lists of initializers ([dcl.init]) — end example ] 
-the comma operator as described in this subclause can appear only in parentheses. </quote>
+Indeed, the standard defines that:</p>
+   <blockquote>
+    <p>In contexts where comma is given a special meaning, <em>[ Example: in lists of arguments to functions ([expr.call]) and lists of initializers ([dcl.init]) — end example ]</em> the comma operator as described in this subclause can appear only in parentheses.</p>
+   </blockquote>
    <p>So simply by supporting multiple parameters, a comma within a subscript operator
 would serve as an argument separator, without the need for specific wording or parsing.</p>
-   <h3 class="heading settled" data-level="2.1" id="the-need-for-a-multi-dimensionnal-subscript-operator"><span class="secno">2.1. </span><span class="content">The need for a multi-dimensionnal subscript operator</span><a class="self-link" href="#the-need-for-a-multi-dimensionnal-subscript-operator"></a></h3>
+   <h3 class="heading settled" data-level="2.1" id="the-need-for-a-multidimensional-subscript-operator"><span class="secno">2.1. </span><span class="content">The need for a multidimensional subscript operator</span><a class="self-link" href="#the-need-for-a-multidimensional-subscript-operator"></a></h3>
    <p>The classes that can benefit from a multidimensional subscript operator are higher-dimensions variants of
 classes that define a single-dimension subscript operator: matrixes, views, geometric entities, graphics APIs...</p>
-   <p><code class="highlight"><span class="n">mdspan</span></code> comes immediately to mind. Note that because there is no multi-dimensional subscript operator in the standard, <code class="highlight"><span class="n">mdspan</span></code> uses the call operator. While this is functionally equivalent to what a multidimensional subscript operator would
+   <p><code class="highlight"><span class="n">mdspan</span></code> comes immediately to mind. Note that because there is no multidimensional subscript operator in the standard, <code class="highlight"><span class="n">mdspan</span></code> uses the call operator. While this is functionally equivalent to what a multidimensional subscript operator would
 be, it does not carry the same semantic, making the code harder to read and reason about. 
 It also encourages non-semantically appropriate operator overloading.</p>
-   <h3 class="heading settled" data-level="2.2" id="what-a-multi-dimensionnal-subscript-operator-would-look-like"><span class="secno">2.2. </span><span class="content">What a multi-dimensionnal subscript operator would look like</span><a class="self-link" href="#what-a-multi-dimensionnal-subscript-operator-would-look-like"></a></h3>
+   <h3 class="heading settled" data-level="2.2" id="what-a-multidimensional-subscript-operator-would-look-like"><span class="secno">2.2. </span><span class="content">What a multidimensional subscript operator would look like</span><a class="self-link" href="#what-a-multidimensional-subscript-operator-would-look-like"></a></h3>
    <p>This paper does not propose a multidimensional subscript operator, yet, it’s interesting to look at what it would look like.
 The most logical thing to do would be to mirror the call operator syntax.</p>
-<pre class="highlight"><span class="k">template</span> <typename datatype="">
+<pre class="highlight"><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">DataType</span><span class="o">></span>
 <span class="k">class</span> <span class="nc">mdspan</span> <span class="p">{</span>
   <span class="k">using</span> <span class="n">reference</span> <span class="o">=</span> <span class="cm">/*...*/</span><span class="p">;</span>
-  <span class="k">template</span><size_t...>
+  <span class="k">template</span><span class="o">&lt;</span><span class="kt">size_t</span><span class="p">...</span><span class="o">></span>
   <span class="n">reference</span> <span class="k">operator</span><span class="p">[](</span> <span class="n">IndexType</span> <span class="p">...</span> <span class="n">indices</span> <span class="p">)</span> <span class="k">const</span> <span class="k">noexcept</span><span class="p">;</span>
 <span class="p">};</span>
 
-<span class="n">mdspan</span><intU0005B1U0005DU0005B2U0005DU0005B3U0005D> <span class="n">foo</span> <span class="o">=</span> <span class="cm">/*....*/</span><span class="p">;</span>
+<span class="n">mdspan</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">2</span><span class="p">][</span><span class="mi">3</span><span class="p">]</span><span class="o">></span> <span class="n">foo</span> <span class="o">=</span> <span class="cm">/*....*/</span><span class="p">;</span>
 <span class="k">auto</span> <span class="n">bar</span> <span class="o">=</span> <span class="n">foo</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">];</span>
-</intU0005B1U0005DU0005B2U0005DU0005B3U0005D></size_t...></typename></pre>
+</pre>
    <p>This syntax resembles that of a call operator, but with the proper semantics.
 A similar syntax can be found in popular languages such as python, D, ruby</p>
    <h2 class="heading settled" data-level="3" id="impact-on-existing-code-bases"><span class="secno">3. </span><span class="content">Impact on existing code bases</span><a class="self-link" href="#impact-on-existing-code-bases"></a></h2>
-   <p>The author analyzed several large open source codebases and did not find a significant use of this pattern. <a href="https://github.com/cor3ntin/clang-tools-extra/tree/detect-comma-in-subscript">The tool used</a> is available
+   <p>We analyzed several large open source codebases and did not find a significant use of this pattern. <a href="https://github.com/cor3ntin/clang-tools-extra/tree/detect-comma-in-subscript">The tool used</a> is available
 on Github and automatic refactoring of large code bases is possible.
 In all cases, <code class="highlight"><span class="n">array</span><span class="p">[</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">,</span><span class="n">z</span><span class="p">]</span></code> can be refactored in <code class="highlight"><span class="n">array</span><span class="p">[(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">,</span><span class="n">z</span><span class="p">)]</span></code> without alteration of semantic and behavior.</p>
    <p>The codebases analyzed include the Linux kernel, the LLVM project and the entirety of the boost test suite.
@@ -1521,30 +1521,30 @@ Example:</p>
 <pre class="highlight"><span class="kt">int</span> <span class="n">c_array</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
 <span class="n">c_array</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">];</span>   <span class="c1">// </span><b><span class="c1">not</span></b><span class="c1"> deprecated</span>
 <span class="c1"></span>
-<span class="n">std</span><span class="o">::</span><span class="n">array</span><intU0002C U00031=""> <span class="n">cpp_array</span><span class="p">;</span>
+<span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span> <span class="mi">1</span><span class="o">></span> <span class="n">cpp_array</span><span class="p">;</span>
 <span class="n">cpp_array</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">];</span>   <span class="c1">// </span><b><span class="c1">deprecated</span></b>
-</intU0002C></pre>
-   <p>However, this would probably lead to more confusion for a feature that is virtually not used.</p>
-   <h3 class="heading settled" data-level="4.2" id="alternative-syntax-for-multi-dimensionnal-subscript-expressions"><span class="secno">4.2. </span><span class="content">Alternative syntax for multi-dimensionnal subscript expressions</span><a class="self-link" href="#alternative-syntax-for-multi-dimensionnal-subscript-expressions"></a></h3>
-   <p>It has been proposed that <code class="highlight"><span class="n">array</span><span class="p">[</span><span class="n">x</span><span class="p">][</span><span class="n">y</span><span class="p">]</span></code> should be equivalent to <code class="highlight"><span class="n">array</span><span class="p">.</span><span class="n">operaror</span><span class="p">[](</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">);</span></code></p>
-<pre class="highlight"><span class="n">mdspan</span><intU0002C array_propertyU0003AU0003AdimensionU0003C2U0002C3=""><span class="o">></span> <span class="n">foo</span><span class="p">;</span>
+</pre>
+   <p>However, this would probably lead to more confusion for a feature that is virtually unused.</p>
+   <h3 class="heading settled" data-level="4.2" id="alternative-syntax-for-multidimensional-subscript-expressions"><span class="secno">4.2. </span><span class="content">Alternative syntax for multidimensional subscript expressions</span><a class="self-link" href="#alternative-syntax-for-multidimensional-subscript-expressions"></a></h3>
+   <p>It has been proposed that <code class="highlight"><span class="n">array</span><span class="p">[</span><span class="n">x</span><span class="p">][</span><span class="n">y</span><span class="p">]</span></code> should be equivalent to <code class="highlight"><span class="n">array</span><span class="p">.</span><span class="k">operator</span><span class="p">[](</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">);</span></code></p>
+<pre class="highlight"><span class="n">mdspan</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span> <span class="n">array_property</span><span class="o">::</span><span class="n">dimension</span><span class="o">&lt;</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="o">>></span> <span class="n">foo</span><span class="p">;</span>
 <span class="k">auto</span> <span class="n">x</span> <span class="o">=</span> <span class="n">foo</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">];</span> <span class="c1">//equivalent to foo(0, 0);</span>
-</intU0002C></pre>
+</pre>
    <p>However, it’s easy to imagine a scenario such that <code class="highlight"><span class="p">(</span><span class="n">array</span><span class="p">[</span><span class="n">x</span><span class="p">])[</span><span class="n">y</span><span class="p">]</span></code> would be a valid expression.
 For example:</p>
 <pre class="highlight"><span class="k">struct</span> <span class="n">row</span> <span class="p">{</span>
-    <span class="n">Foo</span> <span class="o">&amp;</span> <span class="n">operaror</span><span class="p">[</span><span class="kt">size_t</span><span class="p">];</span>
+    <span class="n">Foo</span> <span class="o">&amp;</span> <span class="k">operator</span><span class="p">[</span><span class="kt">size_t</span><span class="p">];</span>
 <span class="p">};</span>
 <span class="k">struct</span> <span class="n">grid</span> <span class="p">{</span>
     <span class="n">row</span> <span class="o">&amp;</span> <span class="k">operator</span><span class="p">[</span><span class="kt">size_t</span><span class="p">]</span> <span class="k">const</span><span class="p">;</span>
-    <span class="k">const</span> <span class="n">Foo</span> <span class="o">&amp;</span> <span class="n">operaror</span><span class="p">[</span><span class="kt">size_t</span><span class="p">,</span> <span class="kt">size_t</span><span class="p">]</span> <span class="k">const</span><span class="p">;</span>
+    <span class="k">const</span> <span class="n">Foo</span> <span class="o">&amp;</span> <span class="k">operator</span><span class="p">[</span><span class="kt">size_t</span><span class="p">,</span> <span class="kt">size_t</span><span class="p">]</span> <span class="k">const</span><span class="p">;</span>
 <span class="p">};</span>
 <span class="n">grid</span> <span class="n">g</span><span class="p">;</span>
 </pre>
    <p>In this somewhat artificial example, <code class="highlight"><span class="n">g</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span></code> and <code class="highlight"><span class="p">(</span><span class="n">g</span><span class="p">[</span><span class="mi">0</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span></code> would be 2 valid, different expressions,
 which is confusing.
 Moreover, making this syntax compatible with pack expansion and fold expressions would certainly prove challenging.</p>
-   <p>On the other hand, this syntax mirror the usage of multi-dimensional C arrays and is also popular in
+   <p>On the other hand, this syntax mirror the usage of multidimensional C arrays and is also popular in
 other languages such as Perl.</p>
    <h2 class="heading settled" data-level="5" id="proposed-wording"><span class="secno">5. </span><span class="content">Proposed Wording</span><a class="self-link" href="#proposed-wording"></a></h2>
    <p>In annex D, add a new Paragraph</p>
@@ -1552,7 +1552,7 @@ other languages such as Perl.</p>
      <b> Comma operator in subscript expressions</b> Comma operator expressions in subscript expressions are deprecated.
 [Note: a comma appearing in parenthesis is not deprecated] <br> [Example: 
 <pre class="highlight"><span class="n">a</span><span class="p">[</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">];</span>   <span class="c1">//deprecated</span>
-<span class="c1"></span><span class="n">a</span><span class="p">[(</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">)];</span> <span class="c1">// Note deprecated</span>
+<span class="c1"></span><span class="n">a</span><span class="p">[(</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">)];</span> <span class="c1">// Not deprecated</span>
 </pre>
     ]
    </div>
