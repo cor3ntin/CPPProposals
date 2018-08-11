@@ -40,6 +40,7 @@ Introduction {#intro}
 =====================
 
 This paper proposes that the use of a comma operator within a subscripting expression should be deprecated.
+Doing so opens the door to multidimensional subscript operators such as `mdspan`.
 
 <table class="tony-table">
 <tr> <th> Current </th> <th> Proposed </th </tr>
@@ -74,12 +75,53 @@ While this is currently unambiguous, it is confusing and error-prone when used a
 The authors think this syntax would be more useful and suited to index multidimensional classes such as `mdspan`.
 
 <pre>
-  mdspan<int, 3> foo;
+  mdspan<int, array_property::dimension<2, 3, 5>> foo(/*...*/);
   int value = foo[1, 2, 3];
 </pre>
 
-The authors do not propose to make this possible until a reasonable deprecation period has passed.
+We do not propose to make this possible until a reasonable deprecation period has passed.
 
+It is important to note that the goal is not to special-casing the meaning of a comma within a subscript expression.
+Indeed, the standard defines that
+
+<quote>In contexts where comma is given a special meaning, 
+[ Example: in lists of arguments to functions ([expr.call]) and lists of initializers ([dcl.init]) — end example ] 
+the comma operator as described in this subclause can appear only in parentheses. </quote>
+
+So simply by supporting multiple parameters, a comma within a subscript operator 
+would serve as an argument separator, without the need for specific wording or parsing.
+
+## The need for a multi-dimensionnal subscript operator
+
+
+The classes that can benefit from a multidimensional subscript operator are higher-dimensions variants of
+classes that define a single-dimension subscript operator: matrixes, views, geometric entities, graphics APIs...
+
+`mdspan` comes immediately to mind. Note that because there is no multi-dimensional subscript operator in the standard,
+`mdspan` uses the call operator. While this is functionally equivalent to what a multidimensional subscript operator would
+be, it does not carry the same semantic, making the code harder to read and reason about. 
+It also encourages non-semantically appropriate operator overloading.
+
+## What a multi-dimensionnal subscript operator would look like
+
+
+This paper does not propose a multidimensional subscript operator, yet, it's interesting to look at what it would look like.
+The most logical thing to do would be to mirror the call operator syntax.
+
+<pre>
+template <typename DataType>
+class mdspan {
+  using reference = /*...*/;
+  template<size_t...>
+  reference operator[]( IndexType ... indices ) const noexcept;
+};
+
+mdspan<int[1][2][3]> foo = /*....*/;
+auto bar = foo[0, 1, 2];
+</pre>
+
+This syntax resembles that of a call operator, but with the proper semantics.
+A similar syntax can be found in popular languages such as python, D, ruby
 
 Impact on existing code bases
 =============================
@@ -89,11 +131,15 @@ The author analyzed several large open source codebases and did not find a signi
 on Github and automatic refactoring of large code bases is possible.
 In all cases, `array[x,y,z]` can be refactored in `array[(x,y,z)]` without alteration of semantic and behavior.
 
+The codebases analyzed include the Linux kernel, the LLVM project and the entirety of the boost test suite.
+The only instances found where in boost's "Spirit Classic" library (deprecated since 2009). 
+A documentation of the offending syntax can be found <a href="https://www.boost.org/doc/libs/1_35_0/libs/spirit/doc/switch_parser.html"> here</a>. 
 
-// More numbers!
 
 Alternatives approaches
 =======================
+
+## Allow comma expression only in C arrays
 
 To maintain compatibility with C, it would be possible to deprecate the use of the comma operator only in overloaded operators.
 Example:
@@ -105,6 +151,37 @@ Example:
   cpp_array[1,0];   // <b>deprecated</b>
 </pre>
 
+However, this would probably lead to more confusion for a feature that is virtually not used.
+
+## Alternative syntax for multi-dimensionnal subscript expressions
+
+
+It has been proposed that `array[x][y]` should be equivalent to `array.operaror[](x, y);`
+<pre>
+    mdspan<int, array_property::dimension<2,3>> foo;
+    auto x = foo[0][0]; //equivalent to foo(0, 0);
+</pre>
+
+However, it's easy to imagine a scenario such that `(array[x])[y]` would be a valid expression.
+For example:
+
+<pre>
+    struct row {
+        Foo & operaror[size_t];
+    };
+    struct grid {
+        row & operator[size_t] const;
+        const Foo & operaror[size_t, size_t] const;
+    };
+    grid g;
+</pre>
+
+In this somewhat artificial example, `g[0][0]` and `(g[0])[0]` would be 2 valid, different expressions,
+which is confusing.
+Moreover, making this syntax compatible with pack expansion and fold expressions would certainly prove challenging.
+
+On the other hand, this syntax mirror the usage of multi-dimensional C arrays and is also popular in
+other languages such as Perl.
 
 
 Proposed Wording
