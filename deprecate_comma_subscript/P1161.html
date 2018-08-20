@@ -1179,7 +1179,7 @@ Possible extra rowspan handling
 </style>
   <meta content="Bikeshed version 67155cabad72a8ab669a7d4421c90e2999a29b68" name="generator">
   <link href="https://cor3ntin.github.io/CPPProposals/deprecate_comma_subscript/P0000.html" rel="canonical">
-  <meta content="d2384e500bcb96ed07318381cfeb41fa8a7c8d3f" name="document-revision">
+  <meta content="d7e29baf38c141f9603bafd1057a91119e5fa8cc" name="document-revision">
 <style>
 
 .tony-table table {
@@ -1197,6 +1197,52 @@ Possible extra rowspan handling
 
 .wording-add {
     background-color: #F6F9ED;
+}
+
+
+/* Table */
+.data-table {
+	border-collapse: collapse;
+	font-size: 14px;
+	min-width: 573px;
+}
+.data-table th {
+	color: #5a5a5a;
+}
+
+.data-table th,
+.data-table td {
+	padding: 7px 17px;
+}
+.data-table caption {
+	margin: 7px;
+}
+
+/* Table Header */
+.data-table thead th {
+    border-bottom: 2px solid #CCCCCC;
+}
+
+/* Table Body */
+.data-table tbody td {
+	color: #353535;
+	border-bottom: 1px solid #dcdcdc;
+	text-align: right;
+}
+
+.data-table tbody tr:last-child td {
+	border: 0;
+}
+
+.data-table tbody tr:hover td {
+	background-color: #f7f7f7;
+	transition: all .2s;
+}
+
+/* Table Footer */
+.data-table tfoot th {
+	border-top: 1px solid #c7c7c7;
+	text-align: right;
 }
 
 </style>
@@ -1446,8 +1492,10 @@ pre .property::before, pre .property::after {
      <ol class="toc">
       <li><a href="#allow-comma-expression-only-in-c-arrays"><span class="secno">4.1</span> <span class="content">Allow comma expression only in C arrays</span></a>
       <li><a href="#alternative-syntax-for-multidimensional-subscript-expressions"><span class="secno">4.2</span> <span class="content">Alternative syntax for multidimensional subscript expressions</span></a>
+      <li><a href="#other-comma-expressions"><span class="secno">4.3</span> <span class="content">Other comma expressions</span></a>
      </ol>
     <li><a href="#proposed-wording"><span class="secno">5</span> <span class="content">Proposed Wording</span></a>
+    <li><a href="#acknowledgments"><span class="secno">6</span> <span class="content">Acknowledgments</span></a>
    </ol>
   </nav>
   <main>
@@ -1546,6 +1594,454 @@ which is confusing.
 Moreover, making this syntax compatible with pack expansion and fold expressions would certainly prove challenging.</p>
    <p>On the other hand, this syntax mirror the usage of multidimensional C arrays and is also popular in
 other languages such as Perl.</p>
+   <h3 class="heading settled" data-level="4.3" id="other-comma-expressions"><span class="secno">4.3. </span><span class="content">Other comma expressions</span><a class="self-link" href="#other-comma-expressions"></a></h3>
+   <p>Early feedback on this paper suggested we might want to deprecate comma expressions in more contexts.
+While the authors of this paper are not suggesting that, for completeness, we analyzed a few open source projects.</p>
+   <p>Below is a table of contexts in which comma expressions are found in LLVM, Boost 1.67’s Test Suite and the Linux 4.17 Kernel.
+The data was generated with the clang-tidy. It is meant to give a rough idea of the ways comma expressions are used
+and does not pretend to be completely accurate.</p>
+   <p>We provide two tables.
+The first counts each expression encountered through a project exactly one and as such give an idea of the amount of code that would
+have to be modified to conform to some eventual depreciation.</p>
+   <table class="data-table">
+    <thead>
+     <tr>
+      <th>Parent Expression
+      <th>Boost
+      <th>Chromium
+      <th>Firefox
+      <th>Kernel
+      <th>Libreoffice
+      <th>Llvm
+      <th>Qt
+      <th>
+      <th><small>Estimated LOC affected*</small>
+    <tbody>
+     <tr>
+      <td>ParenExpr
+      <td>1072
+      <td>7713
+      <td>4342
+      <td>72
+      <td>9359
+      <td>70
+      <td>1489
+      <td>24117
+      <td> <small> 0.030%-0.080% </small> 
+     <tr>
+      <td>ForStmt
+      <td>850
+      <td>2899
+      <td>1415
+      <td>565
+      <td>3293
+      <td>913
+      <td>2596
+      <td>12531
+      <td> <small> 0.016%-0.042% </small> 
+     <tr>
+      <td>CallExpr
+      <td>32
+      <td>5373
+      <td>319
+      <td>-
+      <td>42
+      <td>1504
+      <td>2
+      <td>7272
+      <td> <small> 0.009%-0.024% </small> 
+     <tr>
+      <td>BinaryOperator
+      <td>424
+      <td>1015
+      <td>444
+      <td>63
+      <td>2143
+      <td>77
+      <td>486
+      <td>4652
+      <td> <small> 0.006%-0.016% </small> 
+     <tr>
+      <td>CompoundStmt
+      <td>209
+      <td>287
+      <td>62
+      <td>12
+      <td>247
+      <td>6
+      <td>102
+      <td>925
+      <td> <small> 0.001%-0.003% </small> 
+     <tr>
+      <td>ReturnStmt
+      <td>221
+      <td>328
+      <td>53
+      <td>-
+      <td>56
+      <td>6
+      <td>91
+      <td>755
+      <td> <small> 0.001%-0.003% </small> 
+     <tr>
+      <td>ImplicitCastExpr
+      <td>3
+      <td>443
+      <td>1
+      <td>-
+      <td>13
+      <td>16
+      <td>-
+      <td>476
+      <td> <small> 0.001%-0.002% </small> 
+     <tr>
+      <td>ExprWithCleanups
+      <td>77
+      <td>56
+      <td>3
+      <td>-
+      <td>38
+      <td>48
+      <td>16
+      <td>238
+      <td>~
+     <tr>
+      <td>WhileStmt
+      <td>72
+      <td>20
+      <td>4
+      <td>-
+      <td>66
+      <td>-
+      <td>14
+      <td>176
+      <td>~
+     <tr>
+      <td>IfStmt
+      <td>32
+      <td>51
+      <td>11
+      <td>-
+      <td>30
+      <td>1
+      <td>-
+      <td>125
+      <td>~
+     <tr>
+      <td>ConditionalOperator
+      <td>16
+      <td>17
+      <td>18
+      <td>-
+      <td>35
+      <td>-
+      <td>17
+      <td>103
+      <td>~
+     <tr>
+      <td>MaterializeTemporaryExpr
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>76
+      <td>76
+      <td>~
+     <tr>
+      <td>CaseStmt
+      <td>-
+      <td>7
+      <td>-
+      <td>-
+      <td>20
+      <td>-
+      <td>-
+      <td>27
+      <td>~
+     <tr>
+      <td>DoStmt
+      <td>1
+      <td>10
+      <td>1
+      <td>-
+      <td>1
+      <td>-
+      <td>-
+      <td>13
+      <td>~
+     <tr>
+      <td>CXXStaticCastExpr
+      <td>5
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>5
+      <td>~
+     <tr>
+      <td>CXXMemberCallExpr
+      <td>5
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>5
+      <td>~
+     <tr>
+      <td>CXXConstructExpr
+      <td>5
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>5
+      <td>~
+     <tr>
+      <td>ArraySubscriptExpr
+      <td>2
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>2
+      <td>~
+     <tr>
+      <td>DefaultStmt
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>1
+      <td>-
+      <td>-
+      <td>1
+      <td>~
+   </table>
+   <ul>
+    <li data-md="">
+     <p><b>Estimated 30 to 80 millions LOC compiled. This is a back of the envelop calculation meant to be an order of magnetude rather that a meaningful, accurate value</b>.</p>
+   </ul>
+   <p>This second table represents the number of warnings that would be emitted following some eventual depreciation.</p>
+   <table class="data-table">
+    <thead>
+     <tr>
+      <th>Parent Expression
+      <th>Boost
+      <th>Chromium
+      <th>Firefox
+      <th>Kernel
+      <th>Libreoffice
+      <th>Llvm
+      <th>Qt
+      <th>
+    <tbody>
+     <tr>
+      <td>ParenExpr
+      <td>133201
+      <td>69625
+      <td>100295
+      <td>924
+      <td>55551
+      <td>1451
+      <td>6045
+      <td>367092
+     <tr>
+      <td>ForStmt
+      <td>72792
+      <td>139460
+      <td>99515
+      <td>4114
+      <td>12876
+      <td>13343
+      <td>11464
+      <td>353564
+     <tr>
+      <td>BinaryOperator
+      <td>45614
+      <td>36260
+      <td>3584
+      <td>63
+      <td>4689
+      <td>4756
+      <td>57901
+      <td>152867
+     <tr>
+      <td>ReturnStmt
+      <td>25291
+      <td>20353
+      <td>1253
+      <td>-
+      <td>455
+      <td>46
+      <td>17636
+      <td>65034
+     <tr>
+      <td>MaterializeTemporaryExpr
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>52140
+      <td>52140
+     <tr>
+      <td>CompoundStmt
+      <td>49863
+      <td>383
+      <td>254
+      <td>12
+      <td>503
+      <td>6
+      <td>811
+      <td>51832
+     <tr>
+      <td>WhileStmt
+      <td>11002
+      <td>33
+      <td>10
+      <td>-
+      <td>66
+      <td>-
+      <td>8822
+      <td>19933
+     <tr>
+      <td>CallExpr
+      <td>178
+      <td>6237
+      <td>2872
+      <td>-
+      <td>59
+      <td>1578
+      <td>3
+      <td>10927
+     <tr>
+      <td>ConditionalOperator
+      <td>8087
+      <td>17
+      <td>18
+      <td>-
+      <td>182
+      <td>-
+      <td>17
+      <td>8321
+     <tr>
+      <td>ExprWithCleanups
+      <td>1033
+      <td>61
+      <td>17
+      <td>-
+      <td>101
+      <td>443
+      <td>961
+      <td>2616
+     <tr>
+      <td>IfStmt
+      <td>331
+      <td>54
+      <td>26
+      <td>-
+      <td>359
+      <td>1
+      <td>-
+      <td>771
+     <tr>
+      <td>CXXStaticCastExpr
+      <td>653
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>653
+     <tr>
+      <td>ImplicitCastExpr
+      <td>9
+      <td>472
+      <td>17
+      <td>-
+      <td>13
+      <td>16
+      <td>-
+      <td>527
+     <tr>
+      <td>DoStmt
+      <td>18
+      <td>14
+      <td>34
+      <td>-
+      <td>1
+      <td>-
+      <td>-
+      <td>67
+     <tr>
+      <td>CaseStmt
+      <td>-
+      <td>7
+      <td>-
+      <td>-
+      <td>35
+      <td>-
+      <td>-
+      <td>42
+     <tr>
+      <td>CXXConstructExpr
+      <td>22
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>22
+     <tr>
+      <td>CXXMemberCallExpr
+      <td>5
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>5
+     <tr>
+      <td>ArraySubscriptExpr
+      <td>5
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>5
+     <tr>
+      <td>DefaultStmt
+      <td>-
+      <td>-
+      <td>-
+      <td>-
+      <td>4
+      <td>-
+      <td>-
+      <td>4
+   </table>
+   <ul>
+    <li data-md="">
+     <p>The numerous comas in call expressions accross projects come, for the most part, from Google Test’s <code class="highlight"><span class="n">EXPECT_EQ</span></code> and related unit test macros.</p>
+    <li data-md="">
+     <p>Since comma expressions are often chained <code class="highlight"><span class="p">(</span><span class="n">e1</span><span class="p">,</span> <span class="n">e2</span><span class="p">,</span> <span class="n">e3</span><span class="p">)</span></code>, they appear frequently in binary-operator expressions (BinaryOperator)</p>
+   </ul>
    <h2 class="heading settled" data-level="5" id="proposed-wording"><span class="secno">5. </span><span class="content">Proposed Wording</span><a class="self-link" href="#proposed-wording"></a></h2>
    <p>In annex D, add a new Paragraph</p>
    <div class="wording-add">
@@ -1560,6 +2056,9 @@ other languages such as Perl.</p>
    <div class="wording-add"> [Note: In subscript expressions, the comma operator is deprecated. See [depr.comma-subscript]] </div>
    <p>Add a paragraph after 8.5.1.1.2 [expr.sub]</p>
    <div class="wording-add"> [Note: In subscript expressions, the comma operator is deprecated. See [depr.comma-subscript]] </div>
+   <h2 class="heading settled" data-level="6" id="acknowledgments"><span class="secno">6. </span><span class="content">Acknowledgments</span><a class="self-link" href="#acknowledgments"></a></h2>
+    Thanks to Martin Hořeňovský who computed some of the statistics on comma operator usages presented in this paper. 
+   <p>Thanks to Titus Winters and JF Bastien who provided useful feedbacks and criticism.</p>
   </main>
 <script>
 (function() {

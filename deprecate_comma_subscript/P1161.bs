@@ -33,6 +33,52 @@ Date: 2018-07-01
     background-color: #F6F9ED;
 }
 
+
+/* Table */
+.data-table {
+	border-collapse: collapse;
+	font-size: 14px;
+	min-width: 573px;
+}
+.data-table th {
+	color: #5a5a5a;
+}
+
+.data-table th,
+.data-table td {
+	padding: 7px 17px;
+}
+.data-table caption {
+	margin: 7px;
+}
+
+/* Table Header */
+.data-table thead th {
+    border-bottom: 2px solid #CCCCCC;
+}
+
+/* Table Body */
+.data-table tbody td {
+	color: #353535;
+	border-bottom: 1px solid #dcdcdc;
+	text-align: right;
+}
+
+.data-table tbody tr:last-child td {
+	border: 0;
+}
+
+.data-table tbody tr:hover td {
+	background-color: #f7f7f7;
+	transition: all .2s;
+}
+
+/* Table Footer */
+.data-table tfoot th {
+	border-top: 1px solid #c7c7c7;
+	text-align: right;
+}
+
 </style>
 
 
@@ -184,6 +230,125 @@ On the other hand, this syntax mirror the usage of multidimensional C arrays and
 other languages such as Perl.
 
 
+## Other comma expressions
+
+Early feedback on this paper suggested we might want to deprecate comma expressions in more contexts.
+While the authors of this paper are not suggesting that, for completeness, we analyzed a few open source projects.
+
+Below is a table of contexts in which comma expressions are found in LLVM, Boost 1.67's Test Suite and the Linux 4.17 Kernel.
+The data was generated with the clang-tidy. It is meant to give a rough idea of the ways comma expressions are used
+and does not pretend to be completely accurate.
+
+We provide two tables.
+The first counts each expression encountered through a project exactly one and as such give an idea of the amount of code that would
+have to be modified to conform to some eventual depreciation.
+
+<table class='data-table'><thead><tr><th>Parent Expression</th>
+<th>Boost</th>
+<th>Chromium</th>
+<th>Firefox</th>
+<th>Kernel</th>
+<th>Libreoffice</th>
+<th>Llvm</th>
+<th>Qt</th>
+<th></th><th><small>Estimated LOC affected*</small></th></tr></thead><tbody>
+<tr><td>ParenExpr</td><td>1072</td><td>7713</td><td>4342</td><td>72</td><td>9359</td><td>70</td><td>1489</td><td>24117</td><td> <small> 0.030%-0.080% </small> </td>
+</tr>
+<tr><td>ForStmt</td><td>850</td><td>2899</td><td>1415</td><td>565</td><td>3293</td><td>913</td><td>2596</td><td>12531</td><td> <small> 0.016%-0.042% </small> </td>
+</tr>
+<tr><td>CallExpr</td><td>32</td><td>5373</td><td>319</td><td>-</td><td>42</td><td>1504</td><td>2</td><td>7272</td><td> <small> 0.009%-0.024% </small> </td>
+</tr>
+<tr><td>BinaryOperator</td><td>424</td><td>1015</td><td>444</td><td>63</td><td>2143</td><td>77</td><td>486</td><td>4652</td><td> <small> 0.006%-0.016% </small> </td>
+</tr>
+<tr><td>CompoundStmt</td><td>209</td><td>287</td><td>62</td><td>12</td><td>247</td><td>6</td><td>102</td><td>925</td><td> <small> 0.001%-0.003% </small> </td>
+</tr>
+<tr><td>ReturnStmt</td><td>221</td><td>328</td><td>53</td><td>-</td><td>56</td><td>6</td><td>91</td><td>755</td><td> <small> 0.001%-0.003% </small> </td>
+</tr>
+<tr><td>ImplicitCastExpr</td><td>3</td><td>443</td><td>1</td><td>-</td><td>13</td><td>16</td><td>-</td><td>476</td><td> <small> 0.001%-0.002% </small> </td>
+</tr>
+<tr><td>ExprWithCleanups</td><td>77</td><td>56</td><td>3</td><td>-</td><td>38</td><td>48</td><td>16</td><td>238</td><td>~</td>
+</tr>
+<tr><td>WhileStmt</td><td>72</td><td>20</td><td>4</td><td>-</td><td>66</td><td>-</td><td>14</td><td>176</td><td>~</td>
+</tr>
+<tr><td>IfStmt</td><td>32</td><td>51</td><td>11</td><td>-</td><td>30</td><td>1</td><td>-</td><td>125</td><td>~</td>
+</tr>
+<tr><td>ConditionalOperator</td><td>16</td><td>17</td><td>18</td><td>-</td><td>35</td><td>-</td><td>17</td><td>103</td><td>~</td>
+</tr>
+<tr><td>MaterializeTemporaryExpr</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>76</td><td>76</td><td>~</td>
+</tr>
+<tr><td>CaseStmt</td><td>-</td><td>7</td><td>-</td><td>-</td><td>20</td><td>-</td><td>-</td><td>27</td><td>~</td>
+</tr>
+<tr><td>DoStmt</td><td>1</td><td>10</td><td>1</td><td>-</td><td>1</td><td>-</td><td>-</td><td>13</td><td>~</td>
+</tr>
+<tr><td>CXXStaticCastExpr</td><td>5</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>5</td><td>~</td>
+</tr>
+<tr><td>CXXMemberCallExpr</td><td>5</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>5</td><td>~</td>
+</tr>
+<tr><td>CXXConstructExpr</td><td>5</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>5</td><td>~</td>
+</tr>
+<tr><td>ArraySubscriptExpr</td><td>2</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>2</td><td>~</td>
+</tr>
+<tr><td>DefaultStmt</td><td>-</td><td>-</td><td>-</td><td>-</td><td>1</td><td>-</td><td>-</td><td>1</td><td>~</td>
+</tr>
+</tbody></table>
+
+* <b>Estimated 30 to 80 millions LOC compiled. This is a back of the envelop calculation meant to be an order of magnetude rather that a meaningful, accurate value</b>.
+
+This second table represents the number of warnings that would be emitted following some eventual depreciation.
+
+<table class='data-table'><thead><tr><th>Parent Expression</th>
+<th>Boost</th>
+<th>Chromium</th>
+<th>Firefox</th>
+<th>Kernel</th>
+<th>Libreoffice</th>
+<th>Llvm</th>
+<th>Qt</th>
+<th></th></tr></thead><tbody>
+<tr><td>ParenExpr</td><td>133201</td><td>69625</td><td>100295</td><td>924</td><td>55551</td><td>1451</td><td>6045</td><td>367092</td>
+</tr>
+<tr><td>ForStmt</td><td>72792</td><td>139460</td><td>99515</td><td>4114</td><td>12876</td><td>13343</td><td>11464</td><td>353564</td>
+</tr>
+<tr><td>BinaryOperator</td><td>45614</td><td>36260</td><td>3584</td><td>63</td><td>4689</td><td>4756</td><td>57901</td><td>152867</td>
+</tr>
+<tr><td>ReturnStmt</td><td>25291</td><td>20353</td><td>1253</td><td>-</td><td>455</td><td>46</td><td>17636</td><td>65034</td>
+</tr>
+<tr><td>MaterializeTemporaryExpr</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>52140</td><td>52140</td>
+</tr>
+<tr><td>CompoundStmt</td><td>49863</td><td>383</td><td>254</td><td>12</td><td>503</td><td>6</td><td>811</td><td>51832</td>
+</tr>
+<tr><td>WhileStmt</td><td>11002</td><td>33</td><td>10</td><td>-</td><td>66</td><td>-</td><td>8822</td><td>19933</td>
+</tr>
+<tr><td>CallExpr</td><td>178</td><td>6237</td><td>2872</td><td>-</td><td>59</td><td>1578</td><td>3</td><td>10927</td>
+</tr>
+<tr><td>ConditionalOperator</td><td>8087</td><td>17</td><td>18</td><td>-</td><td>182</td><td>-</td><td>17</td><td>8321</td>
+</tr>
+<tr><td>ExprWithCleanups</td><td>1033</td><td>61</td><td>17</td><td>-</td><td>101</td><td>443</td><td>961</td><td>2616</td>
+</tr>
+<tr><td>IfStmt</td><td>331</td><td>54</td><td>26</td><td>-</td><td>359</td><td>1</td><td>-</td><td>771</td>
+</tr>
+<tr><td>CXXStaticCastExpr</td><td>653</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>653</td>
+</tr>
+<tr><td>ImplicitCastExpr</td><td>9</td><td>472</td><td>17</td><td>-</td><td>13</td><td>16</td><td>-</td><td>527</td>
+</tr>
+<tr><td>DoStmt</td><td>18</td><td>14</td><td>34</td><td>-</td><td>1</td><td>-</td><td>-</td><td>67</td>
+</tr>
+<tr><td>CaseStmt</td><td>-</td><td>7</td><td>-</td><td>-</td><td>35</td><td>-</td><td>-</td><td>42</td>
+</tr>
+<tr><td>CXXConstructExpr</td><td>22</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>22</td>
+</tr>
+<tr><td>CXXMemberCallExpr</td><td>5</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>5</td>
+</tr>
+<tr><td>ArraySubscriptExpr</td><td>5</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>5</td>
+</tr>
+<tr><td>DefaultStmt</td><td>-</td><td>-</td><td>-</td><td>-</td><td>4</td><td>-</td><td>-</td><td>4</td>
+</tr>
+</tbody></table>
+
+
+* The numerous comas in call expressions accross projects come, for the most part, from Google Test's `EXPECT_EQ` and related unit test macros.
+* Since comma expressions are often chained `(e1, e2, e3)`, they appear frequently in binary-operator expressions (BinaryOperator)
+
 Proposed Wording
 ================
 
@@ -211,3 +376,9 @@ Add a paragraph after 8.5.1.1.2 [expr.sub]
 <div class="wording-add">
 [Note: In subscript expressions, the comma operator is deprecated. See [depr.comma-subscript]]
 </div>
+
+# Acknowledgments
+Thanks to Martin Hořeňovský who computed some of the statistics on comma operator usages presented in this paper.
+
+Thanks to Titus Winters and JF Bastien who provided useful feedbacks and criticism.
+
