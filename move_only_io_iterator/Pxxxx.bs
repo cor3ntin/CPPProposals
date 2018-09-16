@@ -34,9 +34,22 @@ In that regard, they are similar to `auto_ptr`.
 
 In this paper, we propose a way to introduce the notion of move-only single-pass iterators.
 
+# Terminology
+
+This paper redefines the requierments of some concepts proposed by the Ranges TS (and the deep merge proposal).
+In the rest of this paper
+
+ * `InputIterator` designs the `InputIterator` concept as proposed by this paper
+ * `RangesTSInputIterator` designs the `InputIterator` concept as proposed by the Ranges TS
+ * `Cpp17InputIterator` design the **requierments** of input iterators compatible with the STL as specified by the C++17 standard
+ 
+ * `OutputIterator` designs the `OutputIterator` concept as proposed by this paper
+ * `RangesTSOutputIterator` designs the `OutputIterator` concept as proposed by the Ranges TS
+ * `Cpp17OutputIterator` design the **requierments** of output iterators compatible with the STL as specified by the C++17 standard
+
 # Scope
 
-This paper proposes changes to the Range TS and [[P0896R2]] both targeting C++20. Because the changes proposed here changes some requirements and concepts as presented
+This paper proposes changes to the Ranges TS and [[P0896R2]] both targeting C++20. Because the changes proposed here changes some requirements and concepts as presented
 by [[P0896R2]], the authors strongly suggest they are considered for the inclusion in the same version of the standard.
 Indeed, [[P0896R2]] gives us a unique opportunity to make the change proposed, and it would be a breaking change to introduce the modifications proposed here in a later version of the standard.
 
@@ -46,13 +59,12 @@ As a large amount of code depend on the Input/Output iterators requirements as s
 any class that depends on it.
 Specifically, we do not propose to change the requirements or wording of `istream_iterator`, `ostream_iterator`, `istreambuf_iterator` or `ostreambuf_iterator`.
 Furthermore, we do not propose modifications to algorithms in the namespace `std`. The new iterators we propose here are in fact not compatible with existing algorithms.
-They are meant to be used in the `range` namespace and as basic building blocks of range-based views.
+They are meant to be used in the `ranges` namespace and as basic building blocks of range-based views.
 
-While the ability to use move-only iterators with the algorithms defined in the `std` namespace, doing so would weaken the `InputIterator` concept and leads to other issues
-(namely, `std` based algorithms require iterators to be EquallyComparable, which the `InputIterator` is not).
+While the ability to use move-only iterators with the algorithms defined in the `std` namespace, doing so would weaken the `RangesTSInputIterator` concept and leads to other issues
+(namely, `std` based algorithms require iterators to be EquallyComparable, which the `RangesTSInputIterator` is not).
 
-In practice, that means that entities satisfying the `Cpp17InputIterator` will continue to work unaffected with algorithms defined in the `std` namespace. They will not be compatible
-with algorithms defined in the ranges namespace, or with new code using the `InputIterator` concept as proposed here.
+In practice, that means that entities satisfying the `Cpp17InputIterator` will continue to work unaffected with algorithms defined in the `std` namespace. They will not be compatible with algorithms defined in the ranges namespace, or with new code using the `InputIterator` concept as proposed here.
 
 Inversely, entities satisfying the `InputIterator` concepts will not be compatible with algorithms in `std` as they would not be able to satisfy the `Cpp17InputIterator` requirements.
 
@@ -104,7 +116,7 @@ But that destruction is reflected nowhere in the API.
 Less experienced developers may not be aware
 
 
-By making InputIterator move only, developers will have to explicitly move them, which both signals the invalidation
+By making `InputIterator` move only, developers will have to explicitly move them, which both signals the invalidation
 of the move-from object, but, more importantly, that the underlying data will be destroyed.
 
 ## Move-only state
@@ -115,7 +127,7 @@ A real-world example of such iterator is described in [[P0902R0]].
 ## Performance optimization
 
 Move-only iterators are a performance improvement opportunity
-For example, in the presence of InputIterators, `ranges::copy` could perform a move rather than a copy of the elements since iteration is destructive.
+For example, in the presence of `InputIterator`s, `ranges::copy` could perform a move rather than a copy of the elements since iteration is destructive.
 
 # Proposed design
 
@@ -159,7 +171,7 @@ concept bool Writable = OutputIterator<I> || ForwardIterator<I>;
 </xmp>
 
 Because this change quite deeply the Iterator concepts taxonomy, we need to adapt algorithms is the `ranges` namespace
-to use this ReadableIterator concept everywhere an InputIterator is expected.
+to use this ReadableIterator concept everywhere a `RangesTSInputIterator` is expected.
 Notice that there is currently no algorithm that is designed to take non-forward input iterators.
 But such algorithms could exist, for example, `ranges::copy` could be specialized for InputIterator and operate a move instead of a copy.
 
@@ -433,7 +445,7 @@ Post-incrementing move-only iterators would obviously be incorrect. However, a s
 ## common_range
 
 `common_range` exists so that an `iterator + sentinel` pair can be fed to legacy as an `iterator + iterator` pair.
-While this could let us circumvent the fact that the proposed `InputIterator` is not `EquallyComparable` ( it already is not in the Range TS),
+While this could let us circumvent the fact that the proposed `InputIterator` is not `EquallyComparable` ( it already is not in the Ranges TS),
 it would not be possible to pass a move only `common_range` to a legacy algorithm expecting a semi-regular iterator
 ( `common_range<InputIterator, S>` would be move-only by virtue of `InputIterator` being move-only ).
 
@@ -482,15 +494,54 @@ we do not propose it for lack of visibility on the consequences of such changes
 
 ## Do non-regular views make sense?
 
+A view that holds a move-only iterator wouldn by definition not be `Semiregular`.
+Is such view useful ?
+
 ## Does iterators default-constructability needs revisiting?
+
+default-constructability of iterator seems to have been added, removed and added back to the Ranges TS and the One Ranges Proposal several
+time. 
+To the best of my knowledge this was done for the sake of Semiregularity. 
+Given that this proposal strikes semi regularity, should this question be revisited ?
+I can see argument for either way.
 
 ## What about naming ?
 
+In this proposal we took the arguably confusing decision to define
+
+* `InputIterator` as the proposed single-pass move only iterator
+* `ReadableIterator` as the common super set of `ForwardIterator` and `InputIterator`
+
+Symetrically,
+
+* `OutputIterator` as the proposed single-pass move only writable iterator
+* `WritableIterator` as the common super set of (Writable) `ForwardIterator` and `OutputIterator`
+
+This is because:
+
+* The semantic of `InputIterator` as proposed is no different from the (intended) semantic of `Cpp17InputIterator` 
+     even if the requierments are rather different and incompatible (ditto for OutputIterator)
+* Input/Output iterator were aptly name as these terms convey the notion of single pass.
+* There exist in the Ranges TS the `Readable` and `Writable` concepts and `ReadableIterator` and `WritableIterator` are `Iterator` that satisfy these concepts.
+
+On the other hand, `InputIterator` (as proposed) is no longer the root of all other readable iterator, 
+changing something established 20 years ago, which odis certainly a valid concern.
+
+While the authors of this paper feels strongly that `InputIterator` should continue to design the single pass iterator and that `ReadableIterator` is a better name
+for an iterator whose sole requirement is to be readable, for completeness we suggest this alternative naming scheme:
+
+* `SinglePassInputIterator` as the proposed single-pass move only iterator
+* `InputIterator` as the common super set of `ForwardIterator` and `SinglePassInputIterator` referred to as `ReadableIterator` in the rest of this paper
+
+* `SinglePassOutputIterator` as the proposed single-pass move only writable iterator
+* `OutputIterator` as the common super set of Writable `ForwardIterator` and `SinglePassOutputIterator` referred to as `WritableIterator` in the rest of this paper
+
+Note: in the WD, `[Cpp17]OutputIterator` refers to any writable iterator that does not satisfy the requirements of other iterators.
 
 
 # List of proposed changes
 
-Because the range proposals are still in flux and will require merging multiple documents, we do not provide wording
+Because the ranges-related proposals are still in flux and will require merging multiple documents, we do not provide wording
 at this time.
 However, here
 
@@ -498,8 +549,8 @@ However, here
 
 ### WeaklyIncrementable
 
-`WeaklyIncrementable` is a requirement of all `Iterator`, including `InputIterator`. `WeaklyIncrementable` is defined to be semi-regular.
-Because WeaklyIncrementable, as it is described in [[P0896R2]], accommodates for `Cpp17InputIterator`, it suffers from the same issue (being copyable with move semantic).
+`WeaklyIncrementable` is a requirement of all `Iterator`, including `RangesTSInputIterator`. `WeaklyIncrementable` is defined to be semi-regular.
+Because WeaklyIncrementable, as it is described in [[P0896R2]], accommodates for `RangesTSInputIterator` and `Cpp17InputIterator`, it suffers from the same issue (being copyable with move semantic).
 We propose to strike the `Semiregular` requirement as follow
 
 <xmp>
@@ -584,7 +635,7 @@ concept bool WritableIterator = OutputIterator<I,T> || (ForwardIterator<I> && Wr
 
 ### Mergeable
 
-Modify the Meargeable concept to accept a ReadableIterator instead of an InputIterator
+Modify the Meargeable concept to accept a ReadableIterator instead of a `RangesTSInputIterator`
 
 <xmp>
 template<class I1, class I2, class Out,
