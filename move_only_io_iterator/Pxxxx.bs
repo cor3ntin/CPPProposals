@@ -24,11 +24,11 @@ The standard states:
 
 Note: For input iterators, a == b does not imply ++a == ++b. (Equality does not guarantee the substitution property or referential transparency.) Algorithms on input iterators should never attempt to pass through the same iterator twice. They should be single pass algorithms.
 
-This means that once an iterator is copied, only one of the copy can meaningfully be used.
+This means that once an iterator is copied, only one of the copies can meaningfully be used.
 Deferencing multiple copies of a single pass iterator often exposes undefined or invalid behavior.
 
 
-It would, therefore, make sense that class satisfying the InputIterator concept be move only.
+It would, therefore, make sense that classes satisfying the `InputIterator` concept be move only.
 Alas, Single-pass iterators and many classes satisfying its requirements predate C++11, they do therefore have move only semantic with copy syntax.
 In that regard, they are similar to `auto_ptr`.
 
@@ -41,11 +41,11 @@ In the rest of this paper
 
  * `InputIterator` designs the `InputIterator` concept as proposed by this paper
  * `RangesTSInputIterator` designs the `InputIterator` concept as proposed by the Ranges TS
- * `Cpp17InputIterator` design the **requierments** of input iterators compatible with the STL as specified by the C++17 standard
+ * `Cpp17InputIterator` design the **requirements** of input iterators compatible with the STL as specified by the C++17 standard
 
  * `OutputIterator` designs the `OutputIterator` concept as proposed by this paper
  * `RangesTSOutputIterator` designs the `OutputIterator` concept as proposed by the Ranges TS
- * `Cpp17OutputIterator` design the **requierments** of output iterators compatible with the STL as specified by the C++17 standard
+ * `Cpp17OutputIterator` design the **requirements** of output iterators compatible with the STL as specified by the C++17 standard
 
  * input/outputs iterators refer to single pass(non/forward) iterators.
 
@@ -57,18 +57,18 @@ Indeed, [[P0896R2]] gives us a unique opportunity to make the change proposed, a
 
 ## Non-Goal
 
-As a large amount of code depend on the Input/Output iterators requirements as specified by C++17, this paper does not propose any modifications to the `Cpp17InputIterator` or
+As a large amount of code depends on the Input/Output iterators requirements as specified by C++17, this paper does not propose any modifications to the `Cpp17InputIterator` or
 any class that depends on it.
 Specifically, we do not propose to change the requirements or wording of `istream_iterator`, `ostream_iterator`, `istreambuf_iterator` or `ostreambuf_iterator`.
 Furthermore, we do not propose modifications to algorithms in the namespace `std`. The new iterators we propose here are in fact not compatible with existing algorithms.
 They are meant to be used in the `ranges` namespace and as basic building blocks of range-based views.
 
-While the ability to use move-only iterators with the algorithms defined in the `std` namespace, doing so would weaken the `RangesTSInputIterator` concept and leads to other issues
-(namely, `std` based algorithms require iterators to be EquallyComparable, which the `RangesTSInputIterator` is not).
+While the ability to use move-only iterators with the algorithms defined in the `std` namespace would certainly be welcomed, doing so would weaken the `RangesTSInputIterator` concept and leads to other issues
+(namely, `std` based algorithms require iterators to be `EqualityComparable`, which the `RangesTSInputIterator` is not).
 
-In practice, that means that entities satisfying the `Cpp17InputIterator` will continue to work unaffected with algorithms defined in the `std` namespace. They will not be compatible with algorithms defined in the ranges namespace, or with new code using the `InputIterator` concept as proposed here.
+In practice, that means that types satisfying the `Cpp17InputIterator` requirements continue to work unaffected with algorithms defined in the `std` namespace. They will not be compatible with algorithms defined in the ranges namespace, or with new code using the `InputIterator` concept as proposed here.
 
-Inversely, entities satisfying the `InputIterator` concepts will not be compatible with algorithms in `std` as they would not be able to satisfy the `Cpp17InputIterator` requirements.
+Inversely, types satisfying the `InputIterator` concepts will not be compatible with algorithms in `std` as they would not be able to satisfy the `Cpp17InputIterator` requirements.
 
 
 
@@ -269,9 +269,9 @@ the requirements of `Cpp17InputIterator` and `Cpp17OutputIterator` are left unto
 or either `Cpp17Iterator` or `Cpp17OutputIterator` will not be impacted by the proposed changes.
 
 Consequently, the `InputIterator` and `OutputIterator` specified as described above are not compatible with `Cpp17Iterator` requirements.
-That means that algorithms in the `std` namespace will not work with entities satisfying the `InputIterator` or `OutputIterator` concepts.
+That means that algorithms in the `std` namespace will not work with types satisfying the `InputIterator` or `OutputIterator` concepts.
 
-It also means that algorithms in the `ranges` namespace will not accept entities  meeting the `Cpp17InputIterator`
+It also means that algorithms in the `ranges` namespace will not accept types meeting the `Cpp17InputIterator`
 or `Cpp17OutputIterator` requirements.
 
 In Rapperswil, the following poll was taken
@@ -744,7 +744,7 @@ designed with C++17 downward. That's, however, a potential source of bug and con
 However, if LEWG felt strongly about a solution compatible with existing algorithms it would be possible
 to relax the requirements of concerned algorithms to accept move-only iterators. along with the introduction of a new `move_iterator_tag` trait.
 
-Such algorithms would then be compatible with entities satisfying `InputIterator` (as proposed by this paper) through a `common_iterator` adaptor.
+Such algorithms would then be compatible with types satisfying `InputIterator` (as proposed by this paper) through a `common_iterator` adaptor.
 
 If proven with enough confidence that requirements of existing algorithms in the `std` namespace can be relaxed to handle move-only iterator, the necessary
 modifications can be applied in a subsequent standard version (by opposition to this proposal).

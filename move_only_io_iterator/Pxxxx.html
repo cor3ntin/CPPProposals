@@ -1215,7 +1215,7 @@ Possible extra rowspan handling
 </style>
   <meta content="Bikeshed version a04b880cde96bf0ae2d14a0edcf2bcdcb631548b" name="generator">
   <link href="https://isocpp.org/favicon.ico" rel="icon">
-  <meta content="99868c46f1262c18ded5913d802486d6fe2814fa" name="document-revision">
+  <meta content="1d39bc707efd8c0aa6c69766b23c7c6c2db8146a" name="document-revision">
 <style>
  table {
     border-collapse: collapse;
@@ -1546,9 +1546,9 @@ pre .property::before, pre .property::after {
    <p>Non-forward Input iterators and output iterators, also known as "Single-pass iterators" are semantically move-only.
 The standard states:</p>
    <p class="note" role="note"><span>Note:</span> For input iterators, a == b does not imply ++a == ++b. (Equality does not guarantee the substitution property or referential transparency.) Algorithms on input iterators should never attempt to pass through the same iterator twice. They should be single pass algorithms.</p>
-   <p>This means that once an iterator is copied, only one of the copy can meaningfully be used.
+   <p>This means that once an iterator is copied, only one of the copies can meaningfully be used.
 Deferencing multiple copies of a single pass iterator often exposes undefined or invalid behavior.</p>
-   <p>It would, therefore, make sense that class satisfying the InputIterator concept be move only.
+   <p>It would, therefore, make sense that classes satisfying the <code class="highlight"><c- n>InputIterator</c-></code> concept be move only.
 Alas, Single-pass iterators and many classes satisfying its requirements predate C++11, they do therefore have move only semantic with copy syntax.
 In that regard, they are similar to <code class="highlight"><c- n>auto_ptr</c-></code>.</p>
    <p>In this paper, we propose a way to introduce the notion of move-only single-pass iterators.</p>
@@ -1561,13 +1561,13 @@ In the rest of this paper</p>
     <li data-md>
      <p><code class="highlight"><c- n>RangesTSInputIterator</c-></code> designs the <code class="highlight"><c- n>InputIterator</c-></code> concept as proposed by the Ranges TS</p>
     <li data-md>
-     <p><code class="highlight"><c- n>Cpp17InputIterator</c-></code> design the <strong>requierments</strong> of input iterators compatible with the STL as specified by the C++17 standard</p>
+     <p><code class="highlight"><c- n>Cpp17InputIterator</c-></code> design the <strong>requirements</strong> of input iterators compatible with the STL as specified by the C++17 standard</p>
     <li data-md>
      <p><code class="highlight"><c- n>OutputIterator</c-></code> designs the <code class="highlight"><c- n>OutputIterator</c-></code> concept as proposed by this paper</p>
     <li data-md>
      <p><code class="highlight"><c- n>RangesTSOutputIterator</c-></code> designs the <code class="highlight"><c- n>OutputIterator</c-></code> concept as proposed by the Ranges TS</p>
     <li data-md>
-     <p><code class="highlight"><c- n>Cpp17OutputIterator</c-></code> design the <strong>requierments</strong> of output iterators compatible with the STL as specified by the C++17 standard</p>
+     <p><code class="highlight"><c- n>Cpp17OutputIterator</c-></code> design the <strong>requirements</strong> of output iterators compatible with the STL as specified by the C++17 standard</p>
     <li data-md>
      <p>input/outputs iterators refer to single pass(non/forward) iterators.</p>
    </ul>
@@ -1576,15 +1576,15 @@ In the rest of this paper</p>
 by <a data-link-type="biblio" href="#biblio-p0896r2">[P0896R2]</a>, the authors strongly suggest they are considered for the inclusion in the same version of the standard.
 Indeed, <a data-link-type="biblio" href="#biblio-p0896r2">[P0896R2]</a> gives us a unique opportunity to make the change proposed, and it would be a breaking change to introduce the modifications proposed here in a later version of the standard.</p>
    <h3 class="heading settled" data-level="3.1" id="non-goal"><span class="secno">3.1. </span><span class="content">Non-Goal</span><a class="self-link" href="#non-goal"></a></h3>
-   <p>As a large amount of code depend on the Input/Output iterators requirements as specified by C++17, this paper does not propose any modifications to the <code class="highlight"><c- n>Cpp17InputIterator</c-></code> or
+   <p>As a large amount of code depends on the Input/Output iterators requirements as specified by C++17, this paper does not propose any modifications to the <code class="highlight"><c- n>Cpp17InputIterator</c-></code> or
 any class that depends on it.
 Specifically, we do not propose to change the requirements or wording of <code class="highlight"><c- n>istream_iterator</c-></code>, <code class="highlight"><c- n>ostream_iterator</c-></code>, <code class="highlight"><c- n>istreambuf_iterator</c-></code> or <code class="highlight"><c- n>ostreambuf_iterator</c-></code>.
 Furthermore, we do not propose modifications to algorithms in the namespace <code class="highlight"><c- n>std</c-></code>. The new iterators we propose here are in fact not compatible with existing algorithms.
 They are meant to be used in the <code class="highlight"><c- n>ranges</c-></code> namespace and as basic building blocks of range-based views.</p>
-   <p>While the ability to use move-only iterators with the algorithms defined in the <code class="highlight"><c- n>std</c-></code> namespace, doing so would weaken the <code class="highlight"><c- n>RangesTSInputIterator</c-></code> concept and leads to other issues
-(namely, <code class="highlight"><c- n>std</c-></code> based algorithms require iterators to be EquallyComparable, which the <code class="highlight"><c- n>RangesTSInputIterator</c-></code> is not).</p>
-   <p>In practice, that means that entities satisfying the <code class="highlight"><c- n>Cpp17InputIterator</c-></code> will continue to work unaffected with algorithms defined in the <code class="highlight"><c- n>std</c-></code> namespace. They will not be compatible with algorithms defined in the ranges namespace, or with new code using the <code class="highlight"><c- n>InputIterator</c-></code> concept as proposed here.</p>
-   <p>Inversely, entities satisfying the <code class="highlight"><c- n>InputIterator</c-></code> concepts will not be compatible with algorithms in <code class="highlight"><c- n>std</c-></code> as they would not be able to satisfy the <code class="highlight"><c- n>Cpp17InputIterator</c-></code> requirements.</p>
+   <p>While the ability to use move-only iterators with the algorithms defined in the <code class="highlight"><c- n>std</c-></code> namespace would certainly be welcomed, doing so would weaken the <code class="highlight"><c- n>RangesTSInputIterator</c-></code> concept and leads to other issues
+(namely, <code class="highlight"><c- n>std</c-></code> based algorithms require iterators to be <code class="highlight"><c- n>EqualityComparable</c-></code>, which the <code class="highlight"><c- n>RangesTSInputIterator</c-></code> is not).</p>
+   <p>In practice, that means that types satisfying the <code class="highlight"><c- n>Cpp17InputIterator</c-></code> requirements continue to work unaffected with algorithms defined in the <code class="highlight"><c- n>std</c-></code> namespace. They will not be compatible with algorithms defined in the ranges namespace, or with new code using the <code class="highlight"><c- n>InputIterator</c-></code> concept as proposed here.</p>
+   <p>Inversely, types satisfying the <code class="highlight"><c- n>InputIterator</c-></code> concepts will not be compatible with algorithms in <code class="highlight"><c- n>std</c-></code> as they would not be able to satisfy the <code class="highlight"><c- n>Cpp17InputIterator</c-></code> requirements.</p>
    <h2 class="heading settled" data-level="4" id="the-problem"><span class="secno">4. </span><span class="content">The problem</span><a class="self-link" href="#the-problem"></a></h2>
    <h3 class="heading settled" data-level="4.1" id="some-elements-of-programming"><span class="secno">4.1. </span><span class="content">Some elements of programming</span><a class="self-link" href="#some-elements-of-programming"></a></h3>
    <p>Input-devices such as a socket, a serial device, a stream of random numbers, etc are sequential.
@@ -1738,8 +1738,8 @@ Input and Output iterators provided by the standard remain unmodified and most i
 the requirements of <code class="highlight"><c- n>Cpp17InputIterator</c-></code> and <code class="highlight"><c- n>Cpp17OutputIterator</c-></code> are left untouched, meaning user-defined iterators meeting the requirements
 or either <code class="highlight"><c- n>Cpp17Iterator</c-></code> or <code class="highlight"><c- n>Cpp17OutputIterator</c-></code> will not be impacted by the proposed changes.</p>
    <p>Consequently, the <code class="highlight"><c- n>InputIterator</c-></code> and <code class="highlight"><c- n>OutputIterator</c-></code> specified as described above are not compatible with <code class="highlight"><c- n>Cpp17Iterator</c-></code> requirements.
-That means that algorithms in the <code class="highlight"><c- n>std</c-></code> namespace will not work with entities satisfying the <code class="highlight"><c- n>InputIterator</c-></code> or <code class="highlight"><c- n>OutputIterator</c-></code> concepts.</p>
-   <p>It also means that algorithms in the <code class="highlight"><c- n>ranges</c-></code> namespace will not accept entities  meeting the <code class="highlight"><c- n>Cpp17InputIterator</c-></code> or <code class="highlight"><c- n>Cpp17OutputIterator</c-></code> requirements.</p>
+That means that algorithms in the <code class="highlight"><c- n>std</c-></code> namespace will not work with types satisfying the <code class="highlight"><c- n>InputIterator</c-></code> or <code class="highlight"><c- n>OutputIterator</c-></code> concepts.</p>
+   <p>It also means that algorithms in the <code class="highlight"><c- n>ranges</c-></code> namespace will not accept types meeting the <code class="highlight"><c- n>Cpp17InputIterator</c-></code> or <code class="highlight"><c- n>Cpp17OutputIterator</c-></code> requirements.</p>
    <p>In Rapperswil, the following poll was taken</p>
    <blockquote>
     <p>We want the invariant that anything that compiles in std::ranges::foo() &amp; std::foo() has the same semantics/result?</p>
@@ -2118,7 +2118,7 @@ The iterators proposed by P0902 are additionally <code class="highlight"><c- n>E
 designed with C++17 downward. That’s, however, a potential source of bug and confusion.</p>
    <p>However, if LEWG felt strongly about a solution compatible with existing algorithms it would be possible
 to relax the requirements of concerned algorithms to accept move-only iterators. along with the introduction of a new <code class="highlight"><c- n>move_iterator_tag</c-></code> trait.</p>
-   <p>Such algorithms would then be compatible with entities satisfying <code class="highlight"><c- n>InputIterator</c-></code> (as proposed by this paper) through a <code class="highlight"><c- n>common_iterator</c-></code> adaptor.</p>
+   <p>Such algorithms would then be compatible with types satisfying <code class="highlight"><c- n>InputIterator</c-></code> (as proposed by this paper) through a <code class="highlight"><c- n>common_iterator</c-></code> adaptor.</p>
    <p>If proven with enough confidence that requirements of existing algorithms in the <code class="highlight"><c- n>std</c-></code> namespace can be relaxed to handle move-only iterator, the necessary
 modifications can be applied in a subsequent standard version (by opposition to this proposal).</p>
    <p>So while there would definitively be value in supporting move-only iterators everywhere it makes sense, and the potential for breakage is relatively low,
