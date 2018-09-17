@@ -110,7 +110,7 @@ Therefore there can be only one observed position at any given time, and consequ
  * positions cannot be compared
  * positions cannot be copied
 
-Therefore, input/output iterators do not meet the semantic requirements of `Copyable` and `EqualityComparable`
+Therefore, input/output iterators do not meet the semantic requirements of either `Copyable` or `EqualityComparable`
 
 ## auto_ptr
 
@@ -144,8 +144,8 @@ For example, in the presence of `InputIterator`s, `ranges::copy` could perform a
 
 # Proposed design
 
-We propose to make the `InputIterator` concept match its semantic.
-In this design, `InputIterator` is required to be `Movable` but it is furthermore required *not to be* `Copyable` nor `EqualityComparable`.
+We propose to make `InputIterator` concept match its semantic.
+In this design, `InputIterator`is required to be `Movable` but it is furthermore required *to be neither* `Copyable` nor `EqualityComparable`.
 
 Note: An iterator not being `EqualityComparable` means that for any given `a` and `b` instances of that iterator `I` there is no operation `a` == `b`.
 However, for such iterators to be useful, there must exist a type `S` such that the concept `Sentinel<S, I>` is satisfied.
@@ -187,7 +187,7 @@ digraph iterator{
 <!-- NonSense1 -->
 <g id="node2" class="node"><title>NonSense1</title>
 <polygon fill="#f06261" stroke="black" points="300.216,-252 -0.216069,-252 -0.216069,-144 300.216,-144 300.216,-252"></polygon>
-<text text-anchor="middle" x="150" y="-202.5" font-family="monospace" font-size="15.00" fill="white">Non sense</text>
+<text text-anchor="middle" x="150" y="-202.5" font-family="monospace" font-size="15.00" fill="white">Nonsense</text>
 <text text-anchor="middle" x="150" y="-184.5" font-family="monospace" font-size="15.00" fill="white">Copyable &amp; non-EqualityComparable</text>
 </g>
 <!-- InputIterator&#45;&gt;NonSense1 -->
@@ -198,7 +198,7 @@ digraph iterator{
 <!-- NonSense2 -->
 <g id="node3" class="node"><title>NonSense2</title>
 <polygon fill="#f06261" stroke="black" points="603.466,-252 318.534,-252 318.534,-144 603.466,-144 603.466,-252"></polygon>
-<text text-anchor="middle" x="461" y="-202.5" font-family="monospace" font-size="15.00" fill="white">Non sense</text>
+<text text-anchor="middle" x="461" y="-202.5" font-family="monospace" font-size="15.00" fill="white">Nonsense</text>
 <text text-anchor="middle" x="461" y="-184.5" font-family="monospace" font-size="15.00" fill="white">Move-Only &amp; EqualityComparable</text>
 </g>
 <!-- InputIterator&#45;&gt;NonSense2 -->
@@ -245,20 +245,20 @@ However there is no valid `ReadableIterator` that is neither input or forward, a
 
 <xmp>
 template <class I>
-concept bool ReadableIterator = InputIterator<I> || ForwardIterator<I>;
+concept ReadableIterator = InputIterator<I> || ForwardIterator<I>;
 </xmp>
 
 and `WritableIterator`
 
 <xmp>
 template <class I>
-concept bool Writable = OutputIterator<I> || ForwardIterator<I>;
+concept Writable = OutputIterator<I> || ForwardIterator<I>;
 </xmp>
 
-Because this change quite deeply the Iterator concepts taxonomy, we need to adapt algorithms in the `ranges` namespace
+Because this dramatically changes the Iterator concepts taxonomy, we need to adapt algorithms in the `ranges` namespace
 to use this `ReadableIterator` concept everywhere a `RangesTSInputIterator` is expected.
-Notice that there is currently no algorithm designed to take non-forward input iterators.
-But such algorithms could exist, for example, `ranges::copy` could be specialized for `InputIterator` and move instead of copy.
+Notice that there is currently no algorithm that is designed to take non-forward input iterators.
+But such algorithms could exist, for example, `ranges::copy` could be specialized for InputIterator and operate a move instead of a copy.
 
 ## No changes to the namespace `std`
 
@@ -817,7 +817,7 @@ We propose to strike the `Semiregular` requirement as follow
 
 <xmp>
 template <class I>
-concept bool WeaklyIncrementable =
+concept WeaklyIncrementable =
     Movable<I> &&
     requires(I& i) {
         typename iter_difference_t<I>;
@@ -833,7 +833,7 @@ We Specifically disallow Input iterators to be `EqualityComparable` or `Copyable
 
 <xmp>
 template <class I>
-concept bool InputIterator =
+concept InputIterator =
     Readable<I> &&
     Iterator<I> &&
     ! Copyable<I> &&
@@ -845,7 +845,7 @@ concept bool InputIterator =
 
 <xmp>
 template <class I>
-concept bool ForwardIterator =
+concept ForwardIterator =
     Iterator<I> &&
     Readable<I> &&
     EqualityComparable<I> &&
@@ -864,7 +864,7 @@ Introduce a new `ReadableIterator` concept, defined as follows:
 
 <xmp>
 template <class I>
-concept bool ReadableIterator = InputIterator<I> || ForwardIterator<I>;
+concept ReadableIterator = InputIterator<I> || ForwardIterator<I>;
 </xmp>
 
 `ReadableIterator` being an `Iterator` itself being `ReadableIterator` it is `Movable`.
@@ -874,7 +874,7 @@ All refinement of `ReadableIterator` will, therefore, be `Movable`, but not nece
 
 <xmp>
 template <class I, class T>
-concept bool OutputIterator =
+concept OutputIterator =
     Iterator<I> &&
     Writable<I, T> &&
     ! Copyable<I> &&
@@ -891,7 +891,7 @@ Introduce a new `WritableIterator` concept, defined as follows:
 
 <xmp>
 template <class I, class T>
-concept bool WritableIterator = OutputIterator<I,T> || (ForwardIterator<I> && Writable<I,T>);
+concept WritableIterator = OutputIterator<I,T> || (ForwardIterator<I> && Writable<I,T>);
 </xmp>
 
 
@@ -902,7 +902,7 @@ Modify the Meargeable concept to accept a ReadableIterator instead of a `RangesT
 <xmp>
 template<class I1, class I2, class Out,
 class R = ranges::less<>, class P1 = identity, class P2 = identity>
-concept bool Mergeable =
+concept Mergeable =
 ReadableIterator<I1> &&
 ReadableIterator<I2> &&
 WeaklyIncrementable<Out> &&
@@ -925,7 +925,7 @@ Introduce a new concept `ReadableRange`:
 
 <xmp>
 template <class T>
-concept bool ReadableRange = Range<T> && ReadableIterator<iterator_t<T>>;
+concept ReadableRange = Range<T> && ReadableIterator<iterator_t<T>>;
 </xmp>
 
 
@@ -935,7 +935,7 @@ Introduce a new concept `WritableRange`:
 
 <xmp>
 template <class T>
-concept bool WritableRange = Range<T> && WritableIterator<iterator_t<T>>;
+concept WritableRange = Range<T> && WritableIterator<iterator_t<T>>;
 </xmp>
 
 
@@ -1015,6 +1015,8 @@ namespace satisfy the `InputIterator` concept as proposed by this proposal.
 
 Should any algorithms not satisfy `InputIterator` (because they depend on copy-constructability), they would need to be modified to
 accept either an `InputIterator` or a `ForwardIterator`.
+
+
 
 # Impact on other proposals
 
