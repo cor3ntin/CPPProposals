@@ -1215,7 +1215,7 @@ Possible extra rowspan handling
 </style>
   <meta content="Bikeshed version a04b880cde96bf0ae2d14a0edcf2bcdcb631548b" name="generator">
   <link href="https://isocpp.org/favicon.ico" rel="icon">
-  <meta content="e4817c0cf8a98c509d82fc9fba7ebca3c3eb00d2" name="document-revision">
+  <meta content="ffe30d5027a6b3386709b498f33ed47b9f5b0e70" name="document-revision">
 <style>
  table {
     border-collapse: collapse;
@@ -1568,6 +1568,8 @@ In the rest of this paper</p>
      <p><code class="highlight"><c- n>RangesTSOutputIterator</c-></code> designs the <code class="highlight"><c- n>OutputIterator</c-></code> concept as proposed by the Ranges TS</p>
     <li data-md>
      <p><code class="highlight"><c- n>Cpp17OutputIterator</c-></code> design the <strong>requierments</strong> of output iterators compatible with the STL as specified by the C++17 standard</p>
+    <li data-md>
+     <p>input/outputs iterators refer to single pass(non/forward) iterators.</p>
    </ul>
    <h2 class="heading settled" data-level="3" id="scope"><span class="secno">3. </span><span class="content">Scope</span><a class="self-link" href="#scope"></a></h2>
    <p>This paper proposes changes to the Ranges TS and <a data-link-type="biblio" href="#biblio-p0896r2">[P0896R2]</a> both targeting C++20. Because the changes proposed here changes some requirements and concepts as presented
@@ -1603,6 +1605,16 @@ Iterators over such entity are therefore non-regular.</p>
    <p>Because input iterators cannot be copied, they should not be comparable either.
 Going back to the reading head metaphor, comparing a reading head to itself make no sense, and
 in fact, comparing input or output iterators to anything other than the end-of-stream position never made sense.</p>
+   <p>Stated differently, the salient property of any given iterator is the position in the underlying data sequence to which it points to.
+In the case of input/output iterators, moving to a new position destroys the old position.
+Therefore there can be only one observed position at any given time, and consequently</p>
+   <ul>
+    <li data-md>
+     <p>positions cannot be compared</p>
+    <li data-md>
+     <p>positions cannot be copied</p>
+   </ul>
+   <p>Therefore, input/output iterators do not meet the semantic requirements of <code class="highlight"><c- n>Copyable</c-></code> and <code class="highlight"><c- n>EqualityComparable</c-></code></p>
    <h3 class="heading settled" data-level="4.2" id="auto_ptr"><span class="secno">4.2. </span><span class="content">auto_ptr</span><a class="self-link" href="#auto_ptr"></a></h3>
    <p>Another way to look at the problem is to say that copyable input iterators fall into the same category of entities than <code class="highlight"><c- n>auto_ptr</c-></code>.
 They own a unique, non-copyable "reading head" over a stream or sequence, and their copy operator has ownership transfer semantics.
@@ -1631,9 +1643,59 @@ On the other hand, the <code class="highlight"><c- n>ForwardIterator</c-></code>
     <li data-md>
      <p><code class="highlight"><c- n>Copyable</c-></code> and  not <code class="highlight"><c- n>EqualityComparable</c-></code></p>
     <li data-md>
-     <p><code class="highlight"><c- n>EqualityComparable</c-></code> but not <code class="highlight"><c- n>Copyable</c-></code>,</p>
+     <p><code class="highlight"><c- n>EqualityComparable</c-></code> but not <code class="highlight"><c- n>Copyable</c-></code></p>
    </ul>
    <p>Neither of these things making sense and being a potential source of bugs.</p>
+   <svg height="404pt" viewBox="0.00 0.00 611.00 404.00" width="611pt" xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg">
+    <g class="graph" id="graph1" transform="scale(1 1) rotate(0) translate(4 400)">
+     <title>iterator</title>
+     <polygon fill="white" points="-4,5 -4,-400 608,-400 608,5 -4,5" stroke="white"></polygon>
+     <g class="node" id="node1">
+      <title>InputIterator</title>
+      <polygon fill="none" points="461.086,-396 148.914,-396 148.914,-288 461.086,-288 461.086,-396" stroke="black"></polygon>
+      <text font-family="monospace" font-size="15.00" text-anchor="middle" x="305" y="-346.5">InputIterator</text>
+      <text font-family="monospace" font-size="15.00" text-anchor="middle" x="305" y="-328.5">Move-Only &amp; non-EqualityComparable</text>
+     </g>
+     <g class="node" id="node2">
+      <title>NonSense1</title>
+      <polygon fill="#f06261" points="300.216,-252 -0.216069,-252 -0.216069,-144 300.216,-144 300.216,-252" stroke="black"></polygon>
+      <text fill="white" font-family="monospace" font-size="15.00" text-anchor="middle" x="150" y="-202.5">Non sense</text>
+      <text fill="white" font-family="monospace" font-size="15.00" text-anchor="middle" x="150" y="-184.5">Copyable &amp; non-EqualityComparable</text>
+     </g>
+     <g class="edge" id="edge2">
+      <title>InputIterator->NonSense1</title>
+      <path d="M246.843,-287.72C236.612,-278.348 225.902,-268.536 215.487,-258.995" fill="none" stroke="black"></path>
+      <polygon fill="black" points="217.706,-256.28 207.968,-252.106 212.977,-261.442 217.706,-256.28" stroke="black"></polygon>
+     </g>
+     <g class="node" id="node3">
+      <title>NonSense2</title>
+      <polygon fill="#f06261" points="603.466,-252 318.534,-252 318.534,-144 603.466,-144 603.466,-252" stroke="black"></polygon>
+      <text fill="white" font-family="monospace" font-size="15.00" text-anchor="middle" x="461" y="-202.5">Non sense</text>
+      <text fill="white" font-family="monospace" font-size="15.00" text-anchor="middle" x="461" y="-184.5">Move-Only &amp; EqualityComparable</text>
+     </g>
+     <g class="edge" id="edge4">
+      <title>InputIterator->NonSense2</title>
+      <path d="M363.532,-287.72C373.829,-278.348 384.609,-268.536 395.09,-258.995" fill="none" stroke="black"></path>
+      <polygon fill="black" points="397.619,-261.426 402.658,-252.106 392.907,-256.249 397.619,-261.426" stroke="black"></polygon>
+     </g>
+     <g class="node" id="node4">
+      <title>ForwardIterator</title>
+      <polygon fill="none" points="410.311,-108 199.689,-108 199.689,0 410.311,0 410.311,-108" stroke="black"></polygon>
+      <text font-family="monospace" font-size="15.00" text-anchor="middle" x="305" y="-58.5">ForwardIteratorIterator</text>
+      <text font-family="monospace" font-size="15.00" text-anchor="middle" x="305" y="-40.5">Regular</text>
+     </g>
+     <g class="edge" id="edge6">
+      <title>NonSense1->ForwardIterator</title>
+      <path d="M208.157,-143.72C218.388,-134.348 229.098,-124.536 239.513,-114.995" fill="none" stroke="black"></path>
+      <polygon fill="black" points="242.023,-117.442 247.032,-108.106 237.294,-112.28 242.023,-117.442" stroke="black"></polygon>
+     </g>
+     <g class="edge" id="edge8">
+      <title>NonSense2->ForwardIterator</title>
+      <path d="M402.468,-143.72C392.171,-134.348 381.391,-124.536 370.91,-114.995" fill="none" stroke="black"></path>
+      <polygon fill="black" points="373.093,-112.249 363.342,-108.106 368.381,-117.426 373.093,-112.249" stroke="black"></polygon>
+     </g>
+    </g>
+   </svg>
    <p>This leaves us with</p>
    <ul>
     <li data-md>
@@ -1705,25 +1767,25 @@ Semiregularity requirements are triked from <span style="background-color:#FFBB8
 either an <span style="background-color:#6ACFCF">InputIterator</span> or an <span style="background-color:#6ACFCF">OutputIterator</span> and are meant to
 be the primary concept used by algorithms that do not care about the specific iterator capabilities beyond their readability/writability.</p>
    <svg height="676pt" viewBox="0.00 0.00 788.00 676.00" width="788pt" xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg">
-    <g class="graph" id="graph1" transform="scale(1 1) rotate(0) translate(4 672)">
+    <g class="graph" id="graph1①" transform="scale(1 1) rotate(0) translate(4 672)">
      <title>iterator</title>
      <polygon fill="white" points="-4,5 -4,-672 785,-672 785,5 -4,5" stroke="white"></polygon>
-     <g class="node" id="node1">
+     <g class="node" id="node1①">
       <title>WeaklyIncrementable</title>
       <polygon fill="#ffbb82" points="551.93,-668 348.07,-668 348.07,-616 551.93,-616 551.93,-668" stroke="black"></polygon>
       <text font-family="Times,serif" font-size="20.00" text-anchor="middle" x="450" y="-636">WeaklyIncrementable</text>
      </g>
-     <g class="node" id="node4">
+     <g class="node" id="node4①">
       <title>Iterator</title>
       <polygon fill="none" points="493.135,-580 406.865,-580 406.865,-528 493.135,-528 493.135,-580" stroke="black"></polygon>
       <text font-family="Times,serif" font-size="20.00" text-anchor="middle" x="450" y="-548">Iterator</text>
      </g>
-     <g class="edge" id="edge2">
+     <g class="edge" id="edge2①">
       <title>WeaklyIncrementable->Iterator</title>
       <path d="M450,-615.662C450,-607.702 450,-598.763 450,-590.245" fill="none" stroke="black"></path>
       <polygon fill="black" points="453.5,-590.157 450,-580.157 446.5,-590.157 453.5,-590.157" stroke="black"></polygon>
      </g>
-     <g class="node" id="node2">
+     <g class="node" id="node2①">
       <title>Incrementable</title>
       <polygon fill="none" points="172.285,-580 29.7147,-580 29.7147,-528 172.285,-528 172.285,-580" stroke="black"></polygon>
       <text font-family="Times,serif" font-size="20.00" text-anchor="middle" x="101" y="-548">Incrementable</text>
@@ -1733,17 +1795,17 @@ be the primary concept used by algorithms that do not care about the specific it
       <polygon fill="lightgrey" points="351.138,-492 210.862,-492 210.862,-440 351.138,-440 351.138,-492" stroke="black"></polygon>
       <text font-family="Times,serif" font-size="20.00" text-anchor="middle" x="281" y="-460">Cpp17Iterator</text>
      </g>
-     <g class="edge" id="edge4">
+     <g class="edge" id="edge4①">
       <title>Incrementable->Cpp17Iterator</title>
       <path d="M153.547,-527.894C174.066,-518.091 197.747,-506.777 219.086,-496.581" fill="none" stroke="black"></path>
       <polygon fill="black" points="220.873,-499.606 228.387,-492.137 217.855,-493.29 220.873,-499.606" stroke="black"></polygon>
      </g>
-     <g class="node" id="node3">
+     <g class="node" id="node3①">
       <title>EqualityComparable</title>
       <polygon fill="none" points="383.139,-580 190.861,-580 190.861,-528 383.139,-528 383.139,-580" stroke="black"></polygon>
       <text font-family="Times,serif" font-size="20.00" text-anchor="middle" x="287" y="-548">EqualityComparable</text>
      </g>
-     <g class="edge" id="edge6">
+     <g class="edge" id="edge6①">
       <title>EqualityComparable->Cpp17Iterator</title>
       <path d="M285.232,-527.662C284.677,-519.702 284.053,-510.763 283.459,-502.245" fill="none" stroke="black"></path>
       <polygon fill="black" points="286.943,-501.889 282.755,-492.157 279.96,-502.376 286.943,-501.889" stroke="black"></polygon>
@@ -1833,7 +1895,7 @@ be the primary concept used by algorithms that do not care about the specific it
       <path d="M424,-87.6623C424,-79.7016 424,-70.7633 424,-62.2449" fill="none" stroke="black"></path>
       <polygon fill="black" points="427.5,-62.1566 424,-52.1566 420.5,-62.1566 427.5,-62.1566" stroke="black"></polygon>
      </g>
-     <g class="edge" id="edge8">
+     <g class="edge" id="edge8①">
       <title>ReadableIterator->ForwardIterator</title>
       <path d="M446.219,-439.699C441.759,-409.846 434.314,-360.025 429.284,-326.365" fill="none" stroke="black"></path>
       <polygon fill="black" points="432.683,-325.422 427.743,-316.049 425.759,-326.457 432.683,-325.422" stroke="black"></polygon>
@@ -1862,6 +1924,161 @@ be the primary concept used by algorithms that do not care about the specific it
       <title>WritableIterator->OutputIterator</title>
       <path d="M651.159,-439.662C659.584,-430.827 669.157,-420.787 678.056,-411.454" fill="none" stroke="black"></path>
       <polygon fill="black" points="680.646,-413.809 685.013,-404.157 675.58,-408.979 680.646,-413.809" stroke="black"></polygon>
+     </g>
+    </g>
+   </svg>
+   <p>While this may seem unbalanced, taking the Cp17Iterator requirements out of the picture show that the proposed design actually strives for symmetrically</p>
+   <svg height="500pt" viewBox="0.00 0.00 469.00 500.00" width="469pt" xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg">
+    <g class="graph" id="graph1②" transform="scale(1 1) rotate(0) translate(4 496)">
+     <title>iterator</title>
+     <polygon fill="white" points="-4,5 -4,-496 466,-496 466,5 -4,5" stroke="white"></polygon>
+     <g class="node" id="node1②">
+      <title>Iterator</title>
+      <polygon fill="none" points="269.135,-492 182.865,-492 182.865,-440 269.135,-440 269.135,-492" stroke="black"></polygon>
+      <text font-family="Times,serif" font-size="20.00" text-anchor="middle" x="226" y="-460">Iterator</text>
+     </g>
+     <g class="node" id="node6①">
+      <title>ReadableIterator</title>
+      <polygon fill="#ccfccb" points="218.44,-404 57.5598,-404 57.5598,-352 218.44,-352 218.44,-404" stroke="black"></polygon>
+      <text font-family="Times,serif" font-size="20.00" text-anchor="middle" x="138" y="-372">ReadableIterator</text>
+     </g>
+     <g class="edge" id="edge6②">
+      <title>Iterator->ReadableIterator</title>
+      <path d="M200.073,-439.662C190.943,-430.739 180.555,-420.588 170.925,-411.177" fill="none" stroke="black"></path>
+      <polygon fill="black" points="173.34,-408.643 163.742,-404.157 168.447,-413.649 173.34,-408.643" stroke="black"></polygon>
+     </g>
+     <g class="node" id="node7①">
+      <title>WritableIterator</title>
+      <polygon fill="#ccfccb" points="393.109,-404 236.891,-404 236.891,-352 393.109,-352 393.109,-404" stroke="black"></polygon>
+      <text font-family="Times,serif" font-size="20.00" text-anchor="middle" x="315" y="-372">WritableIterator</text>
+     </g>
+     <g class="edge" id="edge13①">
+      <title>Iterator->WritableIterator</title>
+      <path d="M252.222,-439.662C261.456,-430.739 271.961,-420.588 281.701,-411.177" fill="none" stroke="black"></path>
+      <polygon fill="black" points="284.207,-413.622 288.966,-404.157 279.342,-408.589 284.207,-413.622" stroke="black"></polygon>
+     </g>
+     <g class="node" id="node2②">
+      <title>ForwardIterator</title>
+      <polygon fill="none" points="300.948,-316 147.052,-316 147.052,-264 300.948,-264 300.948,-316" stroke="black"></polygon>
+      <text font-family="Times,serif" font-size="20.00" text-anchor="middle" x="224" y="-284">ForwardIterator</text>
+     </g>
+     <g class="node" id="node3②">
+      <title>BidirectionalIterator</title>
+      <polygon fill="none" points="319.449,-228 128.551,-228 128.551,-176 319.449,-176 319.449,-228" stroke="black"></polygon>
+      <text font-family="Times,serif" font-size="20.00" text-anchor="middle" x="224" y="-196">BidirectionalIterator</text>
+     </g>
+     <g class="edge" id="edge9">
+      <title>ForwardIterator->BidirectionalIterator</title>
+      <path d="M224,-263.662C224,-255.702 224,-246.763 224,-238.245" fill="none" stroke="black"></path>
+      <polygon fill="black" points="227.5,-238.157 224,-228.157 220.5,-238.157 227.5,-238.157" stroke="black"></polygon>
+     </g>
+     <g class="node" id="node4②">
+      <title>RandomAccessIterator</title>
+      <polygon fill="none" points="329.436,-140 118.564,-140 118.564,-88 329.436,-88 329.436,-140" stroke="black"></polygon>
+      <text font-family="Times,serif" font-size="20.00" text-anchor="middle" x="224" y="-108">RandomAccessIterator</text>
+     </g>
+     <g class="edge" id="edge10①">
+      <title>BidirectionalIterator->RandomAccessIterator</title>
+      <path d="M224,-175.662C224,-167.702 224,-158.763 224,-150.245" fill="none" stroke="black"></path>
+      <polygon fill="black" points="227.5,-150.157 224,-140.157 220.5,-150.157 227.5,-150.157" stroke="black"></polygon>
+     </g>
+     <g class="node" id="node5①">
+      <title>ContiguousIterator</title>
+      <polygon fill="none" points="313.308,-52 134.692,-52 134.692,0 313.308,0 313.308,-52" stroke="black"></polygon>
+      <text font-family="Times,serif" font-size="20.00" text-anchor="middle" x="224" y="-20">ContiguousIterator</text>
+     </g>
+     <g class="edge" id="edge11">
+      <title>RandomAccessIterator->ContiguousIterator</title>
+      <path d="M224,-87.6623C224,-79.7016 224,-70.7633 224,-62.2449" fill="none" stroke="black"></path>
+      <polygon fill="black" points="227.5,-62.1566 224,-52.1566 220.5,-62.1566 227.5,-62.1566" stroke="black"></polygon>
+     </g>
+     <g class="edge" id="edge2②">
+      <title>ReadableIterator->ForwardIterator</title>
+      <path d="M163.338,-351.662C172.173,-342.827 182.213,-332.787 191.546,-323.454" fill="none" stroke="black"></path>
+      <polygon fill="black" points="194.247,-325.703 198.843,-316.157 189.297,-320.753 194.247,-325.703" stroke="black"></polygon>
+     </g>
+     <g class="node" id="node8①">
+      <title>InputIterator</title>
+      <polygon fill="#6acfcf" points="128.296,-316 -0.296387,-316 -0.296387,-264 128.296,-264 128.296,-316" stroke="black"></polygon>
+      <text font-family="Times,serif" font-size="20.00" text-anchor="middle" x="64" y="-284">InputIterator</text>
+     </g>
+     <g class="edge" id="edge7">
+      <title>ReadableIterator->InputIterator</title>
+      <path d="M116.198,-351.662C108.746,-343.002 100.298,-333.184 92.4031,-324.009" fill="none" stroke="black"></path>
+      <polygon fill="black" points="94.8219,-321.454 85.6464,-316.157 89.5158,-326.02 94.8219,-321.454" stroke="black"></polygon>
+     </g>
+     <g class="edge" id="edge4②">
+      <title>WritableIterator->ForwardIterator</title>
+      <path d="M288.189,-351.662C278.747,-342.739 268.006,-332.588 258.047,-323.177" fill="none" stroke="black"></path>
+      <polygon fill="black" points="260.291,-320.481 250.619,-316.157 255.483,-325.569 260.291,-320.481" stroke="black"></polygon>
+     </g>
+     <g class="node" id="node9①">
+      <title>OutputIterator</title>
+      <polygon fill="#6acfcf" points="461.3,-316 318.7,-316 318.7,-264 461.3,-264 461.3,-316" stroke="black"></polygon>
+      <text font-family="Times,serif" font-size="20.00" text-anchor="middle" x="390" y="-284">OutputIterator</text>
+     </g>
+     <g class="edge" id="edge14">
+      <title>WritableIterator->OutputIterator</title>
+      <path d="M337.097,-351.662C344.726,-342.914 353.385,-332.986 361.455,-323.731" fill="none" stroke="black"></path>
+      <polygon fill="black" points="364.126,-325.994 368.061,-316.157 358.851,-321.393 364.126,-325.994" stroke="black"></polygon>
+     </g>
+    </g>
+   </svg>
+   <p>It is important to note that, despite the introduction of <code class="highlight"><c- n>ReadableIterator</c-></code> and <code class="highlight"><c- n>WritableIterator</c-></code> as well as making <code class="highlight"><c- n>ForwardIterator</c-></code> not a direct refinement of the <code class="highlight"><c- n>InputIterator</c-></code> concept,
+the semantic intent of each <code class="highlight"><c- n>Iterator</c-></code> refining concept stays the same. Namely this proposal does not add new iterator categories (there is no <code class="highlight"><c- n>ReadableIterator</c-></code> that is neither an <code class="highlight"><c- n>InputIterator</c-></code> or a <code class="highlight"><c- n>ForwardIterator</c-></code> and there is no <code class="highlight"><c- n>WritableIterator</c-></code> that is neither an <code class="highlight"><c- n>OutputIterator</c-></code> or a <code class="highlight"><c- n>Writable</c-></code> <code class="highlight"><c- n>ForwardIterator</c-></code>), nor does it intend to change the semantics of existing categories.</p>
+   <svg height="116pt" viewBox="0.00 0.00 1058.00 116.00" width="1058pt" xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg">
+    <g class="graph" id="graph1③" transform="scale(1 1) rotate(0) translate(4 112)">
+     <title>iterator</title>
+     <polygon fill="white" points="-4,5 -4,-112 1055,-112 1055,5 -4,5" stroke="white"></polygon>
+     <g class="node" id="node1③">
+      <title>InputIterator</title>
+      <polygon fill="none" points="147.797,-108 0.20336,-108 0.20336,0 147.797,0 147.797,-108" stroke="black"></polygon>
+      <text font-family="monospace" font-size="15.00" text-anchor="middle" x="74" y="-58.5">InputIterator</text>
+      <text font-family="monospace" font-size="15.00" text-anchor="middle" x="74" y="-40.5">Single-pass</text>
+     </g>
+     <g class="node" id="node2③">
+      <title>ForwardIterator</title>
+      <polygon fill="none" points="351.447,-108 184.553,-108 184.553,0 351.447,0 351.447,-108" stroke="black"></polygon>
+      <text font-family="monospace" font-size="15.00" text-anchor="middle" x="268" y="-58.5">ForwardIterator</text>
+      <text font-family="monospace" font-size="15.00" text-anchor="middle" x="268" y="-40.5">Multi-pass</text>
+     </g>
+     <g class="edge" id="edge2③">
+      <title>InputIterator->ForwardIterator</title>
+      <path d="M147.861,-54C156.57,-54 165.55,-54 174.49,-54" fill="none" stroke="black"></path>
+      <polygon fill="black" points="174.549,-57.5001 184.549,-54 174.549,-50.5001 174.549,-57.5001" stroke="black"></polygon>
+     </g>
+     <g class="node" id="node3③">
+      <title>BidirectionalIterator</title>
+      <polygon fill="none" points="582.45,-108 387.55,-108 387.55,0 582.45,0 582.45,-108" stroke="black"></polygon>
+      <text font-family="monospace" font-size="15.00" text-anchor="middle" x="485" y="-58.5">BidirectionalIterator</text>
+      <text font-family="monospace" font-size="15.00" text-anchor="middle" x="485" y="-40.5">Bidirectional</text>
+     </g>
+     <g class="edge" id="edge3">
+      <title>ForwardIterator->BidirectionalIterator</title>
+      <path d="M351.51,-54C360.021,-54 368.754,-54 377.478,-54" fill="none" stroke="black"></path>
+      <polygon fill="black" points="377.702,-57.5001 387.702,-54 377.702,-50.5001 377.702,-57.5001" stroke="black"></polygon>
+     </g>
+     <g class="node" id="node4③">
+      <title>RandomAccessIterator</title>
+      <polygon fill="none" points="827.936,-108 618.064,-108 618.064,0 827.936,0 827.936,-108" stroke="black"></polygon>
+      <text font-family="monospace" font-size="15.00" text-anchor="middle" x="723" y="-58.5">RandomAccessIterator</text>
+      <text font-family="monospace" font-size="15.00" text-anchor="middle" x="723" y="-40.5">Random Access</text>
+     </g>
+     <g class="edge" id="edge4③">
+      <title>BidirectionalIterator->RandomAccessIterator</title>
+      <path d="M582.331,-54C590.759,-54 599.339,-54 607.892,-54" fill="none" stroke="black"></path>
+      <polygon fill="black" points="607.91,-57.5001 617.91,-54 607.91,-50.5001 607.91,-57.5001" stroke="black"></polygon>
+     </g>
+     <g class="node" id="node5②">
+      <title>ContiguousIterator</title>
+      <polygon fill="none" points="1049.81,-108 864.191,-108 864.191,0 1049.81,0 1049.81,-108" stroke="black"></polygon>
+      <text font-family="monospace" font-size="15.00" text-anchor="middle" x="957" y="-58.5">ContiguousIterator</text>
+      <text font-family="monospace" font-size="15.00" text-anchor="middle" x="957" y="-40.5">Contiguous</text>
+     </g>
+     <g class="edge" id="edge5">
+      <title>RandomAccessIterator->ContiguousIterator</title>
+      <path d="M827.786,-54C836.544,-54 845.396,-54 854.139,-54" fill="none" stroke="black"></path>
+      <polygon fill="black" points="854.341,-57.5001 864.341,-54 854.341,-50.5001 854.341,-57.5001" stroke="black"></polygon>
      </g>
     </g>
    </svg>
