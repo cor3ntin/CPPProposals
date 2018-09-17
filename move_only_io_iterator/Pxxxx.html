@@ -1215,7 +1215,7 @@ Possible extra rowspan handling
 </style>
   <meta content="Bikeshed version a04b880cde96bf0ae2d14a0edcf2bcdcb631548b" name="generator">
   <link href="https://isocpp.org/favicon.ico" rel="icon">
-  <meta content="1d39bc707efd8c0aa6c69766b23c7c6c2db8146a" name="document-revision">
+  <meta content="a25a0fe02afc2c24343b9b5f0bb45759233a7484" name="document-revision">
 <style>
  table {
     border-collapse: collapse;
@@ -1595,7 +1595,7 @@ Reading from such entity mutate irreversibly the state of that entity.</p>
 <c- n>stocket</c-><c- p>.</c-><c- n>read_some</c-><c- p>();</c->
 <c- n>assert</c-><c- p>(</c-><c- n>socket</c-> <c- o>!=</c-> <c- n>socket_copy</c-><c- p>);</c->
 </pre>
-   <p>However, from the point of view of an input device or view, consuming data do not move the position of the reading head.
+   <p>However, from the point of view of an input device or view, consuming data does not move the position of the reading head.
 The state of an input stream is not a property of the entity that produces it.</p>
    <p>This means that serial entities ( devices, views ) are not regular.
 Iterators over such entity are therefore non-regular.</p>
@@ -1614,11 +1614,11 @@ Therefore there can be only one observed position at any given time, and consequ
     <li data-md>
      <p>positions cannot be copied</p>
    </ul>
-   <p>Therefore, input/output iterators do not meet the semantic requirements of <code class="highlight"><c- n>Copyable</c-></code> and <code class="highlight"><c- n>EqualityComparable</c-></code></p>
+   <p>Therefore, input/output iterators do not meet the semantic requirements of either <code class="highlight"><c- n>Copyable</c-></code> or <code class="highlight"><c- n>EqualityComparable</c-></code></p>
    <h3 class="heading settled" data-level="4.2" id="auto_ptr"><span class="secno">4.2. </span><span class="content">auto_ptr</span><a class="self-link" href="#auto_ptr"></a></h3>
-   <p>Another way to look at the problem is to say that copyable input iterators fall into the same category of entities than <code class="highlight"><c- n>auto_ptr</c-></code>.
+   <p>Another way to look at the problem is to say that copyable input iterators fall into the same category of entities as <code class="highlight"><c- n>auto_ptr</c-></code>.
 They own a unique, non-copyable "reading head" over a stream or sequence, and their copy operator has ownership transfer semantics.
-All the arguments that lead to <code class="highlight"><c- n>auto_ptr</c-></code> depreciation and eventual removal apply equally to input iterators.</p>
+All the arguments that lead to <code class="highlight"><c- n>auto_ptr</c-></code> deprecation and eventual removal apply equally to input iterators.</p>
    <h3 class="heading settled" data-level="4.3" id="implicitly-destructive-operations"><span class="secno">4.3. </span><span class="content">Implicitly destructive operations</span><a class="self-link" href="#implicitly-destructive-operations"></a></h3>
    <p>More often than not, reading from an input sequence is a destructive operation.
 But that destruction is reflected nowhere in the API.
@@ -1626,7 +1626,7 @@ Less experienced developers may not be aware</p>
    <p>By making <code class="highlight"><c- n>InputIterator</c-></code> move only, developers will have to explicitly move them, which both signals the invalidation
 of the move-from object, but, more importantly, that the underlying data will be destroyed.</p>
    <h3 class="heading settled" data-level="4.4" id="move-only-state"><span class="secno">4.4. </span><span class="content">Move-only state</span><a class="self-link" href="#move-only-state"></a></h3>
-   <p>It may be desirable for an iterate to hold a move-only object, becoming itself move-only, which is not possible with iterators modeling Cpp17Iterator.
+   <p>It may be desirable for an iterator to hold a move-only object, becoming itself move-only, which is not possible with iterators modeling Cpp17Iterator.
 A real-world example of such iterator is described in <a data-link-type="biblio" href="#biblio-p0902r0">[P0902R0]</a>.
 While syntactically copyable in the current design, a <code class="highlight"><c- n>coroutine_handle</c-></code> such as used by a <code class="highlight"><c- n>generator</c-></code> input iterator ought to be move-only.</p>
    <p class="note" role="note"><span>Note:</span> Having input iterators holding move-only state compile is definitively a worthy goal, however this proposal is not attempting to shove a new iterator category
@@ -1636,7 +1636,7 @@ so that such code would compile, but rather to show that all input iterators oug
 For example, in the presence of <code class="highlight"><c- n>InputIterator</c-></code>s, <code class="highlight"><c- n>ranges</c-><c- o>::</c-><c- n>copy</c-></code> could perform a move rather than a copy of the elements since iteration is destructive.</p>
    <h2 class="heading settled" data-level="5" id="proposed-design"><span class="secno">5. </span><span class="content">Proposed design</span><a class="self-link" href="#proposed-design"></a></h2>
    <p>We propose to make <code class="highlight"><c- n>InputIterator</c-></code> concept match its semantic.
-In this design, <code class="highlight"><c- n>InputIterator</c-></code>is required to be <code class="highlight"><c- n>Movable</c-></code> but it is furthermore required <em>not to be</em> Copyable nor <code class="highlight"><c- n>EqualityComparable</c-></code>.</p>
+In this design, <code class="highlight"><c- n>InputIterator</c-></code>is required to be <code class="highlight"><c- n>Movable</c-></code> but it is furthermore required <em>to be neither</em> <code class="highlight"><c- n>Copyable</c-></code> nor <code class="highlight"><c- n>EqualityComparable</c-></code>.</p>
    <p class="note" role="note"><span>Note:</span> An iterator not being <code class="highlight"><c- n>EqualityComparable</c-></code> means that for any given <code class="highlight"><c- n>a</c-></code> and <code class="highlight"><c- n>b</c-></code> instances of that iterator <code class="highlight"><c- n>I</c-></code> there is no operation <code class="highlight"><c- n>a</c-></code> == <code class="highlight"><c- n>b</c-></code>.
 However, for such iterator to be useful, there must exist a type <code class="highlight"><c- n>S</c-></code> such that the concept <code class="highlight"><c- n>Sentinel</c-><c- o>&lt;</c-><c- n>S</c-><c- p>,</c-> <c- n>I</c-><c- o>></c-></code> is satisfied.
 Such a requirement is a property of the algorithm, not of <code class="highlight"><c- n>I</c-></code> itself.
@@ -1662,7 +1662,7 @@ On the other hand, the <code class="highlight"><c- n>ForwardIterator</c-></code>
      <g class="node" id="node2">
       <title>NonSense1</title>
       <polygon fill="#f06261" points="300.216,-252 -0.216069,-252 -0.216069,-144 300.216,-144 300.216,-252" stroke="black"></polygon>
-      <text fill="white" font-family="monospace" font-size="15.00" text-anchor="middle" x="150" y="-202.5">Non sense</text>
+      <text fill="white" font-family="monospace" font-size="15.00" text-anchor="middle" x="150" y="-202.5">Nonsense</text>
       <text fill="white" font-family="monospace" font-size="15.00" text-anchor="middle" x="150" y="-184.5">Copyable &amp; non-EqualityComparable</text>
      </g>
      <g class="edge" id="edge2">
@@ -1673,7 +1673,7 @@ On the other hand, the <code class="highlight"><c- n>ForwardIterator</c-></code>
      <g class="node" id="node3">
       <title>NonSense2</title>
       <polygon fill="#f06261" points="603.466,-252 318.534,-252 318.534,-144 603.466,-144 603.466,-252" stroke="black"></polygon>
-      <text fill="white" font-family="monospace" font-size="15.00" text-anchor="middle" x="461" y="-202.5">Non sense</text>
+      <text fill="white" font-family="monospace" font-size="15.00" text-anchor="middle" x="461" y="-202.5">Nonsense</text>
       <text fill="white" font-family="monospace" font-size="15.00" text-anchor="middle" x="461" y="-184.5">Move-Only &amp; EqualityComparable</text>
      </g>
      <g class="edge" id="edge4">
@@ -1706,7 +1706,7 @@ On the other hand, the <code class="highlight"><c- n>ForwardIterator</c-></code>
     <li data-md>
      <p>ForwardIterator: Regular</p>
    </ul>
-   <p>It is not possible for a given type to meet bot <code class="highlight"><c- n>ForwardIterator</c-></code> and <code class="highlight"><c- n>InputIterator</c-></code> requirements since they have
+   <p>It is not possible for a given type to meet both <code class="highlight"><c- n>ForwardIterator</c-></code> and <code class="highlight"><c- n>InputIterator</c-></code> requirements since they have
 contradictory requirements.</p>
    <p>This leads to the introduction of two new concepts <code class="highlight"><c- n>ReadableIterator</c-></code> and <code class="highlight"><c- n>WritableIterator</c-></code>.
 For correctness, these concepts are defined in terms of other iterators:</p>
@@ -1719,16 +1719,16 @@ For correctness, these concepts are defined in terms of other iterators:</p>
    <p>Notice that <code class="highlight"><c- n>ForwardIterator</c-></code> and <code class="highlight"><c- n>InputIterator</c-></code> share the <code class="highlight"><c- n>Readable</c-></code> and <code class="highlight"><c- n>Iterator</c-></code> requirements, so indeed,
 a ReadableIterator is an Iterator that is Readable.
 Symmetrically, a <code class="highlight"><c- n>WritableIterator</c-></code> is an <code class="highlight"><c- n>Iterator</c-></code> that is <code class="highlight"><c- n>Writable</c-></code>.</p>
-   <p>However there is no valid ReadableIterator that is neither input or forward, and so <code class="highlight"><c- n>ReadableIterator</c-></code> is defined as</p>
+   <p>However there is no valid <code class="highlight"><c- n>ReadableIterator</c-></code> that is neither input or forward, and so <code class="highlight"><c- n>ReadableIterator</c-></code> is defined as</p>
 <pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- o>></c->
-<c- n>concept</c-> <c- b>bool</c-> <c- n>ReadableIterator</c-> <c- o>=</c-> <c- n>InputIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>||</c-> <c- n>ForwardIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-><c- p>;</c->
+<c- n>concept</c-> <c- n>ReadableIterator</c-> <c- o>=</c-> <c- n>InputIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>||</c-> <c- n>ForwardIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-><c- p>;</c->
 </pre>
    <p>and WritableIterator</p>
 <pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- o>></c->
-<c- n>concept</c-> <c- b>bool</c-> <c- n>Writable</c-> <c- o>=</c-> <c- n>OutputIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>||</c-> <c- n>ForwardIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-><c- p>;</c->
+<c- n>concept</c-> <c- n>Writable</c-> <c- o>=</c-> <c- n>OutputIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>||</c-> <c- n>ForwardIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-><c- p>;</c->
 </pre>
-   <p>Because this change quite deeply the Iterator concepts taxonomy, we need to adapt algorithms is the <code class="highlight"><c- n>ranges</c-></code> namespace
-to use this ReadableIterator concept everywhere a <code class="highlight"><c- n>RangesTSInputIterator</c-></code> is expected.
+   <p>Because this dramatically changes the Iterator concepts taxonomy, we need to adapt algorithms in the <code class="highlight"><c- n>ranges</c-></code> namespace
+to use this <code class="highlight"><c- n>ReadableIterator</c-></code> concept everywhere a <code class="highlight"><c- n>RangesTSInputIterator</c-></code> is expected.
 Notice that there is currently no algorithm that is designed to take non-forward input iterators.
 But such algorithms could exist, for example, <code class="highlight"><c- n>ranges</c-><c- o>::</c-><c- n>copy</c-></code> could be specialized for InputIterator and operate a move instead of a copy.</p>
    <h3 class="heading settled" data-level="5.1" id="no-changes-to-the-namespace-std"><span class="secno">5.1. </span><span class="content">No changes to the namespace <code class="highlight"><c- n>std</c-></code></span><a class="self-link" href="#no-changes-to-the-namespace-std"></a></h3>
@@ -2182,7 +2182,7 @@ However, here</p>
 Because WeaklyIncrementable, as it is described in <a data-link-type="biblio" href="#biblio-p0896r2">[P0896R2]</a>, accommodates for <code class="highlight"><c- n>RangesTSInputIterator</c-></code> and <code class="highlight"><c- n>Cpp17InputIterator</c-></code>, it suffers from the same issue (being copyable with move semantic).
 We propose to strike the <code class="highlight"><c- n>Semiregular</c-></code> requirement as follow</p>
 <pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- o>></c->
-<c- n>concept</c-> <c- b>bool</c-> <c- n>WeaklyIncrementable</c-> <c- o>=</c->
+<c- n>concept</c-> <c- n>WeaklyIncrementable</c-> <c- o>=</c->
     <c- n>Movable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
     <c- n>requires</c-><c- p>(</c-><c- n>I</c-><c- o>&amp;</c-> <c- n>i</c-><c- p>)</c-> <c- p>{</c->
         <c- k>typename</c-> <c- n>iter_difference_t</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-><c- p>;</c->
@@ -2194,7 +2194,7 @@ We propose to strike the <code class="highlight"><c- n>Semiregular</c-></code> r
    <p>Modify the <code class="highlight"><c- n>InputIterator</c-></code> as follow.
 We Specifically disallow Input iterators to be <code class="highlight"><c- n>EqualityComparable</c-></code> or <code class="highlight"><c- n>Copyable</c-></code>.</p>
 <pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- o>></c->
-<c- n>concept</c-> <c- b>bool</c-> <c- n>InputIterator</c-> <c- o>=</c->
+<c- n>concept</c-> <c- n>InputIterator</c-> <c- o>=</c->
     <c- n>Readable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
     <c- n>Iterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
     <c- o>!</c-> <c- n>Copyable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
@@ -2202,7 +2202,7 @@ We Specifically disallow Input iterators to be <code class="highlight"><c- n>Equ
 </pre>
    <h4 class="heading settled" data-level="8.1.3" id="forwarditerator"><span class="secno">8.1.3. </span><span class="content">ForwardIterator</span><a class="self-link" href="#forwarditerator"></a></h4>
 <pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- o>></c->
-<c- n>concept</c-> <c- b>bool</c-> <c- n>ForwardIterator</c-> <c- o>=</c->
+<c- n>concept</c-> <c- n>ForwardIterator</c-> <c- o>=</c->
     <c- n>Iterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
     <c- n>Readable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
     <c- n>EqualityComparable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
@@ -2215,13 +2215,13 @@ Concepts refining <code class="highlight"><c- n>ForwardIterator</c-></code> are 
    <h4 class="heading settled" data-level="8.1.4" id="readableiterator"><span class="secno">8.1.4. </span><span class="content">ReadableIterator</span><a class="self-link" href="#readableiterator"></a></h4>
    <p>Introduce a new <code class="highlight"><c- n>ReadableIterator</c-></code> concept, defined as follow</p>
 <pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- o>></c->
-<c- n>concept</c-> <c- b>bool</c-> <c- n>ReadableIterator</c-> <c- o>=</c-> <c- n>InputIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>||</c-> <c- n>ForwardIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-><c- p>;</c->
+<c- n>concept</c-> <c- n>ReadableIterator</c-> <c- o>=</c-> <c- n>InputIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>||</c-> <c- n>ForwardIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-><c- p>;</c->
 </pre>
    <p><code class="highlight"><c- n>ReadableIterator</c-></code> being an <code class="highlight"><c- n>Iterator</c-></code> itself being <code class="highlight"><c- n>ReadableIterator</c-></code> it is <code class="highlight"><c- n>Movable</c-></code>.
 All refinement of <code class="highlight"><c- n>ReadableIterator</c-></code> will, therefore, be <code class="highlight"><c- n>Movable</c-></code>, but not necessarily <code class="highlight"><c- n>Copyable</c-></code>.</p>
    <h4 class="heading settled" data-level="8.1.5" id="outputiterator"><span class="secno">8.1.5. </span><span class="content">OutputIterator</span><a class="self-link" href="#outputiterator"></a></h4>
 <pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- p>,</c-> <c- k>class</c-> <c- nc>T</c-><c- o>></c->
-<c- n>concept</c-> <c- b>bool</c-> <c- n>OutputIterator</c-> <c- o>=</c->
+<c- n>concept</c-> <c- n>OutputIterator</c-> <c- o>=</c->
     <c- n>Iterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
     <c- n>Writable</c-><c- o>&lt;</c-><c- n>I</c-><c- p>,</c-> <c- n>T</c-><c- o>></c-> <c- o>&amp;&amp;</c->
     <c- o>!</c-> <c- n>Copyable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
@@ -2233,13 +2233,13 @@ All refinement of <code class="highlight"><c- n>ReadableIterator</c-></code> wil
    <h4 class="heading settled" data-level="8.1.6" id="writableiterator"><span class="secno">8.1.6. </span><span class="content">WritableIterator</span><a class="self-link" href="#writableiterator"></a></h4>
    <p>Introduce a new <code class="highlight"><c- n>WritableIterator</c-></code> concept, defined as follow</p>
 <pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- p>,</c-> <c- k>class</c-> <c- nc>T</c-><c- o>></c->
-<c- n>concept</c-> <c- b>bool</c-> <c- n>WritableIterator</c-> <c- o>=</c-> <c- n>OutputIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- p>,</c-><c- n>T</c-><c- o>></c-> <c- o>||</c-> <c- p>(</c-><c- n>ForwardIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c-> <c- n>Writable</c-><c- o>&lt;</c-><c- n>I</c-><c- p>,</c-><c- n>T</c-><c- o>></c-><c- p>);</c->
+<c- n>concept</c-> <c- n>WritableIterator</c-> <c- o>=</c-> <c- n>OutputIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- p>,</c-><c- n>T</c-><c- o>></c-> <c- o>||</c-> <c- p>(</c-><c- n>ForwardIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c-> <c- n>Writable</c-><c- o>&lt;</c-><c- n>I</c-><c- p>,</c-><c- n>T</c-><c- o>></c-><c- p>);</c->
 </pre>
    <h4 class="heading settled" data-level="8.1.7" id="mergeable"><span class="secno">8.1.7. </span><span class="content">Mergeable</span><a class="self-link" href="#mergeable"></a></h4>
    <p>Modify the Meargeable concept to accept a ReadableIterator instead of a <code class="highlight"><c- n>RangesTSInputIterator</c-></code></p>
 <pre class="highlight"><c- k>template</c-><c- o>&lt;</c-><c- k>class</c-> <c- nc>I1</c-><c- p>,</c-> <c- k>class</c-> <c- nc>I2</c-><c- p>,</c-> <c- k>class</c-> <c- nc>Out</c-><c- p>,</c->
 <c- k>class</c-> <c- nc>R</c-> <c- o>=</c-> <c- n>ranges</c-><c- o>::</c-><c- n>less</c-><c- o>&lt;></c-><c- p>,</c-> <c- k>class</c-> <c- nc>P1</c-> <c- o>=</c-> <c- n>identity</c-><c- p>,</c-> <c- k>class</c-> <c- nc>P2</c-> <c- o>=</c-> <c- n>identity</c-><c- o>></c->
-<c- n>concept</c-> <c- b>bool</c-> <c- n>Mergeable</c-> <c- o>=</c->
+<c- n>concept</c-> <c- n>Mergeable</c-> <c- o>=</c->
 <c- n>ReadableIterator</c-><c- o>&lt;</c-><c- n>I1</c-><c- o>></c-> <c- o>&amp;&amp;</c->
 <c- n>ReadableIterator</c-><c- o>&lt;</c-><c- n>I2</c-><c- o>></c-> <c- o>&amp;&amp;</c->
 <c- n>WeaklyIncrementable</c-><c- o>&lt;</c-><c- n>Out</c-><c- o>></c-> <c- o>&amp;&amp;</c->
@@ -2260,12 +2260,12 @@ All refinement of <code class="highlight"><c- n>ReadableIterator</c-></code> wil
    <h4 class="heading settled" data-level="8.2.1" id="readablerange"><span class="secno">8.2.1. </span><span class="content">ReadableRange</span><a class="self-link" href="#readablerange"></a></h4>
    <p>Introduce a new concept <code class="highlight"><c- n>ReadableRange</c-></code></p>
 <pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>T</c-><c- o>></c->
-<c- n>concept</c-> <c- b>bool</c-> <c- n>ReadableRange</c-> <c- o>=</c-> <c- n>Range</c-><c- o>&lt;</c-><c- n>T</c-><c- o>></c-> <c- o>&amp;&amp;</c-> <c- n>ReadableIterator</c-><c- o>&lt;</c-><c- n>iterator_t</c-><c- o>&lt;</c-><c- n>T</c-><c- o>>></c-><c- p>;</c->
+<c- n>concept</c-> <c- n>ReadableRange</c-> <c- o>=</c-> <c- n>Range</c-><c- o>&lt;</c-><c- n>T</c-><c- o>></c-> <c- o>&amp;&amp;</c-> <c- n>ReadableIterator</c-><c- o>&lt;</c-><c- n>iterator_t</c-><c- o>&lt;</c-><c- n>T</c-><c- o>>></c-><c- p>;</c->
 </pre>
    <h4 class="heading settled" data-level="8.2.2" id="writablerange"><span class="secno">8.2.2. </span><span class="content">WritableRange</span><a class="self-link" href="#writablerange"></a></h4>
    <p>Introduce a new concept <code class="highlight"><c- n>WritableRange</c-></code></p>
 <pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>T</c-><c- o>></c->
-<c- n>concept</c-> <c- b>bool</c-> <c- n>WritableRange</c-> <c- o>=</c-> <c- n>Range</c-><c- o>&lt;</c-><c- n>T</c-><c- o>></c-> <c- o>&amp;&amp;</c-> <c- n>WritableIterator</c-><c- o>&lt;</c-><c- n>iterator_t</c-><c- o>&lt;</c-><c- n>T</c-><c- o>>></c-><c- p>;</c->
+<c- n>concept</c-> <c- n>WritableRange</c-> <c- o>=</c-> <c- n>Range</c-><c- o>&lt;</c-><c- n>T</c-><c- o>></c-> <c- o>&amp;&amp;</c-> <c- n>WritableIterator</c-><c- o>&lt;</c-><c- n>iterator_t</c-><c- o>&lt;</c-><c- n>T</c-><c- o>>></c-><c- p>;</c->
 </pre>
    <h4 class="heading settled" data-level="8.2.3" id="views"><span class="secno">8.2.3. </span><span class="content">Views</span><a class="self-link" href="#views"></a></h4>
    <ul>
