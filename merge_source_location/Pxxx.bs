@@ -1,0 +1,121 @@
+<pre class='metadata'>
+Title: Adopt source_location from Library Fundamentals V3 for C++20
+Shortname: Dxxx
+Level: 0
+Status: D
+Group: wg21
+Editor: Corentin Jabot, corentin.jabot@gmail.com
+Abstract: This paper proposes that `source_location` (from Library Fundamentals V3) be adopted into the C++20 standard
+Audience: LEWG, LWG
+URL: foo
+Markup Shorthands: markdown yes
+Default Highlight: CPP
+Line Numbers: no
+Date: 2018-09-21
+</pre>
+
+<style>
+
+.tony-table table {
+    width:100%;
+}
+
+.tony-table th {
+    text-align: center;
+    padding-right:20px;
+}
+
+.tony-table  td {
+    vertical-align:top;
+}
+
+.wording-add {
+    background-color: #F6F9ED;
+}
+
+
+/* Table */
+.data-table {
+	border-collapse: collapse;
+	font-size: 14px;
+	min-width: 573px;
+}
+.data-table th {
+	color: #5a5a5a;
+}
+
+.data-table th,
+.data-table td {
+	padding: 7px 17px;
+}
+.data-table caption {
+	margin: 7px;
+}
+
+/* Table Header */
+.data-table thead th {
+    border-bottom: 2px solid #CCCCCC;
+}
+
+/* Table Body */
+.data-table tbody td {
+	color: #353535;
+	border-bottom: 1px solid #dcdcdc;
+	text-align: right;
+}
+
+.data-table tbody tr:last-child td {
+	border: 0;
+}
+
+.data-table tbody tr:hover td {
+	background-color: #f7f7f7;
+	transition: all .2s;
+}
+
+/* Table Footer */
+.data-table tfoot th {
+	border-top: 1px solid #c7c7c7;
+	text-align: right;
+}
+
+.array_row {
+    outline: thin solid #008000
+}
+
+</style>
+
+
+# Proposal
+
+
+This paper proposes that source_location from Library Fundamentals V3 [[N4758]] be adopted into the C++20 standard.
+
+`source_location` has been successfully implemented without difficulties in GCC and Clang implementers almost completed their implementation of it.
+As described by the original paper, it's a necessary feature to implement logging without requiring macros, one that can not be
+be implemented by non-standard libraries because it requires compiler support.
+
+`source_location` has been very favorably received by both EWG and LEWG [[n4129]], [[n4417]] and has been part of library
+fundamentals v2 [[n4562]] and v3 [[N4758]] since 2015 without changes to exposed interface.
+
+Note: A proposal [[P0555R0]] in 2017 to make use of `string_view` in `source_location` has been withdrawn by their authors once string_view
+gained a constexpt constructor, allowing the use of source_location in constexpr context.
+
+
+# Proposed Wording
+
+Create a new header <source_location> with the synopsis taken from paragraph ¶15.11 of [[N4758]].
+
+Add the `source_location` class to the C++ Working paper using the content from [[N4758]] in the <source_location> header.
+
+Move this content from the `std::experimental::fundamentals_v3` to the `std` namespace.
+
+In section 15.5.1.3  `[library.requirements.orlganization.compliance]`, add the <source_location> header to the table 21 (`[tab:cpp.headers.freestanding]`).
+
+NB: The new `<source_location>` header would be best described in a new `Reflection` library (like it is in [[N4758]]).
+At the time of the publication of this category did not exist, and so this paper defers to LEWG and LWG to find the best
+emplacement to describe this header in the wording or to introduce a new Refection category in the wording.
+
+Similarly to the original [[n4417]] wording, we recommend the feature test macro `__cpp_lib_source_location` for this feature.
+
+
