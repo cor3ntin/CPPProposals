@@ -41,25 +41,25 @@ containers and string classes be constructible from a range.
 Most containers of the standard library provide a constructors taking a pair of iterators.
 
 \begin{codeblock}
-	std::list<int> lst;
-	std::vector<int> vec{std::begin(lst), std::end(lst)};
-	//equivalent too
-	std::vector<int> vec;
-	std::copy(it, end, std::back_inserter(vec));
+    std::list<int> lst;
+    std::vector<int> vec{std::begin(lst), std::end(lst)};
+    //equivalent too
+    std::vector<int> vec;
+    std::copy(it, end, std::back_inserter(vec));
 \end{codeblock}
 
 While, this feature is very useful, as converting from one container type to another is a frequent
-use-case, it can be greatly improved by taking full advantage of the notions and tools offer by the Range TS.
+use-case, it can be greatly improved by taking full advantage of the notions and tools offered by the Range TS.
 
 Indeed, given all containers are ranges (ie: an iterator-sentinel pair) the above example can be rewritten, without semantic of performance changes, as:
 
 \begin{codeblock}
-	std::list<int> lst;
-	std::vector<int> vec{lst};
+    std::list<int> lst;
+    std::vector<int> vec{lst};
 \end{codeblock}
 
 
-The above example is a common pattern as it is frequently preferable to copy the content of a \cc{std::list} to 
+The above example is a common pattern as it is frequently preferable to copy the content of a \cc{std::list} to
 a \cc{std::vector} before feeding it an algorithm and then copying it back to a \cc{std::vector}.\\
 
 All containers and views being ranges, it is logical they can themselves be built out of ranges.
@@ -76,11 +76,11 @@ iterated over only exist transiently in memory if an iterator is pointing to tha
 
 \emph{View materialization} consists in committing all the elements of such view in memory by putting them into a container.
 
-The following code iterates over the numbers 0 to 1023 but only one number actually exists in memory at any given time. 
+The following code iterates over the numbers 0 to 1023 but only one number actually exists in memory at any given time.
 \begin{codeblock}
 std::iota_view v{0, 1024};
 for (auto i : v) {
-	std::cout << i << ' ';
+    std::cout << i << ' ';
 }
 \end{codeblock}
 
@@ -89,41 +89,41 @@ The facilities provided by \cite{P0896R3} allow to do that in the following way:
 
 
 \begin{codeblock}
-	std::iota_view v{0, 1024};
-	std::vector<int> materialized;
-	std::ranges::copy v{v, std::back_inserter(materialized)};
+    std::iota_view v{0, 1024};
+    std::vector<int> materialized;
+    std::ranges::copy v{v, std::back_inserter(materialized)};
 \end{codeblock}
 
-This proposal allows to rewrite the above snippet as:
+This proposal allows rewriting the above snippet as:
 
 \begin{codeblock}
-	std::vector materialized = std::iota_view v{0, 1024}; 
+    std::vector materialized = std::iota_view v{0, 1024};
 \end{codeblock}
 
 
-Perhaps the most important aspect of view materialization is that it allow simple code such as:
+Perhaps the most important aspect of view materialization is that it allows simple code such as:
 
 \begin{codeblock}
-	namespace std {
-		split_view<std::string_view> split(std:std::string_view);
-	}
-	std::vector<std::string> words = std::split("Splitting strings made easy");
+    namespace std {
+        split_view<std::string_view> split(std:std::string_view);
+    }
+    std::vector<std::string> words = std::split("Splitting strings made easy");
 \end{codeblock}
 
 Indeed, a function such as \cc{split} is notoriously hard to standardize (\cite{P0540},  \cite{N3593}), because without lazy views and \cc{std::string_view}, it has to allocate or expose an expert-friendly interface.
 The view materialization pattern further let the \emph{caller} choose the best container and allocation strategy for their use case (or to never materialize the view should it not be necessary).
 And while it would not make sense for a standard-library function to split a string into a vector it would allocate, it's totally reasonable for most applications to do so.\\
 
-This paper do not propose to standardize such \cc{split} function, however, view materialization is something the SG-16 working group is interested in.
+This paper does not propose to standardize such \cc{split} function, however, view materialization is something the SG-16 working group is interested in.
 Indeed, they have considered APIs that could rely heavily on this idiom, as it has proven a natural way to handle the numerous ways to iterate over Unicode text.
 Similar ideas have been presented in \cite{P1004}.
 
 \begin{codeblock}
-	std::vector<std::u8string> sentences = 
-		text::unicode_codepoint_view<text::utf8>(blob)  
-		text::normalize<text::nfc> |
-		text::graphemes_view | 
-		text::split<sentences>;
+    std::vector<std::u8string> sentences =
+        text::unicode_codepoint_view<text::utf8>(blob)
+        text::normalize<text::nfc> |
+        text::graphemes_view |
+        text::split<sentences>;
 \end{codeblock}
 
 \section{Design considerations}
@@ -134,17 +134,17 @@ Similar ideas have been presented in \cite{P1004}.
 Iterators from the Ranges TS are not always compatible with iterators from the \cc{std} namespace.
 Namely,
 \begin{itemize}
-	\item They do not have the same set of requirements.
-	\item \cc{std}'s iterator do not support unbounded ranges and \cc{Sentinel}
-	\item Work is being done to allow Ranges's iterators to be move only   
+    \item They do not have the same set of requirements.
+    \item \cc{std}'s iterator do not support unbounded ranges and \cc{Sentinel}
+    \item Work is being done to allow Ranges's iterators to be move only
 \end{itemize}
 
-Therefore, in the general case, the iterator-pair constructor offered by standard containers can not be use, but instead the \cc{ranges::copy} should be use.
+Therefore, in the general case, the iterator-pair constructor offered by standard containers cannot be used, but instead the \cc{ranges::copy} should be used.
 Deferring to the design decisions of \cite{P0896R3}, we think it's better avoided not to have support for both type of iterator-pairs in the same overload set
 as to avoid breaking code in subtle ways.
 
 Therefore, adding support for \cc{ranges::}'s ranges seem the best solution to make \cc{std::} containers constructible from objects meeting the requirements
-specified in th \cc{ranges::} namespace.
+specified in the \cc{ranges::} namespace.
 
 Ranges are also a better, safer, stronger abstraction compared to iterator-pairs.
 
@@ -153,45 +153,45 @@ Ranges are also a better, safer, stronger abstraction compared to iterator-pairs
 Because copy of containers is costly, the authors of this paper believe it is important that the range-based constructors for containers be \cc{explicit}.
 However, there is a strong interest for this syntax to be supported:
 \begin{codeblock}
-	container c = view | transform;
+    container c = view | transform;
 \end{codeblock}
 
 But, at the same time, the following pitfalls should be avoided:
 
 
 \begin{codeblock}
-	auto map m = /*...*/;
-	vector a = m;  //implicit conversion map -> vector ($\mathcal{O}(n)$)
-	vector b = m;  //implicit conversion map -> vector ($\mathcal{O}(n)$)
+    auto map m = /*...*/;
+    vector a = m;  //implicit conversion map -> vector ($\mathcal{O}(n)$)
+    vector b = m;  //implicit conversion map -> vector ($\mathcal{O}(n)$)
 \end{codeblock}
 ---
 
 \begin{codeblock}
-	void foo(const vector<type> &);
-	deque a =  /*...*/;
-	foo(a);  //implicit conversion deque -> vector ($\mathcal{O}(n)$)
-	foo(a);  //implicit conversion deque -> vector ($\mathcal{O}(n)$)
+    void foo(const vector<type> &);
+    deque a =  /*...*/;
+    foo(a);  //implicit conversion deque -> vector ($\mathcal{O}(n)$)
+    foo(a);  //implicit conversion deque -> vector ($\mathcal{O}(n)$)
 \end{codeblock}
 ---
 
 \begin{codeblock}
-	std::list<type> foo(); 
-	void bar(const vector<type> &);
-	bar(foo()); //implicit conversion vector -> list ($\mathcal{O}(n)$)
+    std::list<type> foo();
+    void bar(const vector<type> &);
+    bar(foo()); //implicit conversion vector -> list ($\mathcal{O}(n)$)
 \end{codeblock}
 ---
 
 \begin{codeblock}
-	void foo(const vector<type> &); 
-	auto view = zip(...);
-	foo(view); // View materialized once
-	foo(view); // View materialized twice
+    void foo(const vector<type> &);
+    auto view = zip(...);
+    foo(view); // View materialized once
+    foo(view); // View materialized twice
 \end{codeblock}
 
 All the above example crystallize concerns over performances traps that would indubitably arise.
-Therefore we think it is to best follow the existing practice not to allow implicit copy construction from object of different types.
+Therefore we think it is to best follow the existing practice not to allow implicit copy construction from objects of different types.
 
-But because expiring views can only be materialize once and can therefore not be considered a copy, we think it is reasonable that
+But because expiring views can only be materialized once and can therefore not be considered a copy, we think it is reasonable that
 containers can be constructed \emph{implicitly} from \cc{rvalue-reference} views.
 
 \subsection{Movability}
@@ -204,12 +204,12 @@ This is however generally undecidable for views which may not own the underlying
 
 Views (span, basic_string_view), can only be constructed from a \cc{ContiguousRange} of the same type.
 Because they don't copy the data, they do not need to be explicit as constructing a view is cheap.
-On they other end, because they don't own the data, we must take care to only construct them from lvalue reference.
+On the other end, because they don't own the data, we must take care to only construct them from lvalue reference.
 
 \subsection{\cc{constexpr}}
 
 Views (\cc{std::span}, \cc{std::basic_string_view}) constructors can be \cc{constexpr} and so, they shall be.
-Other containers are currently not \cc{constexpr}-constructable, but work is being down in this area.
+Other containers are currently not \cc{constexpr}-constructible, but work is being down in this area.
 As more containers gain \cc{constexpr} constructors, the range-based constructors as proposed here should be made \cc{constexpr} too.
 
 \section{Existing practices}
@@ -219,10 +219,10 @@ As more containers gain \cc{constexpr} constructors, the range-based constructor
 View materialization is a technique notably adopted by the \cite{Abseil} library. As per their documentation:
 
 \begin{quote}
-	One of the more useful features of the StrSplit() API is its ability to adapt its result set to the desired return type. 
-	StrSplit() returned collections may contain std::string, absl::string_view, or any object that can be explicitly created from an absl::string_view. 
-	This pattern works for all standard STL containers including std::vector, 
-	std::list, std::deque, std::set, std::multiset, std::map, and std::multimap, and even std::pair, which is not actually a container.
+    One of the more useful features of the StrSplit() API is its ability to adapt its result set to the desired return type.
+    StrSplit() returned collections may contain std::string, absl::string_view, or any object that can be explicitly created from an absl::string_view.
+    This pattern works for all standard STL containers including std::vector,
+    std::list, std::deque, std::set, std::multiset, std::map, and std::multimap, and even std::pair, which is not actually a container.
 \end{quote}
 
 Because they can not modify existing containers, view materialization in Abseil is done by the mean of a conversion operator:
@@ -234,7 +234,7 @@ operator C();
 \end{codeblock}
 \end{quote}
 
-However, because it stand to reason to expect that there are many more views than containers, and because conversions between containers is also useful,
+However, because it stands to reason to expect that there are many more views than containers and because conversions between containers are also useful,
 it is a more general solution to accept ranges in container constructors than it is to make each view convertible to a container.
 
 
@@ -247,7 +247,7 @@ it is a more general solution to accept ranges in container constructors than it
 \section{Future work}
 
 Whether \cc{std::vector} can be converted to and from \cc{std::std::string} in $\mathcal{O}(1)$ is an area of interest, notably for SG-16.
-Should such conversion  exist, it should take precedence over the generic range-constructor proposed here.  
+Should such conversion exist, it should take precedence over the generic range-constructor proposed here.
 
 \section{Proposed wording}
 
@@ -260,39 +260,39 @@ namespace std {
 template<class charT, class traits = char_traits<charT>,
 class Allocator = allocator<charT>>
 class basic_string {
-	public:
-	
-	[...]
-	
-	basic_string() noexcept(noexcept(Allocator())) : basic_string(Allocator()) { }
-	explicit basic_string(const Allocator& a) noexcept;
-	basic_string(const basic_string& str);
-	basic_string(basic_string&& str) noexcept;
-	basic_string(const basic_string& str, size_type pos, const Allocator& a = Allocator());
-	basic_string(const basic_string& str, size_type pos, size_type n,
-	const Allocator& a = Allocator());
-	template<class T>
-	basic_string(const T& t, size_type pos, size_type n, const Allocator& a = Allocator());
-	template<class T>
-	explicit basic_string(const T& t, const Allocator& a = Allocator());
-	basic_string(const charT* s, size_type n, const Allocator& a = Allocator());
-	basic_string(const charT* s, const Allocator& a = Allocator());
-	basic_string(size_type n, charT c, const Allocator& a = Allocator());
-	template<class InputIterator>
-	basic_string(InputIterator begin, InputIterator end, const Allocator& a = Allocator());
-	basic_string(initializer_list<charT>, const Allocator& = Allocator());
-	basic_string(const basic_string&, const Allocator&);
-	basic_string(basic_string&&, const Allocator&);
-	
-	@\added{template<Container C>}@
-	@\added{explicit basic_string(C\&\&, const Allocator\& = Allocator());}@
-	
-	@\added{template<InputRange Rng>}@
-	@\added{explicit(see-below)}@ 
-	@\added{basic_string(Rng\&\&, const Allocator\& = Allocator());}@
-	~basic_string();
-	
-	[...]
+    public:
+
+    [...]
+
+    basic_string() noexcept(noexcept(Allocator())) : basic_string(Allocator()) { }
+    explicit basic_string(const Allocator& a) noexcept;
+    basic_string(const basic_string& str);
+    basic_string(basic_string&& str) noexcept;
+    basic_string(const basic_string& str, size_type pos, const Allocator& a = Allocator());
+    basic_string(const basic_string& str, size_type pos, size_type n,
+    const Allocator& a = Allocator());
+    template<class T>
+    basic_string(const T& t, size_type pos, size_type n, const Allocator& a = Allocator());
+    template<class T>
+    explicit basic_string(const T& t, const Allocator& a = Allocator());
+    basic_string(const charT* s, size_type n, const Allocator& a = Allocator());
+    basic_string(const charT* s, const Allocator& a = Allocator());
+    basic_string(size_type n, charT c, const Allocator& a = Allocator());
+    template<class InputIterator>
+    basic_string(InputIterator begin, InputIterator end, const Allocator& a = Allocator());
+    basic_string(initializer_list<charT>, const Allocator& = Allocator());
+    basic_string(const basic_string&, const Allocator&);
+    basic_string(basic_string&&, const Allocator&);
+
+    @\added{template<Container C>}@
+    @\added{explicit basic_string(C\&\&, const Allocator\& = Allocator());}@
+
+    @\added{template<InputRange Rng>}@
+    @\added{explicit(see-below)}@
+    @\added{basic_string(Rng\&\&, const Allocator\& = Allocator());}@
+    ~basic_string();
+
+    [...]
 };
 
 template<class InputIterator,
@@ -333,17 +333,17 @@ explicit basic_string(C&& rng, const Allocator& = Allocator());
 \end{itemdecl}
 
 \begin{itemdescr}
-	\effects
-	In a move constructor, constructs a string by moving from the elements of \tcode{rng} in a way equivalent to
-	\begin{codeblock}
-		ranges::move(rng, std::back_inserter(*this));\end{codeblock}
-	Otherwise, constructs a string from the values in the range [\tcode{ranges::begin(rng)}, \tcode{ranges::end(rng)}).
-	%
-	
-	\complexity
-	Linear in
-	\tcode{ranges::size(rng)}.
-	
+    \effects
+    In a move constructor, constructs a string by moving from the elements of \tcode{rng} in a way equivalent to
+    \begin{codeblock}
+        ranges::move(rng, std::back_inserter(*this));\end{codeblock}
+    Otherwise, constructs a string from the values in the range [\tcode{ranges::begin(rng)}, \tcode{ranges::end(rng)}).
+    %
+
+    \complexity
+    Linear in
+    \tcode{ranges::size(rng)}.
+
 \end{itemdescr}
 \end{addedblock}
 \end{quote}
@@ -355,31 +355,31 @@ explicit basic_string(C&& rng, const Allocator& = Allocator());
 \begin{itemdecl}
 template<InputRange Rng>
 requires Constructible<charT, iter_value_t<iterator_t<C>>>
-explicit(see-below) 
+explicit(see-below)
 basic_string(Rng&& rng, const Allocator& = Allocator());
 
 \end{itemdecl}
 
 \begin{itemdescr}
-	\effects
-	Constructs a string from the values in the range [\tcode{ranges::begin(rng)}, \tcode{ranges::end(rng)})
-	
-	\remarks This constructor shall not participate in overload resolution unless
-	\begin{itemize}
-		\item \tcode{Rng} does not meet the requirements of \tcode{Container}
-	\end{itemize}
+    \effects
+    Constructs a string from the values in the range [\tcode{ranges::begin(rng)}, \tcode{ranges::end(rng)})
 
-	\complexity
-	Linear in
-	\tcode{ranges::size(rng)}.
+    \remarks This constructor shall not participate in overload resolution unless
+    \begin{itemize}
+        \item \tcode{Rng} does not meet the requirements of \tcode{Container}
+    \end{itemize}
+
+    \complexity
+    Linear in
+    \tcode{ranges::size(rng)}.
 
 
 The expression inside explicit is equivalent to:
 \begin{codeblock}
-	!is_rvalue_reference_v<V&&>
+    !is_rvalue_reference_v<V&&>
 \end{codeblock}
-	
-	%
+
+    %
 \end{itemdescr}
 \end{addedblock}
 \end{quote}
@@ -395,38 +395,38 @@ The expression inside explicit is equivalent to:
     \url{https://wg21.link/P0896}
 
 \bibitem[P1004]{P1004}
-	Louis Dionne
-	\emph{Making std::vector constexpr}\newline
-	\url{https://wg21.link/P1004}
-	
+    Louis Dionne
+    \emph{Making std::vector constexpr}\newline
+    \url{https://wg21.link/P1004}
+
 \bibitem[P1004]{P1004}
-	Tom Honermann
-	\emph{Text_view: A C++ concepts and range based character encoding and code point enumeration library}\newline
-	\url{https://wg21.link/P0244}
+    Tom Honermann
+    \emph{Text_view: A C++ concepts and range based character encoding and code point enumeration library}\newline
+    \url{https://wg21.link/P0244}
 
 \bibitem[P0540]{P0540}
-	Laurent Navarro
-	\emph{A Proposal to Add split/join of string/string_view to the Standard Library}\newline
-	\url{https://wg21.link/P0540}
+    Laurent Navarro
+    \emph{A Proposal to Add split/join of string/string_view to the Standard Library}\newline
+    \url{https://wg21.link/P0540}
 
 \bibitem[N3593]{N3593}
-	Greg Miller
-	\emph{std::split(): An algorithm for splitting strings}\newline
-	\url{https://wg21.link/N3593}	
-	
+    Greg Miller
+    \emph{std::split(): An algorithm for splitting strings}\newline
+    \url{https://wg21.link/N3593}
+
 \bibitem[P1035]{P1035}
-	Christopher Di Bella
-	\emph{Input range adaptors}\newline
-	\url{https://wg21.link/P1035}
+    Christopher Di Bella
+    \emph{Input range adaptors}\newline
+    \url{https://wg21.link/P1035}
 
 \bibitem[Abseil]{Abseil}
-	Abseil Maintainers
-	\url{https://abseil.io/docs/cpp/guides/strings}
-	
+    Abseil Maintainers
+    \url{https://abseil.io/docs/cpp/guides/strings}
+
 \bibitem[N3686]{N3686}
-	Jeffrey Yasskin
-	\emph{[Ranges] Traversable arguments for container constructors and methods}\newline
-	\url{https://wg21.link/n3686}
+    Jeffrey Yasskin
+    \emph{[Ranges] Traversable arguments for container constructors and methods}\newline
+    \url{https://wg21.link/n3686}
 
 \end{thebibliography}
 \end{document}
