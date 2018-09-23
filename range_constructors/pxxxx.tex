@@ -9,6 +9,8 @@
 \usepackage{listings}
 \usepackage{minted}
 \usepackage{enumitem}
+\usepackage{minted}
+
 
 \lstdefinestyle{base}{
   language=c++,
@@ -35,6 +37,94 @@ Most standard containers and views can be constructed from an iterators-pair.
 This paper, complementing \cite{P0896R3}, proposing that all standard views,
 containers and string classes be constructible from a range.
 
+\section{Tony tables}
+
+\begin{center}
+\begin{tabular}{l|l}
+Before & After\\ \hline
+\begin{minipage}[t]{0.5\textwidth}
+\begin{minted}[fontsize=\footnotesize]{cpp}
+std::list<int> lst = /*...*/;
+std::vector<int> vec
+	{std::begin(lst), std::end(lst)};
+\end{minted}
+\end{minipage}
+&	
+\begin{minipage}[t]{0.5\textwidth}
+\begin{minted}[fontsize=\footnotesize]{cpp}	
+std::vector<int> vec{lst};
+\end{minted}
+\end{minipage}
+\\\\ \hline
+
+\begin{minipage}[t]{0.5\textwidth}
+\begin{minted}[fontsize=\footnotesize]{cpp}
+auto view = ranges::iota(42);
+vector <
+  iter_value_t<
+	iterator_t<decltype(view)>
+  >
+> vec;
+if constexpr(SizedRanged<decltype(view)>) {
+  vec.reserve(ranges::size(view)));
+}
+ranges::copy(view, std::back_inserter(vec));
+\end{minted}
+\end{minipage}
+&	
+\begin{minipage}[t]{0.5\textwidth}
+\begin{minted}[fontsize=\footnotesize]{cpp}	
+std::vector vec = ranges::iota(42);
+\end{minted}
+\end{minipage}
+\\\\ \hline
+
+
+\begin{minipage}[t]{0.5\textwidth}
+\begin{minted}[fontsize=\footnotesize]{cpp}
+auto map = /*...*/;
+std::vector<
+  typename decltype(map)::value_type
+> vec;
+vec.reserve(map.size());
+ranges::move(map, std::back_inserter(vec));
+\end{minted}
+\end{minipage}
+&	
+\begin{minipage}[t]{0.5\textwidth}
+\begin{minted}[fontsize=\footnotesize]{cpp}	
+auto map = /*...*/;
+std::vector vec{std::move(map)};
+\end{minted}
+\end{minipage}
+\\\\ \hline
+
+\begin{minipage}[t]{0.5\textwidth}
+\begin{minted}[fontsize=\footnotesize]{cpp}
+void foo(string_view);
+vector<char8_t> vec = get_some_unicode();
+foo(string_view{vec.data(), vec.size()});
+
+\end{minted}
+\end{minipage}
+&	
+\begin{minipage}[t]{0.5\textwidth}
+\begin{minted}[fontsize=\footnotesize]{cpp}	
+void foo(string_view);
+vector<char8_t> vec = get_some_unicode();
+foo(vec);
+\end{minted}
+\end{minipage}
+\\\\ \hline
+
+
+
+\end{tabular}
+\end{center}
+
+\section{Non-goal}
+
+{\bf As explained in the "Design consideration", this proposal focuses on explicit construction and do not proposes implicit container conversion.}
 
 \section{Motivation}
 
@@ -200,9 +290,11 @@ Beside being desirable to have different \cc{explicit}-ness policies for contain
 can be moved-from, as if per \cc{std::move_iterator} rather than copied.
 This is however generally undecidable for views which may not own the underlying data, and so views should only be copied-from.
 
+Concerns were raised circa 2014
+
 \subsection{Range constructor for views}
 
-Views (span, basic_string_view), can only be constructed from a \cc{ContiguousRange} of the same type.
+Views (\cc{span}, \cc{basic_string_view}), can only be constructed from a \cc{ContiguousRange} of the same type.
 Because they don't copy the data, they do not need to be explicit as constructing a view is cheap.
 On the other end, because they don't own the data, we must take care to only construct them from lvalue reference.
 
@@ -239,6 +331,21 @@ it is a more general solution to accept ranges in container constructors than it
 
 
 \subsection{Range V3}
+
+The range-v3 offers a  \cc{to_<Container>} method which copy a \cc{Range} into a Container c.
+It is interesting to note that, to the best understanding of the authors, this methods always
+perform a deep copy of each element, rather than a move, when it can.
+
+\begin{quote}
+\begin{codeblock}
+auto vec = view::ints 
+	| view::transform([](int i) {
+		return i + 42;
+	}) 
+	| view::take(10)
+	| to_<std::vector>();
+\end{codeblock}
+\end{quote}
 
 \subsection{Previous work}
 
