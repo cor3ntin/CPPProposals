@@ -290,7 +290,22 @@ Beside being desirable to have different \cc{explicit}-ness policies for contain
 can be moved-from, as if per \cc{std::move_iterator} rather than copied.
 This is however generally undecidable for views which may not own the underlying data, and so views should only be copied-from.
 
-Concerns were raised circa 2014
+Concerns were raised circa 2014 that constructors are proposed here would copy data from the view more often than necessary and that something akin to
+\begin{codeblock}
+view.to_container<vector>();
+\end{codeblock}
+might be more suitable.
+
+However, the authors think this question is worth reexamining given the evolution of the ranges TS over the past 4 years.
+Notably:
+\begin{itemize}
+	\item It would be possible for \textbf{lazy} views to indicate that they can be moved from (through a tag).
+	\item Alternatively, it might be worth considering whether deferencing an iterator over a lazy view should be recommended to return by value.
+	\item The case can be made that for non-forward \cc{InputIterator}, it is always reasonable to move-from the elements rather than copying them.
+	\item In the general case, non-owning views don't have any knowledge of whether they can be moved-from.
+\end{itemize}
+
+
 
 \subsection{Range constructor for views}
 
@@ -584,6 +599,26 @@ constexpr basic_string_view(const Rng& rng);
 \end{itemdescr}
 \end{addedblock}
 \end{quote}
+
+\subsection{todo}
+
+Wording for
+
+\begin{itemize}
+	\item vector
+	\item deque
+	\item list
+	\item forward_list
+	\item priority_queue
+	\item map
+	\item multimap
+	\item set
+	\item multiset
+	\item unordered_map
+	\item unordered_set
+	\item unordered_multiset
+	\item unordered_multimap
+\end{itemize}
 
 \section{References}
 \renewcommand{\section}[2]{}%
