@@ -409,6 +409,15 @@ basic_string(InputIterator, InputIterator, Allocator = Allocator())
 char_traits<typename iterator_traits<InputIterator>::value_type>,
 Allocator>;
 
+@\added{template<InputRange Rng,}@
+@\added{class Allocator = allocator<iter_value_t <iterator_t< Rng>>>>}@
+@\added{explicit(see-below) basic_string(Rng\&\& b, Allocator a = Allocator() )}@
+@\added{	-> basic_string<}@
+@\added{		iter_value_t<iterator_t<Rng>>,}@
+@\added{		char_traits<iter_value_t<iterator_t<Rng>>>,}@
+@\added{		Allocator}@
+@\added{	>;}@
+
 template<class charT,
 class traits,
 class Allocator = allocator<charT>>
@@ -422,6 +431,7 @@ basic_string(basic_string_view<charT, traits>,
 typename @\seebelow@::size_type, typename @\seebelow@::size_type,
 const Allocator& = Allocator())
 -> basic_string<charT, traits, Allocator>;
+
 }
 \end{codeblock}
 \end{quote}
@@ -491,6 +501,89 @@ The expression inside explicit is equivalent to:
 \end{addedblock}
 \end{quote}
 
+Add after 28
+
+\begin{quote}
+\begin{addedblock}
+\begin{itemdecl}
+template<InputRange Rng, class Allocator = allocator<iter_value_t <iterator_t< Rng>>>>
+explicit(see-below) basic_string(Rng&& b, Allocator a = {})
+	-> basic_string<
+		iter_value_t<iterator_t<Rng>>,
+		char_traits<iter_value_t<iterator_t<Rng>>>, 
+		Allocator>;
+\end{itemdecl}
+
+\begin{itemdescr}
+	 \remarks Shall not participate in overload resolution if Allocator is a type that does not qualify as an allocator. 
+	
+	
+	The expression inside explicit is equivalent to:
+	\begin{codeblock}
+		!View<Rng&&> && !is_rvalue_reference_v<V&&>
+	\end{codeblock}
+	
+	%
+\end{itemdescr}
+\end{addedblock}
+\end{quote}
+
+Change in \textbf{[string.view] 20.4.2}:
+\begin{quote}
+\begin{codeblock}
+
+template<class charT, class traits = char_traits<charT>>
+class basic_string_view {
+public:
+	[...]
+	
+	// construction and assignment
+	constexpr basic_string_view() noexcept;
+	constexpr basic_string_view(const basic_string_view&) noexcept = default;
+	constexpr basic_string_view& operator=(const basic_string_view&) noexcept = default;
+	constexpr basic_string_view(const charT* str);
+	constexpr basic_string_view(const charT* str, size_type len);
+	
+	@\added{template <ContiguousRange Rng>}@
+	@\added{requires Same<iter_value_t<iterator_t<Rng>>, charT>}@
+	@\added{constexpr basic_string_view(const Rng\& rng);}@
+	
+	[...]
+};
+
+@\added{template<ContiguousRange Rng>}@
+@\added{basic_string_view(const Rng\& b)}@
+@\added{\qquad -> basic_string_view<}@
+@\added{\qquad\qquad iter_value_t<iterator_t<Rng>>,}@
+@\added{\qquad\qquad char_traits<iter_value_t<iterator_t<Rng>>>}@
+@\added{\qquad 	>;}@
+
+\end{codeblock}
+\end{quote}
+
+Change in \textbf{[string.view.cons] 20.4.2.1}:
+
+Add after 7
+
+\begin{quote}
+\begin{addedblock}
+\begin{itemdecl}
+template <ContiguousRange Rng>
+requires Same<iter_value_t<iterator_t<Rng>>, charT>
+constexpr basic_string_view(const Rng& rng);
+	
+\end{itemdecl}
+
+\begin{itemdescr}
+	\requires
+	rng is a valid range.
+	\effects
+	Constructs a \tcode{basic_string_view}, with the over \tcode{ContiguousRange} rng.
+	
+	%
+\end{itemdescr}
+\end{addedblock}
+\end{quote}
 
 \section{References}
 \renewcommand{\section}[2]{}%
