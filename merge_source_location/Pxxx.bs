@@ -5,6 +5,7 @@ Level: 0
 Status: D
 Group: wg21
 Editor: Corentin Jabot, corentin.jabot@gmail.com
+Editor: Robert Douglas, rwdougla@gmail.com
 Abstract: This paper proposes that `source_location` (from Library Fundamentals V3) be adopted into the C++20 standard
 Audience: LEWG, LWG
 URL: foo
@@ -36,20 +37,20 @@ Date: 2018-09-21
 
 /* Table */
 .data-table {
-	border-collapse: collapse;
-	font-size: 14px;
-	min-width: 573px;
+    border-collapse: collapse;
+    font-size: 14px;
+    min-width: 573px;
 }
 .data-table th {
-	color: #5a5a5a;
+    color: #5a5a5a;
 }
 
 .data-table th,
 .data-table td {
-	padding: 7px 17px;
+    padding: 7px 17px;
 }
 .data-table caption {
-	margin: 7px;
+    margin: 7px;
 }
 
 /* Table Header */
@@ -59,24 +60,24 @@ Date: 2018-09-21
 
 /* Table Body */
 .data-table tbody td {
-	color: #353535;
-	border-bottom: 1px solid #dcdcdc;
-	text-align: right;
+    color: #353535;
+    border-bottom: 1px solid #dcdcdc;
+    text-align: right;
 }
 
 .data-table tbody tr:last-child td {
-	border: 0;
+    border: 0;
 }
 
 .data-table tbody tr:hover td {
-	background-color: #f7f7f7;
-	transition: all .2s;
+    background-color: #f7f7f7;
+    transition: all .2s;
 }
 
 /* Table Footer */
 .data-table tfoot th {
-	border-top: 1px solid #c7c7c7;
-	text-align: right;
+    border-top: 1px solid #c7c7c7;
+    text-align: right;
 }
 
 .array_row {
@@ -87,7 +88,6 @@ Date: 2018-09-21
 
 
 # Proposal
-
 
 This paper proposes that source_location from Library Fundamentals V3 [[N4758]] be adopted into the C++20 standard.
 
@@ -100,6 +100,69 @@ fundamentals v2 [[n4562]] and v3 [[N4758]] since 2015 without changes to exposed
 
 Note: A proposal [[P0555R0]] in 2017 to make use of `string_view` in `source_location` has been withdrawn by their authors once string_view
 gained a constexpr constructor, allowing the use of source_location in constexpr context.
+
+# A few design changes
+
+During an early review of this papers, some interests for a few design changes arose
+
+## Enforcing a size for `source_location` objects ?
+
+`source_location` as currently implemented by Clang And GCC is a structure encapsulating all its members (file, function, line, column),
+and so its size is roughly 3 * sizeof(void*).
+
+A note state
+> [ Note: The intent of source_location is to have a small size and efficient copying. — end note ]
+
+However, there seems to be some interest for having `source_location` be guaranteed `sizeof(void*)`.
+Notably, reviewers wonder if `source_location` should be embedded in a yet to be proposed `std::error`.
+Herb Sutter and Niall Douglas pointed out that `std::error` is meant to handle recoverable errors
+rather than to communicate an error to developers (see Herb Sutter's talk on error handling CppCon 2018).
+And while we agree strongly with this sentiment, it's worth noting that a subset of the C committee
+is interested in having source information in whatever deterministic exception handling they are working towards;
+
+While, as pointed out by Niall, it's unlikely the two languages will have directly interoperable mechanisms,
+having a guaranteed size for `source_location` might make such interoperability easier should a need for it arise.
+
+Baring that, `source_location` being an error reporting tool targeted at human developers,
+and the cost of any error reporting system is many orders of magnitude more resource-demanding than copying
+3 pointers around, we do not think there is a strong incentive to guaranteeing the size of that type
+or restricting the way it is implemented.
+
+
+For completeness, such modification could be achieved by adding one level of indirection:
+
+<pre>
+struct __source_location_data {
+  /* implementation defined */
+};
+struct source_location {
+private:
+    const __source_location_data* __data;
+};
+</pre>
+
+Alternatively, source_location could return a const reference:
+
+<pre>
+struct source_location {
+    constexpr const source_location & current() noexcept;
+};
+</pre>
+
+The authors strongly prefer the first solution as we thing retaining value semantic is important.
+
+## Removing `current()` altogether ?
+
+If LEWG elects to keep value semantics, the authors would like to propose that the `current` function be removed
+since, in its current form, `source_location` has a default constructor that has no meaningful use.
+It is important to note that `source_location` is not, nor should be, regular as it can not be meaningfully be compared.
+Besides being harder to miss-use, using the constructor of the type to acquire its value is also significantly less verbose.
+
+<pre>
+    void log(auto && message, std::source_location sc = std::source_location::current());
+    //or
+    void log(auto && message, std::source_location sc = {});
+<pre>
 
 
 # Proposed Wording
@@ -117,5 +180,3 @@ At the time of the publication of this category did not exist, and so this paper
 emplacement to describe this header in the wording or to introduce a new Refection category in the wording.
 
 Similarly to the original [[n4417]] wording, we recommend the feature test macro `__cpp_lib_source_location` for this feature.
-
-
