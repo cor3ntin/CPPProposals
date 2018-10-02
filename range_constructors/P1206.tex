@@ -49,9 +49,9 @@ std::vector<int> vec
 	{std::begin(lst), std::end(lst)};
 \end{minted}
 \end{minipage}
-&	
+&
 \begin{minipage}[t]{0.5\textwidth}
-\begin{minted}[fontsize=\footnotesize]{cpp}	
+\begin{minted}[fontsize=\footnotesize]{cpp}
 std::vector<int> vec{lst};
 \end{minted}
 \end{minipage}
@@ -71,9 +71,9 @@ if constexpr(SizedRanged<decltype(view)>) {
 ranges::copy(view, std::back_inserter(vec));
 \end{minted}
 \end{minipage}
-&	
+&
 \begin{minipage}[t]{0.5\textwidth}
-\begin{minted}[fontsize=\footnotesize]{cpp}	
+\begin{minted}[fontsize=\footnotesize]{cpp}
 std::vector vec = ranges::iota(42);
 \end{minted}
 \end{minipage}
@@ -90,9 +90,9 @@ vec.reserve(map.size());
 ranges::move(map, std::back_inserter(vec));
 \end{minted}
 \end{minipage}
-&	
+&
 \begin{minipage}[t]{0.5\textwidth}
-\begin{minted}[fontsize=\footnotesize]{cpp}	
+\begin{minted}[fontsize=\footnotesize]{cpp}
 auto map = /*...*/;
 std::vector vec{std::move(map)};
 \end{minted}
@@ -107,9 +107,9 @@ foo(string_view{vec.data(), vec.size()});
 
 \end{minted}
 \end{minipage}
-&	
+&
 \begin{minipage}[t]{0.5\textwidth}
-\begin{minted}[fontsize=\footnotesize]{cpp}	
+\begin{minted}[fontsize=\footnotesize]{cpp}
 void foo(string_view);
 vector<char8_t> vec = get_some_unicode();
 foo(vec);
@@ -298,7 +298,7 @@ Notably,
     vector<int> ints(42);
     span view = ints; //Ok, no copy => implicit
     deque dq = view;  //Ok, implicit construction from a view, but does a copy
-}        
+}
 \end{codeblock}
 
 This oddity, arise from an expressed desire to eat our cake and have it too, or more accurately, offer a convenient syntax for view materialization while avoiding implicit conversion of containers.
@@ -372,10 +372,10 @@ perform a deep copy of each element, rather than a move, when it can.
 
 \begin{quote}
 \begin{codeblock}
-auto vec = view::ints 
+auto vec = view::ints
 	| view::transform([](int i) {
 		return i + 42;
-	}) 
+	})
 	| view::take(10)
 	| to_<std::vector>();
 \end{codeblock}
@@ -393,6 +393,7 @@ Should such conversion exist, it should take precedence over the generic range-c
 \section{Proposed wording}
 
 %%This wording is based on the working draft \cite{N4727}.
+A more complete wording will ve provided in a subsequent revision
 
 Change in \textbf{[basic.string] 20.3.2}:
 \begin{quote}
@@ -518,7 +519,7 @@ basic_string(Rng&& rng, const Allocator& = Allocator());
     \remarks This constructor shall not participate in overload resolution unless
     \begin{itemize}
         \item \tcode{Rng} does not meet the requirements of \tcode{Container}.
-        \item \tcode{is_convertible_v<Rng, const charT*>} is \tcode{false}.
+        \item \tcode{is_array<Rng>} is \tcode{false}.
     \end{itemize}
 
     \complexity
@@ -545,19 +546,19 @@ template<InputRange Rng, class Allocator = allocator<iter_value_t <iterator_t< R
 explicit(see-below) basic_string(Rng&& b, Allocator a = {})
 	-> basic_string<
 		iter_value_t<iterator_t<Rng>>,
-		char_traits<iter_value_t<iterator_t<Rng>>>, 
+		char_traits<iter_value_t<iterator_t<Rng>>>,
 		Allocator>;
 \end{itemdecl}
 
 \begin{itemdescr}
-	 \remarks Shall not participate in overload resolution if Allocator is a type that does not qualify as an allocator. 
-	
-	
+	 \remarks Shall not participate in overload resolution if Allocator is a type that does not qualify as an allocator.
+
+
 	The expression inside explicit is equivalent to:
 	\begin{codeblock}
 		!View<Rng&&> && !is_rvalue_reference_v<V&&>
 	\end{codeblock}
-	
+
 	%
 \end{itemdescr}
 \end{addedblock}
@@ -571,18 +572,18 @@ template<class charT, class traits = char_traits<charT>>
 class basic_string_view {
 public:
 	[...]
-	
+
 	// construction and assignment
 	constexpr basic_string_view() noexcept;
 	constexpr basic_string_view(const basic_string_view&) noexcept = default;
 	constexpr basic_string_view& operator=(const basic_string_view&) noexcept = default;
 	constexpr basic_string_view(const charT* str);
 	constexpr basic_string_view(const charT* str, size_type len);
-	
+
 	@\added{template <ContiguousRange Rng>}@
 	@\added{requires Same<iter_value_t<iterator_t<Rng>>, charT>}@
 	@\added{constexpr basic_string_view(const Rng\& rng);}@
-	
+
 	[...]
 };
 
@@ -606,7 +607,7 @@ Add after 7
 template <ContiguousRange Rng>
 requires Same<iter_value_t<iterator_t<Rng>>, charT>
 constexpr basic_string_view(const Rng& rng);
-	
+
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -614,21 +615,17 @@ constexpr basic_string_view(const Rng& rng);
 	rng is a valid range.
 	\effects
 	Constructs a \tcode{basic_string_view}, with the over \tcode{ContiguousRange} rng.
-	
+
 	 \remarks This constructor shall not participate in overload resolution unless
 	\begin{itemize}
-		\item \tcode{is_convertible_v<Rng, const charT*>} is \tcode{false}.
+		\item \tcode{is_array<Rng>} is \tcode{false}.
 	\end{itemize}
-	
-	
 	%
 \end{itemdescr}
 \end{addedblock}
 \end{quote}
 
-\subsection{todo}
-
-Wording for
+\subsection{Yet to be provided wording for}
 
 \begin{itemize}
 	\item vector
@@ -644,6 +641,7 @@ Wording for
 	\item unordered_set
 	\item unordered_multiset
 	\item unordered_multimap
+	\item span (notably, we wish to modify span to be constructed from a ContiguousRange rather than a container, for the sake of consistency.)
 \end{itemize}
 
 \section{References}
