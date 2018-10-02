@@ -25,7 +25,7 @@
 
 
 \title{Range constructors for standard containers and views}
-\docnumber{DxxxR0}
+\docnumber{D1206R0}
 \audience{LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -204,7 +204,7 @@ Indeed, a function such as \cc{split} is notoriously hard to standardize (\cite{
 The view materialization pattern further let the \emph{caller} choose the best container and allocation strategy for their use case (or to never materialize the view should it not be necessary).
 And while it would not make sense for a standard-library function to split a string into a vector it would allocate, it's totally reasonable for most applications to do so.\\
 
-This paper does not propose to standardize such \cc{split} function, however, view materialization is something the SG-16 working group is interested in.
+This paper does not proposes to standardize such \cc{split} function, however, view materialization is something the SG-16 working group is interested in.
 Indeed, they have considered APIs that could rely heavily on this idiom, as it has proven a natural way to handle the numerous ways to iterate over Unicode text.
 Similar ideas have been presented in \cite{P1004}.
 
@@ -283,6 +283,25 @@ Therefore we think it is to best follow the existing practice not to allow impli
 
 But because expiring views can only be materialized once and can therefore not be considered a copy, we think it is reasonable that
 containers can be constructed \emph{implicitly} from \cc{rvalue-reference} views.
+
+This compromise leads to some oddity because of the inability to distinguish between views over existing
+non-transformed data (\cc{span}, \cc{string_view}) from generators (\cc{view_iota}, \cc{view_transform}, etc).
+
+Notably,
+
+\begin{codeblock}
+{
+    vector<int> ints(42);
+    deque dq = ints; // error, implicit conversion of container
+}
+{
+    vector<int> ints(42);
+    span view = ints; //Ok, no copy => implicit
+    deque dq = view;  //Ok, implicit construction from a view, but does a copy
+}        
+\end{codeblock}
+
+This oddity, arise from an expressed desire to eat our cake and have it too, or more accurately, offer a convenient syntax for view materialization while avoiding implicit conversion of containers.
 
 \subsection{Movability}
 
@@ -368,7 +387,7 @@ auto vec = view::ints
 
 \section{Future work}
 
-Whether \cc{std::vector} can be converted to and from \cc{std::std::string} in $\mathcal{O}(1)$ is an area of interest, notably for SG-16.
+Whether \cc{std::vector} can be converted to and from \cc{std::string} in $\mathcal{O}(1)$ is an area of interest, notably for SG-16.
 Should such conversion exist, it should take precedence over the generic range-constructor proposed here.
 
 \section{Proposed wording}
@@ -498,7 +517,8 @@ basic_string(Rng&& rng, const Allocator& = Allocator());
 
     \remarks This constructor shall not participate in overload resolution unless
     \begin{itemize}
-        \item \tcode{Rng} does not meet the requirements of \tcode{Container}
+        \item \tcode{Rng} does not meet the requirements of \tcode{Container}.
+        \item \tcode{is_convertible_v<Rng, const charT*>} is \tcode{false}.
     \end{itemize}
 
     \complexity
@@ -594,6 +614,12 @@ constexpr basic_string_view(const Rng& rng);
 	rng is a valid range.
 	\effects
 	Constructs a \tcode{basic_string_view}, with the over \tcode{ContiguousRange} rng.
+	
+	 \remarks This constructor shall not participate in overload resolution unless
+	\begin{itemize}
+		\item \tcode{is_convertible_v<Rng, const charT*>} is \tcode{false}.
+	\end{itemize}
+	
 	
 	%
 \end{itemdescr}
