@@ -6,7 +6,7 @@ Status: D
 Group: wg21
 Editor: Corentin Jabot, corentin.jabot@gmail.com
 Editor: Robert Douglas, rwdougla@gmail.com
-Abstract: This paper proposes that `source_location` (from Library Fundamentals V3) be adopted into the C++20 standard
+Abstract: This paper proposes that `source_location` (from Library Fundamentals V3) be adopted into the C++20 standard.
 Audience: LEWG, LWG
 URL: https://rawgit.com/cor3ntin/CPPProposals/master/merge_source_location/P1208.html
 Markup Shorthands: markdown yes
@@ -91,45 +91,44 @@ Date: 2018-09-21
 
 This paper proposes that source_location from Library Fundamentals V3 [[N4758]] be adopted into the C++20 standard.
 
-`source_location` has been successfully implemented without difficulties in GCC and Clang implementers almost completed their implementation of it.
-As described by the original paper, it's a necessary feature to implement logging without requiring macros, one that can not be
-be implemented by non-standard libraries because it requires compiler support.
+`source_location` has been successfully implemented without difficulties in GCC, and Clang has almost completed their implementation of it.
+As described by the original paper, it's a necessary feature to implement logging without requiring macros, one that cannot be
+be implemented portably by non-standard libraries because it requires compiler support.
 
 `source_location` has been very favorably received by both EWG and LEWG [[n4129]], [[n4417]] and has been part of library
-fundamentals v2 [[n4562]] and v3 [[N4758]] since 2015 without changes to exposed interface.
+fundamentals v2 [[n4562]] and v3 [[N4758]] since 2015 without changes to its exposed interface.
 
-Note: A proposal [[P0555R0]] in 2017 to make use of `string_view` in `source_location` has been withdrawn by their authors once string_view
-gained a constexpr constructor, allowing the use of source_location in constexpr context.
+Note: A proposal [[P0555R0]] in 2017 to make use of `string_view` in `source_location` has been withdrawn by their authors once `string_view`
+gained a constexpr constructor, allowing the use of `source_location` in constexpr contexts.
 
 # A few design changes
 
-During an early review of this papers, some interests for a few design changes arose
+During an early review of this papers, some interest in a few design changes arose:
 
-## Enforcing a size for `source_location` objects ?
+## Enforcing a size for `source_location` objects?
 
-`source_location` as currently implemented by Clang And GCC is a structure encapsulating all its members (file, function, line, column),
-and so its size is roughly 3 * sizeof(void*).
+`source_location` as currently implemented by Clang and GCC is a structure encapsulating all its members (file, function, line, column),
+and so its size is roughly `3 * sizeof(void*)`.
 
-A note state
-> [ Note: The intent of source_location is to have a small size and efficient copying. — end note ]
+A note states:
+> [ Note: The intent of `source_location` is to have a small size and efficient copying. — end note ]
 
-However, there seems to be some interest for having `source_location` be guaranteed `sizeof(void*)`.
-Notably, reviewers wonder if `source_location` should be embedded in a yet to be proposed `std::error`.
+However, there seems to be some interest in having `source_location` be guaranteed `sizeof(void*)`.
+
+Some reviewers wonder if `source_location` should be embedded in a yet-to-be-proposed `std::error`.
 Herb Sutter and Niall Douglas pointed out that `std::error` is meant to handle recoverable errors
 rather than to communicate an error to developers (see Herb Sutter's talk on error handling CppCon 2018).
 And while we agree strongly with this sentiment, it's worth noting that a subset of the C committee
-is interested in having source information in whatever deterministic exception handling they are working towards;
-
-While, as pointed out by Niall, it's unlikely the two languages will have directly interoperable mechanisms,
+is interested in having source information in whatever deterministic exception handling they are working towards.
+As pointed out by Niall, it's unlikely that C and C++ will have directly interoperable mechanisms; yet,
 having a guaranteed size for `source_location` might make such interoperability easier should a need for it arise.
 
-Baring that, `source_location` being an error reporting tool targeted at human developers,
+Barring that, `source_location` is an error reporting tool targeted at human developers,
 and the cost of any error reporting system is many orders of magnitude more resource-demanding than copying
-3 pointers around, we do not think there is a strong incentive to guaranteeing the size of that type
+3 pointers around. We do not think there is a strong incentive to guaranteeing the size of that type
 or restricting the way it is implemented.
 
-
-For completeness, such modification could be achieved by adding one level of indirection:
+Such modification could be achieved by library implementors' adding one level of indirection:
 
 <pre>
 struct __source_location_data {
@@ -141,24 +140,24 @@ private:
 };
 </pre>
 
-Alternatively, source_location could return a const reference:
+Alternatively, `source_location::current()` could return a const reference:
 
 <pre>
 struct source_location {
-    constexpr const source_location & current() noexcept;
+    static constexpr const source_location & current() noexcept;
 };
 </pre>
 
-The authors strongly prefer the first solution as we thing retaining value semantic is important.
+The authors strongly prefer the first solution as we think retaining value semantics is important.
 It is also important to note that, while not implemented, the first solution has been considered and is deemed
 realistically implementable by both GCC and Clang developers (Jonathan Wakely, Eric Fiselier).
 
 ## Removing `current()` altogether ?
 
 If LEWG elects to keep value semantics, the authors would like to propose that the `current` function be removed
-since, in its current form, `source_location` has a default constructor that has no meaningful use.
-It is important to note that `source_location` is not, nor should be, regular as it can not be meaningfully be compared.
-Besides being harder to miss-use, using the constructor of the type to acquire its value is also significantly less verbose.
+since, in its current form, `source_location` has a default constructor with no meaningful use.
+We propose that `source_location` should not be regular, as it cannot meaningfully be compared.
+Besides being harder to misuse, using the constructor of the type to acquire its value is also significantly less verbose.
 
 <pre>
     void log(auto && message, std::source_location sc = std::source_location::current());
@@ -169,21 +168,21 @@ Besides being harder to miss-use, using the constructor of the type to acquire i
 
 # Proposed Wording
 
-Create a new header <source_location> with the synopsis taken from paragraph ¶15.11 of [[N4758]].
+Create a new header `<source_location>` with the synopsis taken from paragraph ¶15.11 of [[N4758]].
 
-Add the `source_location` class to the C++ Working paper using the content from [[N4758]] in the <source_location> header.
+Add the `source_location` class to the C++ Working paper using the content from [[N4758]] in the `<source_location>` header.
 
-Move this content from the `std::experimental::fundamentals_v3` to the `std` namespace.
+Move this content from the `std::experimental::fundamentals_v3` namespace to the `std` namespace.
 
-In section 15.5.1.3  `[library.requirements.organization.compliance]`, add the <source_location> header to the table 21 (`[tab:cpp.headers.freestanding]`).
+In section 15.5.1.3  `[library.requirements.organization.compliance]`, add the `<source_location>` header to table 21 (`[tab:cpp.headers.freestanding]`).
 
-NB: The new `<source_location>` header would be best described in a new `Reflection` library (like it is in [[N4758]]).
-At the time of the publication of this category did not exist, and so this paper defers to LEWG and LWG to find the best
-emplacement to describe this header in the wording or to introduce a new Refection category in the wording.
+NB: The new `<source_location>` header would be best described in a new `Reflection` library (as it is in [[N4758]]).
+At the time of publication, this category does not exist, and so this paper defers to LEWG and LWG to find the best
+place to describe this header in the wording or to introduce a new Refection category in the wording.
 
 Similarly to the original [[n4417]] wording, we recommend the feature test macro `__cpp_lib_source_location` for this feature.
 
-# Acknoledgments
+# Acknowledgments
 
 The authors would like to thanks the people who reviewd early version of this proposal, notably Peter Dimov, Jonathan Wakely and Geoffrey Romer.
-We would also like to thank Herb Sutter and Niall Douglas for their insightfull remarks on std::error and errors handling in general.
+We would also like to thank Herb Sutter and Niall Douglas for their insightful remarks on `std::error` and errors handling in general.
