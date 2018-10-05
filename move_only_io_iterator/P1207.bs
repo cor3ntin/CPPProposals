@@ -376,13 +376,91 @@ And while ContiguousIterator is currently not syntactically differentiated from 
 It would be possible to require that ContiguousIterator be convertible to a pointer of the type of the underlying sequence's
 elements.
 
-But then, is there a set of operations and semantic requirements, translating to actual C++ syntax that  could allow for
-InputIterator to be, easily distinguish from each other?
+But then, is there a set of operations and semantic requirements, translating to actual C++ syntax, that could allow for
+InputIterator to be easily distinguish from each other?
 Can we then, not require a tag system?
 Is there a defining operation that distinguishes InputIterator from ForwardIterator, in such a way that it would both not require
 an explicit category tagging, while at the same time offering a better understanding of iterator categories as well as a less suprising,
 safer api for input iterator?
 
+In fact there is. We established that ForwardIterator are semantically copyable, while InputIterator are not.
+So the requirement that promotes an InputIterator into a ForwardIterator is indeed copyability - which translate in C++ to a copy constructor.
+We can therefore consider that, in the absence of a tag, all non-copyable iterator are InputIterator,
+while all copyable iterators are ForwardIterator.
+
+This model however, deviates slightly from Stepanov's work and `Cpp17InputIterator`:
+Copying a `Cpp17InputIterator` do not invalidate either copy.
+In fact it is quite valid to deference multiple copies of a `Cpp17InputIterator`.
+
+Elements Of Programming has the notion of `Regular` types (and in Stepanov work, all Iterators are regular), but also the notion of regular transformations
+(aka pure functions) - which given the same input, always give the same output.
+So given a ForwardIterator `fi`, there is a `successor` function returning an incremented copy of `fi`
+such as `sucessor(fi) == sucessor(fi)`.
+In C++, that regular `sucessor` function is `ForwardIterator::operator++(int);`, in that `(it++) == (it++)` for any given `ForwardIterator`.
+
+For `InputIterator`, Stepanov specifies that the `sucessor` is pseudo transformation, or a non-regular transformation that look like a regular one.
+And Therein lies the rub.
+
+Like a pointer, `InputIterator` is Regular, up until the point a transformation of an instance affects all copies.
+<xmp>
+InputIterator i = /*...*/
+*i    //ok
+a = i //ok
+*i    //ok
+i++;  // a now invalid
+</xmp>
+
+This design models accurately the nature of iterators. Because an iterator represents a position in a sequence, it is natural that multiple iterators could point
+to the same position.
+After one copy is incremented, in Stepanov's model, other copies are in a partiallty formed state, and cannot be used (but they can be assigned to - or destroyed).
+
+Let's consider the case where we move from an iterator instead of copying it
+<xmp>
+InputIterator i = /*...*/
+*i           //ok
+a = move(i); //ok
+*i;          //invalid
+a++;         //ok
+i++;         //invalid
+</xmp>
+
+Moving from an iterator invalids it early, albeit artificially. As per standard, the moved-from iterator is in a valid, but unspecified state,
+and cannot be used (but can be assigned to - or destroyed).
+Notice the similarity between "a valid, but unspecified state" and "a partiallty formed state".
+
+The difference is slim. Notably, both models are equally expresive. References can be use, should multiple names be necessary.
+And in Stepanov's model, iterators are made invalid by the natural mutation of the sequence upon increment, rather than by artificially
+preventing multiple copies.
+
+The second model in which the iterator is moved from, the one we think should be the default way to handle non-forward iterators,
+is, however a much better fit for the C++ model, and offer much stronger guarantees to both the human developer as well as static analysis tools.
+
+In the "increment invalids" model, objects are spiritually moved-from at a distance, which neither the theory
+of special relativity nor the C++ memory model are equiped to handle.
+This makes it hard for tools to detect invalid uses - although it might become possible with better tools (See Herb Sutter's CppCon2018 talk).
+But most concerning, there is no way for a developer to know that the iterators are entangled.
+
+<xmp>
+auto i = troubles.begin();
+auto schrodingers_iterator = i;
+i++;
+auto nasal_demon = *schrodingers_iterator;
+</xmp>
+
+The code code above might be perfectly fine.
+Indeed whether it is well defined or not depends on whether the iterator return by `troubles.begin();` is forward or not.
+It is undecidable in these 4 lines of slide-code.
+It is, not much more obvious in a complex programm that may pass iterators to other functions or store them in containers, etc.
+There are, after all, no theorical limits to the distance in time and space over which entanglement perdures.
+
+Worse even, should the type of `troubles.begin();` be changed from Forward to Input, the code would change from perfectly fine to
+UB, with no warning.
+
+Moving input iterators therefore better express intent, less suprising and safer.
+Move-only input Iterators also express the destructive nature of incrementation and give a better sense of the difference between InputIterator
+and `ForwarIterator`.
+
+## An Holistic Approach to Iterator Tags and Iterator Concepts
 
 
 # Q/A

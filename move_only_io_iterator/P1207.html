@@ -1215,7 +1215,7 @@ Possible extra rowspan handling
 </style>
   <meta content="Bikeshed version a04b880cde96bf0ae2d14a0edcf2bcdcb631548b" name="generator">
   <link href="https://isocpp.org/favicon.ico" rel="icon">
-  <meta content="463871c791c707dd33ee2dd9ba91c7ed5c7081a0" name="document-revision">
+  <meta content="cb5162688ad05edb3b849f90708fd54f659734ac" name="document-revision">
 <style>/* style-md-lists */
 
 /* This is a weird hack for me not yet following the commonmark spec
@@ -1493,7 +1493,11 @@ pre .property::before, pre .property::after {
      <ol class="toc">
       <li><a href="#istream_view"><span class="secno">7.1</span> <span class="content">istream_view</span></a>
      </ol>
-    <li><a href="#a-holistic-approach-to-iterators"><span class="secno">8</span> <span class="content">A Holistic Approach to Iterators.</span></a>
+    <li>
+     <a href="#a-holistic-approach-to-iterators"><span class="secno">8</span> <span class="content">A Holistic Approach to Iterators.</span></a>
+     <ol class="toc">
+      <li><a href="#an-holistic-approach-to-iterator-tags-and-iterator-concepts"><span class="secno">8.1</span> <span class="content">An Holistic Approach to Iterator Tags and Iterator Concepts</span></a>
+     </ol>
     <li>
      <a href="#q-a"><span class="secno">9</span> <span class="content">Q/A</span></a>
      <ol class="toc">
@@ -1784,12 +1788,71 @@ BidirectionalIiterator require decrement operators, RandomAccessIterator further
 And while ContiguousIterator is currently not syntactically differentiated from RandomAccessIterator,
 It would be possible to require that ContiguousIterator be convertible to a pointer of the type of the underlying sequence’s
 elements.</p>
-   <p>But then, is there a set of operations and semantic requirements, translating to actual C++ syntax that  could allow for
-InputIterator to be, easily distinguish from each other?
+   <p>But then, is there a set of operations and semantic requirements, translating to actual C++ syntax, that could allow for
+InputIterator to be easily distinguish from each other?
 Can we then, not require a tag system?
 Is there a defining operation that distinguishes InputIterator from ForwardIterator, in such a way that it would both not require
 an explicit category tagging, while at the same time offering a better understanding of iterator categories as well as a less suprising,
 safer api for input iterator?</p>
+   <p>In fact there is. We established that ForwardIterator are semantically copyable, while InputIterator are not.
+So the requirement that promotes an InputIterator into a ForwardIterator is indeed copyability - which translate in C++ to a copy constructor.
+We can therefore consider that, in the absence of a tag, all non-copyable iterator are InputIterator,
+while all copyable iterators are ForwardIterator.</p>
+   <p>This model however, deviates slightly from Stepanov’s work and <code class="highlight"><c- n>Cpp17InputIterator</c-></code>:
+Copying a <code class="highlight"><c- n>Cpp17InputIterator</c-></code> do not invalidate either copy.
+In fact it is quite valid to deference multiple copies of a <code class="highlight"><c- n>Cpp17InputIterator</c-></code>.</p>
+   <p>Elements Of Programming has the notion of <code class="highlight"><c- n>Regular</c-></code> types (and in Stepanov work, all Iterators are regular), but also the notion of regular transformations
+(aka pure functions) - which given the same input, always give the same output.
+So given a ForwardIterator <code class="highlight"><c- n>fi</c-></code>, there is a <code class="highlight"><c- n>successor</c-></code> function returning an incremented copy of <code class="highlight"><c- n>fi</c-></code> such as <code class="highlight"><c- n>sucessor</c-><c- p>(</c-><c- n>fi</c-><c- p>)</c-> <c- o>==</c-> <c- n>sucessor</c-><c- p>(</c-><c- n>fi</c-><c- p>)</c-></code>.
+In C++, that regular <code class="highlight"><c- n>sucessor</c-></code> function is <code class="highlight"><c- n>ForwardIterator</c-><c- o>::</c-><c- k>operator</c-><c- o>++</c-><c- p>(</c-><c- b>int</c-><c- p>);</c-></code>, in that <code class="highlight"><c- p>(</c-><c- n>it</c-><c- o>++</c-><c- p>)</c-> <c- o>==</c-> <c- p>(</c-><c- n>it</c-><c- o>++</c-><c- p>)</c-></code> for any given <code class="highlight"><c- n>ForwardIterator</c-></code>.</p>
+   <p>For <code class="highlight"><c- n>InputIterator</c-></code>, Stepanov specifies that the <code class="highlight"><c- n>sucessor</c-></code> is pseudo transformation, or a non-regular transformation that look like a regular one.
+And Therein lies the rub.</p>
+   <p>Like a pointer, <code class="highlight"><c- n>InputIterator</c-></code> is Regular, up until the point a transformation of an instance affects all copies.</p>
+<pre class="highlight"><c- n>InputIterator</c-> <c- n>i</c-> <c- o>=</c-> <c- d>/*...*/</c->
+<c- o>*</c-><c- n>i</c->    <c- c1>//ok</c->
+<c- n>a</c-> <c- o>=</c-> <c- n>i</c-> <c- c1>//ok</c->
+<c- o>*</c-><c- n>i</c->    <c- c1>//ok</c->
+<c- n>i</c-><c- o>++</c-><c- p>;</c->  <c- c1>// a now invalid</c->
+</pre>
+   <p>This design models accurately the nature of iterators. Because an iterator represents a position in a sequence, it is natural that multiple iterators could point
+to the same position.
+After one copy is incremented, in Stepanov’s model, other copies are in a partiallty formed state, and cannot be used (but they can be assigned to - or destroyed).</p>
+   <p>Let’s consider the case where we move from an iterator instead of copying it</p>
+<pre class="highlight"><c- n>InputIterator</c-> <c- n>i</c-> <c- o>=</c-> <c- d>/*...*/</c->
+<c- o>*</c-><c- n>i</c->           <c- c1>//ok</c->
+<c- n>a</c-> <c- o>=</c-> <c- n>move</c-><c- p>(</c-><c- n>i</c-><c- p>);</c-> <c- c1>//ok</c->
+<c- o>*</c-><c- n>i</c-><c- p>;</c->          <c- c1>//invalid</c->
+<c- n>a</c-><c- o>++</c-><c- p>;</c->         <c- c1>//ok</c->
+<c- n>i</c-><c- o>++</c-><c- p>;</c->         <c- c1>//invalid</c->
+</pre>
+   <p>Moving from an iterator invalids it early, albeit artificially. As per standard, the moved-from iterator is in a valid, but unspecified state,
+and cannot be used (but can be assigned to - or destroyed).
+Notice the similarity between "a valid, but unspecified state" and "a partiallty formed state".</p>
+   <p>The difference is slim. Notably, both models are equally expresive. References can be use, should multiple names be necessary.
+And in Stepanov’s model, iterators are made invalid by the natural mutation of the sequence upon increment, rather than by artificially
+preventing multiple copies.</p>
+   <p>The second model in which the iterator is moved from, the one we think should be the default way to handle non-forward iterators,
+is, however a much better fit for the C++ model, and offer much stronger guarantees to both the human developer as well as static analysis tools.</p>
+   <p>In the "increment invalids" model, objects are spiritually moved-from at a distance, which neither the theory
+of special relativity nor the C++ memory model are equiped to handle.
+This makes it hard for tools to detect invalid uses - although it might become possible with better tools (See Herb Sutter’s CppCon2018 talk).
+But most concerning, there is no way for a developer to know that the iterators are entangled.</p>
+<pre class="highlight"><c- k>auto</c-> <c- n>i</c-> <c- o>=</c-> <c- n>troubles</c-><c- p>.</c-><c- n>begin</c-><c- p>();</c->
+<c- k>auto</c-> <c- n>schrodingers_iterator</c-> <c- o>=</c-> <c- n>i</c-><c- p>;</c->
+<c- n>i</c-><c- o>++</c-><c- p>;</c->
+<c- k>auto</c-> <c- n>nasal_demon</c-> <c- o>=</c-> <c- o>*</c-><c- n>schrodingers_iterator</c-><c- p>;</c->
+</pre>
+   <p>The code code above might be perfectly fine.
+Indeed whether it is well defined or not depends on whether the iterator return by <code class="highlight"><c- n>troubles</c-><c- p>.</c-><c- n>begin</c-><c- p>();</c-></code> is forward or not.
+It is undecidable in these 4 lines of slide-code.
+It is, not much more obvious in a complex programm that may pass iterators to other functions or store them in containers, etc.
+There are, after all, no theorical limits to the distance in time and space over which entanglement perdures.</p>
+   <p>Worse even, should the type of <code class="highlight"><c- n>troubles</c-><c- p>.</c-><c- n>begin</c-><c- p>();</c-></code> be changed from Forward to Input, the code would change from perfectly fine to
+UB, with no warning.</p>
+   <p>Moving input iterators therefore better express intent, less suprising and safer.
+Move-only input Iterators also express the destructive nature of incrementation and give a better sense of the difference between InputIterator
+and <code class="highlight"><c- n>ForwarIterator</c-></code>.</p>
+   <h3 class="heading settled" data-level="8.1" id="an-holistic-approach-to-iterator-tags-and-iterator-concepts"><span class="secno">8.1. </span><span class="content">An Holistic Approach to Iterator Tags and Iterator Concepts</span><a class="self-link" href="#an-holistic-approach-to-iterator-tags-and-iterator-concepts"></a></h3>
    <h2 class="heading settled" data-level="9" id="q-a"><span class="secno">9. </span><span class="content">Q/A</span><a class="self-link" href="#q-a"></a></h2>
    <h3 class="heading settled" data-level="9.1" id="non-regular-iterators-really"><span class="secno">9.1. </span><span class="content">Non-regular iterators, really?</span><a class="self-link" href="#non-regular-iterators-really"></a></h3>
    <p>This proposal advocates for Non-Regular Iterators, and weakens <code class="highlight"><c- n>WeaklyIncrementable</c-></code> requirements to that effect.
