@@ -1,12 +1,12 @@
 <pre class='metadata'>
-Title: Supporting and enforcing non-copyability of single-pass iterators in the ranges namespace
-Shortname: Dxxxx
+Title: Movability of Single-pass iterators
+Shortname: D1207
 Level: 0
 Status: D
 Group: wg21
 Editor: Corentin Jabot, corentin.jabot@gmail.com
 URL:
-Abstract: We propose a new iterators taxonomy to make single-pass iterator non-copyable in the ranges namespace
+Abstract: ....
 Audience: LEWG
 Markup Shorthands: markdown yes
 Default Highlight: CPP
@@ -22,17 +22,17 @@ Date: 2018-08-20
 Non-forward Input iterators and output iterators, also known as "Single-pass iterators" are semantically move-only.
 The standard states:
 
-Note: For input iterators, a == b does not imply ++a == ++b. (Equality does not guarantee the substitution property or referential transparency.) Algorithms on input iterators should never attempt to pass through the same iterator twice. They should be single pass algorithms.
+Note: For input iterators, a == b does not imply ++a == ++b (Equality does not guarantee the substitution property or referential transparency.)
+Algorithms on input iterators should never attempt to pass through the same iterator twice. They should be single pass algorithms.
 
 This means that once an iterator is copied, only one of the copies can meaningfully be used.
 Deferencing multiple copies of a single pass iterator often exposes undefined or invalid behavior.
 
 
-It would, therefore, make sense that classes satisfying the `InputIterator` concept be move only.
+It would, therefore, make sense that classes satisfying the `InputIterator` shall only be required to be movable.
+
 Alas, Single-pass iterators and many classes satisfying its requirements predate C++11, they do therefore have move only semantic with copy syntax.
 In that regard, they are similar to `auto_ptr`.
-
-In this paper, we propose a way to introduce the notion of move-only single-pass iterators.
 
 # Terminology
 
@@ -51,82 +51,30 @@ In the rest of this paper
 
 # Scope
 
-This paper proposes changes to the Ranges TS and [[P0896R2]] both targeting C++20. Because the changes proposed here changes some requirements and concepts as presented
+This paper proposes changes to the Ranges TS and [[P0896R2]] both targeting C++20. Because the modifications proposed here changes some requirements and concepts as presented
 by [[P0896R2]], the authors strongly suggest they are considered for the inclusion in the same version of the standard.
-Indeed, [[P0896R2]] gives us a unique opportunity to make the change proposed, and it would be a breaking change to introduce the modifications proposed here in a later version of the standard.
+Indeed, [[P0896R2]] gives us a unique opportunity to make the modifications proposed, as they might, in some cases, break code, if introduced after the publication
+of C++20 (with ranges).
 
 ## Non-Goal
 
 As a large amount of code depends on the Input/Output iterators requirements as specified by C++17, this paper does not propose any modifications to the `Cpp17InputIterator` or
 any class that depends on it.
 Specifically, we do not propose to change the requirements or wording of `istream_iterator`, `ostream_iterator`, `istreambuf_iterator` or `ostreambuf_iterator`.
-Furthermore, we do not propose modifications to algorithms in the namespace `std`. The new iterators we propose here are in fact not compatible with existing algorithms.
+Furthermore, we do not propose modifications to algorithms in the namespace `std`. The new iterators we propose here are in fact mostly incompatible with existing algorithms.
 They are meant to be used in the `ranges` namespace and as basic building blocks of range-based views.
 
-While the ability to use move-only iterators with the algorithms defined in the `std` namespace would certainly be welcomed, doing so would weaken the `RangesTSInputIterator` concept and leads to other issues
-(namely, `std` based algorithms require iterators to be `EqualityComparable`, which the `RangesTSInputIterator` is not).
+While the ability to use move-only iterators with the algorithms defined in the `std` namespace would certainly be welcomed, doing so would weaken the `RangesTSInputIterator` concept and leads to other issues (namely, `std` based algorithms require iterators to be `EqualityComparable`, which the `RangesTSInputIterator` is not).
 
-In practice, that means that types satisfying the `Cpp17InputIterator` requirements continue to work unaffected with algorithms defined in the `std` namespace. They will not be compatible with algorithms defined in the ranges namespace, or with new code using the `InputIterator` concept as proposed here.
+In practice, that means that types satisfying the `Cpp17InputIterator` requirements continue to work unaffected with algorithms defined in the `std` namespace. They may not be compatible with algorithms defined in the ranges namespace, or with new code using the `InputIterator` concept as proposed here.
 
-Inversely, types satisfying the `InputIterator` concepts will not be compatible with algorithms in `std` as they would not be able to satisfy the `Cpp17InputIterator` requirements.
+Inversely, types satisfying the `InputIterator` concepts may not be compatible with algorithms in `std` as they may not be able to satisfy the `Cpp17InputIterator` requirements.
 
+Because it makes never sense to copy an Input Iterator (more on that later), it would be possible to add support for move-only iterators to the  `std` namespace without much change to the standard.
+However, because implementers may copy iterators within the implementation of the standard library, along with existing third-party libraries, a lot of code would need to be adapted.
+And there is little pressure to do so as existing iterators types cannot be changed.
 
-
-# The problem
-
-## Some elements of programming
-
-Input-devices such as a socket, a serial device, a stream of random numbers, etc are sequential.
-They model a stream of data, from which reading is destructive and back-seeking impossible.
-Reading from such entity mutate irreversibly the state of that entity.
-
-Therefore, we could expect that:
-
-```
-auto socket_copy = socket;
-stocket.read_some();
-assert(socket != socket_copy);
-
-```
-
-However, from the point of view of an input device or view, consuming data does not move the position of the reading head.
-The state of an input stream is not a property of the entity that produces it.
-
-This means that serial entities ( devices, views ) are not regular.
-Iterators over such entity are therefore non-regular (semantically).
-
-```
-auto input_iterator_copy = input_iterator;
-assert(*(++input_iterator_copy) == *(++input_iterator)) // fails
-```
-
-Because input iterators cannot be copied, they should not be comparable either.
-Going back to the reading head metaphor, comparing a reading head to itself make no sense, and
-in fact, comparing input or output iterators to anything other than the end-of-stream position never made sense.
-
-Stated differently, the salient property of any given iterator is the position in the underlying data sequence to which it points to.
-In the case of input/output iterators, moving to a new position destroys the old position.
-Therefore there can be only one observed position at any given time, and consequently
- * positions cannot be compared
- * positions cannot be copied
-
-Therefore, input/output iterators do not meet the semantic requirements of either `Copyable` or `EqualityComparable`
-
-## auto_ptr
-
-Another way to look at the problem is to say that copyable input iterators fall into the same category of entities as `auto_ptr`.
-They own a unique, non-copyable "reading head" over a stream or sequence, and their copy operator has ownership transfer semantics.
-All the arguments that lead to `auto_ptr` deprecation and eventual removal apply equally to input iterators.
-
-## Implicitly destructive operations
-
-More often than not, reading from an input sequence is a destructive operation.
-But that destruction is reflected nowhere in the API.
-Less experienced developers may not be aware
-
-
-By making `InputIterator` move only, developers will have to explicitly move them, which both signals the invalidation
-of the move-from object, but, more importantly, that the underlying data will be destroyed.
+# Motivation
 
 ## Move-only state
 
@@ -134,678 +82,49 @@ It may be desirable for an iterator to hold a move-only object, becoming itself 
 A real-world example of such iterator is described in [[P0902R0]].
 While syntactically copyable in the current design, a `coroutine_handle` such as used by a `generator` input iterator ought to be move-only.
 
-Note: Having input iterators holding move-only state compile is definitively a worthy goal, however this proposal is not attempting to shove a new iterator category
-so that such code would compile, but rather to show that all input iterators ought to be move-only (again, in the `ranges` namespace solely, for backward compatibility reasons).
+## Implicitly destructive operations
+
+Reading from an input sequence is a destructive operation. But that destruction is reflected nowhere in the API.
+Less experienced developers may not be aware of the destructive / single-pass nature of non-forward Iterators
+By making `InputIterator` move only, developers will have to explicitly move them, which both signals the invalidation
+of the move-from object, but, more importantly, that the underlying data will be destroyed.
 
 ## Performance optimization
 
 Move-only iterators are a performance improvement opportunity.
 For example, in the presence of `InputIterator`s, `ranges::copy` could perform a move rather than a copy of the elements since iteration is destructive.
+This is explored further down
 
-# Proposed design
 
-We propose to make `InputIterator` concept match its semantic.
-In this design, `InputIterator`is required to be `Movable` but it is furthermore required *to be neither* `Copyable` nor `EqualityComparable`.
+# What is a move-only iterator?
 
-Note: An iterator not being `EqualityComparable` means that for any given `a` and `b` instances of that iterator `I` there is no operation `a` == `b`.
-However, for such iterator to be useful, there must exist a type `S` such that the concept `Sentinel<S, I>` is satisfied.
-Such a requirement is a property of the algorithm, not of `I` itself.
-On the other hand, the `ForwardIterator` concept of the Ranges TS does require that `Sentinel<F, F>` be satisfied, for any `ForwardIterator` `F`.
+Unlike [[P0902R0]], we do not propose to introduce a new iterator category.
+A movable Iterator is a non-forward iterator (either input or output depending on whether is it writable).
+This means that a move-only iterator as _almost_ the same semantic requirements as an InputIterator,
+and offers the same operations.
+That means that everything that can be expressed and done with an input iterator can be done equally expressed
+and done with a movable iterator.
 
-That allows us to prevent the creation of an Iterator type that would be
-  * `Copyable` and  not `EqualityComparable`
-  * `EqualityComparable` but not `Copyable`
+This paper does, therefore,  not propose to introduce a new iterator category.
+We do not propose a new name requirement, concept name or iterator tag.
 
-Neither of these things making sense and being a potential source of bugs.
+Furthermore, there is no ForwardIterator that is only movable, as a ForwardIterator is by definition
+an iterator that can be copied. More on that further down.
 
-<!--
-digraph iterator{
-    node [fontcolor=black fontsize=15 width=0.5 shape=box margin=0.5 style="" fontname="monospace"]
-    InputIterator[label="InputIterator\nMove-Only & non-EqualityComparable"]
-    node [style=filled fillcolor="#f06261" fontcolor=white]
-    NonSense1[label="Non sense\nCopyable & non-EqualityComparable"]
-    NonSense2[label="Non sense\nMove-Only & EqualityComparable"]
-    node [style="" fillcolor="#6ACFCF"  fontcolor=black]
-    ForwardIterator[label="ForwardIteratorIterator\nRegular"]
 
-    InputIterator -> NonSense1
-    InputIterator -> NonSense2
-    NonSense1 -> ForwardIterator
-    NonSense2 -> ForwardIterator
-}
--->
-<svg width="611pt" height="404pt" viewBox="0.00 0.00 611.00 404.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-<g id="graph1" class="graph" transform="scale(1 1) rotate(0) translate(4 400)">
-<title>iterator</title>
-<polygon fill="white" stroke="white" points="-4,5 -4,-400 608,-400 608,5 -4,5"></polygon>
-<!-- InputIterator -->
-<g id="node1" class="node"><title>InputIterator</title>
-<polygon fill="none" stroke="black" points="461.086,-396 148.914,-396 148.914,-288 461.086,-288 461.086,-396"></polygon>
-<text text-anchor="middle" x="305" y="-346.5" font-family="monospace" font-size="15.00">InputIterator</text>
-<text text-anchor="middle" x="305" y="-328.5" font-family="monospace" font-size="15.00">Move-Only &amp; non-EqualityComparable</text>
-</g>
-<!-- NonSense1 -->
-<g id="node2" class="node"><title>NonSense1</title>
-<polygon fill="#f06261" stroke="black" points="300.216,-252 -0.216069,-252 -0.216069,-144 300.216,-144 300.216,-252"></polygon>
-<text text-anchor="middle" x="150" y="-202.5" font-family="monospace" font-size="15.00" fill="white">Nonsense</text>
-<text text-anchor="middle" x="150" y="-184.5" font-family="monospace" font-size="15.00" fill="white">Copyable &amp; non-EqualityComparable</text>
-</g>
-<!-- InputIterator&#45;&gt;NonSense1 -->
-<g id="edge2" class="edge"><title>InputIterator-&gt;NonSense1</title>
-<path fill="none" stroke="black" d="M246.843,-287.72C236.612,-278.348 225.902,-268.536 215.487,-258.995"></path>
-<polygon fill="black" stroke="black" points="217.706,-256.28 207.968,-252.106 212.977,-261.442 217.706,-256.28"></polygon>
-</g>
-<!-- NonSense2 -->
-<g id="node3" class="node"><title>NonSense2</title>
-<polygon fill="#f06261" stroke="black" points="603.466,-252 318.534,-252 318.534,-144 603.466,-144 603.466,-252"></polygon>
-<text text-anchor="middle" x="461" y="-202.5" font-family="monospace" font-size="15.00" fill="white">Nonsense</text>
-<text text-anchor="middle" x="461" y="-184.5" font-family="monospace" font-size="15.00" fill="white">Move-Only &amp; EqualityComparable</text>
-</g>
-<!-- InputIterator&#45;&gt;NonSense2 -->
-<g id="edge4" class="edge"><title>InputIterator-&gt;NonSense2</title>
-<path fill="none" stroke="black" d="M363.532,-287.72C373.829,-278.348 384.609,-268.536 395.09,-258.995"></path>
-<polygon fill="black" stroke="black" points="397.619,-261.426 402.658,-252.106 392.907,-256.249 397.619,-261.426"></polygon>
-</g>
-<!-- ForwardIterator -->
-<g id="node4" class="node"><title>ForwardIterator</title>
-<polygon fill="none" stroke="black" points="410.311,-108 199.689,-108 199.689,0 410.311,0 410.311,-108"></polygon>
-<text text-anchor="middle" x="305" y="-58.5" font-family="monospace" font-size="15.00">ForwardIteratorIterator</text>
-<text text-anchor="middle" x="305" y="-40.5" font-family="monospace" font-size="15.00">Regular</text>
-</g>
-<!-- NonSense1&#45;&gt;ForwardIterator -->
-<g id="edge6" class="edge"><title>NonSense1-&gt;ForwardIterator</title>
-<path fill="none" stroke="black" d="M208.157,-143.72C218.388,-134.348 229.098,-124.536 239.513,-114.995"></path>
-<polygon fill="black" stroke="black" points="242.023,-117.442 247.032,-108.106 237.294,-112.28 242.023,-117.442"></polygon>
-</g>
-<!-- NonSense2&#45;&gt;ForwardIterator -->
-<g id="edge8" class="edge"><title>NonSense2-&gt;ForwardIterator</title>
-<path fill="none" stroke="black" d="M402.468,-143.72C392.171,-134.348 381.391,-124.536 370.91,-114.995"></path>
-<polygon fill="black" stroke="black" points="373.093,-112.249 363.342,-108.106 368.381,-117.426 373.093,-112.249"></polygon>
-</g>
-</g>
-</svg>
 
-This leaves us with
- * InputIterator: Movable, not Copyable, not EquallyComparable
- * ForwardIterator: Regular
-
-It is not possible for a given type to meet both `ForwardIterator` and `InputIterator` requirements since they have
-contradictory requirements.
-
-This leads to the introduction of two new concepts `ReadableIterator` and `WritableIterator`.
-For correctness, these concepts are defined in terms of other iterators:
- * `ReadableIterator` is defined to be either an `InputIterator` or a `ForwardIterator`.
- * `WritableIterator` is defined to be either an `OutputIterator` or a `ForwardIterator`
-
-Notice that `ForwardIterator` and `InputIterator` share the `Readable` and `Iterator` requirements, so indeed,
-a ReadableIterator is an Iterator that is Readable.
-Symmetrically, a `WritableIterator` is an `Iterator` that is `Writable`.
-
-However there is no valid `ReadableIterator` that is neither input or forward, and so `ReadableIterator` is defined as
-
-<xmp>
-template <class I>
-concept ReadableIterator = InputIterator<I> || ForwardIterator<I>;
-</xmp>
-
-and WritableIterator
-
-<xmp>
-template <class I>
-concept Writable = OutputIterator<I> || ForwardIterator<I>;
-</xmp>
-
-Because this dramatically changes the Iterator concepts taxonomy, we need to adapt algorithms in the `ranges` namespace
-to use this `ReadableIterator` concept everywhere a `RangesTSInputIterator` is expected.
-Notice that there is currently no algorithm that is designed to take non-forward input iterators.
-But such algorithms could exist, for example, `ranges::copy` could be specialized for InputIterator and operate a move instead of a copy.
-
-## No changes to the namespace `std`
-
-An important design constraint was to make sure not to break existing code.
-Conservatively that means avoiding modification to existing algorithms in the `std` namespace.
-Input and Output iterators provided by the standard remain unmodified and most importantly,
-the requirements of `Cpp17InputIterator` and `Cpp17OutputIterator` are left untouched, meaning user-defined iterators meeting the requirements
-or either `Cpp17Iterator` or `Cpp17OutputIterator` will not be impacted by the proposed changes.
-
-Consequently, the `InputIterator` and `OutputIterator` specified as described above are not compatible with `Cpp17Iterator` requirements.
-That means that algorithms in the `std` namespace will not work with types satisfying the `InputIterator` or `OutputIterator` concepts.
-
-It also means that algorithms in the `ranges` namespace will not accept types meeting the `Cpp17InputIterator`
-or `Cpp17OutputIterator` requirements.
-
-In Rapperswil, the following poll was taken
-
-> We want the invariant that anything that compiles in std::ranges::foo() & std::foo() has the same semantics/result?
-
-<table>
-
-<style>
- table {
-    border-collapse: collapse;
-}
- th, td {
-    padding:10px;
-    border: 1px solid black;
- }
-</style>
-
-
-<thead><tr><th title="Field #1">SF</th>
-<th title="Field #2">F</th>
-<th title="Field #3">N</th>
-<th title="Field #4">A</th>
-<th title="Field #5">SA</th>
-</tr></thead>
-<tbody><tr>
-<td>1</td>
-<td>5</td>
-<td>0</td>
-<td>10</td>
-<td>2</td>
-</tr>
-</tbody></table>
-
-The authors interpreted that poll as an opportunity to do the *right thing* in the `ranges` namespace, at the cost of a less straightforward
-migration path between the two.
-
-New facilities such as `ranges::istream_view` offer cleaner, easier to use, alternatives to the input/output iterators of the stl so a migration
-path does exist.
-
-## Visual summary
-
-<!--
-digraph iterator{
-    node [fontcolor=black fontsize=20 width=0.5 shape=box margin=0.2 style=filled fillcolor="#FFBB82"]
-    WeaklyIncrementable
-    node [style="" fillcolor=""]
-    Incrementable
-    EqualityComparable
-    Iterator
-    node [style=filled margin=0.2]
-    Cpp17Iterator
-    Cpp17InputIterator
-    Cpp17OutputIterator
-    node [fontcolor=black fontsize=20 width=0.5 shape=box margin=0.2 style=""]
-    ForwardIterator
-    BidirectionalIterator
-    RandomAccessIterator
-    ContiguousIterator
-    node [style=filled fillcolor="#CCFCCB"]
-    ReadableIterator
-    WritableIterator
-    node [style=filled fillcolor="#6ACFCF"]
-    InputIterator
-    OutputIterator
-
-    WeaklyIncrementable -> Iterator
-    Incrementable -> Cpp17Iterator
-    EqualityComparable -> Cpp17Iterator
-    ReadableIterator -> ForwardIterator
-    WritableIterator -> ForwardIterator
-    Iterator -> ReadableIterator -> InputIterator
-    Iterator -> Cpp17Iterator -> Cpp17InputIterator -> ForwardIterator -> BidirectionalIterator -> RandomAccessIterator -> ContiguousIterator
-    Iterator -> WritableIterator -> OutputIterator
-    Cpp17Iterator -> Cpp17OutputIterator
-}
--->
-
-The following graph shows a representation of the proposed taxonomy.
-Semiregularity requirements are struck from <span style='background-color:#FFBB82'>WeaklyIncrementable</span>.
-<span style='background-color:#6ACFCF'>InputIterator</span> and <span style='background-color:#6ACFCF'>OutputIterator</span> are modified to require **not to be** EqualityComparable nor Copyable.
-<span style='background-color:#CCFCCB'>ReadableIterator</span> and <span style='background-color:#CCFCCB'>WritableIterator</span> are introduced to represent
-either an <span style='background-color:#6ACFCF'>InputIterator</span> or an <span style='background-color:#6ACFCF'>OutputIterator</span> and are meant to
-be the primary concept used by algorithms that do not care about the specific iterator capabilities beyond their readability/writability.
-
-<svg width="788pt" height="676pt" viewBox="0.00 0.00 788.00 676.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-<g id="graph1" class="graph" transform="scale(1 1) rotate(0) translate(4 672)">
-<title>iterator</title>
-<polygon fill="white" stroke="white" points="-4,5 -4,-672 785,-672 785,5 -4,5"></polygon>
-<!-- WeaklyIncrementable -->
-<g id="node1" class="node"><title>WeaklyIncrementable</title>
-<polygon fill="#ffbb82" stroke="black" points="551.93,-668 348.07,-668 348.07,-616 551.93,-616 551.93,-668"></polygon>
-<text text-anchor="middle" x="450" y="-636" font-family="Times,serif" font-size="20.00">WeaklyIncrementable</text>
-</g>
-<!-- Iterator -->
-<g id="node4" class="node"><title>Iterator</title>
-<polygon fill="none" stroke="black" points="493.135,-580 406.865,-580 406.865,-528 493.135,-528 493.135,-580"></polygon>
-<text text-anchor="middle" x="450" y="-548" font-family="Times,serif" font-size="20.00">Iterator</text>
-</g>
-<!-- WeaklyIncrementable&#45;&gt;Iterator -->
-<g id="edge2" class="edge"><title>WeaklyIncrementable-&gt;Iterator</title>
-<path fill="none" stroke="black" d="M450,-615.662C450,-607.702 450,-598.763 450,-590.245"></path>
-<polygon fill="black" stroke="black" points="453.5,-590.157 450,-580.157 446.5,-590.157 453.5,-590.157"></polygon>
-</g>
-<!-- Incrementable -->
-<g id="node2" class="node"><title>Incrementable</title>
-<polygon fill="none" stroke="black" points="172.285,-580 29.7147,-580 29.7147,-528 172.285,-528 172.285,-580"></polygon>
-<text text-anchor="middle" x="101" y="-548" font-family="Times,serif" font-size="20.00">Incrementable</text>
-</g>
-<!-- Cpp17Iterator -->
-<g id="node5" class="node"><title>Cpp17Iterator</title>
-<polygon fill="lightgrey" stroke="black" points="351.138,-492 210.862,-492 210.862,-440 351.138,-440 351.138,-492"></polygon>
-<text text-anchor="middle" x="281" y="-460" font-family="Times,serif" font-size="20.00">Cpp17Iterator</text>
-</g>
-<!-- Incrementable&#45;&gt;Cpp17Iterator -->
-<g id="edge4" class="edge"><title>Incrementable-&gt;Cpp17Iterator</title>
-<path fill="none" stroke="black" d="M153.547,-527.894C174.066,-518.091 197.747,-506.777 219.086,-496.581"></path>
-<polygon fill="black" stroke="black" points="220.873,-499.606 228.387,-492.137 217.855,-493.29 220.873,-499.606"></polygon>
-</g>
-<!-- EqualityComparable -->
-<g id="node3" class="node"><title>EqualityComparable</title>
-<polygon fill="none" stroke="black" points="383.139,-580 190.861,-580 190.861,-528 383.139,-528 383.139,-580"></polygon>
-<text text-anchor="middle" x="287" y="-548" font-family="Times,serif" font-size="20.00">EqualityComparable</text>
-</g>
-<!-- EqualityComparable&#45;&gt;Cpp17Iterator -->
-<g id="edge6" class="edge"><title>EqualityComparable-&gt;Cpp17Iterator</title>
-<path fill="none" stroke="black" d="M285.232,-527.662C284.677,-519.702 284.053,-510.763 283.459,-502.245"></path>
-<polygon fill="black" stroke="black" points="286.943,-501.889 282.755,-492.157 279.96,-502.376 286.943,-501.889"></polygon>
-</g>
-<!-- Iterator&#45;&gt;Cpp17Iterator -->
-<g id="edge15" class="edge"><title>Iterator-&gt;Cpp17Iterator</title>
-<path fill="none" stroke="black" d="M406.478,-530.853C386.021,-520.442 361.335,-507.88 339.29,-496.662"></path>
-<polygon fill="black" stroke="black" points="340.847,-493.527 330.347,-492.111 337.672,-499.766 340.847,-493.527"></polygon>
-</g>
-<!-- ReadableIterator -->
-<g id="node12" class="node"><title>ReadableIterator</title>
-<polygon fill="#ccfccb" stroke="black" points="530.44,-492 369.56,-492 369.56,-440 530.44,-440 530.44,-492"></polygon>
-<text text-anchor="middle" x="450" y="-460" font-family="Times,serif" font-size="20.00">ReadableIterator</text>
-</g>
-<!-- Iterator&#45;&gt;ReadableIterator -->
-<g id="edge12" class="edge"><title>Iterator-&gt;ReadableIterator</title>
-<path fill="none" stroke="black" d="M450,-527.662C450,-519.702 450,-510.763 450,-502.245"></path>
-<polygon fill="black" stroke="black" points="453.5,-502.157 450,-492.157 446.5,-502.157 453.5,-502.157"></polygon>
-</g>
-<!-- WritableIterator -->
-<g id="node13" class="node"><title>WritableIterator</title>
-<polygon fill="#ccfccb" stroke="black" points="705.109,-492 548.891,-492 548.891,-440 705.109,-440 705.109,-492"></polygon>
-<text text-anchor="middle" x="627" y="-460" font-family="Times,serif" font-size="20.00">WritableIterator</text>
-</g>
-<!-- Iterator&#45;&gt;WritableIterator -->
-<g id="edge22" class="edge"><title>Iterator-&gt;WritableIterator</title>
-<path fill="none" stroke="black" d="M493.299,-531.962C515.261,-521.291 542.299,-508.154 566.301,-496.492"></path>
-<polygon fill="black" stroke="black" points="567.869,-499.622 575.334,-492.103 564.81,-493.325 567.869,-499.622"></polygon>
-</g>
-<!-- Cpp17InputIterator -->
-<g id="node6" class="node"><title>Cpp17InputIterator</title>
-<polygon fill="lightgrey" stroke="black" points="182.3,-404 -0.30022,-404 -0.30022,-352 182.3,-352 182.3,-404"></polygon>
-<text text-anchor="middle" x="91" y="-372" font-family="Times,serif" font-size="20.00">Cpp17InputIterator</text>
-</g>
-<!-- Cpp17Iterator&#45;&gt;Cpp17InputIterator -->
-<g id="edge16" class="edge"><title>Cpp17Iterator-&gt;Cpp17InputIterator</title>
-<path fill="none" stroke="black" d="M225.533,-439.894C203.68,-430.003 178.43,-418.574 155.749,-408.307"></path>
-<polygon fill="black" stroke="black" points="157.089,-405.072 146.536,-404.137 154.203,-411.449 157.089,-405.072"></polygon>
-</g>
-<!-- Cpp17OutputIterator -->
-<g id="node7" class="node"><title>Cpp17OutputIterator</title>
-<polygon fill="lightgrey" stroke="black" points="395.304,-404 200.696,-404 200.696,-352 395.304,-352 395.304,-404"></polygon>
-<text text-anchor="middle" x="298" y="-372" font-family="Times,serif" font-size="20.00">Cpp17OutputIterator</text>
-</g>
-<!-- Cpp17Iterator&#45;&gt;Cpp17OutputIterator -->
-<g id="edge25" class="edge"><title>Cpp17Iterator-&gt;Cpp17OutputIterator</title>
-<path fill="none" stroke="black" d="M286.009,-439.662C287.582,-431.702 289.349,-422.763 291.033,-414.245"></path>
-<polygon fill="black" stroke="black" points="294.521,-414.646 293.027,-404.157 287.654,-413.288 294.521,-414.646"></polygon>
-</g>
-<!-- ForwardIterator -->
-<g id="node8" class="node"><title>ForwardIterator</title>
-<polygon fill="none" stroke="black" points="500.948,-316 347.052,-316 347.052,-264 500.948,-264 500.948,-316"></polygon>
-<text text-anchor="middle" x="424" y="-284" font-family="Times,serif" font-size="20.00">ForwardIterator</text>
-</g>
-<!-- Cpp17InputIterator&#45;&gt;ForwardIterator -->
-<g id="edge17" class="edge"><title>Cpp17InputIterator-&gt;ForwardIterator</title>
-<path fill="none" stroke="black" d="M182.434,-353.386C230.609,-340.945 289.387,-325.765 336.901,-313.494"></path>
-<polygon fill="black" stroke="black" points="338.054,-316.811 346.861,-310.922 336.304,-310.034 338.054,-316.811"></polygon>
-</g>
-<!-- BidirectionalIterator -->
-<g id="node9" class="node"><title>BidirectionalIterator</title>
-<polygon fill="none" stroke="black" points="519.449,-228 328.551,-228 328.551,-176 519.449,-176 519.449,-228"></polygon>
-<text text-anchor="middle" x="424" y="-196" font-family="Times,serif" font-size="20.00">BidirectionalIterator</text>
-</g>
-<!-- ForwardIterator&#45;&gt;BidirectionalIterator -->
-<g id="edge18" class="edge"><title>ForwardIterator-&gt;BidirectionalIterator</title>
-<path fill="none" stroke="black" d="M424,-263.662C424,-255.702 424,-246.763 424,-238.245"></path>
-<polygon fill="black" stroke="black" points="427.5,-238.157 424,-228.157 420.5,-238.157 427.5,-238.157"></polygon>
-</g>
-<!-- RandomAccessIterator -->
-<g id="node10" class="node"><title>RandomAccessIterator</title>
-<polygon fill="none" stroke="black" points="529.436,-140 318.564,-140 318.564,-88 529.436,-88 529.436,-140"></polygon>
-<text text-anchor="middle" x="424" y="-108" font-family="Times,serif" font-size="20.00">RandomAccessIterator</text>
-</g>
-<!-- BidirectionalIterator&#45;&gt;RandomAccessIterator -->
-<g id="edge19" class="edge"><title>BidirectionalIterator-&gt;RandomAccessIterator</title>
-<path fill="none" stroke="black" d="M424,-175.662C424,-167.702 424,-158.763 424,-150.245"></path>
-<polygon fill="black" stroke="black" points="427.5,-150.157 424,-140.157 420.5,-150.157 427.5,-150.157"></polygon>
-</g>
-<!-- ContiguousIterator -->
-<g id="node11" class="node"><title>ContiguousIterator</title>
-<polygon fill="none" stroke="black" points="513.308,-52 334.692,-52 334.692,0 513.308,0 513.308,-52"></polygon>
-<text text-anchor="middle" x="424" y="-20" font-family="Times,serif" font-size="20.00">ContiguousIterator</text>
-</g>
-<!-- RandomAccessIterator&#45;&gt;ContiguousIterator -->
-<g id="edge20" class="edge"><title>RandomAccessIterator-&gt;ContiguousIterator</title>
-<path fill="none" stroke="black" d="M424,-87.6623C424,-79.7016 424,-70.7633 424,-62.2449"></path>
-<polygon fill="black" stroke="black" points="427.5,-62.1566 424,-52.1566 420.5,-62.1566 427.5,-62.1566"></polygon>
-</g>
-<!-- ReadableIterator&#45;&gt;ForwardIterator -->
-<g id="edge8" class="edge"><title>ReadableIterator-&gt;ForwardIterator</title>
-<path fill="none" stroke="black" d="M446.219,-439.699C441.759,-409.846 434.314,-360.025 429.284,-326.365"></path>
-<polygon fill="black" stroke="black" points="432.683,-325.422 427.743,-316.049 425.759,-326.457 432.683,-325.422"></polygon>
-</g>
-<!-- InputIterator -->
-<g id="node14" class="node"><title>InputIterator</title>
-<polygon fill="#6acfcf" stroke="black" points="581.296,-404 452.704,-404 452.704,-352 581.296,-352 581.296,-404"></polygon>
-<text text-anchor="middle" x="517" y="-372" font-family="Times,serif" font-size="20.00">InputIterator</text>
-</g>
-<!-- ReadableIterator&#45;&gt;InputIterator -->
-<g id="edge13" class="edge"><title>ReadableIterator-&gt;InputIterator</title>
-<path fill="none" stroke="black" d="M469.74,-439.662C476.419,-431.089 483.981,-421.382 491.067,-412.287"></path>
-<polygon fill="black" stroke="black" points="494.016,-414.196 497.401,-404.157 488.494,-409.894 494.016,-414.196"></polygon>
-</g>
-<!-- WritableIterator&#45;&gt;ForwardIterator -->
-<g id="edge10" class="edge"><title>WritableIterator-&gt;ForwardIterator</title>
-<path fill="none" stroke="black" d="M625.03,-439.746C621.762,-414.445 613.077,-375.917 590,-352 568.835,-330.065 539.12,-315.969 510.671,-306.931"></path>
-<polygon fill="black" stroke="black" points="511.669,-303.576 501.085,-304.055 509.658,-310.281 511.669,-303.576"></polygon>
-</g>
-<!-- OutputIterator -->
-<g id="node15" class="node"><title>OutputIterator</title>
-<polygon fill="#6acfcf" stroke="black" points="780.3,-404 637.7,-404 637.7,-352 780.3,-352 780.3,-404"></polygon>
-<text text-anchor="middle" x="709" y="-372" font-family="Times,serif" font-size="20.00">OutputIterator</text>
-</g>
-<!-- WritableIterator&#45;&gt;OutputIterator -->
-<g id="edge23" class="edge"><title>WritableIterator-&gt;OutputIterator</title>
-<path fill="none" stroke="black" d="M651.159,-439.662C659.584,-430.827 669.157,-420.787 678.056,-411.454"></path>
-<polygon fill="black" stroke="black" points="680.646,-413.809 685.013,-404.157 675.58,-408.979 680.646,-413.809"></polygon>
-</g>
-</g>
-</svg>
-
-While this may seem unbalanced, taking the Cp17Iterator requirements out of the picture show that the proposed design actually strives for symmetrically
-
-<svg width="469pt" height="500pt" viewBox="0.00 0.00 469.00 500.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-<g id="graph1" class="graph" transform="scale(1 1) rotate(0) translate(4 496)">
-<title>iterator</title>
-<polygon fill="white" stroke="white" points="-4,5 -4,-496 466,-496 466,5 -4,5"></polygon>
-<!-- Iterator -->
-<g id="node1" class="node"><title>Iterator</title>
-<polygon fill="none" stroke="black" points="269.135,-492 182.865,-492 182.865,-440 269.135,-440 269.135,-492"></polygon>
-<text text-anchor="middle" x="226" y="-460" font-family="Times,serif" font-size="20.00">Iterator</text>
-</g>
-<!-- ReadableIterator -->
-<g id="node6" class="node"><title>ReadableIterator</title>
-<polygon fill="#ccfccb" stroke="black" points="218.44,-404 57.5598,-404 57.5598,-352 218.44,-352 218.44,-404"></polygon>
-<text text-anchor="middle" x="138" y="-372" font-family="Times,serif" font-size="20.00">ReadableIterator</text>
-</g>
-<!-- Iterator&#45;&gt;ReadableIterator -->
-<g id="edge6" class="edge"><title>Iterator-&gt;ReadableIterator</title>
-<path fill="none" stroke="black" d="M200.073,-439.662C190.943,-430.739 180.555,-420.588 170.925,-411.177"></path>
-<polygon fill="black" stroke="black" points="173.34,-408.643 163.742,-404.157 168.447,-413.649 173.34,-408.643"></polygon>
-</g>
-<!-- WritableIterator -->
-<g id="node7" class="node"><title>WritableIterator</title>
-<polygon fill="#ccfccb" stroke="black" points="393.109,-404 236.891,-404 236.891,-352 393.109,-352 393.109,-404"></polygon>
-<text text-anchor="middle" x="315" y="-372" font-family="Times,serif" font-size="20.00">WritableIterator</text>
-</g>
-<!-- Iterator&#45;&gt;WritableIterator -->
-<g id="edge13" class="edge"><title>Iterator-&gt;WritableIterator</title>
-<path fill="none" stroke="black" d="M252.222,-439.662C261.456,-430.739 271.961,-420.588 281.701,-411.177"></path>
-<polygon fill="black" stroke="black" points="284.207,-413.622 288.966,-404.157 279.342,-408.589 284.207,-413.622"></polygon>
-</g>
-<!-- ForwardIterator -->
-<g id="node2" class="node"><title>ForwardIterator</title>
-<polygon fill="none" stroke="black" points="300.948,-316 147.052,-316 147.052,-264 300.948,-264 300.948,-316"></polygon>
-<text text-anchor="middle" x="224" y="-284" font-family="Times,serif" font-size="20.00">ForwardIterator</text>
-</g>
-<!-- BidirectionalIterator -->
-<g id="node3" class="node"><title>BidirectionalIterator</title>
-<polygon fill="none" stroke="black" points="319.449,-228 128.551,-228 128.551,-176 319.449,-176 319.449,-228"></polygon>
-<text text-anchor="middle" x="224" y="-196" font-family="Times,serif" font-size="20.00">BidirectionalIterator</text>
-</g>
-<!-- ForwardIterator&#45;&gt;BidirectionalIterator -->
-<g id="edge9" class="edge"><title>ForwardIterator-&gt;BidirectionalIterator</title>
-<path fill="none" stroke="black" d="M224,-263.662C224,-255.702 224,-246.763 224,-238.245"></path>
-<polygon fill="black" stroke="black" points="227.5,-238.157 224,-228.157 220.5,-238.157 227.5,-238.157"></polygon>
-</g>
-<!-- RandomAccessIterator -->
-<g id="node4" class="node"><title>RandomAccessIterator</title>
-<polygon fill="none" stroke="black" points="329.436,-140 118.564,-140 118.564,-88 329.436,-88 329.436,-140"></polygon>
-<text text-anchor="middle" x="224" y="-108" font-family="Times,serif" font-size="20.00">RandomAccessIterator</text>
-</g>
-<!-- BidirectionalIterator&#45;&gt;RandomAccessIterator -->
-<g id="edge10" class="edge"><title>BidirectionalIterator-&gt;RandomAccessIterator</title>
-<path fill="none" stroke="black" d="M224,-175.662C224,-167.702 224,-158.763 224,-150.245"></path>
-<polygon fill="black" stroke="black" points="227.5,-150.157 224,-140.157 220.5,-150.157 227.5,-150.157"></polygon>
-</g>
-<!-- ContiguousIterator -->
-<g id="node5" class="node"><title>ContiguousIterator</title>
-<polygon fill="none" stroke="black" points="313.308,-52 134.692,-52 134.692,0 313.308,0 313.308,-52"></polygon>
-<text text-anchor="middle" x="224" y="-20" font-family="Times,serif" font-size="20.00">ContiguousIterator</text>
-</g>
-<!-- RandomAccessIterator&#45;&gt;ContiguousIterator -->
-<g id="edge11" class="edge"><title>RandomAccessIterator-&gt;ContiguousIterator</title>
-<path fill="none" stroke="black" d="M224,-87.6623C224,-79.7016 224,-70.7633 224,-62.2449"></path>
-<polygon fill="black" stroke="black" points="227.5,-62.1566 224,-52.1566 220.5,-62.1566 227.5,-62.1566"></polygon>
-</g>
-<!-- ReadableIterator&#45;&gt;ForwardIterator -->
-<g id="edge2" class="edge"><title>ReadableIterator-&gt;ForwardIterator</title>
-<path fill="none" stroke="black" d="M163.338,-351.662C172.173,-342.827 182.213,-332.787 191.546,-323.454"></path>
-<polygon fill="black" stroke="black" points="194.247,-325.703 198.843,-316.157 189.297,-320.753 194.247,-325.703"></polygon>
-</g>
-<!-- InputIterator -->
-<g id="node8" class="node"><title>InputIterator</title>
-<polygon fill="#6acfcf" stroke="black" points="128.296,-316 -0.296387,-316 -0.296387,-264 128.296,-264 128.296,-316"></polygon>
-<text text-anchor="middle" x="64" y="-284" font-family="Times,serif" font-size="20.00">InputIterator</text>
-</g>
-<!-- ReadableIterator&#45;&gt;InputIterator -->
-<g id="edge7" class="edge"><title>ReadableIterator-&gt;InputIterator</title>
-<path fill="none" stroke="black" d="M116.198,-351.662C108.746,-343.002 100.298,-333.184 92.4031,-324.009"></path>
-<polygon fill="black" stroke="black" points="94.8219,-321.454 85.6464,-316.157 89.5158,-326.02 94.8219,-321.454"></polygon>
-</g>
-<!-- WritableIterator&#45;&gt;ForwardIterator -->
-<g id="edge4" class="edge"><title>WritableIterator-&gt;ForwardIterator</title>
-<path fill="none" stroke="black" d="M288.189,-351.662C278.747,-342.739 268.006,-332.588 258.047,-323.177"></path>
-<polygon fill="black" stroke="black" points="260.291,-320.481 250.619,-316.157 255.483,-325.569 260.291,-320.481"></polygon>
-</g>
-<!-- OutputIterator -->
-<g id="node9" class="node"><title>OutputIterator</title>
-<polygon fill="#6acfcf" stroke="black" points="461.3,-316 318.7,-316 318.7,-264 461.3,-264 461.3,-316"></polygon>
-<text text-anchor="middle" x="390" y="-284" font-family="Times,serif" font-size="20.00">OutputIterator</text>
-</g>
-<!-- WritableIterator&#45;&gt;OutputIterator -->
-<g id="edge14" class="edge"><title>WritableIterator-&gt;OutputIterator</title>
-<path fill="none" stroke="black" d="M337.097,-351.662C344.726,-342.914 353.385,-332.986 361.455,-323.731"></path>
-<polygon fill="black" stroke="black" points="364.126,-325.994 368.061,-316.157 358.851,-321.393 364.126,-325.994"></polygon>
-</g>
-</g>
-</svg>
-
-
-It is important to note that, despite the introduction of `ReadableIterator` and `WritableIterator` as well as making `ForwardIterator` not a direct refinement of the `InputIterator` concept,
-the semantic intent of each `Iterator` refining concept stays the same. Namely this proposal does not add new iterator categories (there is no `ReadableIterator` that is neither an `InputIterator` or a `ForwardIterator` and there is no `WritableIterator` that is neither an `OutputIterator` or a `Writable` `ForwardIterator`), nor does it intend to change the semantics of existing categories.
-
-<!--
-digraph iterator{
-    rankdir="LR";
-    node [fontcolor=black fontsize=15 width=0.5 shape=box margin=0.5 style="" fontname="monospace"]
-
-    InputIterator[label="InputIterator\nSingle-pass"]
-    ForwardIterator[label="ForwardIterator\nMulti-pass"]
-    BidirectionalIterator[label="BidirectionalIterator\nBidirectional"]
-    RandomAccessIterator[label="RandomAccessIterator\nRandom Access"]
-    ContiguousIterator[label="ContiguousIterator\nContiguous"]
-
-    InputIterator -> ForwardIterator -> BidirectionalIterator -> RandomAccessIterator -> ContiguousIterator
-}
--->
-
-<svg width="1058pt" height="116pt" viewBox="0.00 0.00 1058.00 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-<g id="graph1" class="graph" transform="scale(1 1) rotate(0) translate(4 112)">
-<title>iterator</title>
-<polygon fill="white" stroke="white" points="-4,5 -4,-112 1055,-112 1055,5 -4,5"></polygon>
-<!-- InputIterator -->
-<g id="node1" class="node"><title>InputIterator</title>
-<polygon fill="none" stroke="black" points="147.797,-108 0.20336,-108 0.20336,0 147.797,0 147.797,-108"></polygon>
-<text text-anchor="middle" x="74" y="-58.5" font-family="monospace" font-size="15.00">InputIterator</text>
-<text text-anchor="middle" x="74" y="-40.5" font-family="monospace" font-size="15.00">Single-pass</text>
-</g>
-<!-- ForwardIterator -->
-<g id="node2" class="node"><title>ForwardIterator</title>
-<polygon fill="none" stroke="black" points="351.447,-108 184.553,-108 184.553,0 351.447,0 351.447,-108"></polygon>
-<text text-anchor="middle" x="268" y="-58.5" font-family="monospace" font-size="15.00">ForwardIterator</text>
-<text text-anchor="middle" x="268" y="-40.5" font-family="monospace" font-size="15.00">Multi-pass</text>
-</g>
-<!-- InputIterator&#45;&gt;ForwardIterator -->
-<g id="edge2" class="edge"><title>InputIterator-&gt;ForwardIterator</title>
-<path fill="none" stroke="black" d="M147.861,-54C156.57,-54 165.55,-54 174.49,-54"></path>
-<polygon fill="black" stroke="black" points="174.549,-57.5001 184.549,-54 174.549,-50.5001 174.549,-57.5001"></polygon>
-</g>
-<!-- BidirectionalIterator -->
-<g id="node3" class="node"><title>BidirectionalIterator</title>
-<polygon fill="none" stroke="black" points="582.45,-108 387.55,-108 387.55,0 582.45,0 582.45,-108"></polygon>
-<text text-anchor="middle" x="485" y="-58.5" font-family="monospace" font-size="15.00">BidirectionalIterator</text>
-<text text-anchor="middle" x="485" y="-40.5" font-family="monospace" font-size="15.00">Bidirectional</text>
-</g>
-<!-- ForwardIterator&#45;&gt;BidirectionalIterator -->
-<g id="edge3" class="edge"><title>ForwardIterator-&gt;BidirectionalIterator</title>
-<path fill="none" stroke="black" d="M351.51,-54C360.021,-54 368.754,-54 377.478,-54"></path>
-<polygon fill="black" stroke="black" points="377.702,-57.5001 387.702,-54 377.702,-50.5001 377.702,-57.5001"></polygon>
-</g>
-<!-- RandomAccessIterator -->
-<g id="node4" class="node"><title>RandomAccessIterator</title>
-<polygon fill="none" stroke="black" points="827.936,-108 618.064,-108 618.064,0 827.936,0 827.936,-108"></polygon>
-<text text-anchor="middle" x="723" y="-58.5" font-family="monospace" font-size="15.00">RandomAccessIterator</text>
-<text text-anchor="middle" x="723" y="-40.5" font-family="monospace" font-size="15.00">Random Access</text>
-</g>
-<!-- BidirectionalIterator&#45;&gt;RandomAccessIterator -->
-<g id="edge4" class="edge"><title>BidirectionalIterator-&gt;RandomAccessIterator</title>
-<path fill="none" stroke="black" d="M582.331,-54C590.759,-54 599.339,-54 607.892,-54"></path>
-<polygon fill="black" stroke="black" points="607.91,-57.5001 617.91,-54 607.91,-50.5001 607.91,-57.5001"></polygon>
-</g>
-<!-- ContiguousIterator -->
-<g id="node5" class="node"><title>ContiguousIterator</title>
-<polygon fill="none" stroke="black" points="1049.81,-108 864.191,-108 864.191,0 1049.81,0 1049.81,-108"></polygon>
-<text text-anchor="middle" x="957" y="-58.5" font-family="monospace" font-size="15.00">ContiguousIterator</text>
-<text text-anchor="middle" x="957" y="-40.5" font-family="monospace" font-size="15.00">Contiguous</text>
-</g>
-<!-- RandomAccessIterator&#45;&gt;ContiguousIterator -->
-<g id="edge5" class="edge"><title>RandomAccessIterator-&gt;ContiguousIterator</title>
-<path fill="none" stroke="black" d="M827.786,-54C836.544,-54 845.396,-54 854.139,-54"></path>
-<polygon fill="black" stroke="black" points="854.341,-57.5001 864.341,-54 854.341,-50.5001 854.341,-57.5001"></polygon>
-</g>
-</g>
-</svg>
-
-## Tags
-
-Because `InputIterator` as proposed here and `Cpp17InputIterator` are irrevocably incompatible, we suggest that `InputIterator` should not have
-a `std::input_iterator_tag` at all. Likewise, `OutputIterator` should not have a `std::output_iterator_tag`
-
-## Post Increment on Input and Output Iterators
-
-Post-incrementing move-only iterators would obviously be incorrect. However, a satisfying solution was offered by [[P0541R1]].
-
-## common_range
-
-`common_range` exists so that an `iterator + sentinel` pair can be fed to legacy as an `iterator + iterator` pair.
-While this could let us circumvent the fact that the proposed `InputIterator` is not `EquallyComparable` ( it already is not in the Ranges TS),
-it would not be possible to pass a move only `common_range` to a legacy algorithm expecting a semi-regular iterator
-( `common_range<InputIterator, S>` would be move-only by virtue of `InputIterator` being move-only ).
-
-# Q/A
-
-## Do copyable input iterator make sense?
-
-If an iterator can be copied, it means you can have multiple reading heads on top of the underlying data, making it a forward iterator.
-There is, therefore, no room for a type between move-only InputIterator and ForwardIterator.
-However, for compatibility purposes, we propose to keep a `Cpp17InputIterator` requirement for existing input iterators.
-
-## What about copyable / non-comparable iterators
-
-An iterator represents a reading head at a given position over some data.
-Either the iterator can be copied and position can be compared, or it can not be copied and then comparing positions make no sense.
-
-## Non-regular iterators, really?
-
-This proposal advocates for Non-Regular Iterators, and weakens `WeaklyIncrementable` requirements to that effect.
-Non-Regularity is best avoided, so this might feel like going backward.
-
-However, non-regular types are easier to reason about than types that just pretend to be regular.
-Because InputIterator is meant to iterate over a non-regular sequence, it is not regular (whether we like it or not), and the best we can do is
-make sure the syntax matches the semantic.
-This paper is in part motivated by the conviction than exposing a false sense of (Semi-)regularity is much more detrimental to code robustness
-than non-regularity.
-
-## What about [[P0902R0]] ?
-
-Andrew Hunter's "Move-only iterators" paper proposes a design to introduce Move-Only iterators in the taxonomy of `Cpp17Iterator`.
-However, this design does not offer a solution to use these move-only iterators with existing algorithms, limiting their usefulness.
-The iterators proposed by P0902 are additionally `EqualityComparable`. The advantage of that is that they are compatible with algorithms
-designed with C++17 downward. That's, however, a potential source of bug and confusion.
-
-However, if LEWG felt strongly about a solution compatible with existing algorithms it would be possible
-to relax the requirements of concerned algorithms to accept move-only iterators. along with the introduction of a new `move_iterator_tag` trait.
-
-Such algorithms would then be compatible with types satisfying `InputIterator` (as proposed by this paper) through a `common_iterator` adaptor.
-
-If proven with enough confidence that requirements of existing algorithms in the `std` namespace can be relaxed to handle move-only iterator, the necessary
-modifications can be applied in a subsequent standard version (by opposition to this proposal).
-
-So while there would definitively be value in supporting move-only iterators everywhere it makes sense, and the potential for breakage is relatively low,
-we do not propose it for lack of visibility on the consequences of such changes
-
-# Open questions and bikeshedding
-
-## Do non-regular views make sense?
-
-A view that holds a move-only iterator would by definition not be `Semiregular`.
-Are such views useful?
-
-## Does iterators default-constructability needs revisiting?
-
-default-constructability of iterator seems to have been added, removed and added back to the Ranges TS and the One Ranges Proposal several
-times.
-To the best of my knowledge, this was done for the sake of Semiregularity.
-Given that this proposal strikes semi-regularity, should this question be revisited?
-A valid argument certainly can be either way.
-
-## What about naming?
-
-In this proposal, we took the arguably confusing decision to define
-
-* `InputIterator` as the proposed single-pass move-only iterator
-* `ReadableIterator` as the common superset of `ForwardIterator` and `InputIterator`
-
-Symmetrically,
-
-* `OutputIterator` as the proposed single-pass move only writable iterator
-* `WritableIterator` as the common superset of (Writable) `ForwardIterator` and `OutputIterator`
-
-This is because:
-
-* The semantic of `InputIterator` as proposed is no different from the (intended) semantic of `Cpp17InputIterator`
-     even if the requirements are rather different and incompatible (ditto for OutputIterator)
-* Input/Output iterators were aptly named as these terms convey the notion of single-pass.
-* There exist in the Ranges TS the `Readable` and `Writable` concepts and `ReadableIterator` and `WritableIterator` are `Iterator` that satisfy these concepts.
-
-On the other hand, `InputIterator` (as proposed) is no longer the root of all other readable iterators,
-changing something established 20 years ago, which is certainly a valid concern.
-
-While the authors of this paper feel strongly that `InputIterator` should continue to design the single pass iterator and that `ReadableIterator` is a better name
-for an iterator whose sole requirement is to be readable, for completeness we suggest this alternative naming scheme:
-
-* `SinglePassInputIterator` as the proposed single-pass move-only iterator
-* `InputIterator` as the common superset of `ForwardIterator` and `SinglePassInputIterator` referred to as `ReadableIterator` in the rest of this paper
-
-* `SinglePassOutputIterator` as the proposed single-pass move only writable iterator
-* `OutputIterator` as the common superset of Writable `ForwardIterator` and `SinglePassOutputIterator` referred to as `WritableIterator` in the rest of this paper
-
-Note: in the WD, `[Cpp17]OutputIterator` refers to any writable iterator that does not satisfy the requirements of other iterators.
 
 
 # List of proposed changes
 
 Because the ranges-related proposals are still in flux and will require merging multiple documents, we do not provide wording
 at this time.
-However, here
+However, a number of concepts need to be modified in order to allow for iterators that are only movable.
+This is a departure from the Ranges TS - which itself is grounded in Stepanov work - in which all iterator categories are Regular - or Semi-Regular,
+which implies copyability.
+
+Note that "ForwardIterator" is defined in terms of its copyability, and so it shall remain regular.
+The Copyability, and therefore Regularity of Iterator is therefore moved a few level down from `ranges::Iterator` to `ranges::ForwardIterator`
 
 ## Changes to &lt;iterator>
 
@@ -826,18 +145,20 @@ concept WeaklyIncrementable =
     };
 </xmp>
 
+### Iterator
+
+Iterator is left unmodified as merely changing WeaklyIncrementable is enough to not
+requiring it to be regular.
+
 ### InputIterator
 
-Modify the `InputIterator` as follow.
-We Specifically disallow Input iterators to be `EqualityComparable` or `Copyable`.
+Modify the `InputIterator` concept as follow.
 
 <xmp>
 template <class I>
 concept InputIterator =
     Readable<I> &&
     Iterator<I> &&
-    ! Copyable<I> &&
-    ! EqualityComparable<I>;
 </xmp>
 
 
@@ -855,20 +176,8 @@ concept ForwardIterator =
 </xmp>
 
 ForwardIterator is made `Regular` through `Incrementable`.
-Concepts refining `ForwardIterator` are left unchanged
+Concepts refining `ForwardIterator` are left unchanged.
 
-
-### ReadableIterator
-
-Introduce a new `ReadableIterator` concept, defined as follow
-
-<xmp>
-template <class I>
-concept ReadableIterator = InputIterator<I> || ForwardIterator<I>;
-</xmp>
-
-`ReadableIterator` being an `Iterator` itself being `ReadableIterator` it is `Movable`.
-All refinement of `ReadableIterator` will, therefore, be `Movable`, but not necessarily `Copyable`.
 
 ### OutputIterator
 
@@ -876,72 +185,17 @@ All refinement of `ReadableIterator` will, therefore, be `Movable`, but not nece
 template <class I, class T>
 concept OutputIterator =
     Iterator<I> &&
-    Writable<I, T> &&
-    ! Copyable<I> &&
-    ! EqualityComparable<I>;
+    Writable<I, T>
     requires(I& i, T&& t) {
         *i++ = std::forward<T>(t);
     };
 </xmp>
 
 
-### WritableIterator
-
-Introduce a new `WritableIterator` concept, defined as follow
-
-<xmp>
-template <class I, class T>
-concept WritableIterator = OutputIterator<I,T> || (ForwardIterator<I> && Writable<I,T>);
-</xmp>
-
-
-### Mergeable
-
-Modify the Mergeable concept to accept a ReadableIterator instead of a `RangesTSInputIterator`
-
-<xmp>
-template<class I1, class I2, class Out,
-class R = ranges::less<>, class P1 = identity, class P2 = identity>
-concept Mergeable =
-ReadableIterator<I1> &&
-ReadableIterator<I2> &&
-WeaklyIncrementable<Out> &&
-IndirectlyCopyable<I1, Out> &&
-IndirectlyCopyable<I2, Out> &&
-IndirectStrictWeakOrder<R, projected<I1, P1>, projected<I2, P2>>;
-</xmp>
-
-### Other changes
-
-* common_iterator should take a ReadableIterator?
-* iter_move should take a ReadableIterator
-* iterator_traits should take a ReadableIterator
-
 ## Changes to &lt;ranges>
-
-### ReadableRange
-
-Introduce a new concept `ReadableRange`
-
-<xmp>
-template <class T>
-concept ReadableRange = Range<T> && ReadableIterator<iterator_t<T>>;
-</xmp>
-
-
-### WritableRange
-
-Introduce a new concept `WritableRange`
-
-<xmp>
-template <class T>
-concept WritableRange = Range<T> && WritableIterator<iterator_t<T>>;
-</xmp>
-
 
 ### Views
  * The SemiRegular requirement is removed from view over a non-semi-regular ranges
- * The concerned views are modified to take a `ReadableRange` instead of an `InputRange`
 
 
 ### Inserters
@@ -1003,18 +257,11 @@ insert_iterator<Container> inserter(Container& x, typename Container::iterator i
 
 ## Changes to &lt;algorithms>
 
- * Algorithms in the `std` namespace are left unchanged
- * Algorithms in the `ranges` namespace are modified as follow
-    * Algorithms requiring an `InputIterator`  are modified to take a `ReadableIterator` instead
-    * Algorithms requiring an `OutputIterator` are modified to take a `WritableIterator` instead
-    * Algorithms requiring an `InputRange` are modified to take a `ReadableRange` instead
-    * Algorithms requiring an `OutputRange` are modified to take a `WritabledRange` instead
-
-A systematic review needs to be conducted to make sure that all algorithms in the `ranges`
-namespace satisfy the `InputIterator` concept as proposed in this proposal.
-
 Should algorithms not satisfy `InputIterator` (because they depend on copy-constructability) - they would need to be modified to
-accept either an `InputIterator` or a `ForwardIterator`
+accept a `ForwardIterator` instead.
+Beyond that, there would be very little, if any, wording change requires to ranges' algorithms.
+However, implementers would have to never copy non-forward iterators within the implementation.
+
 
 # Impact on other proposals
 
@@ -1024,6 +271,166 @@ A better alternative to istream_iterator is offered by [[P1035R0]]'s `istream_vi
 While implementation-defined, `istream_view`'s iterators would need to model `InputRange` and therefore make use of `InputIterator` as proposed here.
 
 Given that it does not need to own an Iterator but only a handle to the underlying device, `istream_view` can be semi-regular.
+
+
+
+# A Holistic Approach to Iterators.
+
+While the first part of this paper focuses on making move-only iterators possible, as a mean to get some code to compile,
+it is important to take a step back and to think about what movability means for Iterators, from first principles.
+
+An iterator denotes a position into a sequence of elements (whether that sequence maps to memory or not is, for our purpose, irrelevant).
+
+A most basic iterator can be incremented, which means it can move to the next position in the sequence.
+An iterator does not own the sequence iterated over (there are exceptions, ie: generators), which means the
+salient property of an iterator is its position in that sequence.
+
+In fact, in Elements of programming, an iterator is exactly defined by its distance to the start of the
+sequence.
+
+Iterators categories then represent the way an iterator can move along that sequence.
+ * Input and FordwardIterator: sequentially, one direction
+ * BidirectionalIterator: sequentially, both directions
+ * RandomAccess: both directions in O(1)
+
+ContiguousIterator is an optimization of RandomAccessIterator specific to the C++ memory model that
+further, constrain the underlying sequence to be laid out contiguously in memory.
+
+Stepanov theorized an additional category, "Index iterator", which was O(1) access
+but in a single direction.
+
+Further Work was made on iterator categories, notably the Boost.Iterator library
+focused on separating traversal (how the iterator moves along the sequence), from
+access(whether dereferencing an iterator allows the pointed element to be read, written or both).
+While a very interesting concept, it falls outside the scope of this paper;
+Just keep in mind that everything that applies to non-forward InputIterator usually
+applies to OutputIterator - Which are always non-Forward, the standard lacking that symmetry between
+read access and write access.
+
+However, focusing on traversal, the set of iterators categories is actually
+rather closed, there are only so many ways a sequence can be traversed. An
+important point of Stepanov design is that each category is a refinement of the precedent.
+a RandomAccessIterator is a BidirectionalIterator which in turn is a ForwardIterator.
+so each algorithm applicable to a ForwardIterator can be equally applied to a BidirectionalIterator, etc.
+
+So, what separates InputIterator for ForwardIterator, if they are both "forward" in that they can
+both traverse a sequence in one direction.
+
+ForwardIterator is defined as being "multi-pass". Meaning it can traverse a sequence multiple times.
+That, in turn, implies ForwardIterator is copyable, because if a sequence can be traversed multiple times,
+it can also be traversed multiple times at the same times and therefore there can be multiple ForwardIterator
+pointing at different elements in the sequence.
+ForwardIterator is also always `EquallyComparable`.
+2 ForwardIterator compares equal if they point to the same elements in the sequence.
+Remember the position of an iterator in a sequence is the salient property of an iterator.
+And so, ForwardIterator, being both EquallyComparable and Copyable is Regular.
+
+The standard defines the "multi pass" ganrantee by saying:
+> a == b implies ++a == ++b
+> Given X is a pointer type or the expression (void)++X(a), *a is equivalent to the expression *a.
+
+In other words:
+Two identical objects to which is applied the same transformation are identical.
+Copying a FordwardIterator copy the salient properties of that value and incrementing it does
+not modify the underlying sequence.
+So `ForwardIterator` is required to be a regular type behaving like a regular type.
+
+Which bring us to InputIterator.
+InputIterator is a "single pass" iterator". The underlying sequence can on only be traversed once.
+The existence of an Iterator at the nth position in the sequence implies there can be no valid iterator at the position n-1 in that same sequence.
+
+Given an InputIterator a
+b = a;
+a++;
+b; // is invalid.
+
+However, remember that the sole salient property of an iterator is its distance to the start of the sequence.
+Incrementing an iterator only mutates that property (again, conceptually, independently of implementation).
+And the only operation that mutates that property is the increment operation (which Stepanov calls `successor`).
+
+This implies that, as a non-forward iterator moves from one element of the sequence to the next,
+that element is destroyed.
+The sequences traversed by an InputIterator is best thought of as a stack and incrementing an iterator pops
+the head.
+All of this is well known and is basically rephrasing "Input iterators are single pass".
+
+An important point to make is that how an iterator can traverse a sequence is derived from the nature of the sequence
+rather than from the iterator itself.
+The point could be made that there is no such thing as an "Input iterator" Or a "Forward Iterator" because what we really
+means is "Iterator over an Input Sequence" or "Iterator over a Forward Sequence".
+
+That is saying that, to be able to reason properly about iterators and traversal,
+we must assume that the iterator type associated with a sequence is the most specialized possible for that sequence.
+
+The problem is, of course, that we do not have, in the general case, a more meaningful way to express the traversability
+of a sequence than by defining what type of iterator is used to iterate over it.
+
+It is then the responsibility of the developer providing the sequence to define the most appropriate - specialized -
+iterator for that sequence.
+
+In practice, because InputIterator and ForwardIterator are syntactically identical, and because the
+single-pass / multi-passes guarantees are poorly taught, it is not uncommon for iterators to be miss-categorized.
+Other iterator categories do not have these problems as each subsequent refining category adds syntax requirements:
+BidirectionalIiterator require decrement operators, RandomAccessIterator further requires more methods, etc.
+And while ContiguousIterator is currently not syntactically differentiated from RandomAccessIterator,
+It would be possible to require that ContiguousIterator be convertible to a pointer of the type of the underlying sequence's
+elements.
+
+But then, is there a set of operations and semantic requirements, translating to actual C++ syntax that  could allow for
+InputIterator to be, easily distinguish from each other?
+Can we then, not require a tag system?
+Is there a defining operation that distinguishes InputIterator from ForwardIterator, in such a way that it would both not require
+an explicit category tagging, while at the same time offering a better understanding of iterator categories as well as a less suprising,
+safer api for input iterator?
+
+
+
+# Q/A
+
+## Non-regular iterators, really?
+
+This proposal advocates for Non-Regular Iterators, and weakens `WeaklyIncrementable` requirements to that effect.
+Non-Regularity is best avoided, so this might feel like going backward.
+
+However, non-regular types are easier to reason about than types that just pretend to be regular.
+Because InputIterator is meant to iterate over a non-regular sequence, it is not regular (whether we like it or not), and the best we can do is
+make sure the syntax matches the semantic.
+This paper is in part motivated by the conviction than exposing a false sense of (Semi-)regularity is much more detrimental to code robustness
+than non-regularity.
+
+## What about [[P0902R0]] ?
+
+Andrew Hunter's "Move-only iterators" paper proposes a design to introduce Move-Only iterators in the taxonomy of `Cpp17Iterator`.
+However, this design does not offer a solution to use these move-only iterators with existing algorithms, limiting their usefulness.
+The iterators proposed by P0902 are additionally `EqualityComparable`. The advantage of that is that they are compatible with algorithms
+designed with C++17 downward. That's, however, a potential source of bug and confusion.
+
+However, if LEWG felt strongly about a solution compatible with existing algorithms it would be possible
+to relax the requirements of concerned algorithms to accept move-only iterators. along with the introduction of a new `move_iterator_tag` trait.
+
+Such algorithms would then be compatible with types satisfying `InputIterator` (as proposed by this paper) through a `common_iterator` adaptor.
+
+If proven with enough confidence that requirements of existing algorithms in the `std` namespace can be relaxed to handle move-only iterator, the necessary
+modifications can be applied in a subsequent standard version (by opposition to this proposal).
+
+So while there would definitively be value in supporting move-only iterators everywhere it makes sense, and the potential for breakage is relatively low,
+we do not propose it for lack of visibility on the consequences of such changes
+
+
+# Questions for LEWG
+ * Does LEWG want to support non-copyable iterators in the `ranges` namespace?
+ * Does LEWG agree that **non-copyable** iterators are always input or output iterators and do not constitute a new category (ie: no new tag should be introduced)?
+ * Does LEWG agree that, in the absence of an explicit tag, a **non-copyable** iterator that otherwise meets the requirement of `InputIterator`/`OutputIterator` should be recognized as such?
+ * Does LEWG agree that, in the absence of an explicit tag, a **copyable** iterator that otherwise meets the requirement of `ForwardIterator` should be recognized as such?
+ * Does LEWG want to recommend that future non-forward iterators considered for inclusion in the standard should not be copyable?
+ * Does LEWG think non-forward views should return `begin()` by reference?
+ * Does LEWG agree that `ranges::copy` can and should move from non-copyable input views?
+ * Does LEWG want to revisit the default constructability of iterators given `Regular` is no longer a requirement of `Iterator`?
+ * Does LEWG want to recognize `RandomAccessIterator` providing a conversion operator to the `pointer` type of the underlying sequence as `ContiguousIterator` without the need for an explicit tag?
+ * Generally, does LEWG support the idea of a tag-less categorization of iterators in the ranges namespace, with tags still supported as an opt-in/opt-out mechanism.
+
+
+
 
 ## Iterator facade
 
