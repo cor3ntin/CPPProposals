@@ -71,9 +71,8 @@
 \newcommand*{\authortwo}[2]{\def\@authortwo{#1} \def\@emailtwo{#2}}
 
 \renewcommand{\maketitle}{%
-  \newpage \null \vskip 2em%
+  \null \vskip 1em%
   {\center \LARGE \@title \par}%
-  \vskip 1.5em%
   \begin{flushright}%
     \begin{tabular}{ll}%
       Document \#:&\@docnumber\\%

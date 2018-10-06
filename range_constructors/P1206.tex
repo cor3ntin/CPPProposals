@@ -28,17 +28,16 @@
 \docnumber{D1206R0}
 \audience{LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Christopher Di Bella}{cjdb.ns@gmail.com}
 
 \begin{document}
 \maketitle
 
 \section{Abstract}
 Most standard containers and views can be constructed from an iterators-pair.
-This paper, complementing \cite{P0896R3}, proposing that all standard views,
+This paper, complementing \cite{P0896R3}, proposes that all standard views,
 containers and string classes be constructible from a range.
-
 \section{Tony tables}
-
 \begin{center}
 \begin{tabular}{l|l}
 Before & After\\ \hline
@@ -117,8 +116,6 @@ foo(vec);
 \end{minipage}
 \\\\ \hline
 
-
-
 \end{tabular}
 \end{center}
 
@@ -139,7 +136,7 @@ Most containers of the standard library provide a constructors taking a pair of 
 \end{codeblock}
 
 While, this feature is very useful, as converting from one container type to another is a frequent
-use-case, it can be greatly improved by taking full advantage of the notions and tools offered by the Range TS.
+use-case, it can be greatly improved by taking full advantage of the notions and tools offered by ranges.
 
 Indeed, given all containers are ranges (ie: an iterator-sentinel pair) the above example can be rewritten, without semantic of performance changes, as:
 
@@ -152,15 +149,15 @@ Indeed, given all containers are ranges (ie: an iterator-sentinel pair) the abov
 The above example is a common pattern as it is frequently preferable to copy the content of a \cc{std::list} to
 a \cc{std::vector} before feeding it an algorithm and then copying it back to a \cc{std::vector}.\\
 
-All containers and views being ranges, it is logical they can themselves be built out of ranges.
-Note that all containers and views already provide constructors for iterator-pairs, which themselves represent a range.
+As all containers and views are ranges, it is logical they can themselves be built out of ranges.
+Note that most containers and views already provide constructors for iterator-pairs, which themselves represent a range.
 They also provide copy and move constructors for ranges of the same type ( \cc{std::vector} provide a copy constructor from another \cc{std::vector}, etc).
 This proposal is a generalization of these existing features.
 
 \subsection{View Materialization}
 
 The main motivation for this proposal is what is colloquially called \emph{view materialization}.
-In Ranges TS terminology, a view can generate its elements lazily (upon increment or decrement), such as the value at a given position of the sequence
+A view can generate its elements lazily (upon increment or decrement), such as the value at a given position of the sequence
 iterated over only exist transiently in memory if an iterator is pointing to that position.
 (Note: while all lazy ranges are views, not all views are lazy).\\
 
@@ -187,7 +184,7 @@ The facilities provided by \cite{P0896R3} allow to do that in the following way:
 This proposal allows rewriting the above snippet as:
 
 \begin{codeblock}
-    std::vector materialized = std::iota_view v{0, 1024};
+    std::vector materialized = std::iota_view{0, 1024};
 \end{codeblock}
 
 
@@ -204,7 +201,7 @@ Indeed, a function such as \cc{split} is notoriously hard to standardize (\cite{
 The view materialization pattern further let the \emph{caller} choose the best container and allocation strategy for their use case (or to never materialize the view should it not be necessary).
 And while it would not make sense for a standard-library function to split a string into a vector it would allocate, it's totally reasonable for most applications to do so.\\
 
-This paper does not proposes to standardize such \cc{split} function, however, view materialization is something the SG-16 working group is interested in.
+This paper does not propose to standardize such \cc{split} function, however, view materialization is something the SG-16 working group is interested in.
 Indeed, they have considered APIs that could rely heavily on this idiom, as it has proven a natural way to handle the numerous ways to iterate over Unicode text.
 Similar ideas have been presented in \cite{P1004}.
 
@@ -285,7 +282,7 @@ But because expiring views can only be materialized once and can therefore not b
 containers can be constructed \emph{implicitly} from \cc{rvalue-reference} views.
 
 This compromise leads to some oddity because of the inability to distinguish between views over existing
-non-transformed data (\cc{span}, \cc{string_view}) from generators (\cc{view_iota}, \cc{view_transform}, etc).
+non-transformed data (\cc{span}, \cc{string_view}) from generators (\cc{iota_view}, \cc{transform_view}, etc).
 
 Notably,
 
@@ -297,7 +294,7 @@ Notably,
 {
     vector<int> ints(42);
     span view = ints; //Ok, no copy => implicit
-    deque dq = view;  //Ok, implicit construction from a view, but does a copy
+    deque dq =  std::move(view);  //Ok, implicit construction from a view, but does a copy
 }
 \end{codeblock}
 
@@ -383,7 +380,7 @@ auto vec = view::ints
 
 \subsection{Previous work}
 
-[N3686] explores similar solutions and was discussed by LEWG long before the Ranges TS
+\cite{N3686} explores similar solutions and was discussed by LEWG long before the Ranges TS.
 
 \section{Future work}
 
@@ -426,12 +423,13 @@ class basic_string {
     basic_string(const basic_string&, const Allocator&);
     basic_string(basic_string&&, const Allocator&);
 
-    @\added{template<Container C>}@
+    @\added{template<InputRange C>}@
     @\added{explicit basic_string(C\&\&, const Allocator\& = Allocator());}@
 
-    @\added{template<InputRange Rng>}@
+    @\added{template<InputRange R>}@
+    @\added{requires InputView<R>}@
     @\added{explicit(see-below)}@
-    @\added{basic_string(Rng\&\&, const Allocator\& = Allocator());}@
+    @\added{basic_string(R\&\&, const Allocator\& = Allocator());}@
     ~basic_string();
 
     [...]
@@ -444,12 +442,12 @@ basic_string(InputIterator, InputIterator, Allocator = Allocator())
 char_traits<typename iterator_traits<InputIterator>::value_type>,
 Allocator>;
 
-@\added{template<InputRange Rng,}@
-@\added{class Allocator = allocator<iter_value_t <iterator_t< Rng>>>>}@
-@\added{explicit(see-below) basic_string(Rng\&\& b, Allocator a = Allocator() )}@
+@\added{template<InputRange R,}@
+@\added{class Allocator = allocator<iter_value_t <iterator_t< R>>>>}@
+@\added{explicit() basic_string(R\&\& b, Allocator a = Allocator() )}@
 @\added{	-> basic_string<}@
-@\added{		iter_value_t<iterator_t<Rng>>,}@
-@\added{		char_traits<iter_value_t<iterator_t<Rng>>>,}@
+@\added{		iter_value_t<iterator_t<R>>,}@
+@\added{		char_traits<iter_value_t<iterator_t<R>>>,}@
 @\added{		Allocator}@
 @\added{	>;}@
 
@@ -479,22 +477,22 @@ Add after 23
 \begin{quote}
 \begin{addedblock}
 \begin{itemdecl}
-template<Container C>
+template<InputRange C>
 requires Constructible<charT, iter_value_t<iterator_t<C>>>
-explicit basic_string(C&& rng, const Allocator& = Allocator());
+explicit basic_string(C&& r, const Allocator& = Allocator());
 \end{itemdecl}
 
 \begin{itemdescr}
     \effects
-    In a move constructor, constructs a string by moving from the elements of \tcode{rng} in a way equivalent to
+    In a move constructor, constructs a string by moving from the elements of \tcode{r} in a way equivalent to
     \begin{codeblock}
-        ranges::move(rng, std::back_inserter(*this));\end{codeblock}
-    Otherwise, constructs a string from the values in the range [\tcode{ranges::begin(rng)}, \tcode{ranges::end(rng)}).
+        ranges::move(r, std::back_inserter(*this));\end{codeblock}
+    Otherwise, constructs a string from the values in the range [\tcode{ranges::begin(r)}, \tcode{ranges::end(r)}).
     %
 
     \complexity
     Linear in
-    \tcode{ranges::size(rng)}.
+    \tcode{ranges::size(r)}.
 
 \end{itemdescr}
 \end{addedblock}
@@ -505,26 +503,26 @@ explicit basic_string(C&& rng, const Allocator& = Allocator());
 \begin{quote}
 \begin{addedblock}
 \begin{itemdecl}
-template<InputRange Rng>
+template<InputRange R>
+requires InputView<R>
 requires Constructible<charT, iter_value_t<iterator_t<C>>>
-explicit(see-below)
-basic_string(Rng&& rng, const Allocator& = Allocator());
+explicit(@\seebelow@)
+basic_string(R&& r, const Allocator& = Allocator());
 
 \end{itemdecl}
 
 \begin{itemdescr}
     \effects
-    Constructs a string from the values in the range [\tcode{ranges::begin(rng)}, \tcode{ranges::end(rng)})
+    Constructs a string from the values in the range [\tcode{ranges::begin(r)}, \tcode{ranges::end(r)})
 
     \remarks This constructor shall not participate in overload resolution unless
     \begin{itemize}
-        \item \tcode{Rng} does not meet the requirements of \tcode{Container}.
-        \item \tcode{is_array<Rng>} is \tcode{false}.
+        \item \tcode{is_array<R>} is \tcode{false}.
     \end{itemize}
 
     \complexity
     Linear in
-    \tcode{ranges::size(rng)}.
+    \tcode{ranges::size(r)}.
 
 
 The expression inside explicit is equivalent to:
@@ -542,11 +540,11 @@ Add after 28
 \begin{quote}
 \begin{addedblock}
 \begin{itemdecl}
-template<InputRange Rng, class Allocator = allocator<iter_value_t <iterator_t< Rng>>>>
-explicit(see-below) basic_string(Rng&& b, Allocator a = {})
+template<InputRange R, class Allocator = allocator<iter_value_t <iterator_t< R>>>>
+explicit(@\seebelow@) basic_string(R&& b, Allocator a = {})
 	-> basic_string<
-		iter_value_t<iterator_t<Rng>>,
-		char_traits<iter_value_t<iterator_t<Rng>>>,
+		iter_value_t<iterator_t<R>>,
+		char_traits<iter_value_t<iterator_t<R>>>,
 		Allocator>;
 \end{itemdecl}
 
@@ -556,7 +554,7 @@ explicit(see-below) basic_string(Rng&& b, Allocator a = {})
 
 	The expression inside explicit is equivalent to:
 	\begin{codeblock}
-		!View<Rng&&> && !is_rvalue_reference_v<V&&>
+		!View<R&&> && !is_rvalue_reference_v<V&&>
 	\end{codeblock}
 
 	%
@@ -580,18 +578,18 @@ public:
 	constexpr basic_string_view(const charT* str);
 	constexpr basic_string_view(const charT* str, size_type len);
 
-	@\added{template <ContiguousRange Rng>}@
-	@\added{requires Same<iter_value_t<iterator_t<Rng>>, charT>}@
-	@\added{constexpr basic_string_view(const Rng\& rng);}@
+	@\added{template <ContiguousRange R>}@
+	@\added{requires Same<iter_value_t<iterator_t<R>>, charT>}@
+	@\added{constexpr basic_string_view(const R\& r);}@
 
 	[...]
 };
 
-@\added{template<ContiguousRange Rng>}@
-@\added{basic_string_view(const Rng\& b)}@
+@\added{template<ContiguousRange R>}@
+@\added{basic_string_view(const R\& b)}@
 @\added{\qquad -> basic_string_view<}@
-@\added{\qquad\qquad iter_value_t<iterator_t<Rng>>,}@
-@\added{\qquad\qquad char_traits<iter_value_t<iterator_t<Rng>>>}@
+@\added{\qquad\qquad iter_value_t<iterator_t<R>>,}@
+@\added{\qquad\qquad char_traits<iter_value_t<iterator_t<R>>>}@
 @\added{\qquad 	>;}@
 
 \end{codeblock}
@@ -604,21 +602,21 @@ Add after 7
 \begin{quote}
 \begin{addedblock}
 \begin{itemdecl}
-template <ContiguousRange Rng>
-requires Same<iter_value_t<iterator_t<Rng>>, charT>
-constexpr basic_string_view(const Rng& rng);
+template <ContiguousRange R>
+requires Same<iter_value_t<iterator_t<R>>, charT>
+constexpr basic_string_view(const R& r);
 
 \end{itemdecl}
 
 \begin{itemdescr}
 	\requires
-	rng is a valid range.
+	r is a valid range.
 	\effects
-	Constructs a \tcode{basic_string_view}, with the over \tcode{ContiguousRange} rng.
+	Constructs a \tcode{basic_string_view}, with the over \tcode{ContiguousRange} r.
 
 	 \remarks This constructor shall not participate in overload resolution unless
 	\begin{itemize}
-		\item \tcode{is_array<Rng>} is \tcode{false}.
+		\item \tcode{is_array<R>} is \tcode{false}.
 	\end{itemize}
 	%
 \end{itemdescr}
