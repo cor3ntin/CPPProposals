@@ -1215,7 +1215,7 @@ Possible extra rowspan handling
 </style>
   <meta content="Bikeshed version a04b880cde96bf0ae2d14a0edcf2bcdcb631548b" name="generator">
   <link href="https://isocpp.org/favicon.ico" rel="icon">
-  <meta content="cb5162688ad05edb3b849f90708fd54f659734ac" name="document-revision">
+  <meta content="29393c04b48ffed03b1912ce783f12960967e318" name="document-revision">
 <style>/* style-md-lists */
 
 /* This is a weird hack for me not yet following the commonmark spec
@@ -1496,7 +1496,11 @@ pre .property::before, pre .property::after {
     <li>
      <a href="#a-holistic-approach-to-iterators"><span class="secno">8</span> <span class="content">A Holistic Approach to Iterators.</span></a>
      <ol class="toc">
-      <li><a href="#an-holistic-approach-to-iterator-tags-and-iterator-concepts"><span class="secno">8.1</span> <span class="content">An Holistic Approach to Iterator Tags and Iterator Concepts</span></a>
+      <li>
+       <a href="#an-holistic-approach-to-iterator-tags-and-iterator-concepts"><span class="secno">8.1</span> <span class="content">An Holistic Approach to Iterator Tags and Iterator Concepts</span></a>
+       <ol class="toc">
+        <li><a href="#tags-as-an-opt-in-opt-out-mechanism"><span class="secno">8.1.1</span> <span class="content">Tags as an opt-in opt-out mechanism</span></a>
+       </ol>
      </ol>
     <li>
      <a href="#q-a"><span class="secno">9</span> <span class="content">Q/A</span></a>
@@ -1619,13 +1623,12 @@ requiring it to be regular.</p>
 <pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- o>></c->
 <c- n>concept</c-> <c- n>InputIterator</c-> <c- o>=</c->
     <c- n>Readable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
-    <c- n>Iterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
+    <c- n>Iterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-><c- p>;</c->
 </pre>
    <h4 class="heading settled" data-level="6.1.4" id="forwarditerator"><span class="secno">6.1.4. </span><span class="content">ForwardIterator</span><a class="self-link" href="#forwarditerator"></a></h4>
 <pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- o>></c->
 <c- n>concept</c-> <c- n>ForwardIterator</c-> <c- o>=</c->
-    <c- n>Iterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
-    <c- n>Readable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
+    <c- n>InputIterator</c-> <c- o>&amp;&amp;</c->
     <c- n>EqualityComparable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
     <c- n>Incrementable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
     <c- n>DerivedFrom</c-><c- o>&lt;</c-><c- n>iterator_category_t</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-><c- p>,</c-> <c- n>forward_iterator_tag</c-><c- o>></c-> <c- o>&amp;&amp;</c->
@@ -1853,6 +1856,56 @@ UB, with no warning.</p>
 Move-only input Iterators also express the destructive nature of incrementation and give a better sense of the difference between InputIterator
 and <code class="highlight"><c- n>ForwarIterator</c-></code>.</p>
    <h3 class="heading settled" data-level="8.1" id="an-holistic-approach-to-iterator-tags-and-iterator-concepts"><span class="secno">8.1. </span><span class="content">An Holistic Approach to Iterator Tags and Iterator Concepts</span><a class="self-link" href="#an-holistic-approach-to-iterator-tags-and-iterator-concepts"></a></h3>
+   <p>Missing the notion of movability pre-c++11 and lacking concepts, <code class="highlight"><c- n>Cpp17Iterator</c-></code> are syntactically distinguished by tags.
+a <code class="highlight"><c- n>Cpp17InputIterator</c-></code> is one which has an <code class="highlight"><c- n>input_iterator_tag</c-></code> tag, while a <code class="highlight"><c- n>Cpp17ForwardIterator</c-></code> is one which has a <code class="highlight"><c- n>forward_iterator_tag</c-></code> tag.
+This creates a sort of circular, self-referential definition.
+This has carried over to the RangesTS’s <code class="highlight"><c- n>Iterator</c-></code> concepts definitions.
+Iterators concepts then</p>
+   <ul>
+    <li data-md>
+     <p>Have semantic requirements not expressed through syntax and therefore not enforcable at compile time</p>
+    <li data-md>
+     <p>Need syntax to artificially subscribe to the correct, most refined concept</p>
+   </ul>
+   <p>Of course, it is not always possible to express all of a type sementic requirements through syntax, and in some cases tags are an unfortunate necessity.
+But they should be a last recourse mechanism, and whenever possible the semantic requirements should reflect in the syntax.
+The idea is that hidden requirements not expressed as code lead to easier-to-misuse types, which inevitably translates to runtime bugs.</p>
+   <p>In the case of iterators, all the requirements of all iterators categories can be expressed syntactically:</p>
+<pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- o>></c-> <c- n>concept</c-> <c- b>bool</c-> <c- n>InputIterator</c-> <c- o>=</c->
+  <c- n>Readable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
+  <c- n>Iterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- p>;</c->
+
+<c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- o>></c-> <c- n>concept</c-> <c- b>bool</c-> <c- n>ForwardIterator</c-> <c- o>=</c->
+  <c- n>InputIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
+  <c- n>Copyable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
+  <c- n>EqualityComparable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-><c- p>;</c->
+
+<c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- o>></c-> <c- n>concept</c-> <c- b>bool</c-> <c- n>BidirectionalIterator</c-> <c- o>=</c->
+  <c- n>ForwardIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
+  <c- n>Decrementable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-><c- p>;</c->
+
+<c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- o>></c-> <c- n>concept</c-> <c- b>bool</c-> <c- n>RandomAccessIterator</c-> <c- o>=</c->
+  <c- n>BidirectionalIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
+  <c- n>RandomAccessIncrementable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-><c- p>;</c->
+
+<c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- o>></c-> <c- n>concept</c-> <c- b>bool</c-> <c- n>ContiguousIterator</c-> <c- o>=</c->
+  <c- n>BidirectionalIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
+  <c- n>Convertible</c-><c- o>&lt;</c-><c- n>I</c-><c- p>,</c-> <c- n>iter_reference_t</c-><c- o>&lt;</c-><c- n>I</c-><c- o>>></c-><c- p>;</c->
+</pre>
+   <p>This is of course simplified, but shows that each iterator category subsumes the last and adds a single, cohesive set of requirement enforcable at compile-time.
+In this design there is no risk of a type satisfying the wrong concept because of a poorly chosen tag.</p>
+   <h4 class="heading settled" data-level="8.1.1" id="tags-as-an-opt-in-opt-out-mechanism"><span class="secno">8.1.1. </span><span class="content">Tags as an opt-in opt-out mechanism</span><a class="self-link" href="#tags-as-an-opt-in-opt-out-mechanism"></a></h4>
+   <p>Because of a desire to be compatible with the legacy <code class="highlight"><c- n>std</c-></code> algorithm and the amount of code depending on iterators as they have
+been defined since the inception of the STL, we propose that tags be *<em>optionally</em> definable on <code class="highlight"><c- n>Iterators</c-></code> types.</p>
+   <p>Notably, we propose that a type that otherwise meets the requirements of <code class="highlight"><c- n>FordwardIterator</c-></code>, but does define an <code class="highlight"><c- n>input_iterator_tag</c-></code>,
+should not satisfy <code class="highlight"><c- n>ForwardIterator</c-></code>.
+This can be achieved by defined <code class="highlight"><c- n>ForwardIterator</c-></code> as follow:</p>
+<pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>I</c-><c- o>></c-> <c- n>concept</c-> <c- b>bool</c-> <c- n>ForwardIterator</c-> <c- o>=</c->
+  <c- n>InputIterator</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
+  <c- n>Copyable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
+  <c- n>EqualityComparable</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>&amp;&amp;</c->
+  <c- n>has_no_iterator_category</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-> <c- o>||</c-> <c- n>DerivedFrom</c-><c- o>&lt;</c-><c- n>iterator_category_t</c-><c- o>&lt;</c-><c- n>I</c-><c- o>></c-><c- p>,</c-> <c- n>forward_iterator_tag</c-><c- o>></c-><c- p>;</c->
+</pre>
    <h2 class="heading settled" data-level="9" id="q-a"><span class="secno">9. </span><span class="content">Q/A</span><a class="self-link" href="#q-a"></a></h2>
    <h3 class="heading settled" data-level="9.1" id="non-regular-iterators-really"><span class="secno">9.1. </span><span class="content">Non-regular iterators, really?</span><a class="self-link" href="#non-regular-iterators-really"></a></h3>
    <p>This proposal advocates for Non-Regular Iterators, and weakens <code class="highlight"><c- n>WeaklyIncrementable</c-></code> requirements to that effect.

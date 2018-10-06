@@ -158,7 +158,7 @@ Modify the `InputIterator` concept as follow.
 template <class I>
 concept InputIterator =
     Readable<I> &&
-    Iterator<I> &&
+    Iterator<I>;
 </xmp>
 
 
@@ -167,8 +167,7 @@ concept InputIterator =
 <xmp>
 template <class I>
 concept ForwardIterator =
-    Iterator<I> &&
-    Readable<I> &&
+    InputIterator &&
     EqualityComparable<I> &&
     Incrementable<I> &&
     DerivedFrom<iterator_category_t<I>, forward_iterator_tag> &&
@@ -462,6 +461,62 @@ and `ForwarIterator`.
 
 ## An Holistic Approach to Iterator Tags and Iterator Concepts
 
+Missing the notion of movability pre-c++11 and lacking concepts, `Cpp17Iterator` are syntactically distinguished by tags.
+a `Cpp17InputIterator` is one which has an `input_iterator_tag` tag, while a `Cpp17ForwardIterator` is one which has a `forward_iterator_tag` tag.
+This creates a sort of circular, self-referential definition.
+This has carried over to the RangesTS's `Iterator` concepts definitions.
+Iterators concepts then
+ * Have semantic requirements not expressed through syntax and therefore not enforcable at compile time
+ * Need syntax to artificially subscribe to the correct, most refined concept
+
+Of course, it is not always possible to express all of a type sementic requirements through syntax, and in some cases tags are an unfortunate necessity.
+But they should be a last recourse mechanism, and whenever possible the semantic requirements should reflect in the syntax.
+The idea is that hidden requirements not expressed as code lead to easier-to-misuse types, which inevitably translates to runtime bugs.
+
+In the case of iterators, all the requirements of all iterators categories can be expressed syntactically:
+
+<xmp>
+template <class I> concept bool InputIterator =
+	Readable<I> &&
+	Iterator<I> ;
+
+template <class I> concept bool ForwardIterator =
+	InputIterator<I> &&
+	Copyable<I> &&
+	EqualityComparable<I>;
+
+template <class I> concept bool BidirectionalIterator =
+	ForwardIterator<I> &&
+	Decrementable<I>;
+
+template <class I> concept bool RandomAccessIterator =
+	BidirectionalIterator<I> &&
+	RandomAccessIncrementable<I>;
+
+template <class I> concept bool ContiguousIterator =
+	BidirectionalIterator<I> &&
+	Convertible<I, iter_reference_t<I>>;
+</xmp>
+
+This is of course simplified, but shows that each iterator category subsumes the last and adds a single, cohesive set of requirement enforcable at compile-time.
+In this design there is no risk of a type satisfying the wrong concept because of a poorly chosen tag.
+
+### Tags as an opt-in opt-out mechanism
+
+Because of a desire to be compatible with the legacy `std` algorithm and the amount of code depending on iterators as they have
+been defined since the inception of the STL, we propose that tags be **optionally* definable on `Iterators` types.
+
+Notably, we propose that a type that otherwise meets the requirements of `FordwardIterator`, but does define an `input_iterator_tag`,
+should not satisfy `ForwardIterator`.
+This can be achieved by defined `ForwardIterator` as follow:
+
+<xmp>
+template <class I> concept bool ForwardIterator =
+	InputIterator<I> &&
+	Copyable<I> &&
+	EqualityComparable<I> &&
+	has_no_iterator_category<I> || DerivedFrom<iterator_category_t<I>, forward_iterator_tag>;
+</xmp>
 
 # Q/A
 
