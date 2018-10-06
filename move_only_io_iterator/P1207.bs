@@ -111,168 +111,6 @@ We do not propose a new name requirement, concept name or iterator tag.
 Furthermore, there is no ForwardIterator that is only movable, as a ForwardIterator is by definition
 an iterator that can be copied. More on that further down.
 
-
-
-
-
-# List of proposed changes
-
-Because the ranges-related proposals are still in flux and will require merging multiple documents, we do not provide wording
-at this time.
-However, a number of concepts need to be modified in order to allow for iterators that are only movable.
-This is a departure from the Ranges TS - which itself is grounded in Stepanov work - in which all iterator categories are Regular - or Semi-Regular,
-which implies copyability.
-
-Note that "ForwardIterator" is defined in terms of its copyability, and so it shall remain regular.
-The Copyability, and therefore Regularity of Iterator is therefore moved a few level down from `ranges::Iterator` to `ranges::ForwardIterator`
-
-## Changes to &lt;iterator>
-
-### WeaklyIncrementable
-
-`WeaklyIncrementable` is a requirement of all `Iterator`, including `RangesTSInputIterator`. `WeaklyIncrementable` is defined to be semi-regular.
-Because WeaklyIncrementable, as it is described in [[P0896R2]], accommodates for `RangesTSInputIterator` and `Cpp17InputIterator`, it suffers from the same issue (being copyable with move semantic).
-We propose to strike the `Semiregular` requirement as follow
-
-<xmp>
-template <class I>
-concept WeaklyIncrementable =
-    Movable<I> &&
-    requires(I& i) {
-        typename iter_difference_t<I>;
-        { ++i } -> Same<I&>&&;
-        i++;
-    };
-</xmp>
-
-### Iterator
-
-Iterator is left unmodified as merely changing WeaklyIncrementable is enough to not
-requiring it to be regular.
-
-### InputIterator
-
-Modify the `InputIterator` concept as follow.
-
-<xmp>
-template <class I>
-concept InputIterator =
-    Readable<I> &&
-    Iterator<I>;
-</xmp>
-
-
-### ForwardIterator
-
-<xmp>
-template <class I>
-concept ForwardIterator =
-    InputIterator &&
-    EqualityComparable<I> &&
-    Incrementable<I> &&
-    DerivedFrom<iterator_category_t<I>, forward_iterator_tag> &&
-    Sentinel<I, I>;
-</xmp>
-
-ForwardIterator is made `Regular` through `Incrementable`.
-Concepts refining `ForwardIterator` are left unchanged.
-
-
-### OutputIterator
-
-<xmp>
-template <class I, class T>
-concept OutputIterator =
-    Iterator<I> &&
-    Writable<I, T>
-    requires(I& i, T&& t) {
-        *i++ = std::forward<T>(t);
-    };
-</xmp>
-
-
-## Changes to &lt;ranges>
-
-### Views
- * The SemiRegular requirement is removed from view over a non-semi-regular ranges
-
-
-### Inserters
-
-Because the `OutputIterator` concept as proposed here is not compatible with the `Cpp17OutputIterator` requirements, it would not be possible to
-use `std::` inserters with the `ranges::` algorithms.
-
-It is, therefore, necessary to provide suitable inserters modeling `OutputIterator`
-
-#### back_insert_iterator
-
-<xmp>
-namespace std::ranges {
-template <class Container>
-class back_insert_iterator : public std::back_insert_iterator<Container> {
-public:
-    using std::back_insert_iterator<Container>::back_insert_iterator;
-    back_insert_iterator(const back_insert_iterator & other) = delete;
-    back_insert_iterator(back_insert_iterator && other)
-
-};
-template <class Container>
-back_insert_iterator<Container> back_inserter(Container& x);
-}
-</xmp>
-
-#### front_insert_iterator
-
-<xmp>
-namespace std::ranges {
-template <class Container>
-class front_insert_iterator : public std::front_insert_iterator<Container> {
-public:
-    using std::front_insert_iterator<Container>::front_insert_iterator;
-    front_insert_iterator(const front_insert_iterator & other) = delete;
-    front_insert_iterator(front_insert_iterator && other);
-};
-template <class Container>
-front_insert_iterator<Container> front_inserter(Container& x);
-}
-</xmp>
-
-#### insert_iterator
-
-<xmp>
-namespace std::ranges {
-template <class Container>
-class insert_iterator : public std::insert_iterator<Container> {
-public:
-    using std::insert_iterator<Container>::insert_iterator;
-    insert_iterator(const insert_iterator & other) = delete;
-    insert_iterator(insert_iterator && other);
-};
-template <class Container>
-insert_iterator<Container> inserter(Container& x, typename Container::iterator i);
-}
-</xmp>
-
-
-## Changes to &lt;algorithms>
-
-Should algorithms not satisfy `InputIterator` (because they depend on copy-constructability) - they would need to be modified to
-accept a `ForwardIterator` instead.
-Beyond that, there would be very little, if any, wording change requires to ranges' algorithms.
-However, implementers would have to never copy non-forward iterators within the implementation.
-
-
-# Impact on other proposals
-
-## istream_view
-
-A better alternative to istream_iterator is offered by [[P1035R0]]'s `istream_view`.
-While implementation-defined, `istream_view`'s iterators would need to model `InputRange` and therefore make use of `InputIterator` as proposed here.
-
-Given that it does not need to own an Iterator but only a handle to the underlying device, `istream_view` can be semi-regular.
-
-
-
 # A Holistic Approach to Iterators.
 
 While the first part of this paper focuses on making move-only iterators possible, as a mean to get some code to compile,
@@ -472,6 +310,8 @@ Iterators concepts then
 Of course, it is not always possible to express all of a type sementic requirements through syntax, and in some cases tags are an unfortunate necessity.
 But they should be a last recourse mechanism, and whenever possible the semantic requirements should reflect in the syntax.
 The idea is that hidden requirements not expressed as code lead to easier-to-misuse types, which inevitably translates to runtime bugs.
+Ultimately, requirements that can neither be checked at compile time (concepts), or run time(contracts) are bound to be ignored.
+Rooted in the belief that not all birds quack like a duck, this proposal leverages meaningful syntactic requirements to increase the type safety of the iterator taxonomy.
 
 In the case of iterators, all the requirements of all iterators categories can be expressed syntactically:
 
@@ -515,7 +355,8 @@ template <class I> concept bool ForwardIterator =
 	InputIterator<I> &&
 	Copyable<I> &&
 	EqualityComparable<I> &&
-	has_no_iterator_category<I> || DerivedFrom<iterator_category_t<I>, forward_iterator_tag>;
+	( has_no_iterator_category<I> ||
+		DerivedFrom<iterator_category_t<I>, forward_iterator_tag>);
 </xmp>
 
 # Q/A
@@ -528,10 +369,65 @@ Non-Regularity is best avoided, so this might feel like going backward.
 However, non-regular types are easier to reason about than types that just pretend to be regular.
 Because InputIterator is meant to iterate over a non-regular sequence, it is not regular (whether we like it or not), and the best we can do is
 make sure the syntax matches the semantic.
+It would be accurate to say that InputIterator are locally regular, but this doesn't help much in the context of the c++ memory model.
 This paper is in part motivated by the conviction than exposing a false sense of (Semi-)regularity is much more detrimental to code robustness
 than non-regularity.
 
-## What about [[P0902R0]] ?
+## What about Equality of Input Iterators?
+
+A first, missguided, version of this paper attempted to prevent omparability of types meeting the `InputIterator`
+requirements.
+`InputIterator` should, in general, not be equally `EqualityComparable`, since they cannot be copied and a fundamental
+idea in Stepanov's teachings is that copy and equality are two sides of the same coin.
+
+However, preventing `Equality` requires dramatic changes to the design and the author was reminded that negative-requirements
+are in general a terrible idea.
+
+Early feedback suggested a desire to be able to compare input iterators. Consider the following:
+
+<xmp>
+auto a = stream.begin();
+auto b = stream.begin();
+...
+if(a == b) {
+
+}
+</xmp>
+
+This code will, inevitably lead to pain at some point.
+However, we can not prevent people to constructing multiple input iterators,
+and these iterators will compare equal until one of them invalidate the other.
+
+Two input iterators compare equal if-and-only-if the point to the same position of the same sequence
+(and only one such position can be referred to at any given time).
+
+Allowing `EqualityComparable` on non-forward iterators also simplify the interoperability of `std::` and `ranges::` iterators.
+However, the author would like to recommend that all future non-forward iterators introduced in the standard be *not* `EqualityComparable`.
+Instead, non-forward iterator should compare to a Sentinel, which is a much better model.
+common_iterator can be used to ease migration and interopability.
+
+## But... Move from objects are still objects!
+
+Sure, moving from leaves a trail of objects in an unspecified state.
+However, it is much more easy for tools and humans a like to understand that moved-from objects should
+not be used, and in fact, all majors compilers can warn about these patterns.
+We think that, in the case at end, focusing on the proper handling of values - as opposed to object
+is a sufficient approximation to reduce the potential for iterators misuse while not weakening the stronger
+mathematical underpinning of the STL.
+
+## Does iterators default-constructability needs revisiting?
+
+Default-constructability of iterator seems to have been added, removed and added back
+to the Ranges TS and the One Ranges Proposal several times.
+To the best of my knowledge, this was done for the sake of Semiregularity.
+Given that this proposal strikes semi-regularity, should this question be revisited?
+
+The authors want to point out that a default-constructed iterators are almost never in a specified
+state and are almost always unsafe to use.
+Moreover, DefaultConstructible is not a requirement of any algorithm using ranges and ultimately, we think enforcing
+DefaultConstructibility weakens the better `Sentinel` model introduced by ranges.
+
+## What about [[P0902R0]]?
 
 Andrew Hunter's "Move-only iterators" paper proposes a design to introduce Move-Only iterators in the taxonomy of `Cpp17Iterator`.
 However, this design does not offer a solution to use these move-only iterators with existing algorithms, limiting their usefulness.
@@ -544,10 +440,10 @@ to relax the requirements of concerned algorithms to accept move-only iterators.
 Such algorithms would then be compatible with types satisfying `InputIterator` (as proposed by this paper) through a `common_iterator` adaptor.
 
 If proven with enough confidence that requirements of existing algorithms in the `std` namespace can be relaxed to handle move-only iterator, the necessary
-modifications can be applied in a subsequent standard version (by opposition to this proposal).
+modifications can be applied in a subsequent standard version.
 
 So while there would definitively be value in supporting move-only iterators everywhere it makes sense, and the potential for breakage is relatively low,
-we do not propose it for lack of visibility on the consequences of such changes
+we do not propose it for lack of visibility on the consequences of such changes.
 
 
 # Questions for LEWG
@@ -564,14 +460,187 @@ we do not propose it for lack of visibility on the consequences of such changes
 
 
 
+# List of proposed changes
+
+Because the ranges-related proposals are still in flux and will require merging multiple documents, we do not provide wording
+at this time.
+However, a number of concepts need to be modified in order to allow for iterators that are only movable.
+This is a departure from the Ranges TS - which itself is grounded in Stepanov work - in which all iterator categories are Regular - or Semi-Regular,
+which implies copyability.
+
+Note that "ForwardIterator" is defined in terms of its copyability, and so it shall remain regular.
+The Copyability, and therefore Regularity of Iterator is therefore moved a few level down from `ranges::Iterator` to `ranges::ForwardIterator`
+
+## Changes to &lt;iterator>
+
+### WeaklyIncrementable
+
+`WeaklyIncrementable` is a requirement of all `Iterator`, including `RangesTSInputIterator`. `WeaklyIncrementable` is defined to be semi-regular.
+Because WeaklyIncrementable, as it is described in [[P0896R2]], accommodates for `RangesTSInputIterator` and `Cpp17InputIterator`, it suffers from the same issue (being copyable with move semantic).
+We propose to strike the `Semiregular` requirement as follow
+
+<xmp>
+template <class I>
+concept WeaklyIncrementable =
+    Movable<I> &&
+    requires(I& i) {
+        typename iter_difference_t<I>;
+        { ++i } -> Same<I&>&&;
+        i++;
+    };
+</xmp>
+
+### Iterator
+
+Iterator is left unmodified as merely changing WeaklyIncrementable is enough to not
+requiring it to be regular.
+
+### InputIterator
+
+Modify the `InputIterator` concept as follow.
+
+<xmp>
+template <class I>
+concept InputIterator =
+    Readable<I> &&
+    Iterator<I>;
+</xmp>
+
+
+### ForwardIterator
+
+<xmp>
+template <class I>
+concept ForwardIterator =
+    InputIterator &&
+    EqualityComparable<I> &&
+    Incrementable<I> &&
+    ( has_no_iterator_category<I> ||
+		DerivedFrom<iterator_category_t<I>, forward_iterator_tag>) &&
+    Sentinel<I, I>;
+</xmp>
+
+ForwardIterator is made `Regular` through `Incrementable`.
+Concepts refining `ForwardIterator` are left unchanged.
+
+
+### OutputIterator
+
+<xmp>
+template <class I, class T>
+concept OutputIterator =
+    Iterator<I> &&
+    Writable<I, T>
+    requires(I& i, T&& t) {
+        *i++ = std::forward<T>(t);
+    };
+</xmp>
+
+### ContiguousIterator
+
+<xmp>
+template <class I, class T>
+concept OutputIterator =
+   RandomAccessIterator<I> &&
+   std::is_lvalue_reference<iter_reference_t<I>>::value &&
+        Same<iter_value_t<I>, __uncvref<iter_reference_t<I>>> &&
+   ConvertibleTo<iter_value_t<I>, I>
+</xmp>
+
+Requiring a conversion operator to `iter_value_t<I>` (instead of a tag - It could also require a tag **or** a conversion operator)
+allow the whole iterator taxonomy to be semantically and accurately constrainable without the need for tags.
+
+## Changes to &lt;ranges>
+
+### Views
+ * The SemiRegular requirement is removed from view over a non-semi-regular ranges
+Indeed, views constitued of non-movable iterator are themselves move-only.
+We propose that non-forward views in the Ranges TS and these proposed in pending papers can return `begin()` by reference.
+
+
+### Inserters
+
+Because the `OutputIterator` concept as proposed here is not compatible with the `Cpp17OutputIterator` requirements, it would not be possible to
+use `std::` inserters with the `ranges::` algorithms.
+
+It is, therefore, necessary to provide suitable inserters modeling `OutputIterator`
+
+#### back_insert_iterator
+
+<xmp>
+namespace std::ranges {
+template <class Container>
+class back_insert_iterator : public std::back_insert_iterator<Container> {
+public:
+    using std::back_insert_iterator<Container>::back_insert_iterator;
+    back_insert_iterator(const back_insert_iterator & other) = delete;
+    back_insert_iterator(back_insert_iterator && other)
+
+};
+template <class Container>
+back_insert_iterator<Container> back_inserter(Container& x);
+}
+</xmp>
+
+#### front_insert_iterator
+
+<xmp>
+namespace std::ranges {
+template <class Container>
+class front_insert_iterator : public std::front_insert_iterator<Container> {
+public:
+    using std::front_insert_iterator<Container>::front_insert_iterator;
+    front_insert_iterator(const front_insert_iterator & other) = delete;
+    front_insert_iterator(front_insert_iterator && other);
+};
+template <class Container>
+front_insert_iterator<Container> front_inserter(Container& x);
+}
+</xmp>
+
+#### insert_iterator
+
+<xmp>
+namespace std::ranges {
+template <class Container>
+class insert_iterator : public std::insert_iterator<Container> {
+public:
+    using std::insert_iterator<Container>::insert_iterator;
+    insert_iterator(const insert_iterator & other) = delete;
+    insert_iterator(insert_iterator && other);
+};
+template <class Container>
+insert_iterator<Container> inserter(Container& x, typename Container::iterator i);
+}
+</xmp>
+
+
+## Changes to &lt;algorithms>
+
+Should algorithms not satisfy `InputIterator` (because they depend on copy-constructability) - they would need to be modified to
+accept a `ForwardIterator` instead.
+Beyond that, there would be very little, if any, wording change required to ranges' algorithms.
+However, implementers would have to never copy non-forward iterators within the implementation.
+
+### `ranges::copy`
+
+In the presence of an InputRange or an InputIterator that is non-copyable (no `iterator_concept` or `iterator_category` is defined),
+ranges::copy can and should behave like `ranges::move`.
+
+
+# Impact on other proposals
+
+## View proposals
+
+We suggest that the various proposals introducing new non-forward views should have iterators that are neither copyable nor equally comparable.
+Non-forward input views can further return `begin()` by reference.
 
 ## Iterator facade
 
 [[P0186R0]] describes a system for an iterator facade.
-
-We propose that
+The changes propose make defining iterators easier but we think there is still value in an iterator facade.
+To accommodate and honour the changes proposed here, we suggest that:
  * An iterator constructed from a move-only cursor, without an `equal(const cursor &)` method models an `InputIterator`
     (or `OutputIterator` depending on whether a `write` method is defined)
- * An iterator facade constructed from a Copyable cursor with an `equal(const cursor &)` method models an `ForwardIterator`
- * Unless it defines a `single_pass = true` trait in which case it should models `Cpp17InputIterator`.
- * An iterator facade cannot be constructed from a cursor that either defines `equal` or models Copyable but not both.
+ * An iterator facade constructed from a Copyable cursor with an `equal(const cursor &)` method models an `ForwardIterator`,
+unless it defines a `single_pass = true` trait.
