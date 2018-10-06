@@ -40,7 +40,7 @@ This means that once an iterator is copied, only one of the copies can meaningfu
 Deferencing multiple copies of a single pass iterator often exposes undefined or invalid behavior.
 
 
-It would, therefore, make sense that classes satisfying the `InputIterator` shall only be required to be movable.
+It would, therefore, make sense that classes satisfying the `InputIterator` concept shall only be required to be movable.
 
 Alas, Single-pass iterators and many classes satisfying its requirements predate C++11, they do therefore have move only semantic with copy syntax.
 In that regard, they are similar to `auto_ptr`.
@@ -110,11 +110,12 @@ This is explored further down.
 # What is a move-only iterator?
 
 Unlike [[P0902R0]], we do not propose to introduce a new iterator category.
-A movable Iterator is a non-forward iterator (either input or output depending on whether is it writable).
-This means that a move-only iterator as *almost* the same semantic requirements as an `InputIterator`,
+
+A move-only Iterator is a non-forward iterator (either input or output depending on whether is it writable).
+This means that a move-only iterator has *almost* the same semantic requirements as an `InputIterator`,
 and offers the same operations.
 That means that everything that can be expressed and done with a `RangesTSInputIterator` can
-be equally expressed and done with a non-copyable iterator.
+be equally expressed and done with a move-only/non-copyable `InputIterator`.
 
 This paper does, therefore,  not propose to introduce a new iterator category.
 We do not propose a new name requirement, concept name or iterator tag.
@@ -197,7 +198,7 @@ And the only operation that mutates that property is the increment operation (wh
 
 This implies that, as a non-forward iterator moves from one element of the sequence to the next,
 that element is destroyed.
-The sequences traversed by an `InputIterator` is best thought of as a stack and incrementing an iterator pops
+The sequences traversed by an `InputIterator` is best thought of as a queue and incrementing an iterator pops
 the head.
 All of this is well known and is basically rephrasing "Input iterators are single pass".
 
@@ -215,7 +216,8 @@ of a sequence than by defining what type of iterator is used to iterate over it.
 It is then the responsibility of the developer providing the sequence to define the most appropriate - specialized -
 iterator for that sequence.
 
-In practice, because `InputIterator` and `ForwardIterator` are syntactically identical, and because of the single-pass / multi-passes guarantees are poorly taught, it is not uncommon for iterators to be miss-categorized.
+In practice, because `InputIterator` and `ForwardIterator` are syntactically identical, and because of the single-pass / multi-passes guarantees are poorly taught,
+it is not uncommon for iterators to be miss-categorized.
 Other iterator categories do not have these problems as each subsequent refining category adds syntax requirements:
 BidirectionalIiterator require decrement operators, RandomAccessIterator further requires more methods, etc.
 And while ContiguousIterator is currently not syntactically differentiated from RandomAccessIterator,
