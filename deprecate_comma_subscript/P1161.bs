@@ -6,7 +6,7 @@ Status: D
 Group: wg21
 Editor: Corentin Jabot, corentin.jabot@gmail.com
 URL: https://cor3ntin.github.io/CPPProposals/deprecate_comma_subscript/P0000.html
-Abstract: We propose to deprecate the use of the comma operator in subscripting expressions as they are not very useful, confusing and limit futures evolutions of the standard.
+Abstract: We propose to deprecate the use of the comma operator in subscripting expressions it is not very useful, is confusing and limits the future evolution of the standard.
 Audience: EWG
 Markup Shorthands: markdown yes
 Default Highlight: CPP
@@ -89,8 +89,8 @@ Date: 2018-07-01
 Introduction {#intro}
 =====================
 
-This paper proposes that the use of a comma operator within a subscripting expression should be deprecated.
-Doing so opens the door to multidimensional subscript operators such as `mdspan`.
+This paper proposes that the use of a comma operator within a subscripting expression be deprecated.
+Doing so opens the door to multidimensional subscript operators for classes such as `mdspan`.
 
 <table class="tony-table">
 <tr> <th> Current </th> <th> Proposed </th </tr>
@@ -119,8 +119,8 @@ array[x,y]   // <b>Deprecated</b> , uses y as index/key
 Motivation
 ==========
 
-Currently, a comma can appear in subscript expressions such that `auto z = foo[x, y]` calls the comma operator.
-While this is currently unambiguous, it is confusing and error-prone when used and encountered.
+Currently, a comma can appear in subscript expressions such that `auto z = foo[x, y]` calls the comma operator with `y` as the argument.
+While this is currently unambiguous, it is confusing when encountered and error-prone when used.
 
 The authors think this syntax would be more useful and suited to index multidimensional classes such as `mdspan`.
 
@@ -134,11 +134,11 @@ We do not propose to make this possible until a reasonable deprecation period ha
 It is important to note that the goal is not to special-casing the meaning of a comma within a subscript expression.
 Indeed, the standard defines that:
 
-> In contexts where comma is given a special meaning, 
-> *[ Example: in lists of arguments to functions ([expr.call]) and lists of initializers ([dcl.init]) — end example ]* 
+> In contexts where comma is given a special meaning,
+> *[ Example: in lists of arguments to functions ([expr.call]) and lists of initializers ([dcl.init]) — end example ]*
 > the comma operator as described in this subclause can appear only in parentheses.
 
-So simply by supporting multiple parameters, a comma within a subscript operator 
+So simply by supporting multiple parameters, a comma within a subscript operator
 would serve as an argument separator, without the need for specific wording or parsing.
 
 ## The need for a multidimensional subscript operator
@@ -149,8 +149,8 @@ classes that define a single-dimension subscript operator: matrixes, views, geom
 
 `mdspan` comes immediately to mind. Note that because there is no multidimensional subscript operator in the standard,
 `mdspan` uses the call operator. While this is functionally equivalent to what a multidimensional subscript operator would
-be, it does not carry the same semantic, making the code harder to read and reason about. 
-It also encourages non-semantically appropriate operator overloading.
+be, it does not carry the same semantic, making the code harder to read and reason about.
+It also encourages non-semantical operator overloading.
 
 ## What a multidimensional subscript operator would look like
 
@@ -171,7 +171,7 @@ auto bar = foo[0, 1, 2];
 </xmp>
 
 This syntax resembles that of a call operator, but with the proper semantics.
-A similar syntax can be found in popular languages such as python, D, ruby
+A similar syntax can be found in popular languages such as Python, D and Ruby.
 
 Impact on existing code bases
 =============================
@@ -179,15 +179,15 @@ Impact on existing code bases
 We analyzed several large open source codebases and did not find a significant use of this pattern.
 <a href="https://github.com/cor3ntin/clang-tools-extra/tree/detect-comma-in-subscript">The tool used</a> is available
 on Github and automatic refactoring of large code bases is possible.
-In all cases, `array[x,y,z]` can be refactored in `array[(x,y,z)]` without alteration of semantic and behavior.
+In all cases, `array[x,y,z]` can be refactored in `array[(x,y,z)]` without alteration of semantics or behavior.
 
-The codebases analyzed include the Linux kernel, the LLVM project and the entirety of the boost test suite.
-The only instances found where in boost's "Spirit Classic" library (deprecated since 2009). 
-A documentation of the offending syntax can be found <a href="https://www.boost.org/doc/libs/1_35_0/libs/spirit/doc/switch_parser.html"> here</a>. 
+The codebases analyzed include the Linux kernel, Chromium, the LLVM project and the entirety of the Boost test suite.
+The only instances found were in Boost's "Spirit Classic" library (deprecated since 2009).
+A documentation of the offending syntax can be found <a href="https://www.boost.org/doc/libs/1_35_0/libs/spirit/doc/switch_parser.html">here</a>.
 
 
-Alternatives approaches
-=======================
+Alternative approaches
+======================
 
 ## Allow comma expression only in C arrays
 
@@ -209,7 +209,8 @@ However, this would probably lead to more confusion for a feature that is virtua
 It has been proposed that `array[x][y]` should be equivalent to `array.operator[](x, y);`
 <xmp>
     mdspan<int, array_property::dimension<2,3>> foo;
-    auto x = foo[0][0]; //equivalent to foo(0, 0);
+    auto x = foo[0][0]; //equivalent to foo(0, 0); <========== This looks weird, fix it somehow.
+                                                   <========== I had to read it 3 times before I figured out you don't mean the call operator
 </xmp>
 
 However, it's easy to imagine a scenario such that `(array[x])[y]` would be a valid expression.
@@ -231,7 +232,7 @@ which is confusing.
 Moreover, making this syntax compatible with pack expansion and fold expressions would certainly prove challenging.
 
 On the other hand, this syntax mirror the usage of multidimensional C arrays and is also popular in
-other languages such as Perl.
+other languages, such as Perl.
 
 
 ## Other comma expressions
