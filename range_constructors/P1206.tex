@@ -202,16 +202,16 @@ Indeed, a function such as \cc{split} is notoriously hard to standardize (\cite{
 The view materialization pattern further let the \emph{caller} choose the best container and allocation strategy for their use case (or to never materialize the view should it not be necessary).
 And while it would not make sense for a standard-library function to split a string into a vector it would allocate, it's totally reasonable for most applications to do so.\\
 
-This paper does not propose to standardize such \cc{split} function, however, view materialization is something the SG-16 working group is interested in.
+This paper does not propose to standardize such \cc{split} function - a \cc{split_view} exist in \cite{P0896R3}, however, view materialization is something the SG-16 working group is interested in.
 Indeed, they have considered APIs that could rely heavily on this idiom, as it has proven a natural way to handle the numerous ways to iterate over Unicode text.
 Similar ideas have been presented in \cite{P1004}.
 
 \begin{codeblock}
     std::vector<std::u8string> sentences =
-        text::unicode_codepoint_view<text::utf8>(blob)
-        text::normalize<text::nfc> |
-        text::graphemes_view |
-        text::split<sentences>;
+        text(blob)
+        normalize<text::nfc> |
+        graphemes_view |
+        split<sentences>;
 \end{codeblock}
 
 \section{Design considerations}
@@ -318,7 +318,7 @@ Notably:
 \begin{itemize}
 	\item It would be possible for \textbf{lazy} views to indicate that they can be moved from (through a tag).
 	\item Alternatively, it might be worth considering whether deferencing an iterator over a lazy view should be recommended to return by value.
-	\item The case can be made that for non-forward \cc{InputIterator}, it is always reasonable to move-from the elements rather than copying them.
+	\item The case can be made that for non-forward \cc{InputIterator}, it is always reasonable to move-from the elements rather than copying them. This is explored at length in \cite{P1207}
 	\item In the general case, non-owning views don't have any knowledge of whether they can be moved-from.
 \end{itemize}
 
@@ -643,6 +643,11 @@ constexpr basic_string_view(const R& r);
 	\item span (notably, we wish to modify span to be constructed from a ContiguousRange rather than a container, for the sake of consistency.)
 \end{itemize}
 
+\section{Acknowledgements}
+The authors would like to thank the people who gave feedback on this paper, notably Casey Carter, Arthur O'Dwyer, Barry Revzin
+and Tristan Brindle.\\
+We would also further acknowledge that this paper can only exist because of the incredible body of work constituting the Ranges TS.
+
 \section{References}
 \renewcommand{\section}[2]{}%
 \begin{thebibliography}{9}
@@ -685,6 +690,11 @@ constexpr basic_string_view(const R& r);
     Jeffrey Yasskin
     \emph{[Ranges] Traversable arguments for container constructors and methods}\newline
     \url{https://wg21.link/n3686}
+    
+\bibitem[P1207]{P1207}
+	Corentin Jabot
+	\emph{Movability of Single-pass Iterators}\newline
+	\url{https://wg21.link/P1207}
 
 \end{thebibliography}
 \end{document}
