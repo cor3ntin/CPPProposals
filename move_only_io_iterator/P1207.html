@@ -1215,7 +1215,77 @@ Possible extra rowspan handling
 </style>
   <meta content="Bikeshed version a04b880cde96bf0ae2d14a0edcf2bcdcb631548b" name="generator">
   <link href="https://isocpp.org/favicon.ico" rel="icon">
-  <meta content="7df568b41129524dd36d62a9dad106de462c2172" name="document-revision">
+  <meta content="0c61cf6ea8fea6bbdca9a729748d14a434f90067" name="document-revision">
+<style>
+
+.tony-table table {
+    width:100%;
+}
+
+.tony-table th {
+    text-align: center;
+    padding-right:20px;
+}
+
+.tony-table  td {
+    vertical-align:top;
+}
+
+.wording-add {
+    background-color: #F6F9ED;
+}
+
+
+/* Table */
+.data-table {
+	border-collapse: collapse;
+	font-size: 14px;
+	min-width: 573px;
+}
+.data-table th {
+	color: #5a5a5a;
+}
+
+.data-table th,
+.data-table td {
+	padding: 7px 17px;
+}
+.data-table caption {
+	margin: 7px;
+}
+
+/* Table Header */
+.data-table thead th {
+    border-bottom: 2px solid #CCCCCC;
+}
+
+/* Table Body */
+.data-table tbody td {
+	color: #353535;
+	border-bottom: 1px solid #dcdcdc;
+	text-align: right;
+}
+
+.data-table tbody tr:last-child td {
+	border: 0;
+}
+
+.data-table tbody tr:hover td {
+	background-color: #f7f7f7;
+	transition: all .2s;
+}
+
+/* Table Footer */
+.data-table tfoot th {
+	border-top: 1px solid #c7c7c7;
+	text-align: right;
+}
+
+.array_row {
+    outline: thin solid #008000
+}
+
+</style>
 <style>/* style-md-lists */
 
 /* This is a weird hack for me not yet following the commonmark spec
@@ -1641,10 +1711,12 @@ it can also be traversed multiple times at the same time and therefore there can
 ForwardIterator is also always <code class="highlight"><c- n>EquallyComparable</c-></code>.
 Two <code class="highlight"><c- n>ForwardIterator</c-></code> compare equal if they point to the same elements in the sequence (remember, that in the general case, the position of an iterator in a sequence is its sole salient property).
 And so <code class="highlight"><c- n>ForwardIterator</c-></code>, being both <code class="highlight"><c- n>EquallyComparable</c-></code> and <code class="highlight"><c- n>Copyable</c-></code> is Regular.</p>
-   <p>The standard defines the "multi pass" guarantee by stating:</p>
-<pre class="highlight"><c- o>></c-> <c- n>a</c-> <c- o>==</c-> <c- n>b</c-> <c- n>implies</c-> <c- o>++</c-><c- n>a</c-> <c- o>==</c-> <c- o>++</c-><c- n>b</c->
-<c- o>></c-> <c- n>Given</c-> <c- n>X</c-> <c- n>is</c-> <c- n>a</c-> <c- n>pointer</c-> <c- n>type</c-> <c- n>or</c-> <c- n>the</c-> <c- n>expression</c-> <c- p>(</c-><c- b>void</c-><c- p>)</c-><c- o>++</c-><c- n>X</c-><c- p>(</c-><c- n>a</c-><c- p>),</c-> <c- o>*</c-><c- n>a</c-> <c- n>is</c-> <c- n>equivalent</c-> <c- n>to</c-> <c- n>the</c-> <c- n>expression</c-> <c- o>*</c-><c- n>a</c-><c- p>.</c->
-</pre>
+   <p>The standard defines the "multi pass" guarantee by stating: <em></em></p>
+   <em> </em>
+   <blockquote>
+    <em> </em>
+    <p><em>a == b implies ++a == ++b <br> Given X is a pointer type or the expression (void)++X(a), <em>a is equivalent to the expression </em>a. </em></p>
+   </blockquote>
    <p>In other words:
 Two identical objects to which is applied the same transformation are identical.
 Copying a <code class="highlight"><c- n>FordwardIterator</c-></code> copies the salient properties of that value and incrementing it does
@@ -1858,10 +1930,51 @@ we do not propose it for lack of visibility on the consequences of such changes.
    <p>We do not propose anything of the sort. But, we propose that</p>
    <ul>
     <li data-md>
-     <p>Any <code class="highlight"><c- n>InputIterator</c-></code>s that happens to be <code class="highlight"><c- n>Copyable</c-></code> is also a <code class="highlight"><c- n>ForwardIterator</c-></code>.</p>
+     <p>Any <code class="highlight"><c- n>InputIterator</c-></code> that happens to be <code class="highlight"><c- n>Copyable</c-></code> is also a <code class="highlight"><c- n>ForwardIterator</c-></code>.</p>
     <li data-md>
      <p>It remains possible to opt-out of that behavior by defining <code class="highlight"><c- n>iterator_concept</c-></code> to be <code class="highlight"><c- n>input_iterator_tag</c-></code>. Which has to be done in the current standard.</p>
    </ul>
+   <table class="tony-table">
+    <tbody>
+     <tr>
+      <th> Non-copyable Iterator 
+      <th> Copyable Iterator
+      <th> Copyable Iterator with a tag
+     <tr>
+      <td>
+<pre class="highlight"><c- k>struct</c-> <c- n>It</c-> <c- p>{</c->
+    <c- n>It</c-><c- p>(</c-><c- n>It</c-><c- o>&amp;&amp;</c-><c- p>)</c-> <c- o>=</c-> <c- k>default</c-><c- p>;</c->
+    <c- n>It</c-><c- p>(</c-><c- k>const</c-> <c- n>It</c-><c- o>&amp;</c-><c- p>)</c-> <c- o>=</c-> <c- k>delete</c-><c- p>;</c->
+    <c- c1>//...</c->
+<c- p>};</c->
+</pre>
+      <td>
+<pre class="highlight"><c- k>struct</c-> <c- n>It</c-> <c- p>{</c->
+    <c- n>It</c-><c- p>(</c-><c- k>const</c-> <c- n>It</c-><c- o>&amp;</c-><c- p>)</c-> <c- o>=</c-> <c- k>default</c-><c- p>;</c->
+    <c- c1>//...</c->
+<c- p>};</c->
+       <br></pre>
+      <td>
+<pre class="highlight"><c- k>struct</c-> <c- n>It</c-> <c- p>{</c->
+    <c- n>It</c-><c- p>(</c-><c- k>const</c-> <c- n>It</c-><c- o>&amp;</c-><c- p>)</c-> <c- o>=</c-> <c- k>default</c-><c- p>;</c->
+    <c- k>using</c-> <c- n>iterator_concept</c-> <c- o>=</c-> <c- n>input_iterator_tag</c-><c- p>;</c->
+    <c- c1>//...</c->
+<c- p>};</c->
+</pre>
+     <tr>
+      <td>
+<pre class="highlight"><c- k>static_assert</c-><c- o>&lt;</c-><c- n>InputIterator</c-><c- o>&lt;</c-><c- n>It</c-><c- o>>></c->  <c- o>==</c-> true<c- p>;</c->
+<c- k>static_assert</c-><c- o>&lt;</c-><c- n>ForwardIterator</c-><c- o>&lt;</c-><c- n>It</c-><c- o>>></c->  <c- o>==</c-> false<c- p>;</c->
+</pre>
+      <td>
+<pre class="highlight"><c- k>static_assert</c-><c- o>&lt;</c-><c- n>InputIterator</c-><c- o>&lt;</c-><c- n>It</c-><c- o>>></c->  <c- o>==</c-> true<c- p>;</c->
+<c- k>static_assert</c-><c- o>&lt;</c-><c- n>ForwardIterator</c-><c- o>&lt;</c-><c- n>It</c-><c- o>>></c->  <c- o>==</c-> true<c- p>;</c->
+</pre>
+      <td>
+<pre class="highlight"><c- k>static_assert</c-><c- o>&lt;</c-><c- n>InputIterator</c-><c- o>&lt;</c-><c- n>It</c-><c- o>>></c->  <c- o>==</c-> true<c- p>;</c->
+<c- k>static_assert</c-><c- o>&lt;</c-><c- n>ForwardIterator</c-><c- o>&lt;</c-><c- n>It</c-><c- o>>></c->  <c- o>==</c-> false<c- p>;</c->
+</pre>
+   </table>
    <h3 class="heading settled" data-level="7.7" id="will-this-break-existing-code"><span class="secno">7.7. </span><span class="content">Will this break existing code ?!</span><a class="self-link" href="#will-this-break-existing-code"></a></h3>
    <p>We want to reiterate(!) that all the changes proposed in this paper are only applicable to concepts, types, and requirements of the Ranges TS living
 in the <code class="highlight"><c- n>ranges</c-></code> namespace and do not, in any way, impact code depending on types, requirements or algorithms as defined by the C++17 standard</p>
