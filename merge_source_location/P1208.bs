@@ -92,8 +92,8 @@ Date: 2018-09-21
 This paper proposes that source_location from Library Fundamentals V3 [[N4758]] be adopted into the C++20 standard.
 
 `source_location` has been successfully implemented without difficulties in GCC, and Clang implementers almost completed their implementation of it.
-As described by the original paper, it's a necessary feature to implement logging without requiring macros, one that cannot be implemented
-by non-standard libraries because it requires compiler support (at least portably).
+As described by the original paper, it's a necessary feature to implement logging without requiring macros, one that cannot be portably implemented
+by non-standard libraries because it requires compiler support.
 
 `source_location` has been very favorably received by both EWG and LEWG [[n4129]], [[n4417]] and has been part of library
 fundamentals v2 [[n4562]] and v3 [[N4758]] since 2015 without changes to exposed interface.
@@ -115,7 +115,7 @@ A note states:
 
 However, there seems to be some interest for having `source_location` be guaranteed `sizeof(void*)`.
 Notably, reviewers wonder if `source_location` should be embedded in a yet to be proposed `std::error`.
-Herb Sutter and Niall Douglas pointed out that `std::error` is meant to handle recoverable errors
+Herb Sutter and Niall Douglas pointed out that `std::error` is meant to handle recoverable errors,
 rather than to communicate an error to developers (see Herb Sutter's talk on error handling CppCon 2018).
 And while we agree strongly with this sentiment, it's worth noting that a subset of the C committee
 is interested in having source information in whatever deterministic exception handling they are working towards;
@@ -124,8 +124,8 @@ While, as pointed out by Niall, it's unlikely the two languages will have direct
 having a guaranteed size for `source_location` might make such interoperability easier should a need for it arise.
 
 Barring that, `source_location` is an error reporting tool targeted at human developers,
-and the cost of any error reporting system is many orders of magnitude more resource-demanding than copying
-3 pointers around. We do not think there is a strong incentive to guaranteeing the size of that type
+and the cost of any such error reporting system is many orders of magnitude larger than copying
+3 pointers around. We do not think there is a strong incentive to guarantee the size of that type
 or restricting the way it is implemented.
 
 
@@ -155,7 +155,7 @@ realistically implementable by both GCC and Clang developers (Jonathan Wakely, E
 
 ## Removing `current()` altogether ?
 
-If LEWG elects to keep value semantics, the authors would like to propose that the `current` function be removed
+If LEWG elects to keep value semantics, the authors would like to propose that the `current` function is removed,
 since, in its current form, `source_location` has a default constructor that has no meaningful use.
 Besides being harder to misuse, using the constructor of the type to acquire its value is also significantly less verbose.
 
@@ -184,6 +184,6 @@ Similarly to the original [[n4417]] wording, we recommend the feature test macro
 
 # Acknowledgments
 
-The authors would like to thanks the people who reviewd early version of this proposal, notably Peter Dimov, Jonathan Wakely Arthur O'Dwyer
+The authors would like to thanks the people who reviewed early version of this proposal, notably Peter Dimov, Jonathan Wakely Arthur O'Dwyer
 and Geoffrey Romer.
 We would also like to thank Herb Sutter and Niall Douglas for their insightful remarks on std::error and errors handling in general.

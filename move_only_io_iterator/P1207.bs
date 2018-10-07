@@ -105,9 +105,9 @@ of the move-from object, but, more importantly, that the underlying data will be
 
 ## Performance optimization
 
-Move-only iterators are a performance improvement opportunity.
+Move-only iterators are an optimization opportunity.
 For example, in the presence of `InputIterator`s, `ranges::copy` could perform a move rather than a copy of the elements since iteration is destructive.
-This is explored further down.
+We will explore more of these opportunities later on.
 
 
 # What is a move-only iterator?
@@ -117,18 +117,18 @@ Unlike [[P0902R0]], we do not propose to introduce a new iterator category.
 A move-only Iterator is a non-forward iterator (either input or output depending on whether is it writable).
 This means that a move-only iterator has *almost* the same semantic requirements as an `InputIterator`,
 and offers the same operations.
-That means that everything that can be expressed and done with a `RangesTSInputIterator` can
+In other words, everything that can be expressed and done with a `RangesTSInputIterator` can
 be equally expressed and done with a move-only/non-copyable `InputIterator`.
 
-This paper does, therefore,  not propose to introduce a new iterator category.
-We do not propose a new name requirement, concept name or iterator tag.
+Therefore, this paper does not propose to introduce a new iterator category,
+new named-requirement, concept name or iterator tag.
 
 Furthermore, there is no `ForwardIterator` that is only movable, as a `ForwardIterator` is by definition
-an iterator that can be copied. More on that further down.
+an iterator that can be copied. We will expand on this later.
 
-# A Holistic Approach to Iterators.
+# A Holistic Approach to Iterators
 
-While the first part of this paper focuses on making move-only iterators possible, as a mean to get some code to compile,
+While the first part of this paper focuses on making move-only iterators possible, as means to get some code to compile,
 it is important to take a step back and to think about what movability means for Iterators, from first principles.
 
 An iterator denotes a position into a sequence of elements (whether that sequence maps to memory or not is, for our purpose, irrelevant).
@@ -136,7 +136,7 @@ An iterator denotes a position into a sequence of elements (whether that sequenc
 A most basic iterator can be incremented, which means it can move to the next position in the sequence.
 An iterator does not own the sequence iterated over (there are exceptions, ie: generators), which means the salient property of an iterator is its position in that sequence.
 
-In fact, in Elements of Programming [[EOP]], an iterator is exactly defined by its distance to the start of the
+In fact, in Elements of Programming [[EOP]], an iterator is exactly defined by its distance from the start of the
 sequence.
 
 Iterators categories then represent the way an iterator can move along that sequence.
@@ -150,9 +150,9 @@ further, constrain the underlying sequence to be laid out contiguously in memory
 Stepanov theorized an additional category, "Index iterator", which has O(1) access
 but in a single direction.
 
-Further Work was made on iterator categories, notably the Boost.Iterator library
+Further work was made on iterator categories, notably the Boost.Iterator library
 focused on separating traversal (how the iterator moves along the sequence) from
-access(whether dereferencing an iterator allows the pointed element to be read, written or both).
+access (whether dereferencing an iterator allows the pointed element to be read, written or both).
 While a very interesting concept, it falls outside the scope of this paper.
 Just keep in mind that everything that applies to non-forward `InputIterator` usually
 applies to OutputIterator - which are always non-Forward, the standard lacking that symmetry between
@@ -160,24 +160,26 @@ read access and write access.
 
 However, focusing on traversal, the set of iterators categories is actually
 rather closed, there are only so many ways a sequence can be traversed. An
-important point of Stepanov design is that each category is a refinement of the precedent.
+important point of Stepanov design is that each category is a refinement of the preceeding one.
 `RandomAccessIterator` is a `BidirectionalIterator` which in turn is a `ForwardIterator`.
-Every algorithm applicable to a `ForwardIterator` can be equally applied to a BidirectionalIterator, etc.
+Every algorithm applicable to a `ForwardIterator` can be equally applied to a `BidirectionalIterator`, etc.
 
 So, what separates `InputIterator` from `ForwardIterator` if they are both "forward" in that they can
 both traverse a sequence in one direction?
 
-ForwardIterator is defined as being "multi-pass". Meaning it can traverse a sequence multiple times.
+`ForwardIterator` is defined as being "multi-pass". Meaning it can traverse a sequence multiple times.
 That, in turn, implies `ForwardIterator` is copyable, because if a sequence can be traversed multiple times,
 it can also be traversed multiple times at the same time and therefore there can be multiple `ForwardIterator`
 pointing at different elements in the sequence.
 ForwardIterator is also always `EquallyComparable`.
-Two `ForwardIterator` compare equal if they point to the same elements in the sequence (remember that the position of an iterator in a sequence is the sole salient property of that iterator, in the general case).
+Two `ForwardIterator` compare equal if they point to the same elements in the sequence (remember, that in the general case, the position of an iterator in a sequence is its sole salient property).
 And so `ForwardIterator`, being both `EquallyComparable` and `Copyable` is Regular.
 
 The standard defines the "multi pass" guarantee by stating:
+<xmp>
 > a == b implies ++a == ++b
 > Given X is a pointer type or the expression (void)++X(a), *a is equivalent to the expression *a.
+</xmp>
 
 In other words:
 Two identical objects to which is applied the same transformation are identical.
@@ -190,7 +192,7 @@ InputIterator is a "single pass" iterator. The underlying sequence can on only b
 The existence of an Iterator at the nth position in the sequence implies there can be no valid iterator at the position n-1 in that same sequence.
 
 <pre>
-//Given an `InputIterator` a
+//Given an InputIterator a
 b = a;
 a++;
 b; // is invalid.
@@ -210,14 +212,14 @@ rather than from the iterator itself.
 The point could be made that there is no such thing as an "Input iterator" Or a "Forward Iterator" because what we really
 mean is "Iterator over an Input Sequence" or "Iterator over a Forward Sequence".
 
-That is saying that, to be able to reason properly about iterators and traversal,
+This is saying that, to be able to reason properly about iterators and traversal,
 we must assume that the iterator type associated with a sequence is the most specialized possible for that sequence.
 
 The problem is, of course, that we do not have, in the general case, a more meaningful way to express the traversability
 of a sequence than by defining what type of iterator is used to iterate over it.
 
-It is then the responsibility of the developer providing the sequence to define the most appropriate - specialized -
-iterator for that sequence.
+It is then the responsibility of the developer providing the sequence to
+define the most appropriate -- the most specialized -- iterator for that sequence.
 
 In practice, because `InputIterator` and `ForwardIterator` are syntactically identical and because of the single-pass / multi-passes guarantees are poorly taught,
 it is common for iterators to be miss-categorized.
@@ -229,7 +231,7 @@ elements.
 
 But then, is there a set of operations and semantic requirements, translating to actual C++ syntax, that could allow for
 InputIterator to be easily distinguished from each other?
-Can we not require a tag system?
+Can we avoid requiring a tag system?
 Is there a defining operation that distinguishes `InputIterator` from `ForwardIterator` in such a way that it would both not require
 an explicit category tagging while at the same time offering a better understanding of iterator categories as well as a less surprising and
 safer API for non-forward iterators?
@@ -261,9 +263,9 @@ a = i //ok
 i++;  // a now invalid
 </xmp>
 
-This design model accurately the nature of iterators. Because an iterator represents a position in a sequence, it is natural that multiple iterators could point
+This design accurately models the nature of iterators. Because an iterator represents a position in a sequence, it is natural that multiple iterators could point
 to the same position.
-After one copy is incremented, in Stepanov's model, other copies are in a partially formed state and cannot be used (but they can be assigned to - or destroyed).
+After one copy is incremented, in Stepanov's model, other copies are in a partially formed state and cannot be used (but they can be assigned to, or destroyed).
 
 Let's consider the case where we move from an iterator instead of copying it
 <xmp>
@@ -276,7 +278,7 @@ i++;         //invalid
 </xmp>
 
 Moving from an iterator invalidates it early, albeit artificially. As per standard, the moved-from iterator is in a valid, but unspecified state,
-and cannot be used (but can be assigned to - or destroyed).
+and cannot be used (but can be assigned to, or destroyed).
 Notice the similarity between "a valid, but unspecified state" and "a partially formed state".
 
 The difference is slim. Notably, both models are equally expressive. References can be used, should multiple names be necessary.
@@ -303,12 +305,12 @@ It is undecidable in these 4 lines of slide-code.
 It is not much more obvious in a complex program that may pass iterators to other functions or store them in containers, etc.
 There are, after all, no theoretical limits to the distance in time and space over which entanglement perdures.
 
-Worse even, should the type of `troubles.begin();` be changed from Forward to Input, the code would change from perfectly fine to
+Even worse, should the type of `troubles.begin();` be changed from Forward to Input, the code would change from perfectly fine to
 UB, with no warning.
 
-Moving non-forward iterators, therefore, better express intent, less surprising and safer.
+Moving non-forward iterators, therefore, better expresses intent, is safer and less surprising.
 Move-only non-forward Iterators also express the destructive nature of incrementation and give a better sense of the difference between `InputIterator`
-and `ForwarIterator`.
+and `ForwardIterator`.
 
 ## An Holistic Approach to Iterator Tags and Iterator Concepts
 
@@ -321,9 +323,9 @@ Iterators concepts then
  * Need syntax to artificially subscribe to the correct, most refined concept
 
 Of course, it is not always possible to express all of a type's semantic requirements through syntax, and in some cases, tags are an unfortunate necessity.
-But they should be a last recourse mechanism, and whenever possible the semantic requirements should reflect in the syntax.
+However, they should be the mechanism of last recourse, and whenever possible, the semantic requirements should be reflected in the syntax.
 The idea is that hidden requirements not expressed as code lead to easier-to-misuse types, which inevitably translates to runtime bugs.
-**Ultimately, requirements that can neither be checked at compile time (concepts) or runtime(contracts) are bound to be ignored**.
+**Ultimately, requirements that can neither be checked at compile time (concepts) or runtime (contracts) are bound to be ignored**.
 Rooted in the belief that not all birds quack like a duck, this proposal leverages meaningful syntactic requirements to increase the type safety of the iterator taxonomy.
 
 In the case of iterators, all requirements of all iterators categories can be expressed syntactically:
@@ -382,7 +384,7 @@ Non-Regularity is best avoided, so this might feel like going backwards.
 However, **non-regular types are easier to reason about than types that just pretend to be regular**.
 Because `InputIterator` is meant to iterate over a non-regular sequence, it is not regular (whether we like it or not), and the best we can do is
 make sure the syntax matches the semantic.
-It would be accurate to say that `InputIterator` are locally regular, but this doesn't help much in the context of the c++ memory model.
+It would be accurate to say that `InputIterator` is locally regular, but this doesn't help much in the context of the c++ memory model.
 This paper is in part motivated by the conviction that exposing **a false sense of (Semi-)regularity is much more detrimental to code robustness
 than non-regularity**.
 
@@ -424,7 +426,7 @@ common_iterator can be used to ease migration and interoperability.
 Sure, moving-from leaves a trail of objects in an unspecified state.
 However, it is much more easy for tools and humans alike to understand that moved-from objects should
 not be used, and in fact, all majors compilers can warn about these patterns.
-We think that in the case at hand, focusing on the proper handling of values - as opposed to object
+We think that for the case at hand, focusing on the proper handling of values -- as opposed to objects --
 is a sufficient approximation to reduce the potential for iterators misuse while not weakening the stronger
 mathematical underpinning of the STL.
 
@@ -473,10 +475,10 @@ in the `ranges` namespace and do not, in any way, impact code depending on types
 
 The only valid use cases for `InputIterator` are streams or other input devices, and iterators that own a non-copyable generator.
 Most views and iterators are Forward.
-It turns out that C++ types are `Copyable` by default, therefore, Iterators will be Categorized as `ForwardIterator` by default, which is correct in most cases.
+It turns out that C++ types are `Copyable` by default, therefore, Iterators will be categorized as `ForwardIterator` by default, which is correct in most cases.
 
-This proposal is also a teaching opportunity because the nature of `InputIterator` is often poorly missunderstood and misconstrued.
-We suspect hese tweaks to the taxonomy of Iterator will make them easier to teach.
+This proposal is also a teaching opportunity because the nature of `InputIterator` is often poorly understood and misconstrued.
+We suspect that these tweaks to the taxonomy of Iterator will make them easier to teach.
 
 ## Post Increment on non-copyable iterators
 
@@ -585,7 +587,7 @@ concept OutputIterator =
 </xmp>
 
 Requiring a conversion operator to `iter_value_t<I>` (instead of a tag - It could also require a tag **or** a conversion operator)
-allow the whole iterator taxonomy to be semantically and accurately constrainable without the need for tags.
+allows the whole iterator taxonomy to be semantically and accurately constrainable without the need for tags.
 
 ## Changes to &lt;ranges>
 
