@@ -3,7 +3,7 @@
   <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
   <meta content="width=device-width, initial-scale=1,
 shrink-to-fit=no" name="viewport">
-  <title>D1207R0: Movability of Single-pass iterators</title>
+  <title>D1207R0: Movability of Single-pass Iterators</title>
 <style data-fill-with="stylesheet">/******************************************************************************
  *                   Style sheet for the W3C specifications                   *
  *
@@ -1215,7 +1215,7 @@ Possible extra rowspan handling
 </style>
   <meta content="Bikeshed version a04b880cde96bf0ae2d14a0edcf2bcdcb631548b" name="generator">
   <link href="https://isocpp.org/favicon.ico" rel="icon">
-  <meta content="ceac7cec6d8ec5944a48ce10791dbd22e206080d" name="document-revision">
+  <meta content="4b9f5a23355d5076fa04dcade1941c6149abf494" name="document-revision">
 <style>/* style-md-lists */
 
 /* This is a weird hack for me not yet following the commonmark spec
@@ -1424,7 +1424,7 @@ pre .property::before, pre .property::after {
  <body class="h-entry">
   <div class="head">
    <p data-fill-with="logo"></p>
-   <h1 class="p-name no-ref" id="title">D1207R0<br>Movability of Single-pass iterators</h1>
+   <h1 class="p-name no-ref" id="title">D1207R0<br>Movability of Single-pass Iterators</h1>
    <h2 class="no-num no-toc no-ref heading settled" id="subtitle"><span class="content">Draft Proposal, <time class="dt-updated" datetime="2018-08-20">2018-08-20</time></span></h2>
    <div data-fill-with="spec-metadata">
     <dl>
@@ -1557,8 +1557,6 @@ In the rest of this paper</p>
      <p><code class="highlight"><c- n>RangesTSOutputIterator</c-></code> designs the <code class="highlight"><c- n>OutputIterator</c-></code> concept as proposed by the Ranges TS</p>
     <li data-md>
      <p><code class="highlight"><c- n>Cpp17OutputIterator</c-></code> design the <strong>requirements</strong> of output iterators compatible with the STL as specified by the C++17 standard</p>
-    <li data-md>
-     <p>input/outputs iterators refer to single pass(non/forward) iterators.</p>
    </ul>
    <h2 class="heading settled" data-level="3" id="scope"><span class="secno">3. </span><span class="content">Scope</span><a class="self-link" href="#scope"></a></h2>
    <p>This paper proposes changes to the Ranges TS and <a data-link-type="biblio" href="#biblio-p0896r2">[P0896R2]</a> both targeting C++20. Because the modifications proposed here changes some requirements and concepts as presented
@@ -1574,7 +1572,7 @@ They are meant to be used in the <code class="highlight"><c- n>ranges</c-></code
    <p>While the ability to use move-only iterators with the algorithms defined in the <code class="highlight"><c- n>std</c-></code> namespace would certainly be welcomed, doing so would weaken the <code class="highlight"><c- n>RangesTSInputIterator</c-></code> concept and leads to other issues (namely, <code class="highlight"><c- n>std</c-></code> based algorithms require iterators to be <code class="highlight"><c- n>EqualityComparable</c-></code>, which the <code class="highlight"><c- n>RangesTSInputIterator</c-></code> is not).</p>
    <p>In practice, that means that types satisfying the <code class="highlight"><c- n>Cpp17InputIterator</c-></code> requirements continue to work unaffected with algorithms defined in the <code class="highlight"><c- n>std</c-></code> namespace. They may not be compatible with algorithms defined in the ranges namespace, or with new code using the <code class="highlight"><c- n>InputIterator</c-></code> concept as proposed here.</p>
    <p>Inversely, types satisfying the <code class="highlight"><c- n>InputIterator</c-></code> concepts may not be compatible with algorithms in <code class="highlight"><c- n>std</c-></code> as they may not be able to satisfy the <code class="highlight"><c- n>Cpp17InputIterator</c-></code> requirements.</p>
-   <p>Because it makes never sense to copy an Input Iterator (more on that later), it would be possible to add support for move-only iterators to the <code class="highlight"><c- n>std</c-></code> namespace without much change to the standard.
+   <p>Because it hardly makes sense to copy an Input Iterator (more on that later), it would be possible to add support for move-only iterators to the <code class="highlight"><c- n>std</c-></code> namespace without much change to the standard.
 However, because implementers may copy iterators within the implementation of the standard library, along with existing third-party libraries, a lot of code would need to be adapted.
 And there is little pressure to do so as existing iterators types cannot be changed.</p>
    <h2 class="heading settled" data-level="4" id="motivation"><span class="secno">4. </span><span class="content">Motivation</span><a class="self-link" href="#motivation"></a></h2>
@@ -1677,7 +1675,7 @@ of a sequence than by defining what type of iterator is used to iterate over it.
    <p>It is then the responsibility of the developer providing the sequence to define the most appropriate - specialized -
 iterator for that sequence.</p>
    <p>In practice, because <code class="highlight"><c- n>InputIterator</c-></code> and <code class="highlight"><c- n>ForwardIterator</c-></code> are syntactically identical and because of the single-pass / multi-passes guarantees are poorly taught,
-it is not uncommon for iterators to be miss-categorized.
+it is common for iterators to be miss-categorized.
 Other iterator categories do not have these problems as each subsequent refining category adds syntax requirements:
 BidirectionalIiterator require decrement operators, RandomAccessIterator further requires more methods, etc.
 And while ContiguousIterator is currently not syntactically differentiated from RandomAccessIterator,
@@ -1688,7 +1686,7 @@ InputIterator to be easily distinguished from each other?
 Can we not require a tag system?
 Is there a defining operation that distinguishes <code class="highlight"><c- n>InputIterator</c-></code> from <code class="highlight"><c- n>ForwardIterator</c-></code> in such a way that it would both not require
 an explicit category tagging while at the same time offering a better understanding of iterator categories as well as a less surprising and
-safer API for input iterators?</p>
+safer API for non-forward iterators?</p>
    <p>In fact, there is. We established that <code class="highlight"><c- n>ForwardIterator</c-></code> are semantically copyable, while <code class="highlight"><c- n>InputIterator</c-></code>s are not.
 So the requirement that promotes an <code class="highlight"><c- n>InputIterator</c-></code> into a <code class="highlight"><c- n>ForwardIterator</c-></code> is indeed copyability - which translate in C++ to a copy constructor.
 We can, therefore, consider that, in the absence of a tag, all non-copyable iterators are <code class="highlight"><c- n>InputIterator</c-></code>,
@@ -1743,8 +1741,8 @@ It is not much more obvious in a complex program that may pass iterators to othe
 There are, after all, no theoretical limits to the distance in time and space over which entanglement perdures.</p>
    <p>Worse even, should the type of <code class="highlight"><c- n>troubles</c-><c- p>.</c-><c- n>begin</c-><c- p>();</c-></code> be changed from Forward to Input, the code would change from perfectly fine to
 UB, with no warning.</p>
-   <p>Moving input iterators, therefore, better express intent, less surprising and safer.
-Move-only input Iterators also express the destructive nature of incrementation and give a better sense of the difference between <code class="highlight"><c- n>InputIterator</c-></code> and <code class="highlight"><c- n>ForwarIterator</c-></code>.</p>
+   <p>Moving non-forward iterators, therefore, better express intent, less surprising and safer.
+Move-only non-forward Iterators also express the destructive nature of incrementation and give a better sense of the difference between <code class="highlight"><c- n>InputIterator</c-></code> and <code class="highlight"><c- n>ForwarIterator</c-></code>.</p>
    <h3 class="heading settled" data-level="6.1" id="an-holistic-approach-to-iterator-tags-and-iterator-concepts"><span class="secno">6.1. </span><span class="content">An Holistic Approach to Iterator Tags and Iterator Concepts</span><a class="self-link" href="#an-holistic-approach-to-iterator-tags-and-iterator-concepts"></a></h3>
    <p>Missing the notion of movability pre-c++11 and lacking concepts, <code class="highlight"><c- n>Cpp17Iterator</c-></code>s are syntactically distinguished by tags.
 a <code class="highlight"><c- n>Cpp17InputIterator</c-></code> is one which has an <code class="highlight"><c- n>input_iterator_tag</c-></code> tag, while a <code class="highlight"><c- n>Cpp17ForwardIterator</c-></code> is one which has a <code class="highlight"><c- n>forward_iterator_tag</c-></code> tag.
@@ -1813,7 +1811,7 @@ than non-regularity</strong>.</p>
 idea in Stepanov’s teachings is that copy and equality are two sides of the same coin.</p>
    <p>However, preventing <code class="highlight"><c- n>Equality</c-></code> requires dramatic changes to the design and the author was reminded that negative-requirements
 are in general a terrible idea.</p>
-   <p>Early feedback suggested a desire to be able to compare input iterators. Consider the following:</p>
+   <p>Early feedback suggested a desire to be able to compare non-forward iterators. Consider the following:</p>
 <pre class="highlight"><c- k>auto</c-> <c- n>a</c-> <c- o>=</c-> <c- n>stream</c-><c- p>.</c-><c- n>begin</c-><c- p>();</c->
 <c- k>auto</c-> <c- n>b</c-> <c- o>=</c-> <c- n>stream</c-><c- p>.</c-><c- n>begin</c-><c- p>();</c->
 <c- p>...</c->
@@ -1822,9 +1820,9 @@ are in general a terrible idea.</p>
 <c- p>}</c->
 </pre>
    <p>This code will inevitably lead to suffering at some point.
-However, we cannot prevent people from constructing multiple input iterators,
+However, we cannot prevent people from constructing multiple non-forward iterators,
 and these iterators will compare equal until one of them invalidate the other.</p>
-   <p>Two input iterators compare equal if-and-only-if they point to the same position of the same sequence
+   <p>Two non-forward iterators compare equal if-and-only-if they point to the same position of the same sequence
 (and only one such position can be referred to at any given time).</p>
    <p>Allowing <code class="highlight"><c- n>EqualityComparable</c-></code> on non-forward iterators also simplify the interoperability of <code class="highlight"><c- n>std</c-><c- o>::</c-></code> and <code class="highlight"><c- n>ranges</c-><c- o>::</c-></code> iterators.
 However, the author would like to recommend that all future non-forward iterators introduced in the standard be <em>not</em> <code class="highlight"><c- n>EqualityComparable</c-></code>.
@@ -1880,7 +1878,7 @@ We suspect hese tweaks to the taxonomy of Iterator will make them easier to teac
     <li data-md>
      <p>Does LEWG want to support non-copyable iterators in the <code class="highlight"><c- n>ranges</c-></code> namespace?</p>
     <li data-md>
-     <p>Does LEWG agree that <strong>non-copyable</strong> iterators are always input or output iterators and do not constitute a new category (ie: no new tag should be introduced)?</p>
+     <p>Does LEWG agree that <strong>non-copyable</strong> iterators are always non-forward iterators and do not constitute a new category (ie: no new tag should be introduced)?</p>
     <li data-md>
      <p>Does LEWG agree that, in the absence of an explicit tag, a <strong>non-copyable</strong> iterator that otherwise meets the requirement of <code class="highlight"><c- n>InputIterator</c-></code>/<code class="highlight"><c- n>OutputIterator</c-></code> should be recognized as such?</p>
     <li data-md>
@@ -2021,7 +2019,8 @@ ranges::copy can and should behave like <code class="highlight"><c- n>ranges</c-
    <h2 class="heading settled" data-level="10" id="impact-on-other-proposals"><span class="secno">10. </span><span class="content">Impact on other proposals</span><a class="self-link" href="#impact-on-other-proposals"></a></h2>
    <h3 class="heading settled" data-level="10.1" id="view-proposals"><span class="secno">10.1. </span><span class="content">View proposals</span><a class="self-link" href="#view-proposals"></a></h3>
    <p>We suggest that the various proposals introducing new non-forward views should have iterators that are neither copyable nor equally comparable.
-Non-forward input views can further return <code class="highlight"><c- n>begin</c-><c- p>()</c-></code> by reference.</p>
+Non-forward input views can further return <code class="highlight"><c- n>begin</c-><c- p>()</c-></code> by reference.
+A candidate for such change would be <a data-link-type="biblio" href="#biblio-p1035r1">[P1035R1]</a>'s <code class="highlight"><c- n>istream_view</c-></code>.</p>
    <h3 class="heading settled" data-level="10.2" id="iterator-facade"><span class="secno">10.2. </span><span class="content">Iterator facade</span><a class="self-link" href="#iterator-facade"></a></h3>
    <p><a data-link-type="biblio" href="#biblio-p0186r0">[P0186R0]</a> describes a system for an iterator facade.
 The changes proposed make defining iterators easier but we think there is still value in an iterator facade.
@@ -2177,4 +2176,6 @@ during the writing of this paper.</p>
    <dd>Eric Niebler, Casey Carter, Christopher Di Bella. <a href="https://wg21.link/p0896r2">The One Ranges Proposal</a>. 25 June 2018. URL: <a href="https://wg21.link/p0896r2">https://wg21.link/p0896r2</a>
    <dt id="biblio-p0902r0">[P0902R0]
    <dd>Andrew Hunter. <a href="https://wg21.link/p0902r0">Move-only iterators</a>. 5 February 2018. URL: <a href="https://wg21.link/p0902r0">https://wg21.link/p0902r0</a>
+   <dt id="biblio-p1035r1">[P1035R1]
+   <dd>Christopher Di Bella. <a href="https://wg21.link/p1035">Input range adaptors</a>. URL: <a href="https://wg21.link/p1035">https://wg21.link/p1035</a>
   </dl>

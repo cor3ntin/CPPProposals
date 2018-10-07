@@ -1,5 +1,5 @@
 <pre class='metadata'>
-Title: Movability of Single-pass iterators
+Title: Movability of Single-pass Iterators
 Shortname: D1207
 Level: 0
 Status: D
@@ -21,6 +21,11 @@ Date: 2018-08-20
     "href": "http://elementsofprogramming.com/",
     "publisher": "Addison-Wesley",
     "date": "2009"
+},
+"P1035R1": {
+    "title": "Input range adaptors",
+    "authors": ["Christopher Di Bella"],
+    "href": "https://wg21.link/p1035"
 }
 }
 </pre>
@@ -58,8 +63,6 @@ In the rest of this paper
  * `RangesTSOutputIterator` designs the `OutputIterator` concept as proposed by the Ranges TS
  * `Cpp17OutputIterator` design the **requirements** of output iterators compatible with the STL as specified by the C++17 standard
 
- * input/outputs iterators refer to single pass(non/forward) iterators.
-
 # Scope
 
 This paper proposes changes to the Ranges TS and [[P0896R2]] both targeting C++20. Because the modifications proposed here changes some requirements and concepts as presented
@@ -81,7 +84,7 @@ In practice, that means that types satisfying the `Cpp17InputIterator` requireme
 
 Inversely, types satisfying the `InputIterator` concepts may not be compatible with algorithms in `std` as they may not be able to satisfy the `Cpp17InputIterator` requirements.
 
-Because it makes never sense to copy an Input Iterator (more on that later), it would be possible to add support for move-only iterators to the  `std` namespace without much change to the standard.
+Because it hardly makes sense to copy an Input Iterator (more on that later), it would be possible to add support for move-only iterators to the  `std` namespace without much change to the standard.
 However, because implementers may copy iterators within the implementation of the standard library, along with existing third-party libraries, a lot of code would need to be adapted.
 And there is little pressure to do so as existing iterators types cannot be changed.
 
@@ -217,7 +220,7 @@ It is then the responsibility of the developer providing the sequence to define 
 iterator for that sequence.
 
 In practice, because `InputIterator` and `ForwardIterator` are syntactically identical and because of the single-pass / multi-passes guarantees are poorly taught,
-it is not uncommon for iterators to be miss-categorized.
+it is common for iterators to be miss-categorized.
 Other iterator categories do not have these problems as each subsequent refining category adds syntax requirements:
 BidirectionalIiterator require decrement operators, RandomAccessIterator further requires more methods, etc.
 And while ContiguousIterator is currently not syntactically differentiated from RandomAccessIterator,
@@ -229,7 +232,7 @@ InputIterator to be easily distinguished from each other?
 Can we not require a tag system?
 Is there a defining operation that distinguishes `InputIterator` from `ForwardIterator` in such a way that it would both not require
 an explicit category tagging while at the same time offering a better understanding of iterator categories as well as a less surprising and
-safer API for input iterators?
+safer API for non-forward iterators?
 
 In fact, there is. We established that `ForwardIterator` are semantically copyable, while `InputIterator`s are not.
 So the requirement that promotes an `InputIterator` into a `ForwardIterator` is indeed copyability - which translate in C++ to a copy constructor.
@@ -303,8 +306,8 @@ There are, after all, no theoretical limits to the distance in time and space ov
 Worse even, should the type of `troubles.begin();` be changed from Forward to Input, the code would change from perfectly fine to
 UB, with no warning.
 
-Moving input iterators, therefore, better express intent, less surprising and safer.
-Move-only input Iterators also express the destructive nature of incrementation and give a better sense of the difference between `InputIterator`
+Moving non-forward iterators, therefore, better express intent, less surprising and safer.
+Move-only non-forward Iterators also express the destructive nature of incrementation and give a better sense of the difference between `InputIterator`
 and `ForwarIterator`.
 
 ## An Holistic Approach to Iterator Tags and Iterator Concepts
@@ -393,7 +396,7 @@ idea in Stepanov's teachings is that copy and equality are two sides of the same
 However, preventing `Equality` requires dramatic changes to the design and the author was reminded that negative-requirements
 are in general a terrible idea.
 
-Early feedback suggested a desire to be able to compare input iterators. Consider the following:
+Early feedback suggested a desire to be able to compare non-forward iterators. Consider the following:
 
 <xmp>
 auto a = stream.begin();
@@ -405,10 +408,10 @@ if(a == b) {
 </xmp>
 
 This code will inevitably lead to suffering at some point.
-However, we cannot prevent people from constructing multiple input iterators,
+However, we cannot prevent people from constructing multiple non-forward iterators,
 and these iterators will compare equal until one of them invalidate the other.
 
-Two input iterators compare equal if-and-only-if they point to the same position of the same sequence
+Two non-forward iterators compare equal if-and-only-if they point to the same position of the same sequence
 (and only one such position can be referred to at any given time).
 
 Allowing `EqualityComparable` on non-forward iterators also simplify the interoperability of `std::` and `ranges::` iterators.
@@ -478,7 +481,7 @@ We suspect hese tweaks to the taxonomy of Iterator will make them easier to teac
 
 # Questions for LEWG
  * Does LEWG want to support non-copyable iterators in the `ranges` namespace?
- * Does LEWG agree that **non-copyable** iterators are always input or output iterators and do not constitute a new category (ie: no new tag should be introduced)?
+ * Does LEWG agree that **non-copyable** iterators are always non-forward iterators and do not constitute a new category (ie: no new tag should be introduced)?
  * Does LEWG agree that, in the absence of an explicit tag, a **non-copyable** iterator that otherwise meets the requirement of `InputIterator`/`OutputIterator` should be recognized as such?
  * Does LEWG agree that, in the absence of an explicit tag, a **copyable** iterator that otherwise meets the requirement of `ForwardIterator` should be recognized as such?
  * Does LEWG want to recommend that future non-forward iterators considered for inclusion in the standard should not be copyable?
@@ -664,6 +667,7 @@ ranges::copy can and should behave like `ranges::move`.
 
 We suggest that the various proposals introducing new non-forward views should have iterators that are neither copyable nor equally comparable.
 Non-forward input views can further return `begin()` by reference.
+A candidate for such change would be [[P1035R1]]'s `istream_view`.
 
 ## Iterator facade
 
