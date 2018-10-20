@@ -1,8 +1,8 @@
 <pre class='metadata'>
 Title: Movability of Single-pass Iterators
 Shortname: P1207
-Level: 0
-Status: P
+Level: 1
+Status: D
 Group: wg21
 Editor: Corentin Jabot, corentin.jabot@gmail.com
 URL:
@@ -105,6 +105,12 @@ Date: 2018-08-20
 <div style="text-align:right"><em>I want to move(it), move(it), y'all want to move(it); </em></div>
 
 
+# Changes
+## Revision 1
+ * Remove the very wrong idea of having view return `begin()` by reference.
+ * Fix some confusing phrasing
+
+
 # Introduction
 
 Non-forward Input iterators and output iterators, also known as "Single-pass iterators" are semantically move-only.
@@ -113,7 +119,7 @@ The standard states:
 Note: For input iterators, a == b does not imply ++a == ++b (Equality does not guarantee the substitution property or referential transparency.)
 Algorithms on input iterators should never attempt to pass through the same iterator twice. They should be single pass algorithms.
 
-This means that once an iterator is copied, only one of the copies can meaningfully be used.
+This means that once an iterator is copied, only one of the copies can be read-from, which make the usefulness of such object questionable.
 Deferencing multiple copies of a single pass iterator often exposes undefined or invalid behavior.
 
 
@@ -617,7 +623,6 @@ However, a satisfying solution was offered by [[P0541R1]].
  * Does LEWG agree that, in the absence of an explicit tag, a **non-copyable** iterator that otherwise meets the requirement of `InputIterator`/`OutputIterator` should be recognized as such?
  * Does LEWG agree that, in the absence of an explicit tag, a **copyable** iterator that otherwise meets the requirement of `ForwardIterator` should be recognized as such?
  * Does LEWG want to recommend that future non-forward iterators considered for inclusion in the standard should not be copyable?
- * Does LEWG think non-forward views should return `begin()` by reference?
  * Does LEWG agree that `ranges::copy` can and should move from non-copyable input views?
  * Does LEWG want to revisit the default constructability of iterators given `Regular` is no longer a requirement of `Iterator`?
  * Does LEWG want to recognize `RandomAccessIterator` providing a conversion operator to the `pointer` type of the underlying sequence as `ContiguousIterator` without the need for an explicit tag?
@@ -720,7 +725,10 @@ allows the whole iterator taxonomy to be semantically and accurately constrainab
 ### Views
 The `SemiRegular` requirement is removed from `View` over a non-semi-regular ranges
 Indeed, views constituted of non-movable iterator are themselves move-only.
-We propose that non-forward views in the Ranges TS and these proposed in pending papers can return `begin()` by reference.
+
+Note: Calling `begin()` on a non-forward view still spawns entangled non-forward iterator,
+a problem we do not propose to solve - for lack of a reasonable solution.
+
 
 
 ### Inserters
@@ -798,7 +806,6 @@ ranges::copy can and should behave like `ranges::move`.
 ## View proposals
 
 We suggest that the various proposals introducing new non-forward views should have iterators that are neither copyable nor equally comparable.
-Non-forward input views can further return `begin()` by reference.
 A candidate for such change would be [[P1035R1]]'s `istream_view`.
 
 ## Iterator facade
