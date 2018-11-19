@@ -1,8 +1,8 @@
 <pre class='metadata'>
 Title: Adopt source_location from Library Fundamentals V3 for C++20
-Shortname: P1208
-Level: 0
-Status: P
+Shortname: D1208
+Level: 1
+Status: D
 Group: wg21
 Editor: Corentin Jabot, corentin.jabot@gmail.com
 Editor: Robert Douglas, rwdougla@gmail.com
@@ -10,12 +10,15 @@ Abstract: This paper proposes that `source_location` (from Library Fundamentals 
 Audience: LEWG, LWG
 URL: https://rawgit.com/cor3ntin/CPPProposals/master/merge_source_location/P1208.html
 Markup Shorthands: markdown yes
-Default Highlight: CPP
 Line Numbers: no
-Date: 2018-10-07
+Date: 2018-09-21
 </pre>
 
 <style>
+
+pre * {
+	all:initial ! important
+}
 
 .tony-table table {
     width:100%;
@@ -84,8 +87,11 @@ Date: 2018-10-07
     outline: thin solid #008000
 }
 
-</style>
+header {
+	font-weight:bold
+}
 
+</style>
 
 # Proposal
 
@@ -106,6 +112,8 @@ gained a constexpr constructor, allowing the use of `source_location` in constex
 During an early review of this papers, some interest in a few design changes arose:
 
 ## Enforcing a size for `source_location` objects ?
+
+<b> No consensus in San Diego </b>
 
 `source_location` as currently implemented by Clang and GCC is a structure encapsulating all its members (file, function, line, column),
 and so its size is roughly `3 * sizeof(void*)`.
@@ -155,6 +163,9 @@ realistically implementable by both GCC and Clang developers (Jonathan Wakely, E
 
 ## Removing `current()` altogether ?
 
+<b> No consensus in San Diego </b>
+
+
 If LEWG elects to keep value semantics, the authors would like to propose that the `current` function is removed,
 since, in its current form, `source_location` has a default constructor that has no meaningful use.
 Besides being harder to misuse, using the constructor of the type to acquire its value is also significantly less verbose.
@@ -168,18 +179,235 @@ Besides being harder to misuse, using the constructor of the type to acquire its
 
 # Proposed Wording
 
-Create a new header <source_location> with the synopsis taken from paragraph ¶15.11 of [[N4758]].
+The following wording correspond to the wording as in [n4758] (Library fundamental), with the exception of
+making source_location::current() an immediate function as decided by LEWG in San Diego.
 
-Add the `source_location` class to the C++ Working paper using the content from [[N4758]] in the <source_location> header.
+Notes To The Editor:
+<ul>
+The &lt;source_location> header in Library fundamental is part of a "Reflection" library that does not yet exist and may need to be created
+or be placed elsewhere.
+</ul>
+<ul>
+The &lt;source_location> header should be added to the list of freestanding headers
+</ul>
 
-Move this content from the `std::experimental::fundamentals_v3` namespace to the `std` namespace.
 
-In section 15.5.1.3  `[library.requirements.organization.compliance]`, add the <source_location> header to the table 21 (`[tab:cpp.headers.freestanding]`).
 
-NB: The new `<source_location>` header would be best described in a new `Reflection` library (as it is in [[N4758]]).
-At the time of the publication of this category does not exist, and so this paper defers to LEWG and LWG to find the best
-place to describe this header in the wording or to introduce a new Refection category in the wording.
+<wording>
 
+<section>
+      <header>11.1 Header &lt;source_location> synopsis [reflection.src_loc.syn]</header>
+<xmp>
+namespace std {
+  struct source_location {
+
+    static consteval source_location current() noexcept;
+
+    constexpr source_location() noexcept;
+
+    constexpr uint_least32_t line() const noexcept;
+    constexpr uint_least32_t column() const noexcept;
+    constexpr const char* file_name() const noexcept;
+    constexpr const char* function_name() const noexcept;
+  };
+} // namespace std</xmp>
+
+    <p id="reflection.src_loc.1" para_num="1">
+      <cxx-note><span class="nowrap">[ <em>Note:</em></span>
+    The intent of <code>source_location</code> is to have a small size and efficient copying.
+    <span class="nowrap">— <em>end note</em> ]</span>
+  </cxx-note>
+    </p>
+
+    <cxx-section id="reflection.src_loc.creation">
+
+
+    <section>
+    <header>11.2.1 source_location creation [reflection.src_loc.creation] </header>
+
+
+      <cxx-function id="reflection.src_loc.creation.1" para_num="1">
+
+    <pre><code><cxx-signature>static consteval source_location current() noexcept;</cxx-signature></code></pre>
+
+    <dl>
+
+
+
+        <cxx-returns id="reflection.src_loc.creation.2" para_num="2">
+
+    <dt>Returns:</dt><dd>
+          When invoked by a function call (<cxx-ref in="cxx" to="expr.call">C++17 <span title="expr.call">§8.2.2</span></cxx-ref>)
+          whose <cxx-grammarterm><i>postfix-expression</i></cxx-grammarterm> is
+          a (possibly parenthesized) <cxx-grammarterm><i>id-expression</i></cxx-grammarterm> naming <code>current</code>,
+          returns a <code>source_location</code> with an implementation-defined value.
+          The value should be affected by <code>#line</code>
+          (<cxx-ref in="cxx" to="cpp.line">C++17 <span title="cpp.line">§19.4</span></cxx-ref>) in the same manner as for <code>__LINE__</code> and <code>__FILE__</code>.
+          If invoked in some other way, the value returned is unspecified.
+        </dd>
+  </cxx-returns>
+        <cxx-remarks id="reflection.src_loc.creation.3" para_num="3">
+
+    <dt>Remarks:</dt><dd>
+          When a <cxx-grammarterm><i>brace-or-equal-initializer</i></cxx-grammarterm> is used to initialize a non-static data member,
+          any calls to <code>current</code> should correspond to the location of
+          the constructor or aggregate initialization that initializes the member.
+        </dd>
+  </cxx-remarks>
+        <p id="reflection.src_loc.creation.4" para_num="4">
+          <cxx-note><span class="nowrap">[ <em>Note:</em></span>
+    When used as a default argument (<cxx-ref in="cxx" to="dcl.fct.default">C++17 <span title="dcl.fct.default">§11.3.6</span></cxx-ref>),
+            the value of the <code>source_location</code> will be the location of the call to <code>current</code> at the call site.
+    <span class="nowrap">— <em>end note</em> ]</span>
+  </cxx-note>
+        </p>
+        <cxx-example>
+
+    <span class="nowrap">[ <em>Example:</em></span>
+
+          <pre>struct s {
+  source_location member = source_location::current();
+  int other_member;
+  s(source_location loc = source_location::current())
+    : member(loc) // <i>values of</i> member <i>will be from call-site</i>
+  {}
+  s(int blather) : // <i>values of</i> member <i>should be hereabouts</i>
+    other_member(blather) {}
+  s(double) // <i>values of</i> member <i>should be hereabouts</i>
+  {}
+};
+
+void f(source_location a = source_location::current()) {
+  source_location b = source_location::current(); // <i>values in</i> b <i>represent this line</i>
+}
+
+void g() {
+  f(); // f<i>’s first argument corresponds to this line of code</i>
+
+  source_location c = source_location::current();
+  f(c); // f<i>’s first argument gets the same values as </i>c<i>, above</i>
+}</pre>
+
+    <span class="nowrap">— <em>end example</em> ]</span>
+  </cxx-example>
+
+    </dl>
+  </cxx-function>
+
+      <cxx-function id="reflection.src_loc.creation.5" para_num="5">
+
+    <pre><code><cxx-signature>constexpr source_location() noexcept;</cxx-signature></code></pre>
+
+    <dl>
+
+
+
+        <cxx-effects id="reflection.src_loc.creation.6" para_num="6">
+
+    <dt>Effects:</dt><dd>Constructs an object of class <code>source_location</code>.</dd>
+  </cxx-effects>
+        <cxx-remarks id="reflection.src_loc.creation.7" para_num="7">
+
+    <dt>Remarks:</dt><dd>The values are implementation-defined.</dd>
+  </cxx-remarks>
+
+    </dl>
+  </cxx-function>
+
+    </section>
+  </cxx-section>
+
+    <cxx-section id="reflection.src_loc.fields">
+
+
+    <section>
+      <header>11.2.2 source_location field access</header>
+
+
+
+      <cxx-function id="reflection.src_loc.fields.1" para_num="1">
+
+    <pre><code><cxx-signature>constexpr uint_least32_t line() const noexcept;</cxx-signature></code></pre>
+
+    <dl>
+
+
+
+        <cxx-returns id="reflection.src_loc.fields.2" para_num="2">
+
+    <dt>Returns:</dt><dd>The presumed line number (<cxx-ref in="cxx" to="cpp.predefined">C++17 <span title="cpp.predefined">§19.8</span></cxx-ref>) represented by this object.</dd>
+  </cxx-returns>
+
+    </dl>
+  </cxx-function>
+
+      <cxx-function id="reflection.src_loc.fields.3" para_num="3">
+
+    <pre><code><cxx-signature>constexpr uint_least32_t column() const noexcept;</cxx-signature></code></pre>
+
+    <dl>
+
+
+
+        <cxx-returns id="reflection.src_loc.fields.4" para_num="4">
+
+    <dt>Returns:</dt><dd>
+          An implementation-defined value representing
+          some offset from the start of the line represented by this object.
+        </dd>
+  </cxx-returns>
+
+    </dl>
+  </cxx-function>
+
+      <cxx-function id="reflection.src_loc.fields.5" para_num="5">
+
+    <pre><code><cxx-signature>constexpr const char* file_name() const noexcept;</cxx-signature></code></pre>
+
+    <dl>
+
+
+
+        <cxx-returns id="reflection.src_loc.fields.6" para_num="6">
+
+    <dt>Returns:</dt><dd>
+          The presumed name of the current source file (<cxx-ref in="cxx" to="cpp.predefined">C++17 <span title="cpp.predefined">§19.8</span></cxx-ref>)
+          represented by this object as an NTBS.
+        </dd>
+  </cxx-returns>
+
+    </dl>
+  </cxx-function>
+
+      <cxx-function id="reflection.src_loc.fields.7" para_num="7">
+
+    <pre><code><cxx-signature>constexpr const char* function_name() const noexcept;</cxx-signature></code></pre>
+
+    <dl>
+
+
+
+        <cxx-returns id="reflection.src_loc.fields.8" para_num="8">
+
+    <dt>Returns:</dt><dd>
+          If this object represents a position in the body of a function,
+          returns an implementation-defined NTBS that should correspond to the function name.
+          Otherwise, returns an empty string.
+        </dd>
+  </cxx-returns>
+
+    </dl>
+  </cxx-function>
+
+    </section>
+  </cxx-section>
+
+    </section>
+  </cxx-section>
+</section>
+</wording>
+
+# Feature macro
 Similarly to the original [[n4417]] wording, we recommend the feature test macro `__cpp_lib_source_location` for this feature.
 
 # Acknowledgments
