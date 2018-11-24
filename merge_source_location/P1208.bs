@@ -176,6 +176,24 @@ Besides being harder to misuse, using the constructor of the type to acquire its
     void log(auto && message, std::source_location sc = {});
 </pre>
 
+# User-constructed source_location
+In San Diego, it was suggested to add the following constructor
+
+```cpp
+consteval source_location(uint_least32_t line,
+				uint_least32_t column,
+				const char* filename,
+				const char* function);
+```
+So that source_location can be constructed by users and other libraries (stacktrace ?)
+However, `consteval`, to the best of our understanding doesn't not guarantee that `filename` and `function` will
+live past the call to that constructor.
+
+`filename` and `function` would have to be copied (at compile time)
+and it isn't clear wether it would be possible  to copy them in read only memory.
+
+Therefore we suggested that this could be the subject of a separate paper to explore these lifetime issues
+
 
 # Proposed Wording
 

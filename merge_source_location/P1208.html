@@ -1216,7 +1216,7 @@ Possible extra rowspan handling
   <meta content="Bikeshed version a04b880cde96bf0ae2d14a0edcf2bcdcb631548b" name="generator">
   <link href="https://rawgit.com/cor3ntin/CPPProposals/master/merge_source_location/P1208.html" rel="canonical">
   <link href="https://isocpp.org/favicon.ico" rel="icon">
-  <meta content="7de9f4aa76d60f97f37b5faf17a2804b0626b6aa" name="document-revision">
+  <meta content="cb26592816c0ec06863189b09d9438a1d43206f7" name="document-revision">
 <style>
 
 pre * {
@@ -1537,9 +1537,10 @@ pre .property::before, pre .property::after {
       <li><a href="#enforcing-a-size-for-source_location-objects"><span class="secno">2.1</span> <span class="content">Enforcing a size for <code class="highlight"><c- n>source_location</c-></code> objects ?</span></a>
       <li><a href="#removing-current-altogether"><span class="secno">2.2</span> <span class="content">Removing <code class="highlight"><c- n>current</c-><c- p>()</c-></code> altogether ?</span></a>
      </ol>
-    <li><a href="#proposed-wording"><span class="secno">3</span> <span class="content">Proposed Wording</span></a>
-    <li><a href="#feature-macro"><span class="secno">4</span> <span class="content">Feature macro</span></a>
-    <li><a href="#acknowledgments"><span class="secno">5</span> <span class="content">Acknowledgments</span></a>
+    <li><a href="#user-constructed-source_location"><span class="secno">3</span> <span class="content">User-constructed source_location</span></a>
+    <li><a href="#proposed-wording"><span class="secno">4</span> <span class="content">Proposed Wording</span></a>
+    <li><a href="#feature-macro"><span class="secno">5</span> <span class="content">Feature macro</span></a>
+    <li><a href="#acknowledgments"><span class="secno">6</span> <span class="content">Acknowledgments</span></a>
     <li>
      <a href="#references"><span class="secno"></span> <span class="content">References</span></a>
      <ol class="toc">
@@ -1604,7 +1605,20 @@ Besides being harder to misuse, using the constructor of the type to acquire its
 <c- c1>//or</c->
 <c- b>void</c-> <c- nf>log</c-><c- p>(</c-><c- k>auto</c-> <c- o>&amp;&amp;</c-> <c- n>message</c-><c- p>,</c-> <c- n>std</c-><c- o>::</c-><c- n>source_location</c-> <c- n>sc</c-> <c- o>=</c-> <c- p>{});</c->
 </pre>
-   <h2 class="heading settled" data-level="3" id="proposed-wording"><span class="secno">3. </span><span class="content">Proposed Wording</span><a class="self-link" href="#proposed-wording"></a></h2>
+   <h2 class="heading settled" data-level="3" id="user-constructed-source_location"><span class="secno">3. </span><span class="content">User-constructed source_location</span><a class="self-link" href="#user-constructed-source_location"></a></h2>
+    In San Diego, it was suggested to add the following constructor 
+<pre class="language-cpp highlight"><c- n>consteval</c-> <c- nf>source_location</c-><c- p>(</c-><c- b>uint_least32_t</c-> <c- n>line</c-><c- p>,</c->
+				<c- b>uint_least32_t</c-> <c- n>column</c-><c- p>,</c->
+				<c- k>const</c-> <c- b>char</c-><c- o>*</c-> <c- n>filename</c-><c- p>,</c->
+				<c- k>const</c-> <c- b>char</c-><c- o>*</c-> <c- n>function</c-><c- p>);</c->
+</pre>
+   So that source_location can be constructed by users and other libraries (stacktrace ?)
+However, <code class="highlight"><c- n>consteval</c-></code>, to the best of our understanding doesn’t not guarantee that <code class="highlight"><c- n>filename</c-></code> and <code class="highlight"><c- n>function</c-></code> will
+live past the call to that constructor. 
+   <p><code class="highlight"><c- n>filename</c-></code> and <code class="highlight"><c- n>function</c-></code> would have to be copied (at compile time)
+and it isn’t clear wether it would be possible  to copy them in read only memory.</p>
+   <p>Therefore we suggested that this could be the subject of a separate paper to explore these lifetime issues</p>
+   <h2 class="heading settled" data-level="4" id="proposed-wording"><span class="secno">4. </span><span class="content">Proposed Wording</span><a class="self-link" href="#proposed-wording"></a></h2>
    <p>The following wording correspond to the wording as in [n4758] (Library fundamental), with the exception of
 making source_location::current() an immediate function as decided by LEWG in San Diego.</p>
    <p>Notes To The Editor:</p>
@@ -1716,9 +1730,9 @@ or be placed elsewhere. </ul>
      </section>
     </section>
    </wording>
-   <h2 class="heading settled" data-level="4" id="feature-macro"><span class="secno">4. </span><span class="content">Feature macro</span><a class="self-link" href="#feature-macro"></a></h2>
+   <h2 class="heading settled" data-level="5" id="feature-macro"><span class="secno">5. </span><span class="content">Feature macro</span><a class="self-link" href="#feature-macro"></a></h2>
     Similarly to the original <a data-link-type="biblio" href="#biblio-n4417">[n4417]</a> wording, we recommend the feature test macro <code class="highlight"><c- n>__cpp_lib_source_location</c-></code> for this feature. 
-   <h2 class="heading settled" data-level="5" id="acknowledgments"><span class="secno">5. </span><span class="content">Acknowledgments</span><a class="self-link" href="#acknowledgments"></a></h2>
+   <h2 class="heading settled" data-level="6" id="acknowledgments"><span class="secno">6. </span><span class="content">Acknowledgments</span><a class="self-link" href="#acknowledgments"></a></h2>
    <p>The authors would like to thanks the people who reviewed early version of this proposal, notably Peter Dimov, Jonathan Wakely Arthur O’Dwyer
 and Geoffrey Romer.
 We would also like to thank Herb Sutter and Niall Douglas for their insightful remarks on std::error and errors handling in general.</p>
