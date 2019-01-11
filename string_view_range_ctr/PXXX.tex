@@ -1,0 +1,153 @@
+\documentclass{wg21}
+
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{ulem}
+\usepackage{fullpage}
+\usepackage{parskip}
+\usepackage{csquotes}
+\usepackage{listings}
+\usepackage{minted}
+\usepackage{enumitem}
+\usepackage{minted}
+
+
+\lstdefinestyle{base}{
+  language=c++,
+  breaklines=false,
+  basicstyle=\ttfamily\color{black},
+  moredelim=**[is][\color{green!50!black}]{@}{@},
+  escapeinside={(*@}{@*)}
+}
+
+\newcommand{\cc}[1]{\mintinline{c++}{#1}}
+\newminted[cpp]{c++}{}
+
+
+\title{Range constructor for std::string\_view}
+\docnumber{P00R0}
+\audience{LEWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+This paper proposes that  \tcode{string_view} be constructible from any contiguous range of characters.
+The idea was extracted from P1206. 
+
+\section{Tony tables}
+\begin{center}
+\begin{tabular}{l|l}
+Before & After\\ \hline
+
+\begin{minipage}[t]{0.5\textwidth}
+\begin{minted}[fontsize=\footnotesize]{cpp}
+void foo(string_view);
+vector<char8_t> vec = get_some_unicode();
+foo(string_view{vec.data(), vec.size()});
+
+\end{minted}
+\end{minipage}
+&
+\begin{minipage}[t]{0.5\textwidth}
+\begin{minted}[fontsize=\footnotesize]{cpp}
+void foo(string_view);
+vector<char8_t> vec = get_some_unicode();
+foo(vec);
+\end{minted}
+\end{minipage}
+\\\\ \hline
+
+\end{tabular}
+\end{center}
+
+\section{Motivation}
+
+While P1206 gives a general motivation for range constructors, it's especially important for string_view because there exist in a lot of codebases
+string types that would benefit from being convertible to string_view \tcode{string_view}. For example, \tcode{llvm::StringRef}, \tcode{QByteArray}, \tcode{fbstring}, \tcode{boost::container::string} ...
+
+Manipulating the content of a vector as a string is also useful.
+
+Finally, this makes contiguous views operating on characters easier to use with \tcode{string_view}.
+
+
+\section{Design considerations}
+
+\begin{itemize}
+    \item instantiations of \tcode{basic_string} are specifically excluded because \tcode{std::basic_string} already provides a conversion operator and more importantly,
+    strings with different char_traits should not be implicitly convertible
+    \item Because \tcode{basic_string_view} doesn't mutate the underlying data, there is no reason to accept a range by something other than const lvalue reference.
+    \item The construction is implicit because it is cheap and a contiguous range of character is the same platonic thing as a string_view.
+    
+\end{itemize}
+
+\section{Proposed wording}
+
+Change in \textbf{[string.view] 20.4.2}:
+\begin{quote}
+\begin{codeblock}
+
+template<class charT, class traits = char_traits<charT>>
+class basic_string_view {
+public:
+    [...]
+
+    // construction and assignment
+    constexpr basic_string_view() noexcept;
+    constexpr basic_string_view(const basic_string_view&) noexcept = default;
+    constexpr basic_string_view& operator=(const basic_string_view&) noexcept = default;
+    constexpr basic_string_view(const charT* str);
+    constexpr basic_string_view(const charT* str, size_type len);
+
+    @\added{template <ContiguousRange R>}@
+    @\added{requires ranges::SizedRange<R> \&\& Same<iter_value_t<iterator_t<R>>, charT>}@
+    @\added{constexpr basic_string_view(const R\& r);}@
+
+    [...]
+};
+
+@\added{template<ranges::ContiguousRange R>}@
+@\added{basic_string_view(const R\& r)}@
+@\added{requires ranges::SizedRange<R>}@
+@\added{\qquad -> basic_string_view<iter_value_t<iterator_t<R>>>;}@
+
+\end{codeblock}
+\end{quote}
+
+Change in \textbf{[string.view.cons] 20.4.2.1}:
+
+Add after 7
+
+\begin{quote}
+\begin{addedblock}
+\begin{itemdecl}
+template <ranges::ContiguousRange R>
+requires ranges::SizedRange<R> && Same<iter_value_t<iterator_t<R>>, charT>
+constexpr basic_string_view(const R& r);
+
+\end{itemdecl}
+
+\begin{itemdescr}
+    \effects
+    Constructs a \tcode{basic_string_view} over the \tcode{ContiguousRange} r.
+    
+    
+    \throws If  \tcode{data(r)} or \tcode{size(r)} throw
+
+     \remarks This constructor shall not participate in overload resolution unless
+    \begin{itemize}
+        \item \tcode{is_array<R>} is \tcode{false}.
+        \item \tcode{R} does not derive from an instantiation of  \tcode{std::basic_string}
+        \item \tcode{R} does not derive from an instantiation of  \tcode{std::basic_string_view}
+        \end{itemize}
+    %
+\end{itemdescr}
+\end{addedblock}
+\end{quote}
+
+
+
+\end{document}
