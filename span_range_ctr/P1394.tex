@@ -1,0 +1,332 @@
+\documentclass{wg21}
+
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{ulem}
+\usepackage{fullpage}
+\usepackage{parskip}
+\usepackage{csquotes}
+\usepackage{listings}
+\usepackage{minted}
+\usepackage{enumitem}
+\usepackage{minted}
+
+
+\lstdefinestyle{base}{
+  language=c++,
+  breaklines=false,
+  basicstyle=\ttfamily\color{black},
+  moredelim=**[is][\color{green!50!black}]{@}{@},
+  escapeinside={(*@}{@*)}
+}
+
+\newcommand{\cc}[1]{\mintinline{c++}{#1}}
+\newminted[cpp]{c++}{}
+
+
+\title{Range constructor for \tcode{std::span}}
+\docnumber{D1394R0}
+\audience{LEWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+This paper proposes that \tcode{span} be constructible from any contiguous range of its value type.
+The idea was extracted from P1206. 
+
+
+\section{Motivation}
+
+Span is specified to be constructible from \tcode{Container} types.
+However, while defined, \tcode{Container} is not a concept and as such \tcode{ContiguousRange} is more expressive.
+Furthermore, there exist some non-container ranges that would otherwise be valid ranges to construct span from.
+As such span as currently specified is overly constrained. 
+
+\section{Design considerations}
+
+\begin{itemize}
+    \item Like the current design we propose that span can be constructed from lvalue references
+    \item We further propose that it can be constructed from any \tcode{forwarding-range} or \tcode{View} as they don't own the underlying data.
+    \item We believe allowing rvalue-reference of containers would be needlessly and surprisingly dangerous.
+\end{itemize}
+
+\section{Future work}
+
+\begin{itemize}
+	\item We suggest that both the wording and the implementation of span would greatly benefit from a trait to detect whether a type has a static extent.
+Because \tcode{std::extent} equals to 0 for types without static extent, and because 0 is a valid extent for containers, \tcode{std::extent} proved too limited. However we do not propose a solution in the present paper. 
+\end{itemize}
+
+\section{Proposed wording}
+
+Change in \textbf{[views.span] 21.7.3}:
+\begin{quote}
+\begin{codeblock}
+
+ // [span.cons], constructors, copy, and assignment
+constexpr span() noexcept;
+constexpr span(pointer ptr, index_type count);
+@\removed{constexpr span(pointer first, pointer last);}@
+@\added{template <ranges::ContiguousIterator It, ranges::Sentinel<It> End>}@
+@\added{constexpr span(It first, End last);}@
+
+template<size_t N>
+constexpr span(element_type (&arr)[N]) noexcept;
+template<size_t N>
+constexpr span(array<value_type, N>& arr) noexcept;
+template<size_t N>
+constexpr span(const array<value_type, N>& arr) noexcept;
+@\removed{template<class Container>}@
+@\removed{constexpr span(Container\& cont);}@
+@\removed{template<class Container>}@
+@\removed{constexpr span(const Container\& cont);}@
+constexpr span(const span& other) noexcept = default;
+template<class OtherElementType, ptrdiff_t OtherExtent>
+constexpr span(const span<OtherElementType, OtherExtent>& s) noexcept;
+
+...
+
+}
+
+
+template<class T, size_t N>
+span(T (&)[N]) -> span<T, N>;
+template<class T, size_t N>
+span(array<T, N>&) -> span<T, N>;
+template<class T, size_t N>
+span(const array<T, N>&) -> span<const T, N>;
+@\added{template <ranges::ContiguousIterator It, ranges::Sentinel<It> End>}@
+@\added{span(It, End) -> span<It, End>;}@
+
+template<class T, size_t N>
+span(const array<T, N>&) -> span<const T, N>;
+
+template<@\removed{Container}@ @\added{ContiguousRange}@>
+span(@\removed{Container\&}@ @\added{ranges::ContiguousRange\&}@) 
+-> span<@\removed{typename Container\&}@ @\added{ranges::iter_value_t<ranges::iterator_t<R>>}@>;
+template<@\removed{Container}@ @\added{ContiguousRange}@>
+span(@\removed{const Container\&}@ @\added{const ranges::ContiguousRange\&}@) 
+-> span<@\removed{typename Container\&}@ @\added{ranges::iter_value_t<ranges::iterator_t<R>>}@>;
+
+@\added{template<anges::ContiguousRange>}@
+@\added{requires ranges::View<R> || \placeholder{forwarding-range}<R>}@
+@\added{-> span<ranges::iter_value_t<ranges::iterator_t<R>>>;}@
+
+\end{codeblock}
+\end{quote}
+
+In 21.7.3.2 [span.cons]
+
+\begin{quote}
+	
+\begin{itemdecl}
+constexpr span(pointer ptr, index_type count);
+\end{itemdecl}
+\begin{itemdescr}
+	\pnum
+	\requires \range{ptr}{ptr + count} shall be a valid range.
+	If \tcode{extent} is not equal to \tcode{dynamic_extent},
+	then \tcode{count} shall be equal to \tcode{extent}.
+	
+	\pnum
+	\effects
+	Constructs a \tcode{span} that is a view over the range \range{ptr}{ptr + count}.
+	
+	\pnum
+	\ensures
+	\tcode{size() == count \&\& data() == ptr}.
+	
+	\pnum
+	\throws
+	Nothing.
+\end{itemdescr}
+
+	
+\begin{removedblock}
+\begin{itemdecl}
+constexpr span(pointer first, pointer last);
+\end{itemdecl}
+\end{removedblock}
+\begin{removedblock}
+
+\begin{itemdescr}
+	\pnum
+	\requires
+	\range{first}{last} shall be a valid range.
+	If \tcode{extent} is not equal to \tcode{dynamic_extent},
+	then \tcode{last - first} shall be equal to \tcode{extent}.
+	
+	\pnum
+	\effects
+	Constructs a span that is a view over the range \range{first}{last}.
+	
+	\pnum
+	\ensures
+	\tcode{size() == last - first \&\& data() == first}.
+	
+	\pnum
+	\throws
+	Nothing.
+\end{itemdescr}
+\end{removedblock}
+
+\begin{addedblock}
+\begin{itemdecl}
+template <ranges::ContiguousIterator It, ranges::Sentinel<It> End>
+constexpr span(It first, End last);
+\end{itemdecl}
+\end{addedblock}
+
+\begin{addedblock}
+
+\begin{itemdescr}
+
+	\pnum
+	\requires
+	\range{first}{last} shall be a valid range.
+	If \tcode{extent} is not equal to \tcode{dynamic_extent},
+	then \tcode{last - first} shall be equal to \tcode{extent}.
+	
+	\pnum
+	\effects
+	Constructs a span that is a view over the range \range{first}{last}.
+	
+	\pnum
+	\ensures
+	\tcode{size() == last - first \&\& data() ==  \tcode{adressof(*it)}}.
+	
+	\pnum
+	\throws
+	Nothing.
+	
+	\remark This constructor shall not participate in overload resolution unless:
+	\begin{itemize}
+		\item \tcode{ranges::iter_value_t<It>(*)[] is convertible to ElementType(*)[]};
+	\end{itemize}
+\end{itemdescr}
+\end{addedblock}
+
+\begin{itemdecl}
+	template<size_t N> constexpr span(element_type (&arr)[N]) noexcept;
+	template<size_t N> constexpr span(array<value_type, N>& arr) noexcept;
+	template<size_t N> constexpr span(const array<value_type, N>& arr) noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+	\pnum
+	\effects
+	Constructs a \tcode{span} that is a view over the supplied array.
+	
+	\pnum
+	\ensures
+	\tcode{size() == N \&\& data() == data(arr)}.
+	
+	\pnum
+	\remarks
+	These constructors shall not participate in overload resolution unless:
+	\begin{itemize}
+		\item \tcode{extent == dynamic_extent || N == extent} is \tcode{true}, and
+		\item \tcode{remove_pointer_t<decltype(data(arr))>(*)[]} is convertible to \tcode{ElementType(*)[]}.
+	\end{itemize}
+\end{itemdescr}
+
+\begin{removedblock}
+\begin{itemdecl}
+template<class Container> constexpr span(Container& cont);
+template<class Container> constexpr span(const Container& cont);
+\end{itemdecl}
+\end{removedblock}
+\begin{removedblock}
+\begin{itemdescr}
+	\pnum
+	\requires
+	\range{data(cont)}{data(cont) + size(cont)} shall be a valid range.
+	If \tcode{extent} is not equal to \tcode{dynamic_extent},
+	then \tcode{size(cont)} shall be equal to \tcode{extent}.
+	
+	\pnum
+	\effects
+	Constructs a \tcode{span} that is a view over the range \range{data(cont)}{data(cont) + size(cont)}.
+	
+	\pnum
+	\ensures
+	\tcode{size() == size(cont) \&\& data() == data(cont)}.
+	
+	\pnum
+	\throws
+	What and when \tcode{data(cont)} and \tcode{size(cont)} throw.
+	
+	\pnum
+	\remarks
+	These constructors shall not participate in overload resolution unless:
+	\begin{itemize}
+		\item \tcode{Container} is not a specialization of \tcode{span},
+		\item \tcode{Container} is not a specialization of \tcode{array},
+		\item \tcode{is_array_v<Container>} is \tcode{false},
+		\item \tcode{data(cont)} and \tcode{size(cont)} are both well-formed, and
+		\item \tcode{remove_pointer_t<decltype(data(cont))>(*)[]} is convertible to \tcode{ElementType(*)[]}.
+	\end{itemize}
+\end{itemdescr}
+\end{removedblock}
+
+
+\begin{addedblock}
+\begin{itemdecl}
+template <ranges::ContiguousRange R>
+constexpr span(R & r);
+template <ranges::ContiguousRange R>
+constexpr span(const R & r)
+template <ranges::ContiguousRange R>
+requires ranges::View<R> || @\placeholder{forwarding-range}<R>@
+constexpr span(R&&)
+\end{itemdecl}
+\end{addedblock}
+
+\begin{addedblock}
+\begin{itemdescr}
+	\pnum
+	\requires
+	If \tcode{extent} is not equal to \tcode{dynamic_extent},
+	then \tcode{size(r)} shall be equal to \tcode{extent}.
+	
+	\pnum
+	\effects
+	Constructs a \tcode{span} that is a view over the range \tcode{r}.
+	
+	\pnum
+	\ensures
+	\tcode{size() == size(r) \&\& data() == data(r)}.
+	
+	\pnum
+	\throws
+	What and when \tcode{data(r)} and \tcode{size(r)} throw.
+	
+	\pnum
+	\remarks
+	These constructors shall not participate in overload resolution unless:
+	\begin{itemize}
+		\item \tcode{R} is not a specialization of \tcode{span},
+		\item \tcode{R} is not a specialization of \tcode{array},
+		\item \tcode{is_array_v<R>} is \tcode{false},
+		\item \tcode{remove_pointer_t<decltype(data(r))>(*)[]} is convertible to \tcode{ElementType(*)[]}.
+	\end{itemize}
+\end{itemdescr}
+
+\begin{itemdecl}
+	constexpr span(const span& other) noexcept = default;
+\end{itemdecl}
+\begin{itemdescr}
+	\pnum
+	\ensures
+	\tcode{other.size() == size() \&\& other.data() == data()}.
+\end{itemdescr}
+\end{addedblock}
+
+
+\end{quote}
+
+
+\end{document}
