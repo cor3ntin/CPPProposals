@@ -105,14 +105,13 @@ public:
     @\added{template <ContiguousRange R>}@
     @\added{requires ranges::SizedRange<R> \&\& Same<iter_value_t<iterator_t<R>>, charT>}@
     @\added{constexpr basic_string_view(const R\& r);}@
+    
+    @\added{template <ContiguousIterator It, Sentinel<It> End>}@
+    @\added{requires Same<iter_value_t<It>, charT>}@
+    @\added{constexpr basic_string_view(const It\& begin, End end );}@
 
     [...]
 };
-
-@\added{template<ranges::ContiguousRange R>}@
-@\added{basic_string_view(const R\& r)}@
-@\added{requires ranges::SizedRange<R>}@
-@\added{\qquad -> basic_string_view<iter_value_t<iterator_t<R>>>;}@
 
 \end{codeblock}
 \end{quote}
@@ -145,9 +144,28 @@ constexpr basic_string_view(const R& r);
         \end{itemize}
     %
 \end{itemdescr}
+
+\begin{itemdecl}
+	template <ContiguousIterator It, Sentinel<It> End>
+	requires requires Same<iter_value_t<It>>, charT>
+	constexpr basic_string_view(const It& begin, End end );
+	
+\end{itemdecl}
+
+\begin{itemdescr}
+	\effects
+	Constructs a \tcode{basic_string_view} over the range [begin, end) .
+	
+	\remarks This constructor shall not participate in overload resolution unless
+	\begin{itemize}
+		\item \tcode{It} does not derive from an instantiation of  \tcode{std::basic_string}::iterator or  \tcode{std::basic_string}::const_iterator
+		\item \tcode{It} does not derive from an instantiation of  \tcode{std::basic_string_view}::iterator  \tcode{std::basic_string_view}::const_iterator
+		\item \tcode{It} and \tcode{End} are not of the same type or \tcode{End} is not convertible to a pointer of \tcode{charT}
+	\end{itemize}
+	%
+\end{itemdescr}
 \end{addedblock}
 \end{quote}
-
 
 
 \end{document}
