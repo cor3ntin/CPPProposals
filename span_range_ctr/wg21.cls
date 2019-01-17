@@ -279,6 +279,8 @@
 \newcommand{\Fundesc}[1]{\Fundescx{#1:}}
 \newcommand{\required}{\Fundesc{Required behavior}}
 \newcommand{\requires}{\Fundesc{Requires}}
+\newcommand{\constraints}{\Fundesc{Constraints}}
+\newcommand{\expects}{\Fundesc{Expects}}
 \newcommand{\ensures}{\Fundesc{Ensures}}
 \newcommand{\effects}{\Fundesc{Effects}}
 \newcommand{\postconditions}{\Fundesc{Postconditions}}
