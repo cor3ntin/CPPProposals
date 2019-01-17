@@ -24,8 +24,8 @@
 \newminted[cpp]{c++}{}
 
 
-\title{Range constructors for standard containers and views}
-\docnumber{P1206R0}
+\title{\tcode{ranges::to}: A function to convert any range to a container}
+\docnumber{P1206R1}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Christopher Di Bella}{cjdb.ns@gmail.com}
@@ -34,9 +34,51 @@
 \maketitle
 
 \section{Abstract}
-Most standard containers and views can be constructed from an iterators-pair.
-This paper, complementing \cite{P0896R3}, proposes that all standard views,
-containers and string classes be constructible from a range.
+
+We propose a function to copy or materialize any range (containers and views alike) to a container.
+
+\section{Revisions}
+
+\subsection*{Revision 1}
+\begin{itemize}
+	\item Split out the proposed constructors for string view and span into separate papers (\cite{P1391} and \cite{P1394} respectively)
+	\item Use a function based approach rather than adding a constructor to standard containers, as it proved unworkable.
+\end{itemize}
+\newpage
+\section{Quick Overview}
+We propose all the following syntaxes to be valid constructs
+
+\begin{minted}{cpp}
+std::list<int>  l;
+
+// copy a list to a vector of the same type
+Same<std::vector<int>> auto a = ranges::to<std::vector<int>>(l);
+//Specify an allocator
+Same<std::vector<int>> auto b = ranges::to<std::vector<int, Alloc>(l, alloc);
+// copy a list to a vector of the same type, deducing value_type
+Same<std::vector<int>> auto c = ranges::to<std::vector>(l);
+// copy to a container of types ConvertibleTo
+Same<std::vector<long>> auto d = ranges::to<std::vector<long>>(l);
+
+std::map<int, int> m;
+//Supports converting associative container to sequence containers
+Same<std::vector<std::pair<const int, int>>> auto e = ranges::to<vector>(m);
+Same<std::vector<std::pair<int, int>>> auto f = ranges::to<vector<std::pair<int, int>>>(m);
+
+//Supports converting sequence containers to associative ones
+Same<std::map<int, int>> auto g = f | ranges::to<map>();
+
+//Pipe syntaxe
+Same<std::vector<int>> auto g = l | ranges::view::take(42) | ranges::to<std::vector>();
+
+//Pipe syntax with allocator
+Same<std::vector<int>> auto g = l | ranges::view::take(42) | ranges::to<std::vector>(alloc);
+
+//The pipe syntax also support specifying the type and conversions
+Same<std::vector<int>> auto g = l | ranges::view::take(42) | ranges::to<std::vector<long>>(); 
+\end{minted}
+
+\pagebreak
 \section{Tony tables}
 \begin{center}
 \begin{tabular}{l|l}
@@ -51,7 +93,7 @@ std::vector<int> vec
 &
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
-std::vector<int> vec{lst};
+std::vector<int> = lst | ranges::to<std::vector>();
 \end{minted}
 \end{minipage}
 \\\\ \hline
@@ -73,7 +115,8 @@ ranges::copy(view, std::back_inserter(vec));
 &
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
-std::vector vec = ranges::iota(42);
+auto vec = ranges::iota(42) 
+	| ranges::to<std::vector>();
 \end{minted}
 \end{minipage}
 \\\\ \hline
@@ -92,27 +135,8 @@ ranges::move(map, std::back_inserter(vec));
 &
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
-std::map<int, widget> map = get_widgets_map();
-std::vector vec{std::move(map)};
-//vector<const int, widget>
-\end{minted}
-\end{minipage}
-\\\\ \hline
-
-\begin{minipage}[t]{0.5\textwidth}
-\begin{minted}[fontsize=\footnotesize]{cpp}
-void foo(string_view);
-vector<char8_t> vec = get_some_unicode();
-foo(string_view{vec.data(), vec.size()});
-
-\end{minted}
-\end{minipage}
-&
-\begin{minipage}[t]{0.5\textwidth}
-\begin{minted}[fontsize=\footnotesize]{cpp}
-void foo(string_view);
-vector<char8_t> vec = get_some_unicode();
-foo(vec);
+auto vec = get_widgets_map() 
+          | ranges::to<vector>();
 \end{minted}
 \end{minipage}
 \\\\ \hline
@@ -120,9 +144,6 @@ foo(vec);
 \end{tabular}
 \end{center}
 
-\section{Non-goal}
-
-{\bf As explained in the "Design consideration", this proposal focuses on explicit construction and does not propose implicit container conversion.}
 
 \section{Motivation}
 
@@ -139,21 +160,18 @@ Most containers of the standard library provide a constructors taking a pair of 
 While, this feature is very useful, as converting from one container type to another is a frequent
 use-case, it can be greatly improved by taking full advantage of the notions and tools offered by ranges.
 
-Indeed, given all containers are ranges (ie: an iterator-sentinel pair) the above example can be rewritten, without semantic of performance changes, as:
+Indeed, given all containers are ranges (ie: an iterator-sentinel pair) the above example can be rewritten, without semantic as:
 
 \begin{codeblock}
     std::list<int> lst;
-    std::vector<int> vec{lst};
+    std::vector<int> vec = lst | ranges::to<std::vector>();
 \end{codeblock}
 
 
 The above example is a common pattern as it is frequently preferable to copy the content of a \cc{std::list} to
 a \cc{std::vector} before feeding it an algorithm and then copying it back to a \cc{std::vector}.\\
 
-As all containers and views are ranges, it is logical they can themselves be built out of ranges.
-Note that most containers and views already provide constructors for iterator-pairs, which themselves represent a range.
-They also provide copy and move constructors for ranges of the same type ( \cc{std::vector} provide a copy constructor from another \cc{std::vector}, etc).
-This proposal is a generalization of these existing features.
+As all containers and views are ranges, it is logical they can themselves be easily built out of ranges.
 
 \subsection{View Materialization}
 
@@ -179,13 +197,13 @@ The facilities provided by \cite{P0896R3} allow to do that in the following way:
 \begin{codeblock}
     std::iota_view v{0, 1024};
     std::vector<int> materialized;
-    std::ranges::copy(v, std::back_inserter(materialized));
+    std::copy(v, std::back_inserter(materialized));
 \end{codeblock}
 
 This proposal allows rewriting the above snippet as:
 
 \begin{codeblock}
-    std::vector materialized = std::iota_view{0, 1024};
+    auto materialized = std::iota_view{0, 1024} | std::ranges::to<std::vector>();
 \end{codeblock}
 
 
@@ -195,7 +213,8 @@ Perhaps the most important aspect of view materialization is that it allows simp
     namespace std {
         split_view<std::string_view> split(std:std::string_view);
     }
-    std::vector<std::string> words = std::split("Splitting strings made easy");
+    auto res = std::split("Splitting strings made easy") 
+    	       | std::ranges::to<std::vector>();
 \end{codeblock}
 
 Indeed, a function such as \cc{split} is notoriously hard to standardize (\cite{P0540},  \cite{N3593}), because without lazy views and \cc{std::string_view}, it has to allocate or expose an expert-friendly interface.
@@ -207,140 +226,73 @@ Indeed, they have considered APIs that could rely heavily on this idiom, as it h
 Similar ideas have been presented in \cite{P1004}.
 
 \begin{codeblock}
-    std::vector<std::u8string> sentences =
+    auto sentences =
         text(blob)
         normalize<text::nfc> |
         graphemes_view |
-        split<sentences>;
+        split<sentences> | ranges::to<std::vector<std::u8string>>();
 \end{codeblock}
 
-\section{Design considerations}
 
 
-\subsection{Ranges and sentinels}
+\section{Constructing views from ranges}
 
-Iterators from the Ranges TS are not always compatible with iterators from the \cc{std} namespace.
-Namely,
+Constructing standard views (\cc{string_view} and \cc{span}) from ranges is addressed in separate papers as
+the design space and the requirements are different:
+
 \begin{itemize}
-    \item They do not have the same set of requirements.
-    \item \cc{std}'s iterator do not support unbounded ranges and \cc{Sentinel}
-    \item Work is being done to allow Ranges's iterators to be move only
+	\item \cc{string_view} : \cite{P1391}
+	\item  \cc{span}       : \cite{P1394}
+	\item Work is being done to allow Ranges's iterators to be move only
 \end{itemize}
 
-Therefore, in the general case, the iterator-pair constructor offered by standard containers cannot be used, but instead the \cc{ranges::copy} should be used.
-Deferring to the design decisions of \cite{P0896R3}, we think it's better avoided not to have support for both type of iterator-pairs in the same overload set
-as to avoid breaking code in subtle ways.
-
-Therefore, adding support for \cc{ranges::}'s ranges seem the best solution to make \cc{std::} containers constructible from objects meeting the requirements
-specified in the \cc{ranges::} namespace.
-
-Ranges are also a better, safer, stronger abstraction compared to iterator-pairs.
-
-\subsection{\cc{explicit}}
-
-Because copy of containers is costly, the authors of this paper believe it is important that the range-based constructors for containers be \cc{explicit}.
-However, there is a strong interest for this syntax to be supported:
-\begin{codeblock}
-    container c = view | transform;
-\end{codeblock}
-
-But, at the same time, the following pitfalls should be avoided:
+As views are not containers, they are not constructible from \cc{ranges::to}  
 
 
-\begin{codeblock}
-    auto map m = /*...*/;
-    vector a = m;  //implicit conversion map -> vector ($\mathcal{O}(n)$)
-    vector b = m;  //implicit conversion map -> vector ($\mathcal{O}(n)$)
-\end{codeblock}
----
+\section{Alternative designs}
 
-\begin{codeblock}
-    void foo(const vector<type> &);
-    deque a =  /*...*/;
-    foo(a);  //implicit conversion deque -> vector ($\mathcal{O}(n)$)
-    foo(a);  //implicit conversion deque -> vector ($\mathcal{O}(n)$)
-\end{codeblock}
----
+While we believe the range constructor based approach is the cleanest way to solve this problem,
+LEWG was interested in alternative design based on free functions
 
-\begin{codeblock}
-    std::list<type> foo();
-    void bar(const vector<type> &);
-    bar(foo()); //implicit conversion vector -> list ($\mathcal{O}(n)$)
-\end{codeblock}
----
+\subsection{Range constructors}
 
-\begin{codeblock}
-    void foo(const vector<type> &);
-    auto view = zip(...);
-    foo(view); // View materialized once
-    foo(view); // View materialized twice
-\end{codeblock}
+The original version of that paper proposed to add range constructors to all constructors.
+This proved to be unworkable because of std::initializer_list:
 
-All the above example crystallize concerns over performances traps that would indubitably arise.
-Therefore we think it is to best follow the existing practice not to allow implicit copy construction from objects of different types.
+\begin{quote}
+	\begin{codeblock}
+		std::vector<int> foo = ....;
+		std::vector a{foo}; //constructs a std:vector<std::vector<int>>
+		std::vector b(foo); //would construct a std::vector<int>
+	\end{codeblock}
+\end{quote}
 
-But because expiring views can only be materialized once and can therefore not be considered a copy, we think it is reasonable that
-containers can be constructed \emph{implicitly} from \cc{rvalue-reference} views.
-
-This compromise leads to some oddity because of the inability to distinguish between views over existing
-non-transformed data (\cc{span}, \cc{string_view}) from generators (\cc{iota_view}, \cc{transform_view}, etc).
-
-Notably,
-
-\begin{codeblock}
-{
-    vector<int> ints(42);
-    deque dq = ints; // error, implicit conversion of container
-}
-{
-    vector<int> ints(42);
-    span view = ints; //Ok, no copy => implicit
-    deque dq =  std::move(view);  //Ok, implicit construction from a view, but does a copy
-}
-\end{codeblock}
-
-This oddity, arise from an expressed desire to eat our cake and have it too, or more accurately, offer a convenient syntax for view materialization while avoiding implicit conversion of containers.
-
-\subsection{Movability}
-
-Beside being desirable to have different \cc{explicit}-ness policies for containers and views, the content of \cc{rvalue-reference} \cc{Containers}
-can be moved-from, as if per \cc{std::move_iterator} rather than copied.
-This is however generally undecidable for views which may not own the underlying data, and so views should only be copied-from.
-
-Concerns were raised circa 2014 that constructors are proposed here would copy data from the view more often than necessary and that something akin to
-\begin{codeblock}
-view.to_container<vector>();
-\end{codeblock}
-might be more suitable.
-
-However, the authors think this question is worth reexamining given the evolution of the ranges TS over the past 4 years.
-Notably:
-\begin{itemize}
-	\item It would be possible for \textbf{lazy} views to indicate that they can be moved from (through a tag).
-	\item Alternatively, it might be worth considering whether deferencing an iterator over a lazy view should be recommended to return by value.
-	\item The case can be made that for non-forward \cc{InputIterator}, it is always reasonable to move-from the elements rather than copying them. This is explored at length in \cite{P1207}
-	\item In the general case, non-owning views don't have any knowledge of whether they can be moved-from.
-\end{itemize}
-
-
-
-\subsection{Range constructor for views}
-
-Views (\cc{span}, \cc{basic_string_view}), can only be constructed from a \cc{ContiguousRange} of the same type.
-Because they don't copy the data, they do not need to be explicit as constructing a view is cheap.
-On the other end, because they don't own the data, we must take care to only construct them from lvalue reference.
-
-\subsection{\cc{constexpr}}
-
-Views (\cc{std::span}, \cc{std::basic_string_view}) constructors can be \cc{constexpr} and so, they shall be.
-Other containers are currently not \cc{constexpr}-constructible, but work is being down in this area.
-As more containers gain \cc{constexpr} constructors, the range-based constructors as proposed here should be made \cc{constexpr} too.
 
 \section{Existing practices}
 
+
+\subsection{Range V3}
+
+This proposal is based on the \cc{to} (previously (\cc{to_}) function offered by ranges v3.
+
+
+\begin{quote}
+	\begin{codeblock}
+		auto vec = view::ints
+		| view::transform([](int i) {
+			return i + 42;
+		})
+		| view::take(10)
+		| to_<std::vector>();
+	\end{codeblock}
+\end{quote}
+
+
+
 \subsection{Abseil}
 
-View materialization is a technique notably adopted by the \cite{Abseil} library. As per their documentation:
+Abseil offer converting constructors with each of their view.
+As per their documentation:
 
 \begin{quote}
     One of the more useful features of the StrSplit() API is its ability to adapt its result set to the desired return type.
@@ -359,25 +311,7 @@ operator C();
 \end{quote}
 
 However, because it stands to reason to expect that there are many more views than containers and because conversions between containers are also useful,
-it is a more general solution to accept ranges in container constructors than it is to make each view convertible to a container.
-
-
-\subsection{Range V3}
-
-The range-v3 offers a  \cc{to_<Container>} method which copy a \cc{Range} into a Container c.
-It is interesting to note that, to the best understanding of the authors, this methods always
-perform a deep copy of each element, rather than a move, when it can.
-
-\begin{quote}
-\begin{codeblock}
-auto vec = view::ints
-	| view::transform([](int i) {
-		return i + 42;
-	})
-	| view::take(10)
-	| to_<std::vector>();
-\end{codeblock}
-\end{quote}
+it is a more general solution to provide a solution that is not coupled with each individual view.
 
 \subsection{Previous work}
 
@@ -385,272 +319,73 @@ auto vec = view::ints
 
 \section{Future work}
 
-Whether \cc{std::vector} can be converted to and from \cc{std::string} in $\mathcal{O}(1)$ is an area of interest, notably for SG-16 - see \cite{P1072R1}.
-Should such conversion exist, it should take precedence over the generic range-constructor proposed here.
+Eric Niebler suggested (and implemented in ranges v3) making the parenthesis \tcode{range::to<..>();} in optional, 
+such that 
+
+\tcode{auto v = \tcode{view | range::to<vector<int>>;}}
+
+Would be valid syntax. However, this is currently only be feasible for types template (\tcode{range::to<vector<int>>;})
+and not template template (\tcode{range::to<vector>;}) which would require a core language tweak to make possible.
 
 \section{Proposed wording}
 
-%%This wording is based on the working draft \cite{N4727}.
-A more complete wording will ve provided in a subsequent revision
+We do not provide wording at this time, but this is what the interface would look like conceptually.
 
-Change in \textbf{[basic.string] 20.3.2}:
 \begin{quote}
 \begin{codeblock}
-namespace std {
-template<class charT, class traits = char_traits<charT>,
-class Allocator = allocator<charT>>
-class basic_string {
-    public:
-
-    [...]
-
-    basic_string() noexcept(noexcept(Allocator())) : basic_string(Allocator()) { }
-    explicit basic_string(const Allocator& a) noexcept;
-    basic_string(const basic_string& str);
-    basic_string(basic_string&& str) noexcept;
-    basic_string(const basic_string& str, size_type pos, const Allocator& a = Allocator());
-    basic_string(const basic_string& str, size_type pos, size_type n,
-    const Allocator& a = Allocator());
-    template<class T>
-    basic_string(const T& t, size_type pos, size_type n, const Allocator& a = Allocator());
-    template<class T>
-    explicit basic_string(const T& t, const Allocator& a = Allocator());
-    basic_string(const charT* s, size_type n, const Allocator& a = Allocator());
-    basic_string(const charT* s, const Allocator& a = Allocator());
-    basic_string(size_type n, charT c, const Allocator& a = Allocator());
-    template<class InputIterator>
-    basic_string(InputIterator begin, InputIterator end, const Allocator& a = Allocator());
-    basic_string(initializer_list<charT>, const Allocator& = Allocator());
-    basic_string(const basic_string&, const Allocator&);
-    basic_string(basic_string&&, const Allocator&);
-
-    @\added{template<InputRange C>}@
-    @\added{explicit basic_string(C\&\&, const Allocator\& = Allocator());}@
-
-    @\added{template<InputRange R>}@
-    @\added{requires InputView<R>}@
-    @\added{explicit(see-below)}@
-    @\added{basic_string(R\&\&, const Allocator\& = Allocator());}@
-    ~basic_string();
-
-    [...]
-};
-
-template<class InputIterator,
-class Allocator = allocator<typename iterator_traits<InputIterator>::value_type>>
-basic_string(InputIterator, InputIterator, Allocator = Allocator())
--> basic_string<typename iterator_traits<InputIterator>::value_type,
-char_traits<typename iterator_traits<InputIterator>::value_type>,
-Allocator>;
-
-@\added{template<InputRange R,}@
-@\added{class Allocator = allocator<iter_value_t <iterator_t< R>>>>}@
-@\added{explicit() basic_string(R\&\& b, Allocator a = Allocator() )}@
-@\added{	-> basic_string<}@
-@\added{		iter_value_t<iterator_t<R>>,}@
-@\added{		char_traits<iter_value_t<iterator_t<R>>>,}@
-@\added{		Allocator}@
-@\added{	>;}@
-
-template<class charT,
-class traits,
-class Allocator = allocator<charT>>
-explicit basic_string(basic_string_view<charT, traits>, const Allocator& = Allocator())
--> basic_string<charT, traits, Allocator>;
-
-template<class charT,
-class traits,
-class Allocator = allocator<charT>>
-basic_string(basic_string_view<charT, traits>,
-typename @\seebelow@::size_type, typename @\seebelow@::size_type,
-const Allocator& = Allocator())
--> basic_string<charT, traits, Allocator>;
-
+namespace ranges {
+	
+	//1
+	template <Container C, Range R, typename...Arg>
+	constexpr auto to(const R & r, Args...&) -> C;
+	
+	//2
+	template <template <typename...> typename C, 
+	          Range R, typename T = range_value_t<R>, typename... Args>
+	constexpr auto to(const R & r, Args...&) -> C<T, Args...>;
+	
+	//3
+	template <Container C, typename...Args>
+	constexpr auto to(Args...&&) -> @{\impdef}@;
+	
+	//4
+	template <template <typename...> typename C>
+	constexpr auto to(Args...&&) -> @{\impdef}@;
+	
+	//5
+	template <Range R>
+	constexpr auto operator|(const R && r, @{\impdef}@});
 }
 \end{codeblock}
 \end{quote}
 
+Functions 3 and 4 return an implementation defined object that can be passed to the pipe operator(5), 
+and provide an implementation defined way of creating a container ov the appropriate type.
 
-Change in \textbf{[string.cons] 20.3.2.2}:
+\tcode{range::to} forwards the range to the container if it is constructible from it. 
+If not, it tries to construct the container from the \tcode{begin(range)/end(range)} iterators pair.
+Otherwise, it falls-back to \tcode{ranges::copy}.
+This ensure the most efficient strategy is selected to perform the actual copy.
 
-Add after 23
-
-\begin{quote}
-\begin{addedblock}
-\begin{itemdecl}
-template<InputRange C>
-requires Constructible<charT, iter_value_t<iterator_t<C>>>
-explicit basic_string(C&& r, const Allocator& = Allocator());
-\end{itemdecl}
-
-\begin{itemdescr}
-    \effects
-    In a move constructor, constructs a string by moving from the elements of \tcode{r} in a way equivalent to
-    \begin{codeblock}
-        ranges::move(r, std::back_inserter(*this));\end{codeblock}
-    Otherwise, constructs a string from the values in the range [\tcode{ranges::begin(r)}, \tcode{ranges::end(r)}).
-    %
-
-    \complexity
-    Linear in
-    \tcode{ranges::size(r)}.
-
-\end{itemdescr}
-\end{addedblock}
-\end{quote}
-
----
-
-\begin{quote}
-\begin{addedblock}
-\begin{itemdecl}
-template<InputRange R>
-requires InputView<R>
-requires Constructible<charT, iter_value_t<iterator_t<C>>>
-explicit(@\seebelow@)
-basic_string(R&& r, const Allocator& = Allocator());
-
-\end{itemdecl}
-
-\begin{itemdescr}
-    \effects
-    Constructs a string from the values in the range [\tcode{ranges::begin(r)}, \tcode{ranges::end(r)})
-
-    \remarks This constructor shall not participate in overload resolution unless
-    \begin{itemize}
-        \item \tcode{is_array<R>} is \tcode{false}.
-    \end{itemize}
-
-    \complexity
-    Linear in
-    \tcode{ranges::size(r)}.
-
-
-The expression inside explicit is equivalent to:
-\begin{codeblock}
-    !is_rvalue_reference_v<V&&>
-\end{codeblock}
-
-    %
-\end{itemdescr}
-\end{addedblock}
-\end{quote}
-
-Add after 28
-
-\begin{quote}
-\begin{addedblock}
-\begin{itemdecl}
-template<InputRange R, class Allocator = allocator<iter_value_t <iterator_t< R>>>>
-explicit(@\seebelow@) basic_string(R&& b, Allocator a = {})
-	-> basic_string<
-		iter_value_t<iterator_t<R>>,
-		char_traits<iter_value_t<iterator_t<R>>>,
-		Allocator>;
-\end{itemdecl}
-
-\begin{itemdescr}
-	 \remarks Shall not participate in overload resolution if Allocator is a type that does not qualify as an allocator.
-
-
-	The expression inside explicit is equivalent to:
-	\begin{codeblock}
-		!View<R&&> && !is_rvalue_reference_v<V&&>
-	\end{codeblock}
-
-	%
-\end{itemdescr}
-\end{addedblock}
-\end{quote}
-
-Change in \textbf{[string.view] 20.4.2}:
-\begin{quote}
-\begin{codeblock}
-
-template<class charT, class traits = char_traits<charT>>
-class basic_string_view {
-public:
-	[...]
-
-	// construction and assignment
-	constexpr basic_string_view() noexcept;
-	constexpr basic_string_view(const basic_string_view&) noexcept = default;
-	constexpr basic_string_view& operator=(const basic_string_view&) noexcept = default;
-	constexpr basic_string_view(const charT* str);
-	constexpr basic_string_view(const charT* str, size_type len);
-
-	@\added{template <ContiguousRange R>}@
-	@\added{requires Same<iter_value_t<iterator_t<R>>, charT>}@
-	@\added{constexpr basic_string_view(const R\& r);}@
-
-	[...]
-};
-
-@\added{template<ContiguousRange R>}@
-@\added{basic_string_view(const R\& b)}@
-@\added{\qquad -> basic_string_view<}@
-@\added{\qquad\qquad iter_value_t<iterator_t<R>>,}@
-@\added{\qquad\qquad char_traits<iter_value_t<iterator_t<R>>>}@
-@\added{\qquad 	>;}@
-
-\end{codeblock}
-\end{quote}
-
-Change in \textbf{[string.view.cons] 20.4.2.1}:
-
-Add after 7
-
-\begin{quote}
-\begin{addedblock}
-\begin{itemdecl}
-template <ContiguousRange R>
-requires Same<iter_value_t<iterator_t<R>>, charT>
-constexpr basic_string_view(const R& r);
-
-\end{itemdecl}
-
-\begin{itemdescr}
-	\requires
-	r is a valid range.
-	\effects
-	Constructs a \tcode{basic_string_view}, with the over \tcode{ContiguousRange} r.
-
-	 \remarks This constructor shall not participate in overload resolution unless
-	\begin{itemize}
-		\item \tcode{is_array<R>} is \tcode{false}.
-	\end{itemize}
-	%
-\end{itemdescr}
-\end{addedblock}
-\end{quote}
-
-\subsection{Yet to be provided wording for}
-
-\begin{itemize}
-	\item vector
-	\item deque
-	\item list
-	\item forward_list
-	\item priority_queue
-	\item map
-	\item multimap
-	\item set
-	\item multiset
-	\item unordered_map
-	\item unordered_set
-	\item unordered_multiset
-	\item unordered_multimap
-	\item span (notably, we wish to modify span to be constructed from a ContiguousRange rather than a container, for the sake of consistency.)
-\end{itemize}
 
 \section{Acknowledgements}
-We would like to thank the people who gave feedback on this paper, notably Casey Carter, Arthur O'Dwyer, Barry Revzin
+We would like to thank the people who gave feedback on this paper, notably Eric Niebler, Casey Carter, Arthur O'Dwyer, Barry Revzin
 and Tristan Brindle.\\
 We would also further acknowledge that this paper can only exist because of the incredible body of work constituting the Ranges TS.
 
 \section{References}
 \renewcommand{\section}[2]{}%
 \begin{thebibliography}{9}
+	
+\bibitem[P1391]{P1391}
+	Corentin Jabot
+	\emph{Range constructor for std::string\_view}\newline
+	\url{https://wg21.link/P1391}
+	
+\bibitem[P1394]{P1394}
+	Corentin Jabot
+	\emph{Range constructor for std::span}\newline
+	\url{https://wg21.link/P1394}
 
 \bibitem[P0896R3]{P0896R3}
     Eric Niebler, Casey Carter, Christopher Di Bella
@@ -689,11 +424,6 @@ We would also further acknowledge that this paper can only exist because of the 
     Jeffrey Yasskin
     \emph{[Ranges] Traversable arguments for container constructors and methods}\newline
     \url{https://wg21.link/n3686}
-
-\bibitem[P1207]{P1207}
-	Corentin Jabot
-	\emph{Movability of Single-pass Iterators}\newline
-	\url{https://wg21.link/P1207}
 
 \bibitem[P1072R1]{P1072R1}
 	Chris Kennelly, Mark Zeren
