@@ -125,8 +125,13 @@ The standard states:
 Note: For input iterators, a == b does not imply ++a == ++b (Equality does not guarantee the substitution property or referential transparency.)
 Algorithms on input iterators should never attempt to pass through the same iterator twice. They should be single pass algorithms.
 
-This means that once an iterator is copied, only one of the copies can be read-from, which make the usefulness of such object questionable.
-Deferencing multiple copies of a single pass iterator often exposes undefined or invalid behavior.
+This means that once an iterator is copied, only one of the copies can be read-from if either one is incremented, which make the usefulness of such object questionable.
+Deferencing multiple copies of a single pass iterator often exposes undefined or invalid behavior if either one is incremented: the following example exposes Undefined behavior:
+<xmp>
+auto other = some_input_iterator;
+std::cout << *(++other) << *some_input_iterator << '\n';
+</xmp>
+
 
 It would, therefore, make sense that classes satisfying the `InputIterator` concept shall only be required to be movable.
 
@@ -214,9 +219,6 @@ An iterator denotes a position into a sequence of elements (whether that sequenc
 A most basic iterator can be incremented, which means it can move to the next position in the sequence.
 An iterator does not own the sequence iterated over (there are exceptions, ie: generators), which means the salient property of an iterator is its position in that sequence.
 
-In fact, in Elements of Programming [[EOP]], an iterator is exactly defined by its distance from the start of the
-sequence.
-
 Iterators categories then represent the way an iterator can move along that sequence.
  * Input and FordwardIterator: sequentially, one direction
  * BidirectionalIterator: sequentially, both directions
@@ -248,9 +250,9 @@ So, what separates `InputIterator` from `ForwardIterator` if they are both "forw
 That, in turn, implies `ForwardIterator` is copyable, because if a sequence can be traversed multiple times,
 it can also be traversed multiple times at the same time and therefore there can be multiple `ForwardIterator`
 pointing at different elements in the sequence.
-ForwardIterator is also always `EquallyComparable`.
+ForwardIterator is also always `EqualityComparable`.
 Two `ForwardIterator` compare equal if they point to the same elements in the sequence (remember, that in the general case, the position of an iterator in a sequence is its sole salient property).
-And so `ForwardIterator`, being both `EquallyComparable` and `Copyable` is Regular.
+And so `ForwardIterator`, being both `EqualityComparable` and `Copyable` is Regular.
 
 The standard defines the "multi pass" guarantee by stating:
 <em>
@@ -271,7 +273,7 @@ The existence of an Iterator at the nth position in the sequence implies there c
 
 <xmp>
 //Given an InputIterator a
-b = a;
+auto b = a;
 a++;
 b; // is invalid.
 </xmp>
@@ -297,14 +299,14 @@ The problem is, of course, that we do not have, in the general case, a more mean
 of a sequence than by defining what type of iterator is used to iterate over it.
 
 It is then the responsibility of the developer providing the sequence to
-define the most appropriate -- the most specialized -- iterator for that sequence.
+define the most appropriate -- the most specialized -- iterator category for that sequence.
 
 In practice, because `InputIterator` and `ForwardIterator` are syntactically identical and because of the single-pass / multi-passes guarantees are poorly taught,
-it is common for iterators to be miss-categorized.
+it is common for iterators to be mis-categorized.
 Other iterator categories do not have these problems as each subsequent refining category adds syntax requirements:
-BidirectionalIiterator require decrement operators, RandomAccessIterator further requires more methods, etc.
+BidirectionalIiterator require decrement operators, RandomAccessIterator has further requirements.
 And while ContiguousIterator is currently not syntactically differentiated from RandomAccessIterator,
-it would be possible to require that ContiguousIterator be convertible to a pointer of the type of the underlying sequence's
+it is possible to require that ContiguousIterator be convertible to a pointer of the type of the underlying sequence's
 elements.
 
 But then, is there a set of operations and semantic requirements, translating to actual C++ syntax, that could allow for
@@ -314,7 +316,7 @@ Is there a defining operation that distinguishes `InputIterator` from `ForwardIt
 an explicit category tagging while at the same time offering a better understanding of iterator categories as well as a less surprising and
 safer API for non-forward iterators?
 
-In fact, there is. We established that `ForwardIterator` are semantically copyable, while `InputIterator`s are not.
+In fact, there is. We established that `ForwardIterator`s are semantically copyable, while `InputIterator`s are not.
 So the requirement that promotes an `InputIterator` into a `ForwardIterator` is indeed copyability - which translate in C++ to a copy constructor.
 We can, therefore, consider that, in the absence of a tag, all non-copyable iterators are `InputIterator`,
 while all copyable iterators are `ForwardIterator`.
@@ -336,7 +338,7 @@ Like a pointer, `InputIterator` is Regular, up until the point a transformation 
 <xmp>
 InputIterator i = /*...*/
 *i    //ok
-a = i //ok
+auto a = i //ok
 *i    //ok
 i++;  // a now invalid
 </xmp>
@@ -349,7 +351,7 @@ Let's consider the case where we move from an iterator instead of copying it
 <xmp>
 InputIterator i = /*...*/
 *i           //ok
-a = move(i); //ok
+auto a = move(i); //ok
 *i;          //invalid
 a++;         //ok
 i++;         //invalid
@@ -427,7 +429,7 @@ template <class I> concept bool RandomAccessIterator =
     RandomAccessIncrementable<I>;
 
 template <class I> concept bool ContiguousIterator =
-    BidirectionalIterator<I> &&
+    RandomAccessIterator<I> &&
     ConvertibleTo<I, std::add_const_t<iter_value_t<I>>*>
 </xmp>
 
@@ -761,12 +763,11 @@ insert_iterator<Container> inserter(Container& x, typename Container::iterator i
  * `move_iterator::base()` needs to be disabled for non-copyable iterators
 
 
-## Changes to &lt;algorithms>
+## Changes to &lt;algorithm>
 
-Should algorithms not satisfy `InputIterator` (because they depend on copy-constructability) - they would need to be modified to
-accept a `ForwardIterator` instead.
-Beyond that, there would be very little, if any, wording change required to ranges' algorithms.
-However, implementers would have to never copy non-forward iterators within the implementation.
+There should be no wording change to algorithms.
+However, implementers would have to never copy non-forward iterators within the implementation
+of C++20 ranges based and ranges:: algorithms.
 
 # Impact on other proposals
 
@@ -797,5 +798,5 @@ Some algorithms, like `count`, proved to require specialization for `InputIterat
 
 ## Acknowledgments
 
-The authors like to thank Connor Waters, Tony Van Eerd, Eric Niebler, Casey Carter, Sean Parent and Arthur O’Dwyer who gave tremendously helpful feedbacks
+The authors like to thank Connor Waters, Tony Van Eerd, Eric Niebler, Casey Carter, Christopher Di Bella, Sean Parent and Arthur O’Dwyer who gave tremendously helpful feedbacks
 during the writing of this paper.
