@@ -25,7 +25,7 @@
 
 
 \title{Range constructor for \tcode{std::span}}
-\docnumber{D1394R0}
+\docnumber{P1394R0}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -36,7 +36,7 @@
 \section{Abstract}
 
 This paper proposes that \tcode{span} be constructible from any forwarding contiguous range of its value type.
-The idea was extracted from P1206. 
+The idea was extracted from P1206.
 
 \section{Tony tables}
 \begin{center}
@@ -106,7 +106,7 @@ foo(get_vector()); //ill-formed
 Span is specified to be constructible from \tcode{Container} types.
 However, while defined, \tcode{Container} is not a concept and as such \tcode{ContiguousRange} is more expressive.
 Furthermore, there exist some non-container ranges that would otherwise be valid ranges to construct span from.
-As such span as currently specified fits poorly with the iterators / ranges model of the rest of the standard library. 
+As such span as currently specified fits poorly with the iterators / ranges model of the rest of the standard library.
 
 
 \section{Design considerations}
@@ -122,7 +122,7 @@ respectively as well as to add or modify the relevant deduction guides for these
 
 \begin{itemize}
 	\item We suggest that both the wording and the implementation of span would greatly benefit from a trait to detect whether a type has a static extent.
-Because \tcode{std::extent} equals to 0 for types without static extent, and because 0 is a valid extent for containers, \tcode{std::extent} proved too limited. However we do not propose a solution in the present paper. 
+Because \tcode{std::extent} equals to 0 for types without static extent, and because 0 is a valid extent for containers, \tcode{std::extent} proved too limited. However we do not propose a solution in the present paper.
 \end{itemize}
 
 \section{Proposed wording}
@@ -194,7 +194,7 @@ In 21.7.3.2 [span.cons]
 
 \begin{quote}
 
-	
+
 \begin{itemdecl}
 	constexpr span() noexcept;
 \end{itemdecl}
@@ -202,7 +202,7 @@ In 21.7.3.2 [span.cons]
 	\pnum
 	\ensures
 	\tcode{size() == 0 \&\& data() == nullptr}.
-	
+
 	\pnum
 	\remarks
 	This constructor shall not participate in overload resolution
@@ -225,21 +225,21 @@ constexpr span(It first, index_type count);
 	\requires \range{\changed{ptr}{first}}{ \changed{ptr}{first} + count} shall be a valid range.
 	If \tcode{extent} is not equal to \tcode{dynamic_extent},
 	then \tcode{count} shall be equal to \tcode{extent}.
-	
+
 	\pnum
 	\effects
 	Constructs a \tcode{span} that is a view over the range \range{\changed{ptr}{first} }{\changed{ptr}{first}  + count}.
-	
+
 	\pnum
 	\ensures
 	\tcode{size() == count \&\& data() == \changed{ptr}{\tcode{adressof(*first)}}}.
-	
+
 	\pnum
 	\throws
 	Nothing.
 \end{itemdescr}
 
-	
+
 \begin{removedblock}
 \begin{itemdecl}
 constexpr span(pointer first, pointer last);
@@ -253,15 +253,15 @@ constexpr span(pointer first, pointer last);
 	\range{first}{last} shall be a valid range.
 	If \tcode{extent} is not equal to \tcode{dynamic_extent},
 	then \tcode{last - first} shall be equal to \tcode{extent}.
-	
+
 	\pnum
 	\effects
 	Constructs a span that is a view over the range \range{first}{last}.
-	
+
 	\pnum
 	\ensures
 	\tcode{size() == last - first \&\& data() == first}.
-	
+
 	\pnum
 	\throws
 	Nothing.
@@ -284,15 +284,15 @@ constexpr span(It first, End last);
 	\expects
 	If \tcode{extent} is not equal to \tcode{dynamic_extent},
 	then \tcode{last - first} shall be equal to \tcode{extent}.
-	
+
 	\pnum
 	\effects
 	Constructs a span that is a view over the range \range{first}{last}.
-	
+
 	\pnum
 	\ensures
 	\tcode{size() == last - first \&\& data() ==  \tcode{adressof(*first)}}.
-	
+
 	\pnum
 	\throws
 	Nothing.
@@ -309,11 +309,11 @@ template<size_t N> constexpr span(const array<value_type, N>& arr) noexcept;
 	\pnum
 	\effects
 	Constructs a \tcode{span} that is a view over the supplied array.
-	
+
 	\pnum
 	\ensures
 	\tcode{size() == N \&\& data() == data(arr)}.
-	
+
 	\pnum
 	\remarks
 	These constructors shall not participate in overload resolution unless:
@@ -336,19 +336,19 @@ template<class Container> constexpr span(const Container& cont);
 	\range{data(cont)}{data(cont) + size(cont)} shall be a valid range.
 	If \tcode{extent} is not equal to \tcode{dynamic_extent},
 	then \tcode{size(cont)} shall be equal to \tcode{extent}.
-	
+
 	\pnum
 	\effects
 	Constructs a \tcode{span} that is a view over the range \range{data(cont)}{data(cont) + size(cont)}.
-	
+
 	\pnum
 	\ensures
 	\tcode{size() == size(cont) \&\& data() == data(cont)}.
-	
+
 	\pnum
 	\throws
 	What and when \tcode{data(cont)} and \tcode{size(cont)} throw.
-	
+
 	\pnum
 	\remarks
 	These constructors shall not participate in overload resolution unless:
@@ -378,19 +378,19 @@ constexpr span(R&& r)
 	\expects
 	If \tcode{extent} is not equal to \tcode{dynamic_extent},
 	then \tcode{size(r)} shall be equal to \tcode{extent}.
-	
+
 	\pnum
 	\effects
 	Constructs a \tcode{span} that is a view over the range \tcode{r}.
-	
+
 	\pnum
 	\ensures
 	\tcode{ranges::size() == ranges::size(r) \&\& ranges::data() == ranges::data(r)}.
-	
+
 	\pnum
 	\throws
 	What and when \tcode{ranges::data(r)} and \tcode{ranges::size(r)} throw.
-	
+
 	\pnum
 	\constraints
 	\begin{itemize}
