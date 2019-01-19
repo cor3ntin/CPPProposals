@@ -54,7 +54,7 @@ std::list<int>  l;
 // copy a list to a vector of the same type
 Same<std::vector<int>> auto a = ranges::to<std::vector<int>>(l);
 //Specify an allocator
-Same<std::vector<int>> auto b = ranges::to<std::vector<int, Alloc>(l, alloc);
+Same<std::vector<int, Alloc>> auto b = ranges::to<std::vector<int, Alloc>(l, alloc);
 // copy a list to a vector of the same type, deducing value_type
 Same<std::vector<int>> auto c = ranges::to<std::vector>(l);
 // copy to a container of types ConvertibleTo
@@ -72,10 +72,15 @@ Same<std::map<int, int>> auto g = f | ranges::to<map>();
 Same<std::vector<int>> auto g = l | ranges::view::take(42) | ranges::to<std::vector>();
 
 //Pipe syntax with allocator
-Same<std::vector<int>> auto g = l | ranges::view::take(42) | ranges::to<std::vector>(alloc);
+auto h = l | ranges::view::take(42) | ranges::to<std::vector>(alloc);
 
 //The pipe syntax also support specifying the type and conversions
-Same<std::vector<int>> auto g = l | ranges::view::take(42) | ranges::to<std::vector<long>>(); 
+auto i = l | ranges::view::take(42) | ranges::to<std::vector<long>>();
+
+//Pathenthesis are optional for template
+Same<std::vector<int>> auto j = l | ranges::view::take(42) | ranges::to<std::vector>;
+auto k = l | ranges::view::take(42) | ranges::to<std::vector<long>>; 
+ 
 \end{minted}
 
 \pagebreak
@@ -93,7 +98,7 @@ std::vector<int> vec
 &
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
-std::vector<int> = lst | ranges::to<std::vector>();
+std::vector<int> = lst | ranges::to<std::vector>;
 \end{minted}
 \end{minipage}
 \\\\ \hline
@@ -116,7 +121,7 @@ ranges::copy(view, std::back_inserter(vec));
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
 auto vec = ranges::iota(42) 
-	| ranges::to<std::vector>();
+	| ranges::to<std::vector>;
 \end{minted}
 \end{minipage}
 \\\\ \hline
@@ -136,7 +141,7 @@ ranges::move(map, std::back_inserter(vec));
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
 auto vec = get_widgets_map() 
-          | ranges::to<vector>();
+          | ranges::to<vector>;
 \end{minted}
 \end{minipage}
 \\\\ \hline
@@ -164,7 +169,7 @@ Indeed, given all containers are ranges (ie: an iterator-sentinel pair) the abov
 
 \begin{codeblock}
     std::list<int> lst;
-    std::vector<int> vec = lst | ranges::to<std::vector>();
+    std::vector<int> vec = lst | ranges::to<std::vector>;
 \end{codeblock}
 
 
@@ -214,7 +219,7 @@ Perhaps the most important aspect of view materialization is that it allows simp
         split_view<std::string_view> split(std:std::string_view);
     }
     auto res = std::split("Splitting strings made easy") 
-    	       | std::ranges::to<std::vector>();
+    	       | std::ranges::to<std::vector>;
 \end{codeblock}
 
 Indeed, a function such as \cc{split} is notoriously hard to standardize (\cite{P0540},  \cite{N3593}), because without lazy views and \cc{std::string_view}, it has to allocate or expose an expert-friendly interface.
@@ -230,7 +235,7 @@ Similar ideas have been presented in \cite{P1004}.
         text(blob)
         normalize<text::nfc> |
         graphemes_view |
-        split<sentences> | ranges::to<std::vector<std::u8string>>();
+        split<sentences> | ranges::to<std::vector<std::u8string>>;
 \end{codeblock}
 
 
@@ -283,7 +288,7 @@ This proposal is based on the \cc{to} (previously (\cc{to_}) function offered by
 			return i + 42;
 		})
 		| view::take(10)
-		| to_<std::vector>();
+		| to<std::vector>;
 	\end{codeblock}
 \end{quote}
 
