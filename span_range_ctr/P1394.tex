@@ -46,14 +46,15 @@ Before & After\\ \hline
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
 std::vector<int> v(42);
-std::span foo = v | view::take(3); //ill-formed
+std::span<int> foo = 
+    v | view::take(3); //ill-formed
 \end{minted}
 \end{minipage}
 &
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
 std::vector<int> v(42);
-std::span<int> foo = v | view::take(3); //valid
+std::span foo = v | view::take(3); //valid
 \end{minted}
 \end{minipage}
 \\\\ \hline
@@ -62,7 +63,6 @@ std::span<int> foo = v | view::take(3); //valid
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
 std::vector<int> v(42);
-std::span foo = v; // ill-valid
 std::span bar(v.begin(), 3); // ill-formed
 \end{minted}
 \end{minipage}
@@ -70,7 +70,6 @@ std::span bar(v.begin(), 3); // ill-formed
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
 std::vector<int> v(42);
-std::span foo = v; // valid
 std::span bar(v.begin(), 3); // valid
 
 \end{minted}
@@ -80,8 +79,8 @@ std::span bar(v.begin(), 3); // valid
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
 std::vector<int> get_vector();
-void foo(std::experimental::span<int>);
-void bar(std::experimental::span<const int>);
+void foo(std:::span<int>);
+void bar(std::span<const int>);
 bar(get_vector()); //valid
 foo(get_vector()); //ill-formed
 \end{minted}
@@ -90,8 +89,8 @@ foo(get_vector()); //ill-formed
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
 std::vector<int> get_vector();
-void foo(std::experimental::span<int>);
-void bar(std::experimental::span<const int>);
+void foo(std::span<int>);
+void bar(std::span<const int>);
 bar(get_vector()); //ill-formed
 foo(get_vector()); //ill-formed
 \end{minted}
@@ -103,10 +102,15 @@ foo(get_vector()); //ill-formed
 
 \section{Motivation}
 
-Span is specified to be constructible from \tcode{Container} types.
+\tcode{std::span} is specified to be constructible from \tcode{Container} types.
 However, while defined, \tcode{Container} is not a concept and as such \tcode{ContiguousRange} is more expressive.
 Furthermore, there exist some non-container ranges that would otherwise be valid ranges to construct span from.
 As such span as currently specified fits poorly with the iterators / ranges model of the rest of the standard library.
+
+The intent of span was always to be constructible from a wide number of compatible types, 
+whether standard contiguous containers, non-standard equivalent types, or views.
+This proposal ensure that span, especially when used as parameter of a function will be constructible 
+from all compatible types while offering stronger and more consistent (in regard to Range) lifetime guarantees.
 
 
 \section{Design considerations}
@@ -154,7 +158,7 @@ constexpr span(const array<value_type, N>& arr) noexcept;
 @\added{template <ranges::ContiguousRange R>}@
 @\added{requires ranges::SizedRange<R> \&\& \placeholder{forwarding-range}<R> \&\&}@
 @\added{ConvertibleTo<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>(*)[], ElementType(*)[]>}@
-@\added{constexpr span(R\&\& r)}@
+@\added{constexpr span(R\&\& r);}@
 
 constexpr span(const span\& other) noexcept = default;
 template<class OtherElementType, ptrdiff_t OtherExtent>
@@ -178,11 +182,10 @@ span(const array<T, N>&) -> span<const T, N>;
 
 template<class T, size_t N>
 span(const array<T, N>&) -> span<const T, N>;
+@\removed{ template<class Container>}@
+@\removed{span(Container\&) -> span<typename Container::value_type>;}@
 @\removed{template<class Container>}@
-@\removed{constexpr span(Container\& cont);}@
-@\removed{template<class Container>}@
-@\removed{constexpr span(const Container\& cont);}@
-@\removed{constexpr span(const span\& other) noexcept = default;}@
+@\removed{span(const Container\&) -> span<const typename Container::value_type>;}@
 @\added{template<ranges::ContiguousRange>}@
 @\added{requires ranges::SizedRange<R> \&\& \placeholder{forwarding-range}<R>}@
 @\added{-> span<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>>;}@
