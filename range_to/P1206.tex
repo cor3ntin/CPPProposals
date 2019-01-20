@@ -28,7 +28,9 @@
 \docnumber{P1206R1}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
-\authortwo{Christopher Di Bella}{cjdb.ns@gmail.com}
+\authortwo{Eric Niebler}{eric.niebler@gmail.com}
+\authorthree{Casey Carter}{Casey@carter.net}
+\authorfour{Christopher Di Bella}{cjdb.ns@gmail.com}
 
 \begin{document}
 \maketitle
@@ -50,6 +52,7 @@ We propose all the following syntaxes to be valid constructs
 
 \begin{minted}{cpp}
 std::list<int>  l;
+std::map<int, int> m;
 
 // copy a list to a vector of the same type
 Same<std::vector<int>> auto a = ranges::to<std::vector<int>>(l);
@@ -60,10 +63,14 @@ Same<std::vector<int>> auto c = ranges::to<std::vector>(l);
 // copy to a container of types ConvertibleTo
 Same<std::vector<long>> auto d = ranges::to<std::vector<long>>(l);
 
-std::map<int, int> m;
-//Supports converting associative container to sequence containers
-Same<std::vector<std::pair<const int, int>>> auto e = ranges::to<vector>(m);
-Same<std::vector<std::pair<int, int>>> auto f = ranges::to<vector<std::pair<int, int>>>(m);
+
+//Supports converting associative container to sequence containers 
+Same<std::vector<std::pair<const int, int>>> 
+	auto f = ranges::to<vector<std::pair<const int, int>>>(m);
+
+//Removing the const from the key by default
+Same<std::vector<std::pair<int, int>>> auto e = ranges::to<vector>(m);
+
 
 //Supports converting sequence containers to associative ones
 Same<std::map<int, int>> auto g = f | ranges::to<map>();
@@ -79,6 +86,7 @@ auto i = l | ranges::view::take(42) | ranges::to<std::vector<long>>();
 
 //Pathenthesis are optional for template
 Same<std::vector<int>> auto j = l | ranges::view::take(42) | ranges::to<std::vector>;
+//and types
 auto k = l | ranges::view::take(42) | ranges::to<std::vector<long>>; 
  
 \end{minted}
@@ -373,14 +381,31 @@ Otherwise, it falls-back to \tcode{ranges::copy}.
 This ensure the most efficient strategy is selected to perform the actual copy.
 
 
+\section{Implementation Experience}
+
+Implementations of this proposal are available on in the 1.0 branch of \cite{Range V3} and on \cite{Compiler Explorer}.
+To make sure the parentheses are optional (\tcode{v| ranges::to<vector>;}) our implementations use a default constructed 
+tag which dispatch through a function pointer.
+However, this have no runtime cost 
+and doesn't suffer from the sames issues LEWG had about \tcode{std::in_place_tag} because no actual indirection takes place.
+We believe being able to omit the parenthesis is necessary so \tcode{ranges::to} remains consistent with the syntax of views adaptors, 
+and is otherwise a nice quality of life improvement in a facility which we expect to be used frequently.
+
+
 \section{Acknowledgements}
-We would like to thank the people who gave feedback on this paper, notably Eric Niebler, Casey Carter, Arthur O'Dwyer, Barry Revzin
+We would like to thank the people who gave feedback on this paper, notably Arthur O'Dwyer, Barry Revzin
 and Tristan Brindle.\\
-We would also further acknowledge that this paper can only exist because of the incredible body of work constituting the Ranges TS.
 
 \section{References}
 \renewcommand{\section}[2]{}%
 \begin{thebibliography}{9}
+	
+\bibitem[Compiler Explorer]{Compiler Explorer}
+	\url{https://godbolt.org/z/m1I9NE}
+
+\bibitem[RangeV3]{Range V3}
+    Eric Niebler
+	\url{https://github.com/ericniebler/range-v3/blob/v1.0-beta/include/range/v3/to_container.hpp}
 	
 \bibitem[P1391]{P1391}
 	Corentin Jabot
@@ -434,6 +459,12 @@ We would also further acknowledge that this paper can only exist because of the 
 	Chris Kennelly, Mark Zeren
 	\emph{Vector as allocation transfer device}
 	\url{https://wg21.link/P1072}
+	
+\bibitem{P0504R0}[P0504R0]
+	Jonathan Wakely
+	\emph{Revisiting in-place tag types for any/optional/variant}
+	\url{https://wg21.link/P0504R0}
 
+	
 \end{thebibliography}
 \end{document}

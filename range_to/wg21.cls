@@ -69,6 +69,9 @@
 % usage: \author{<author>}{<email>}
 \renewcommand*{\author}[2]{\def\@author{#1} \def\@email{#2}}
 \newcommand*{\authortwo}[2]{\def\@authortwo{#1} \def\@emailtwo{#2}}
+\newcommand*{\authorthree}[2]{\def\@authorthree{#1} \def\@emailthree{#2}}
+\newcommand*{\authorfour}[2]{\def\@authorfour{#1} \def\@emailfour{#2}}
+
 
 \renewcommand{\maketitle}{%
   \null \vskip 1em%
@@ -81,6 +84,8 @@
       Audience:   &\@audience\\%
       Reply-to:   &\@author\ \textless\href{mailto:\@email}{\@email}\textgreater%
                   \ifdef{\@authortwo}{\\&\@authortwo\ \textless\href{mailto:\@emailtwo}{\@emailtwo}\textgreater}{}%
+                  \ifdef{\@authorthree}{\\&\@authorthree\ \textless\href{mailto:\@emailthree}{\@emailthree}\textgreater}{}%
+                  \ifdef{\@authorfour}{\\&\@authorfour\ \textless\href{mailto:\@emailfour}{\@emailfour}\textgreater}{}%
     \end{tabular}%
   \end{flushright}%
 }
