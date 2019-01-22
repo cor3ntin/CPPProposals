@@ -28,6 +28,7 @@
 \docnumber{P1394R0}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Casey Carter}{casey@carter.net}
 
 
 \begin{document}
@@ -35,7 +36,7 @@
 
 \section{Abstract}
 
-This paper proposes that \tcode{span} be constructible from any forwarding contiguous range of its value type.
+This paper proposes that \tcode{span} be constructible from any contiguous forwarding-range with a compatible element type.
 The idea was extracted from P1206.
 
 \section{Tony tables}
@@ -131,6 +132,11 @@ Because \tcode{std::extent} equals to 0 for types without static extent, and bec
 
 \section{Proposed wording}
 
+
+The following wording assumes \tcode{std::to_address} will be specialized for \tcode{ContiguousIterator} as proposed
+in \cite{P1474}.  
+
+
 Change in \textbf{[views.span] 21.7.3}:
 \begin{quote}
 \begin{codeblock}
@@ -160,9 +166,9 @@ constexpr span(const array<value_type, N>& arr) noexcept;
 @\added{ConvertibleTo<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>(*)[], ElementType(*)[]>}@
 @\added{constexpr span(R\&\& r);}@
 
-constexpr span(const span\& other) noexcept = default;
+constexpr span(const span& other) noexcept = default;
 template<class OtherElementType, ptrdiff_t OtherExtent>
-constexpr span(const span<OtherElementType, OtherExtent>\& s) noexcept;
+constexpr span(const span<OtherElementType, OtherExtent>& s) noexcept;
 
 ...
 
@@ -235,7 +241,7 @@ constexpr span(It first, index_type count);
 
 	\pnum
 	\ensures
-	\tcode{size() == count \&\& data() == \changed{ptr}{\tcode{adressof(*first)}}}.
+	\tcode{size() == count \&\& data() == \changed{ptr}{\tcode{std::to_address(first)}}}.
 
 	\pnum
 	\throws
@@ -294,7 +300,7 @@ constexpr span(It first, End last);
 
 	\pnum
 	\ensures
-	\tcode{size() == last - first \&\& data() ==  \tcode{adressof(*first)}}.
+	\tcode{size() == last - first \&\& data() ==  \tcode{std::to_address(first)}}.
 
 	\pnum
 	\throws
@@ -416,5 +422,29 @@ constexpr span(const span& other) noexcept = default;
 
 \end{quote}
 
+\section{References}
+\renewcommand{\section}[2]{}%
+\begin{thebibliography}{9}
+	
+	\bibitem[P1419]{P1419}
+	Casey Carter, Corentin Jabot
+	\emph{A SFINAE-friendly trait to determine the extent of statically sized containers}\newline
+	\url{https://wg21.link/P1419}
+	
+	\bibitem[P1391]{P1391}
+	Corentin Jabot
+	\emph{Range constructor for std::string\_view}\newline
+	\url{https://wg21.link/P1391}
+	
+	
+	\bibitem[P1474]{P1474}
+	Casey Carter
+	\emph{Helpful pointers for ContiguousIterator}\newline
+	\url{https://wg21.link/P1474}
+	
+	
+	
+\end{thebibliography}
+\end{document}
 
 \end{document}

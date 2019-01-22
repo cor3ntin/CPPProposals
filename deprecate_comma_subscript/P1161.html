@@ -3,7 +3,7 @@
   <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
   <meta content="width=device-width, initial-scale=1,
 shrink-to-fit=no" name="viewport">
-  <title>P1161R1: Deprecate uses of the comma operator in subscripting expressions</title>
+  <title>P1161R2: Deprecate uses of the comma operator in subscripting expressions</title>
 <style data-fill-with="stylesheet">/******************************************************************************
  *                   Style sheet for the W3C specifications                   *
  *
@@ -1216,7 +1216,7 @@ Possible extra rowspan handling
   <meta content="Bikeshed version a04b880cde96bf0ae2d14a0edcf2bcdcb631548b" name="generator">
   <link href="https://cor3ntin.github.io/CPPProposals/deprecate_comma_subscript/P0000.html" rel="canonical">
   <link href="https://isocpp.org/favicon.ico" rel="icon">
-  <meta content="cb26592816c0ec06863189b09d9438a1d43206f7" name="document-revision">
+  <meta content="3105b653c1615f25338295962c31905c474399a7" name="document-revision">
 <style>
 
 .tony-table table {
@@ -1495,8 +1495,8 @@ pre .property::before, pre .property::after {
  <body class="h-entry">
   <div class="head">
    <p data-fill-with="logo"></p>
-   <h1 class="p-name no-ref" id="title">P1161R1<br>Deprecate uses of the comma operator in subscripting expressions</h1>
-   <h2 class="no-num no-toc no-ref heading settled" id="subtitle"><span class="content">Published Proposal, <time class="dt-updated" datetime="2018-10-07">2018-10-07</time></span></h2>
+   <h1 class="p-name no-ref" id="title">P1161R2<br>Deprecate uses of the comma operator in subscripting expressions</h1>
+   <h2 class="no-num no-toc no-ref heading settled" id="subtitle"><span class="content">Published Proposal, <time class="dt-updated" datetime="2019-01-21">2019-01-21</time></span></h2>
    <div data-fill-with="spec-metadata">
     <dl>
      <dt>This version:
@@ -1505,7 +1505,7 @@ pre .property::before, pre .property::after {
      <dd>
       <dd class="editor p-author h-card vcard"><a class="p-name fn u-email email" href="mailto:corentin.jabot@gmail.com">Corentin Jabot</a>
      <dt>Audience:
-     <dd>EWG
+     <dd>CWG
      <dt>Project:
      <dd>ISO/IEC JTC1/SC22/WG21 14882: Programming Language — C++
     </dl>
@@ -1520,32 +1520,38 @@ pre .property::before, pre .property::after {
   <nav data-fill-with="table-of-contents" id="toc">
    <h2 class="no-num no-toc no-ref" id="contents">Table of Contents</h2>
    <ol class="toc" role="directory">
-    <li><a href="#intro"><span class="secno">1</span> <span class="content">Introduction</span></a>
     <li>
-     <a href="#motivation"><span class="secno">2</span> <span class="content">Motivation</span></a>
+     <a href="#revisions"><span class="secno">1</span> <span class="content">Revisions</span></a>
      <ol class="toc">
-      <li><a href="#the-need-for-a-multidimensional-subscript-operator"><span class="secno">2.1</span> <span class="content">The need for a multidimensional subscript operator</span></a>
-      <li><a href="#what-a-multidimensional-subscript-operator-would-look-like"><span class="secno">2.2</span> <span class="content">What a multidimensional subscript operator would look like</span></a>
+      <li><a href="#revision-2"><span class="secno">1.1</span> <span class="content">Revision 2</span></a>
+      <li><a href="#revision-1"><span class="secno">1.2</span> <span class="content">Revision 1</span></a>
      </ol>
-    <li><a href="#impact-on-existing-code-bases"><span class="secno">3</span> <span class="content">Impact on existing code bases</span></a>
+    <li><a href="#intro"><span class="secno">2</span> <span class="content">Introduction</span></a>
     <li>
-     <a href="#alternative-approaches"><span class="secno">4</span> <span class="content">Alternative approaches</span></a>
+     <a href="#motivation"><span class="secno">3</span> <span class="content">Motivation</span></a>
      <ol class="toc">
-      <li><a href="#allow-comma-expression-only-in-c-arrays"><span class="secno">4.1</span> <span class="content">Allow comma expression only in C arrays</span></a>
-      <li><a href="#alternative-syntax-for-multidimensional-subscript-expressions"><span class="secno">4.2</span> <span class="content">Alternative syntax for multidimensional subscript expressions</span></a>
+      <li><a href="#the-need-for-a-multidimensional-subscript-operator"><span class="secno">3.1</span> <span class="content">The need for a multidimensional subscript operator</span></a>
+      <li><a href="#what-a-multidimensional-subscript-operator-would-look-like"><span class="secno">3.2</span> <span class="content">What a multidimensional subscript operator would look like</span></a>
+     </ol>
+    <li><a href="#impact-on-existing-code-bases"><span class="secno">4</span> <span class="content">Impact on existing code bases</span></a>
+    <li>
+     <a href="#alternative-approaches"><span class="secno">5</span> <span class="content">Alternative approaches</span></a>
+     <ol class="toc">
+      <li><a href="#allow-comma-expression-only-in-c-arrays"><span class="secno">5.1</span> <span class="content">Allow comma expression only in C arrays</span></a>
+      <li><a href="#alternative-syntax-for-multidimensional-subscript-expressions"><span class="secno">5.2</span> <span class="content">Alternative syntax for multidimensional subscript expressions</span></a>
       <li>
-       <a href="#other-comma-expressions"><span class="secno">4.3</span> <span class="content">Other comma expressions</span></a>
+       <a href="#other-comma-expressions"><span class="secno">5.3</span> <span class="content">Other comma expressions</span></a>
        <ol class="toc">
-        <li><a href="#without-duplication-caused-by-headers-included-multiple-times-throughout-a-project"><span class="secno">4.3.1</span> <span class="content">Without duplication caused by headers included multiple times throughout a project</span></a>
-        <li><a href="#non-deduplicated-results"><span class="secno">4.3.2</span> <span class="content">Non-Deduplicated results.</span></a>
+        <li><a href="#without-duplication-caused-by-headers-included-multiple-times-throughout-a-project"><span class="secno">5.3.1</span> <span class="content">Without duplication caused by headers included multiple times throughout a project</span></a>
+        <li><a href="#non-deduplicated-results"><span class="secno">5.3.2</span> <span class="content">Non-Deduplicated results.</span></a>
        </ol>
      </ol>
     <li>
-     <a href="#proposed-wording"><span class="secno">5</span> <span class="content">Proposed Wording</span></a>
+     <a href="#proposed-wording"><span class="secno">6</span> <span class="content">Proposed Wording</span></a>
      <ol class="toc">
-      <li><a href="#d-comma-operator-in-subscript-expressions"><span class="secno">5.1</span> <span class="content">D.� Comma operator in subscript expressions</span></a>
+      <li><a href="#d-comma-operator-in-subscript-expressions"><span class="secno">6.1</span> <span class="content">D.� Comma operator in subscript expressions</span></a>
      </ol>
-    <li><a href="#acknowledgments"><span class="secno">6</span> <span class="content">Acknowledgments</span></a>
+    <li><a href="#acknowledgments"><span class="secno">7</span> <span class="content">Acknowledgments</span></a>
     <li>
      <a href="#references"><span class="secno"></span> <span class="content">References</span></a>
      <ol class="toc">
@@ -1554,7 +1560,18 @@ pre .property::before, pre .property::after {
    </ol>
   </nav>
   <main>
-   <h2 class="heading settled" data-level="1" id="intro"><span class="secno">1. </span><span class="content">Introduction</span><a class="self-link" href="#intro"></a></h2>
+   <h2 class="heading settled" data-level="1" id="revisions"><span class="secno">1. </span><span class="content">Revisions</span><a class="self-link" href="#revisions"></a></h2>
+   <h3 class="heading settled" data-level="1.1" id="revision-2"><span class="secno">1.1. </span><span class="content">Revision 2</span><a class="self-link" href="#revision-2"></a></h3>
+   <ul>
+    <li data-md>
+     <p>Target CWG</p>
+   </ul>
+   <h3 class="heading settled" data-level="1.2" id="revision-1"><span class="secno">1.2. </span><span class="content">Revision 1</span><a class="self-link" href="#revision-1"></a></h3>
+   <ul>
+    <li data-md>
+     <p>Improve Wording</p>
+   </ul>
+   <h2 class="heading settled" data-level="2" id="intro"><span class="secno">2. </span><span class="content">Introduction</span><a class="self-link" href="#intro"></a></h2>
    <p>This paper proposes that the use of a comma operator within a subscripting expression be deprecated.
 Doing so opens the door to multidimensional subscript operators for classes such as <code class="highlight"><c- n>mdspan</c-></code>.</p>
    <table class="tony-table">
@@ -1574,7 +1591,7 @@ Doing so opens the door to multidimensional subscript operators for classes such
 <c- n>array</c-><c- p>[</c-><c- n>x</c-><c- p>,</c-><c- n>y</c-><c- p>]</c->   <c- c1> // </c-><b><c- c1>Deprecated</c-></b><c- c1>, uses y as index/key</c->
 </pre>
    </table>
-   <h2 class="heading settled" data-level="2" id="motivation"><span class="secno">2. </span><span class="content">Motivation</span><a class="self-link" href="#motivation"></a></h2>
+   <h2 class="heading settled" data-level="3" id="motivation"><span class="secno">3. </span><span class="content">Motivation</span><a class="self-link" href="#motivation"></a></h2>
    <p>Currently, a comma can appear in subscript expressions such that <code class="highlight"><c- k>auto</c-> <c- n>z</c-> <c- o>=</c-> <c- n>foo</c-><c- p>[</c-><c- n>x</c-><c- p>,</c-> <c- n>y</c-><c- p>]</c-></code> calls the comma operator with <code class="highlight"><c- n>y</c-></code> as the argument.
 While this is currently unambiguous, it is confusing when encountered and error-prone when used.</p>
    <p>The authors think this syntax would be more useful and suited to index multidimensional classes such as <code class="highlight"><c- n>mdspan</c-></code>.</p>
@@ -1592,13 +1609,13 @@ Indeed, the standard defines that:</p>
    </blockquote>
    <p>So simply by supporting multiple parameters, a comma within a subscript operator
 would serve as an argument separator, without the need for specific wording or parsing.</p>
-   <h3 class="heading settled" data-level="2.1" id="the-need-for-a-multidimensional-subscript-operator"><span class="secno">2.1. </span><span class="content">The need for a multidimensional subscript operator</span><a class="self-link" href="#the-need-for-a-multidimensional-subscript-operator"></a></h3>
+   <h3 class="heading settled" data-level="3.1" id="the-need-for-a-multidimensional-subscript-operator"><span class="secno">3.1. </span><span class="content">The need for a multidimensional subscript operator</span><a class="self-link" href="#the-need-for-a-multidimensional-subscript-operator"></a></h3>
    <p>The classes that can benefit from a multidimensional subscript operator are higher-dimensions variants of
 classes that define a single-dimension subscript operator: matrixes, views, geometric entities, graphics APIs...</p>
    <p><code class="highlight"><c- n>mdspan</c-></code> comes immediately to mind. Note that because there is no multidimensional subscript operator in the standard, <code class="highlight"><c- n>mdspan</c-></code> uses the call operator. While this is functionally equivalent to what a multidimensional subscript operator would
 be, it does not carry the same semantic, making the code harder to read and reason about.
 It also encourages non-semantical operator overloading.</p>
-   <h3 class="heading settled" data-level="2.2" id="what-a-multidimensional-subscript-operator-would-look-like"><span class="secno">2.2. </span><span class="content">What a multidimensional subscript operator would look like</span><a class="self-link" href="#what-a-multidimensional-subscript-operator-would-look-like"></a></h3>
+   <h3 class="heading settled" data-level="3.2" id="what-a-multidimensional-subscript-operator-would-look-like"><span class="secno">3.2. </span><span class="content">What a multidimensional subscript operator would look like</span><a class="self-link" href="#what-a-multidimensional-subscript-operator-would-look-like"></a></h3>
    <p>This paper does not propose a multidimensional subscript operator, yet, it’s interesting to look at what it would look like.
 The most logical thing to do would be to mirror the call operator syntax.</p>
 <pre class="highlight"><c- k>template</c-> <c- o>&lt;</c-><c- k>typename</c-> <c- n>DataType</c-><c- o>></c->
@@ -1613,15 +1630,15 @@ The most logical thing to do would be to mirror the call operator syntax.</p>
 </pre>
    <p>This syntax resembles that of a call operator, but with the proper semantics.
 A similar syntax can be found in popular languages such as Python, D and Ruby.</p>
-   <h2 class="heading settled" data-level="3" id="impact-on-existing-code-bases"><span class="secno">3. </span><span class="content">Impact on existing code bases</span><a class="self-link" href="#impact-on-existing-code-bases"></a></h2>
+   <h2 class="heading settled" data-level="4" id="impact-on-existing-code-bases"><span class="secno">4. </span><span class="content">Impact on existing code bases</span><a class="self-link" href="#impact-on-existing-code-bases"></a></h2>
    <p>We analyzed several large open source codebases and did not find a significant use of this pattern. <a href="https://github.com/cor3ntin/clang-tools-extra/tree/detect-comma-in-subscript">The tool used</a> is available
 on Github and automatic refactoring of large code bases is possible.
 In all cases, <code class="highlight"><c- n>array</c-><c- p>[</c-><c- n>x</c-><c- p>,</c-><c- n>y</c-><c- p>,</c-><c- n>z</c-><c- p>]</c-></code> can be refactored in <code class="highlight"><c- n>array</c-><c- p>[(</c-><c- n>x</c-><c- p>,</c-><c- n>y</c-><c- p>,</c-><c- n>z</c-><c- p>)]</c-></code> without alteration of semantics or behavior.</p>
    <p>The codebases analyzed include the Linux kernel, Chromium, the LLVM project and the entirety of the Boost test suite.
 The only instances found were in Boost’s "Spirit Classic" library (deprecated since 2009).
 A documentation of the offending syntax can be found <a href="https://www.boost.org/doc/libs/1_35_0/libs/spirit/doc/switch_parser.html">here</a>.</p>
-   <h2 class="heading settled" data-level="4" id="alternative-approaches"><span class="secno">4. </span><span class="content">Alternative approaches</span><a class="self-link" href="#alternative-approaches"></a></h2>
-   <h3 class="heading settled" data-level="4.1" id="allow-comma-expression-only-in-c-arrays"><span class="secno">4.1. </span><span class="content">Allow comma expression only in C arrays</span><a class="self-link" href="#allow-comma-expression-only-in-c-arrays"></a></h3>
+   <h2 class="heading settled" data-level="5" id="alternative-approaches"><span class="secno">5. </span><span class="content">Alternative approaches</span><a class="self-link" href="#alternative-approaches"></a></h2>
+   <h3 class="heading settled" data-level="5.1" id="allow-comma-expression-only-in-c-arrays"><span class="secno">5.1. </span><span class="content">Allow comma expression only in C arrays</span><a class="self-link" href="#allow-comma-expression-only-in-c-arrays"></a></h3>
    <p>To maintain compatibility with C, it would be possible to deprecate the use of the comma operator only in overloaded operators.
 Example:</p>
 <pre class="highlight"><c- b>int</c-> <c- n>c_array</c-><c- p>[</c-><c- mi>1</c-><c- p>];</c->
@@ -1631,7 +1648,7 @@ Example:</p>
 <c- n>cpp_array</c-><c- p>[</c-><c- mi>1</c-><c- p>,</c-><c- mi>0</c-><c- p>];</c->   <c- c1>// </c-><b><c- c1>deprecated</c-></b>
 </pre>
    <p>However, this would probably lead to more confusion for a feature that is virtually unused.</p>
-   <h3 class="heading settled" data-level="4.2" id="alternative-syntax-for-multidimensional-subscript-expressions"><span class="secno">4.2. </span><span class="content">Alternative syntax for multidimensional subscript expressions</span><a class="self-link" href="#alternative-syntax-for-multidimensional-subscript-expressions"></a></h3>
+   <h3 class="heading settled" data-level="5.2" id="alternative-syntax-for-multidimensional-subscript-expressions"><span class="secno">5.2. </span><span class="content">Alternative syntax for multidimensional subscript expressions</span><a class="self-link" href="#alternative-syntax-for-multidimensional-subscript-expressions"></a></h3>
    <p>It has been proposed that <code class="highlight"><c- n>array</c-><c- p>[</c-><c- n>x</c-><c- p>][</c-><c- n>y</c-><c- p>]</c-></code> should be equivalent to <code class="highlight"><c- n>array</c-><c- p>.</c-><c- k>operator</c-><c- p>[](</c-><c- n>x</c-><c- p>,</c-> <c- n>y</c-><c- p>);</c-></code></p>
 <pre class="highlight"><c- n>mdspan</c-><c- o>&lt;</c-><c- b>int</c-><c- p>,</c-> <c- n>array_property</c-><c- o>::</c-><c- n>dimension</c-><c- o>&lt;</c-><c- mi>2</c-><c- p>,</c-><c- mi>3</c-><c- o>>></c-> <c- n>foo</c-><c- p>;</c->
 <c- k>auto</c-> <c- n>x</c-> <c- o>=</c-> <c- n>foo</c-><c- p>[</c-><c- mi>0</c-><c- p>][</c-><c- mi>0</c-><c- p>];</c-> <c- c1>//equivalent to foo(0, 0);</c->
@@ -1652,7 +1669,7 @@ which is confusing.
 Moreover, making this syntax compatible with pack expansion and fold expressions would certainly prove challenging.</p>
    <p>On the other hand, this syntax mirror the usage of multidimensional C arrays and is also popular in
 other languages, such as Perl.</p>
-   <h3 class="heading settled" data-level="4.3" id="other-comma-expressions"><span class="secno">4.3. </span><span class="content">Other comma expressions</span><a class="self-link" href="#other-comma-expressions"></a></h3>
+   <h3 class="heading settled" data-level="5.3" id="other-comma-expressions"><span class="secno">5.3. </span><span class="content">Other comma expressions</span><a class="self-link" href="#other-comma-expressions"></a></h3>
    <p>Early feedback on this paper suggested we might want to deprecate comma expressions in more contexts.
 While the authors of this paper are not suggesting that, for completeness, we analyzed a few open source projects.</p>
    <p>Below are tables of contexts in which comma expressions are found in various open source projects.
@@ -1661,7 +1678,7 @@ and does not pretend to be completely accurate.</p>
    <p>We provide two tables.
 The first counts each expression encountered throughout a project exactly one and as such gives an idea of the amount of code that would
 have to be modified to conform to some eventual deprecation.</p>
-   <h4 class="heading settled" data-level="4.3.1" id="without-duplication-caused-by-headers-included-multiple-times-throughout-a-project"><span class="secno">4.3.1. </span><span class="content">Without duplication caused by headers included multiple times throughout a project</span><a class="self-link" href="#without-duplication-caused-by-headers-included-multiple-times-throughout-a-project"></a></h4>
+   <h4 class="heading settled" data-level="5.3.1" id="without-duplication-caused-by-headers-included-multiple-times-throughout-a-project"><span class="secno">5.3.1. </span><span class="content">Without duplication caused by headers included multiple times throughout a project</span><a class="self-link" href="#without-duplication-caused-by-headers-included-multiple-times-throughout-a-project"></a></h4>
    <table class="data-table">
     <thead>
      <tr>
@@ -1810,7 +1827,7 @@ have to be modified to conform to some eventual deprecation.</p>
       <td>~
    </table>
    <p><b>Estimated 30 to 80 millions LOC compiled. This is a back of the envelop calculation meant to be an order of magnetude rather that a meaningful, accurate value</b>.</p>
-   <h4 class="heading settled" data-level="4.3.2" id="non-deduplicated-results"><span class="secno">4.3.2. </span><span class="content">Non-Deduplicated results.</span><a class="self-link" href="#non-deduplicated-results"></a></h4>
+   <h4 class="heading settled" data-level="5.3.2" id="non-deduplicated-results"><span class="secno">5.3.2. </span><span class="content">Non-Deduplicated results.</span><a class="self-link" href="#non-deduplicated-results"></a></h4>
    <p>This second table represents the number of warnings that would be emitted following some eventual deprecation.</p>
    <table class="data-table">
     <thead>
@@ -1947,16 +1964,16 @@ have to be modified to conform to some eventual deprecation.</p>
       <td>4
    </table>
    <p><sup id="fn1">1. The only instances found where in boost’s "Spirit Classic" library (deprecated since 2009).A documentation of the offending syntax can be found <a href="https://www.boost.org/doc/libs/1_35_0/libs/spirit/doc/switch_parser.html"> here</a>.<a href="#ref1">↩</a></sup></p>
-   <h2 class="heading settled" data-level="5" id="proposed-wording"><span class="secno">5. </span><span class="content">Proposed Wording</span><a class="self-link" href="#proposed-wording"></a></h2>
+   <h2 class="heading settled" data-level="6" id="proposed-wording"><span class="secno">6. </span><span class="content">Proposed Wording</span><a class="self-link" href="#proposed-wording"></a></h2>
    <p>In annex D, add a new subclause [depr.comma.subscript]</p>
    <div class="wording-add">
-    <h3 class="heading settled" data-level="5.1" id="d-comma-operator-in-subscript-expressions"><span class="secno">5.1. </span><span class="content">D.� Comma operator in subscript expressions</span><a class="self-link" href="#d-comma-operator-in-subscript-expressions"></a></h3>
+    <h3 class="heading settled" data-level="6.1" id="d-comma-operator-in-subscript-expressions"><span class="secno">6.1. </span><span class="content">D.� Comma operator in subscript expressions</span><a class="self-link" href="#d-comma-operator-in-subscript-expressions"></a></h3>
      A comma expression ([expr.comma]) appearing as the <em>expr-or-braced-init-list<em> of an array subscript expression ([expr.sub]) is deprecated.
 [Note: A comma appearing in parenthesis is not deprecated] <br> [Example: <pre class="highlight"><c- n>a</c-><c- p>[</c-><c- n>b</c-><c- p>,</c-><c- n>c</c-><c- p>];</c->   <c- c1>//deprecated</c->
 <c- n>a</c-><c- p>[(</c-><c- n>b</c-><c- p>,</c-><c- n>c</c-><c- p>)];</c-> <c- c1>// Not deprecated; equivalent to a[c] except that b is evaluated as a discarded-value expression</c->
 </pre>]</em></em>
    </div>
-   <em><em> <p>After 7.6.1.1 [expr.comma] ¶1 ("A postfix expression followed by an expression in square brackets is a postfix expression..."), add a paragraph</p> <div class="wording-add"> [Note: In subscript expressions, the comma operator is deprecated; see [depr.comma.subscript].] </div> <p>Add a paragraph after 7.6.19 [expr.sub] ¶2 ("In contexts where comma is given a special meaning, ...")</p> <div class="wording-add"> [Note: In subscript expressions, the comma operator is deprecated; see [depr.comma-subscript].] </div> <h2 class="heading settled" data-level="6" id="acknowledgments"><span class="secno">6. </span><span class="content">Acknowledgments</span><a class="self-link" href="#acknowledgments"></a></h2> Thanks to Martin Hořeňovský who computed some of the statistics on comma operator usages presented in this paper. <p>Thanks to Titus Winters and JF Bastien who provided useful feedbacks and criticism.</p> </em></em>
+   <em><em> <p>After 7.6.1.1 [expr.comma] ¶1 ("A postfix expression followed by an expression in square brackets is a postfix expression..."), add a paragraph</p> <div class="wording-add"> [Note: In subscript expressions, the comma operator is deprecated; see [depr.comma.subscript].] </div> <p>Add a paragraph after 7.6.19 [expr.sub] ¶2 ("In contexts where comma is given a special meaning, ...")</p> <div class="wording-add"> [Note: In subscript expressions, the comma operator is deprecated; see [depr.comma-subscript].] </div> <h2 class="heading settled" data-level="7" id="acknowledgments"><span class="secno">7. </span><span class="content">Acknowledgments</span><a class="self-link" href="#acknowledgments"></a></h2> Thanks to Martin Hořeňovský who computed some of the statistics on comma operator usages presented in this paper. <p>Thanks to Titus Winters and JF Bastien who provided useful feedbacks and criticism.</p> </em></em>
   </main>
   <em><em> <script>
 (function() {
