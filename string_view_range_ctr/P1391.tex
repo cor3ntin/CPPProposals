@@ -25,7 +25,7 @@
 
 
 \title{Range constructor for std::string\_view}
-\docnumber{P1391R0}
+\docnumber{D1391R1}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -103,12 +103,12 @@ public:
     constexpr basic_string_view(const charT* str, size_type len);
 
     @\added{template <ContiguousRange R>}@
-    @\added{requires ranges::SizedRange<R> \&\& Same<iter_value_t<iterator_t<R>>, charT>}@
+    @\added{requires ranges::SizedRange<const R> \&\& Same<iter_value_t<iterator_t<const R>>, charT>}@
     @\added{constexpr basic_string_view(const R\& r);}@
-    
+
     @\added{template <ContiguousIterator It, Sentinel<It> End>}@
     @\added{requires Same<iter_value_t<It>, charT>}@
-    @\added{constexpr basic_string_view(const It\& begin, End end );}@
+    @\added{constexpr basic_string_view(It begin, End end );}@
 
     [...]
 };
@@ -124,7 +124,7 @@ Add after 7
 \begin{addedblock}
 \begin{itemdecl}
 template <ranges::ContiguousRange R>
-requires ranges::SizedRange<R> && Same<iter_value_t<iterator_t<R>>, charT>
+requires ranges::SizedRange<const R> && Same<iter_value_t<iterator_t<const R>>, charT>
 constexpr basic_string_view(const R& r);
 
 \end{itemdecl}
@@ -132,30 +132,30 @@ constexpr basic_string_view(const R& r);
 \begin{itemdescr}
     \effects
     Constructs a \tcode{basic_string_view} over the \tcode{ContiguousRange} r.
-    
-    
+
+
     \throws If  \tcode{data(r)} or \tcode{size(r)} throw
 
      \remarks This constructor shall not participate in overload resolution unless
     \begin{itemize}
         \item \tcode{is_array<R>} is \tcode{false}.
-        \item \tcode{R} does not derive from an instantiation of  \tcode{std::basic_string}
-        \item \tcode{R} does not derive from an instantiation of  \tcode{std::basic_string_view}
+        \item \tcode{R} does not derive from a specialization of \tcode{std::basic_string}
+        \item \tcode{R} does not derive from a specialization of \tcode{std::basic_string_view}
         \end{itemize}
     %
 \end{itemdescr}
 
 \begin{itemdecl}
 	template <ContiguousIterator It, Sentinel<It> End>
-	requires requires Same<iter_value_t<It>>, charT>
-	constexpr basic_string_view(const It& begin, End end );
-	
+	requires Same<iter_value_t<It>>, charT>
+	constexpr basic_string_view(It begin, End end );
+
 \end{itemdecl}
 
 \begin{itemdescr}
 	\effects
 	Constructs a \tcode{basic_string_view} over the range [begin, end) .
-	
+
 	\remarks This constructor shall not participate in overload resolution unless
 	\begin{itemize}
 		\item \tcode{It} does not derive from an instantiation of  \tcode{std::basic_string}::iterator or  \tcode{std::basic_string}::const_iterator
