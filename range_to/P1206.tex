@@ -63,8 +63,8 @@ Same<std::vector<int>> auto c = ranges::to<std::vector>(l);
 Same<std::vector<long>> auto d = ranges::to<std::vector<long>>(l);
 
 
-//Supports converting associative container to sequence containers 
-Same<std::vector<std::pair<const int, int>>> 
+//Supports converting associative container to sequence containers
+Same<std::vector<std::pair<const int, int>>>
 	auto f = ranges::to<vector<std::pair<const int, int>>>(m);
 
 //Removing the const from the key by default
@@ -86,8 +86,8 @@ auto i = l | ranges::view::take(42) | ranges::to<std::vector<long>>();
 //Pathenthesis are optional for template
 Same<std::vector<int>> auto j = l | ranges::view::take(42) | ranges::to<std::vector>;
 //and types
-auto k = l | ranges::view::take(42) | ranges::to<std::vector<long>>; 
- 
+auto k = l | ranges::view::take(42) | ranges::to<std::vector<long>>;
+
 \end{minted}
 
 \pagebreak
@@ -127,7 +127,7 @@ ranges::copy(view, std::back_inserter(vec));
 &
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
-auto vec = ranges::iota(42) 
+auto vec = ranges::iota(42)
 	| ranges::to<std::vector>;
 \end{minted}
 \end{minipage}
@@ -147,7 +147,7 @@ ranges::move(map, std::back_inserter(vec));
 &
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
-auto vec = get_widgets_map() 
+auto vec = get_widgets_map()
           | ranges::to<vector>;
 \end{minted}
 \end{minipage}
@@ -225,7 +225,7 @@ Perhaps the most important aspect of view materialization is that it allows simp
     namespace std {
         split_view<std::string_view> split(std:std::string_view);
     }
-    auto res = std::split("Splitting strings made easy") 
+    auto res = std::split("Splitting strings made easy")
     	       | std::ranges::to<std::vector>;
 \end{codeblock}
 
@@ -258,7 +258,7 @@ the design space and the requirements are different:
 	\item Work is being done to allow Ranges's iterators to be move only
 \end{itemize}
 
-As views are not containers, they are not constructible from \cc{ranges::to}  
+As views are not containers, they are not constructible from \cc{ranges::to}
 
 
 \section{Alternative designs}
@@ -336,24 +336,24 @@ We do not provide wording at this time, but this is what the interface would loo
 \begin{quote}
 \begin{codeblock}
 namespace ranges {
-	
+
 	//1
 	template <Container C, Range R, typename...Arg>
 	constexpr auto to(const R & r, Args...&) -> C;
-	
+
 	//2
-	template <template <typename...> typename C, 
+	template <template <typename...> typename C,
 	          Range R, typename T = range_value_t<R>, typename... Args>
 	constexpr auto to(const R & r, Args...&) -> C<T, Args...>;
-	
+
 	//3
 	template <Container C, typename...Args>
 	constexpr auto to(Args...&&) -> @{\impdef}@;
-	
+
 	//4
 	template <template <typename...> typename C>
 	constexpr auto to(Args...&&) -> @{\impdef}@;
-	
+
 	//5
 	template <Range R>
 	constexpr auto operator|(const R && r, @{\impdef}@});
@@ -361,10 +361,10 @@ namespace ranges {
 \end{codeblock}
 \end{quote}
 
-Functions 3 and 4 return an implementation defined object that can be passed to the pipe operator(5), 
+Functions 3 and 4 return an implementation defined object that can be passed to the pipe operator(5),
 and provide an implementation defined way of creating a container ov the appropriate type.
 
-\tcode{range::to} forwards the range to the container if it is constructible from it. 
+\tcode{range::to} forwards the range to the container if it is constructible from it.
 If not, it tries to construct the container from the \tcode{begin(range)/end(range)} iterators pair.
 Otherwise, it falls-back to \tcode{ranges::copy}.
 This ensure the most efficient strategy is selected to perform the actual copy.
@@ -374,11 +374,11 @@ This ensure the most efficient strategy is selected to perform the actual copy.
 
 Implementations of this proposal are available on in the 1.0 branch of \cite{Range V3} and on \cite{Compiler Explorer} (Incomplete cmcstl2-based prototype).
 
-To make sure the parentheses are optional (\tcode{v| ranges::to<vector>;}) our implementations use a default constructed 
+To make sure the parentheses are optional (\tcode{v| ranges::to<vector>;}) our implementations use a default constructed
 tag which dispatch through a function pointer.
-However, this have no runtime cost 
+However, this have no runtime cost
 and doesn't suffer from the sames issues LEWG had about \tcode{std::in_place_tag} because no actual indirection takes place.
-We believe being able to omit the parenthesis is necessary so \tcode{ranges::to} remains consistent with the syntax of views adaptors, 
+We believe being able to omit the parenthesis is necessary so \tcode{ranges::to} remains consistent with the syntax of views adaptors,
 and is otherwise a nice quality of life improvement in a facility which we expect to be used frequently.
 
 
@@ -400,24 +400,24 @@ and Tristan Brindle.\\
 \section{References}
 \renewcommand{\section}[2]{}%
 \begin{thebibliography}{9}
-	
+
 \bibitem[Compiler Explorer]{Compiler Explorer}
 	\url{https://godbolt.org/z/m1I9NE}
 
 \bibitem[RangeV3]{Range V3}
     Eric Niebler
 	\url{https://github.com/ericniebler/range-v3/blob/v1.0-beta/include/range/v3/to_container.hpp}
-	
+
 \bibitem[P1391]{P1391}
 	Corentin Jabot
 	\emph{Range constructor for std::string\_view}\newline
 	\url{https://wg21.link/P1391}
-	
+
 \bibitem[P1394]{P1394}
 	Casey Carter, Corentin Jabot
 	\emph{Range constructor for std::span}\newline
 	\url{https://wg21.link/P1394}
-	
+
 \bibitem[P1425]{P1425}
 	Corentin Jabot
 	\emph{Iterators pair constructors for stack and queue}\newline
@@ -470,12 +470,12 @@ and Tristan Brindle.\\
 	Chris Kennelly, Mark Zeren
 	\emph{Vector as allocation transfer device}
 	\url{https://wg21.link/P1072}
-	
+
 \bibitem{P0504R0}[P0504R0]
 	Jonathan Wakely
 	\emph{Revisiting in-place tag types for any/optional/variant}
 	\url{https://wg21.link/P0504R0}
 
-	
+
 \end{thebibliography}
 \end{document}
