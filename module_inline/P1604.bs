@@ -128,14 +128,14 @@ And so, non-inline symbols defined in module interface units have a guaranteed u
 and as such make code more reliable, which again is a major selling point of modules - Especially given that ODR violations are very hard or impossible to properly
 diagnostic.
 
-By materializing interfaces as an actual entity, modules further make easier to reason about code ownership, API and ABI, as each exported symbol is tied
+By materializing interfaces as an actual entity, modules further make it easier to reason about code ownership, API and ABI, as each exported symbol is tied
 to an interface, which has a name.
 
 So, what is the purpose of `inline` in module-unit context?
 
 Since modules units form translation units, the compiler has a unique place to put and find the compiled symbols of all symbols declared
 in a module unit and do not need to duplicate any symbols declared in modules units.
-But symbols marked `inline` functions need to be defined in all TUs in which they are used, even in module units.
+But symbols marked `inline` need to be defined in all TUs in which they are used, even in module units.
 
 This has undersirable consequences:
 
@@ -196,7 +196,7 @@ export int add(int a, int b) {
 //defined in the module interface's TU, definition NOT available for inlining
 export int sub(int a, int b);
 
-:private;
+module :private;
 
 int sub(int a, int b) {
         return a - b;
@@ -254,7 +254,7 @@ Note: This implies that the wording distinguishes between the definition of an e
 
 ## Introduce an `[[inline]]` attribute
 
-Similarly to [[P1498R0]], we thing compiler hints for inlining would be better
+Similarly to [[P1498]], we thing compiler hints for inlining would be better
 served by one or several attributes that would not have any other semantic or effect or linkage.
 
 Compilers vendors have existing experience with attributes such `[[noinline]]`,  `[[inline]]`,  `[[force_inline]]`.
@@ -267,7 +267,7 @@ While this is an implementation concern, we expect that this will indeed require
 for modules that might not need one under the modules design as merged in the WD.
 However, it is expected that build systems would always generate an object file - even an empty one - for all module interface units.
 The reason for that is that is is unpractical to determine whether an object file is needed or not without user input, and requiring
-users to maintain this information manually would be brittle an a source of bugs.
+users to maintain this information manually would be brittle and a source of bugs.
 
 ## Inlining is a QoI issue - Doesn't this proposal limit implementers freedom ?
 
@@ -286,6 +286,19 @@ All modules units should have the same specification when it comes to inline (or
 
 For backward compatibility reasons,
 we do not propose to change the semantics of inline, implicitly inline or non inline symbols in these contexts.
+
+## How does this compare with [[P1498]] ?
+
+[[P1498]] propose to deprecate `inline` in implementation units as well as for non-exported symbols.
+For the same reason that it make little sense to allow it.
+
+Futhermore, [[P1498]] proposes changes as to what methods can be declared `inline` and be inlined.
+With this proposal, the compiler can decide automatically when a method cannot be inlined ( ie when it calls a symbol with module-local linkage),
+rather that putting that responsability on users.
+
+## Wouldn't this create a dialect?
+
+No more than `export` being only valid in module units.
 
 ## Why this change and why now?
 
@@ -311,7 +324,7 @@ makes offering a stable API with clear boundary more challenging than it needs t
         "href":  "https://blog.tartanllama.xyz/inline-hints/",
         "title": "Do compilers take inline as a hint?"
     },
-    "P1498R0": {
+    "P1498": {
         "authors": [
             "Chandler Carruth",
             "Nathan Sidwell",
