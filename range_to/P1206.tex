@@ -105,7 +105,7 @@ std::vector<int> vec
 &
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
-std::vector<int> = lst | ranges::to<std::vector>;
+std::vector<int> vec = lst | ranges::to<std::vector>;
 \end{minted}
 \end{minipage}
 \\\\ \hline
@@ -362,13 +362,15 @@ namespace ranges {
 \end{quote}
 
 Functions 3 and 4 return an implementation defined object that can be passed to the pipe operator(5), 
-and provide an implementation defined way of creating a container ov the appropriate type.
+and provide an implementation defined way of creating a container of the appropriate type.
 
 \tcode{range::to} forwards the range to the container if it is constructible from it. 
 If not, it tries to construct the container from the \tcode{begin(range)/end(range)} iterators pair.
 Otherwise, it falls-back to \tcode{ranges::copy}.
 This ensure the most efficient strategy is selected to perform the actual copy.
 
+When Deducing the type of a container from the range's value type,
+if that value type is a pair, std::remove_const is applied to the type of the first element of the deduced pair type.
 
 \section{Implementation Experience}
 
@@ -380,6 +382,12 @@ However, this have no runtime cost
 and doesn't suffer from the sames issues LEWG had about \tcode{std::in_place_tag} because no actual indirection takes place.
 We believe being able to omit the parenthesis is necessary so \tcode{ranges::to} remains consistent with the syntax of views adaptors, 
 and is otherwise a nice quality of life improvement in a facility which we expect to be used frequently.
+
+An implementation strategy to deduce the concrete type of a container, including associative containers is to use CTAD, as shown in \cite{CTAD}.
+
+This approach does not necessitate special casing to handle associative containers.
+
+A more naive approach (instantiating the type of the container directly from the type of the range's value type) can be used as fallback for cases where no deduction guide was declared
 
 
 \section{Related Paper and future work}
@@ -407,6 +415,10 @@ and Tristan Brindle.\\
 \bibitem[RangeV3]{Range V3}
     Eric Niebler
 	\url{https://github.com/ericniebler/range-v3/blob/v1.0-beta/include/range/v3/to_container.hpp}
+	
+\bibitem[CTAD Ranges]{CTAD}
+Eric Niebler
+\url{https://github.com/ericniebler/range-v3/blob/d284e9c84ff69bb416d9d94d029729dfb38c3364/include/range/v3/range/conversion.hpp#L140-L152}
 	
 \bibitem[P1391]{P1391}
 	Corentin Jabot
