@@ -1,0 +1,337 @@
+<pre class='metadata'>
+Title: The inline keyword is not in line with the design of modules.
+Shortname: P1604
+Level: 0
+Status: D
+Group: wg21
+URL:
+Editor: Corentin Jabot, corentin.jabot@gmail.com
+Abstract: The <code>inline</code> keywords make little sense in modules units. We, therefore, propose to make the use of that keyword ill-formed in module unit contexts and show a better way to obtain the intended result.
+Audience: EWG
+Markup Shorthands: markdown yes
+Default Highlight: CPP
+Line Numbers: no
+Date: 2019-01-21
+</pre>
+
+<style>
+
+.tony-table table {
+    width:100%;
+}
+
+.tony-table th {
+    text-align: center;
+    padding-right:20px;
+}
+
+.tony-table  td {
+    vertical-align:top;
+}
+
+.wording-add {
+    background-color: #F6F9ED;
+}
+
+
+/* Table */
+.data-table {
+    border-collapse: collapse;
+    font-size: 14px;
+    min-width: 573px;
+}
+.data-table th {
+    color: #5a5a5a;
+}
+
+.data-table th,
+.data-table td {
+    padding: 7px 17px;
+}
+.data-table caption {
+    margin: 7px;
+}
+
+/* Table Header */
+.data-table thead th {
+    border-bottom: 2px solid #CCCCCC;
+}
+
+/* Table Body */
+.data-table tbody td {
+    color: #353535;
+    border-bottom: 1px solid #dcdcdc;
+    text-align: right;
+}
+
+.data-table tbody tr:last-child td {
+    border: 0;
+}
+
+.data-table tbody tr:hover td {
+    background-color: #f7f7f7;
+    transition: all .2s;
+}
+
+/* Table Footer */
+.data-table tfoot th {
+    border-top: 1px solid #c7c7c7;
+    text-align: right;
+}
+
+.array_row {
+    outline: thin solid #008000
+}
+
+</style>
+
+Introduction {#intro}
+=====================
+
+`inline` was intended as a hint for the compiler that performing inlining optimizations of marked functions was desirable.
+However, for inlining to be possible, the definition of functions must be visible to the compiler - aka a prerequisite of inlinable functions is to have their definition visible in the TUs in which they are called.
+
+To make function definitions visible in a non-modular world, it is customary to define them in headers.
+However, headers are often included (stitched) to multiple sources files thereby forming multiple TU containing duplicated definitions of the same
+functions.
+
+This would, of course, cause linkage error, and so inline gained a new semantic:
+
+> An inline function or variable shall be defined in every translation unit in which it is odr-used and shall have exactly the same definition in every case.
+
+The inlining semantics of `inline` is described in this delightful normatively non-normative clause:
+
+> The inline specifier indicates to the implementation that inline substitution of the function body at the point of call is to be preferred to the usual function call mechanism.
+> An implementation is not required to perform this inline substitution at the point of call;
+
+And so `inline` means both "This function is a candidate for inlining" and "This function might be defined multiple times".
+This duality has been a constant source of confusion as developers struggle to understand what `inline` does and why both semantics are orthogonal yet intertwined.
+A quick "C++ inline" search on the internet reveals how poorly `inline` is understood.
+
+Or is it?
+
+Practices such has header-only libraries make the link behavior of `inline` much more prevalent than the inlining hint semantic.
+In such scenarios, functions are marked `inline`  that are pour candidate for inlining.
+It is also not easy to determine how much compilers rely on `inline` as an inlining hint [[inline-hint]].
+
+Inline and Modules
+==================
+The module proposal [[P1103r3]] states:
+
+> A module unit is a translation unit that forms part of a module.
+
+Specifically, this implies that module interface units are translation units, rather than text files stitched together to form translation units.
+
+This is a fundamental property of modules and one that makes them a superior alternative to non-modularized code and legacy header units.
+
+And so, non-inline symbols defined in module interface units have a guaranteed unique definition. This solves a number of ODR violation issues
+and as such make code more reliable, which again is a major selling point of modules - Especially given that ODR violations are very hard or impossible to properly
+diagnostic.
+
+By materializing interfaces as an actual entity, modules further make it easier to reason about code ownership, API and ABI, as each exported symbol is tied
+to an interface, which has a name.
+
+So, what is the purpose of `inline` in module-unit context?
+
+Since modules units form translation units, the compiler has a unique place to put and find the compiled symbols of all symbols declared
+in a module unit and do not need to duplicate any symbols declared in modules units.
+But symbols marked `inline` need to be defined in all TUs in which they are used, even in module units.
+
+This has undersirable consequences:
+
+## Compile time pessimizations
+
+Machine code needs to be generated for `inline` functions in every translation unit in which they are used.
+While arguably generating code for functions is fast, duplicating that work over a large number of TUs adds up.
+Given that compilation, speed is an ever increasing issue and that modules have been branded as a mean to reduce compilation
+time significantly, it would prove beneficial to reduce the amount of duplicated work a compiler has to do to compile a program.
+
+Compiling 1000 TUs calling the same simple function `f` revealed a 10-25% difference (varying across compilers and optimizations levels)
+depending on whether `f` was marked `inline` or defined in a separate TU.
+While gains in real code or in more thorough tests would be less pronounced, they would still be noticeable.
+
+Of course, when `inline` functions are actually inlined, compilation times are not impacted by whether or not a method is redefined -
+inlining is desirable and does not constitute work duplication.
+
+## ODR violations
+
+`inline` allows a symbol to be redefined multiple time but mandates that each definition must be identical.
+However, we don't have the tools to properly diagnostic or prevent violations of this rule, and as such `inline` in module interface units might be the source of ODR violations, despite modules being branded as a tool to limit or better diagnostic such issues.
+
+## Inlining of non `inline` functions
+
+Because the way modules interface units are imported is implementation defined, whether the definitions defined in module interface units
+are visible (such that inlining can be performed) is equally implementation-defined.
+To be more precise
+ * `inline` and implicitly inline definitions are always visible.
+ * Whether non-inline definitions (exported or not) can be inlined in importing TUs is implementation-defined.
+
+In practice, we observe that different compilers have different policies as to whether
+non-inline definitions are included in binary modules interfaces.
+
+This is a confusing departure from the header-modules in which the definitions of all symbols defined in headers were visible
+and therefore candidates for inlining.
+
+* Exporting a symbol is not sufficient to make its definition visible portably across compilers
+* Not marking a symbol inline is not sufficient to hide its definition visible portably across compilers
+
+Implementers have suggested relying on Link Time Optimization to perform inlining of non-inlined symbols,
+however we believe this to be an unsatisfactory workaround as LTO is usually time and resource consuming,
+not universally used and not as efficient as compile-time inlining.
+
+# Modules, inlining, API and visibility : A simpler mental model
+
+An easy way to think about modules interface units is that what is defined in the interface module unit (excluding preamble and private partition) is part
+of the interface of the corresponding module.
+What is not defined in the module interface unit is not part if the interface:
+
+```cpp
+export module M;
+
+//defined in the module interface's TU, definition available for inlining
+export int add(int a, int b) {
+    return a + b;
+}
+
+//defined in the module interface's TU, definition NOT available for inlining
+export int sub(int a, int b);
+
+module :private;
+
+int sub(int a, int b) {
+        return a - b;
+}
+
+```
+
+This model makes it clearer what definitions are part of the interfaces which is a
+desirable outcome when trying to maintain a stable API and ABI accross compilers and compiler versions.
+
+
+Instead of relying on the `inline` keyword, we suggest that the ability to perform inlining optimization should
+depend solely on whether a definition is present in the imported module interface unit.
+
+Within that model, functions who are defined in an imported module unit would always
+be inlinable by the compiler.
+
+Functions who are not defined in an imported module unit or defined in the private module partition of an imported module unit would never be candidates for inlining.
+
+At the same times, to limit the risk of odr issues and optimize compilation times, we think it is important to separate
+where an entity is defined from where its definition is visible.
+
+Functions and variables defined in a module unit should only be defined in that translation unit, but the definitions
+of functions should be visible in all importing translation units.
+
+
+
+# Proposed solutions
+
+## Make using the `inline` keyword ill-formed in module units
+
+It might be tempting to keep the `inline` keyword in modules units and give it back its original intended meaning of inlining hint.
+However, `inline` would still need to have its current semantic in non-modularized code and so its meaning would become
+context sensitive.
+Furthermore `inline` has a long history of being misused, poorly taught and understood.
+Trying to change its semantic might only add to the industry wise confusion.
+Instead, we suggest making it ill-formed in module units such that neither variables or functions can be declared `inline` in module units.
+
+Functions and variables defined in modules units are instead defined in (and only in) the translation unit which is the module unit.
+
+## In module units, class members and constexpr entities should not be implicitly inline.
+
+For convenience, a number of entities are implicitly inline in non-modularized code
+
+* Class member functions
+* `constexptr` functions
+* Function templates
+
+We suggest that in module units, the definition of class member functions should not be implicitly inline.
+
+Similarly, we suggest that in module units, the definition of constexpr functions should not be implicitly inline.
+However, the definition of `constexpr` and `consteval` functions should be visible in all TUs in which the module unit is imported.
+
+Note: This implies that the wording distinguishes between the definition of an entity and where that definition is <i>visible</i> - such that it can be used for inlining.
+
+## Introduce an `[[inline]]` attribute
+
+Similarly to [[P1498]], we thing compiler hints for inlining would be better
+served by one or several attributes that would not have any other semantic or effect or linkage.
+
+Compilers vendors have existing experience with attributes such `[[noinline]]`,  `[[inline]]`,  `[[force_inline]]`.
+
+# FAQ
+
+## Doesn't this model forces the generation of an object files for all modules?
+
+While this is an implementation concern, we expect that this will indeed require the generation of object files
+for modules that might not need one under the modules design as merged in the WD.
+However, it is expected that build systems would always generate an object file - even an empty one - for all module interface units.
+The reason for that is that is is unpractical to determine whether an object file is needed or not without user input, and requiring
+users to maintain this information manually would be brittle and a source of bugs.
+
+## Inlining is a QoI issue - Doesn't this proposal limit implementers freedom ?
+
+The main idea beging this proposal is to separate the location of the definition of a symbol from the fact that a definition
+must be available for inlining to occur.
+In the common case, that means that a definition can be present in a Binary Module Interface as the same time as the coresponding symbol is uniquely
+defined in a single translation unit's object file.
+However, it does not force a particular implementation (such as the existence of a BMI or an object file)
+beyond the fact that modules interface are required to be translation units.
+
+## What about module implementations units and modules partitions ?
+
+All modules units should have the same specification when it comes to inline (or lack thereof), and definition visibility.
+
+## What about Preamble, Legacy Header units and Non-Modular code ?
+
+For backward compatibility reasons,
+we do not propose to change the semantics of inline, implicitly inline or non inline symbols in these contexts.
+
+## How does this compare with [[P1498]] ?
+
+[[P1498]] propose to deprecate `inline` in implementation units as well as for non-exported symbols.
+For the same reason that it make little sense to allow it.
+
+Futhermore, [[P1498]] proposes changes as to what methods can be declared `inline` and be inlined.
+With this proposal, the compiler can decide automatically when a method cannot be inlined ( ie when it calls a symbol with module-local linkage),
+rather that putting that responsability on users.
+
+## Wouldn't this create a dialect?
+
+No more than `export` being only valid in module units.
+
+## Why this change and why now?
+
+Modules are a profund change to the way people will compile C++ code and it will transform the ecosystem.
+It is important to make sure Modules offer the right semantics now and for the next few decades as it will certainly prove impossible
+to reasonably do these sort of changes post of C++20.
+
+And while modules offer a better compilation model, they do not get rid of artifacts like `inline`, which were the product of the textual inclusion
+model of `#include` directives.
+The multiplication of closely-related but not identical concepts, a wide range of implementation-specific behaviour and the loaded history of `inline`
+makes offering a stable API with clear boundary more challenging than it needs to be.
+
+## If C++ did have modules from the start, would the inline keyword exist at all ?
+
+;)
+
+<pre class=biblio>
+{
+    "inline-hint": {
+        "authors": [
+            "Simon Brand"
+        ],
+        "href":  "https://blog.tartanllama.xyz/inline-hints/",
+        "title": "Do compilers take inline as a hint?"
+    },
+    "P1498": {
+        "authors": [
+            "Chandler Carruth",
+            "Nathan Sidwell",
+            "Richard Smith"
+        ],
+        "href":  "http://wg21.link/p1498",
+        "title": "Constrained Internal Linkage for Modules"
+    }
+}
+</pre>
