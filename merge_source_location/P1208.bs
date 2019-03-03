@@ -1,7 +1,7 @@
 <pre class='metadata'>
 Title: Adopt source_location from Library Fundamentals V3 for C++20
 Shortname: D1208
-Level: 1
+Level: 3
 Status: D
 Group: wg21
 Editor: Corentin Jabot, corentin.jabot@gmail.com
@@ -11,15 +11,7 @@ Audience: LEWG, LWG
 URL: https://rawgit.com/cor3ntin/CPPProposals/master/merge_source_location/P1208.html
 Markup Shorthands: markdown yes
 Line Numbers: no
-Date: 2018-09-21
-</pre>
-
-<style>
-
-pre * {
-	all:initial ! important
-}
-
+Date: 2019-02-22
 .tony-table table {
     width:100%;
 }
@@ -31,6 +23,14 @@ pre * {
 
 .tony-table  td {
     vertical-align:top;
+}
+
+</pre>
+
+<style>
+
+pre * {
+	all:initial ! important
 }
 
 .wording-add {
@@ -92,6 +92,13 @@ header {
 }
 
 </style>
+
+# Changes
+## R2
+	* Specify that the string returned by function_name is a NTMBS encoded using the execution character set
+## R1
+	* Make current consteval
+	* Explain why source_location cannot be constructed from user specified values
 
 # Proposal
 
@@ -223,14 +230,17 @@ namespace std {
 
     constexpr source_location() noexcept;
 
-    constexpr uint_least32_t line() const noexcept;
-    constexpr uint_least32_t column() const noexcept;
+    constexpr int_least32_t line() const noexcept;
+    constexpr int_least32_t column() const noexcept;
     constexpr const char* file_name() const noexcept;
     constexpr const char* function_name() const noexcept;
   };
 } // namespace std</xmp>
 
     <p id="reflection.src_loc.1" para_num="1">
+    
+    Copies of a <code>source_location</code> object represent the same value.
+    
       <cxx-note><span class="nowrap">[ <em>Note:</em></span>
     The intent of <code>source_location</code> is to have a small size and efficient copying.
     <span class="nowrap">— <em>end note</em> ]</span>
@@ -409,7 +419,8 @@ void g() {
 
     <dt>Returns:</dt><dd>
           If this object represents a position in the body of a function,
-          returns an implementation-defined NTBS that should correspond to the function name.
+          returns an implementation-defined NTMBS that should correspond to the function name.
+          The value of the NTMBS is first formed using the basic source character set (with universal-character-names as necessary) then mapped in the manner applied to string literals with no encoding prefix in phases 5 and 6 of translation.
           Otherwise, returns an empty string.
         </dd>
   </cxx-returns>

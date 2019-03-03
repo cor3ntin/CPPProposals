@@ -3,7 +3,7 @@
   <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
   <meta content="width=device-width, initial-scale=1,
 shrink-to-fit=no" name="viewport">
-  <title>D1208R1: Adopt source_location from Library Fundamentals V3 for C++20</title>
+  <title>D1208R3: Adopt source_location from Library Fundamentals V3 for C++20</title>
 <style data-fill-with="stylesheet">/******************************************************************************
  *                   Style sheet for the W3C specifications                   *
  *
@@ -1213,10 +1213,10 @@ Possible extra rowspan handling
 		}
 	}
 </style>
-  <meta content="Bikeshed version a04b880cde96bf0ae2d14a0edcf2bcdcb631548b" name="generator">
+  <meta content="Bikeshed version 33fed5007b404f885d4fe033a21ec1ce681f0504" name="generator">
   <link href="https://rawgit.com/cor3ntin/CPPProposals/master/merge_source_location/P1208.html" rel="canonical">
   <link href="https://isocpp.org/favicon.ico" rel="icon">
-  <meta content="cb26592816c0ec06863189b09d9438a1d43206f7" name="document-revision">
+  <meta content="5f98d747ccc142b99f7664bd2f17a6272e77642e" name="document-revision">
 <style>
 
 pre * {
@@ -1503,8 +1503,8 @@ pre .property::before, pre .property::after {
  <body class="h-entry">
   <div class="head">
    <p data-fill-with="logo"></p>
-   <h1 class="p-name no-ref" id="title">D1208R1<br>Adopt source_location from Library Fundamentals V3 for C++20</h1>
-   <h2 class="no-num no-toc no-ref heading settled" id="subtitle"><span class="content">Draft Proposal, <time class="dt-updated" datetime="2018-09-21">2018-09-21</time></span></h2>
+   <h1 class="p-name no-ref" id="title">D1208R3<br>Adopt source_location from Library Fundamentals V3 for C++20</h1>
+   <h2 class="no-num no-toc no-ref heading settled" id="subtitle"><span class="content">Draft Proposal, <time class="dt-updated" datetime="2019-02-22">2019-02-22</time></span></h2>
    <div data-fill-with="spec-metadata">
     <dl>
      <dt>This version:
@@ -1530,17 +1530,23 @@ pre .property::before, pre .property::after {
   <nav data-fill-with="table-of-contents" id="toc">
    <h2 class="no-num no-toc no-ref" id="contents">Table of Contents</h2>
    <ol class="toc" role="directory">
-    <li><a href="#proposal"><span class="secno">1</span> <span class="content">Proposal</span></a>
     <li>
-     <a href="#a-few-design-changes"><span class="secno">2</span> <span class="content">A few design changes</span></a>
+     <a href="#changes"><span class="secno">1</span> <span class="content">Changes</span></a>
      <ol class="toc">
-      <li><a href="#enforcing-a-size-for-source_location-objects"><span class="secno">2.1</span> <span class="content">Enforcing a size for <code class="highlight"><c- n>source_location</c-></code> objects ?</span></a>
-      <li><a href="#removing-current-altogether"><span class="secno">2.2</span> <span class="content">Removing <code class="highlight"><c- n>current</c-><c- p>()</c-></code> altogether ?</span></a>
+      <li><a href="#r2"><span class="secno">1.1</span> <span class="content">R2</span></a>
+      <li><a href="#r1"><span class="secno">1.2</span> <span class="content">R1</span></a>
      </ol>
-    <li><a href="#user-constructed-source_location"><span class="secno">3</span> <span class="content">User-constructed source_location</span></a>
-    <li><a href="#proposed-wording"><span class="secno">4</span> <span class="content">Proposed Wording</span></a>
-    <li><a href="#feature-macro"><span class="secno">5</span> <span class="content">Feature macro</span></a>
-    <li><a href="#acknowledgments"><span class="secno">6</span> <span class="content">Acknowledgments</span></a>
+    <li><a href="#proposal"><span class="secno">2</span> <span class="content">Proposal</span></a>
+    <li>
+     <a href="#a-few-design-changes"><span class="secno">3</span> <span class="content">A few design changes</span></a>
+     <ol class="toc">
+      <li><a href="#enforcing-a-size-for-source_location-objects"><span class="secno">3.1</span> <span class="content">Enforcing a size for <code class="highlight"><c- n>source_location</c-></code> objects ?</span></a>
+      <li><a href="#removing-current-altogether"><span class="secno">3.2</span> <span class="content">Removing <code class="highlight"><c- n>current</c-><c- p>()</c-></code> altogether ?</span></a>
+     </ol>
+    <li><a href="#user-constructed-source_location"><span class="secno">4</span> <span class="content">User-constructed source_location</span></a>
+    <li><a href="#proposed-wording"><span class="secno">5</span> <span class="content">Proposed Wording</span></a>
+    <li><a href="#feature-macro"><span class="secno">6</span> <span class="content">Feature macro</span></a>
+    <li><a href="#acknowledgments"><span class="secno">7</span> <span class="content">Acknowledgments</span></a>
     <li>
      <a href="#references"><span class="secno"></span> <span class="content">References</span></a>
      <ol class="toc">
@@ -1549,7 +1555,20 @@ pre .property::before, pre .property::after {
    </ol>
   </nav>
   <main>
-   <h2 class="heading settled" data-level="1" id="proposal"><span class="secno">1. </span><span class="content">Proposal</span><a class="self-link" href="#proposal"></a></h2>
+   <h2 class="heading settled" data-level="1" id="changes"><span class="secno">1. </span><span class="content">Changes</span><a class="self-link" href="#changes"></a></h2>
+   <h3 class="heading settled" data-level="1.1" id="r2"><span class="secno">1.1. </span><span class="content">R2</span><a class="self-link" href="#r2"></a></h3>
+   <ul>
+    <li data-md>
+     <p>Specify that the string returned by function_name is a NTMBS encoded using the execution character set</p>
+   </ul>
+   <h3 class="heading settled" data-level="1.2" id="r1"><span class="secno">1.2. </span><span class="content">R1</span><a class="self-link" href="#r1"></a></h3>
+   <ul>
+    <li data-md>
+     <p>Make current consteval</p>
+    <li data-md>
+     <p>Explain why source_location cannot be constructed from user specified values</p>
+   </ul>
+   <h2 class="heading settled" data-level="2" id="proposal"><span class="secno">2. </span><span class="content">Proposal</span><a class="self-link" href="#proposal"></a></h2>
    <p>This paper proposes that source_location from Library Fundamentals V3 <a data-link-type="biblio" href="#biblio-n4758">[N4758]</a> be adopted into the C++20 standard.</p>
    <p><code class="highlight"><c- n>source_location</c-></code> has been successfully implemented without difficulties in GCC, and Clang implementers almost completed their implementation of it.
 As described by the original paper, it’s a necessary feature to implement logging without requiring macros, one that cannot be portably implemented
@@ -1557,9 +1576,9 @@ by non-standard libraries because it requires compiler support.</p>
    <p><code class="highlight"><c- n>source_location</c-></code> has been very favorably received by both EWG and LEWG <a data-link-type="biblio" href="#biblio-n4129">[n4129]</a>, <a data-link-type="biblio" href="#biblio-n4417">[n4417]</a> and has been part of library
 fundamentals v2 <a data-link-type="biblio" href="#biblio-n4562">[n4562]</a> and v3 <a data-link-type="biblio" href="#biblio-n4758">[N4758]</a> since 2015 without changes to exposed interface.</p>
    <p class="note" role="note"><span>Note:</span> A proposal <a data-link-type="biblio" href="#biblio-p0555r0">[P0555R0]</a> in 2017 to make use of <code class="highlight"><c- n>string_view</c-></code> in <code class="highlight"><c- n>source_location</c-></code> has been withdrawn by their authors once <code class="highlight"><c- n>string_view</c-></code> gained a constexpr constructor, allowing the use of <code class="highlight"><c- n>source_location</c-></code> in constexpr contexts.</p>
-   <h2 class="heading settled" data-level="2" id="a-few-design-changes"><span class="secno">2. </span><span class="content">A few design changes</span><a class="self-link" href="#a-few-design-changes"></a></h2>
+   <h2 class="heading settled" data-level="3" id="a-few-design-changes"><span class="secno">3. </span><span class="content">A few design changes</span><a class="self-link" href="#a-few-design-changes"></a></h2>
    <p>During an early review of this papers, some interest in a few design changes arose:</p>
-   <h3 class="heading settled" data-level="2.1" id="enforcing-a-size-for-source_location-objects"><span class="secno">2.1. </span><span class="content">Enforcing a size for <code class="highlight"><c- n>source_location</c-></code> objects ?</span><a class="self-link" href="#enforcing-a-size-for-source_location-objects"></a></h3>
+   <h3 class="heading settled" data-level="3.1" id="enforcing-a-size-for-source_location-objects"><span class="secno">3.1. </span><span class="content">Enforcing a size for <code class="highlight"><c- n>source_location</c-></code> objects ?</span><a class="self-link" href="#enforcing-a-size-for-source_location-objects"></a></h3>
    <p><b> No consensus in San Diego </b></p>
    <p><code class="highlight"><c- n>source_location</c-></code> as currently implemented by Clang and GCC is a structure encapsulating all its members (file, function, line, column),
 and so its size is roughly <code class="highlight"><c- mi>3</c-> <c- o>*</c-> <c- k>sizeof</c-><c- p>(</c-><c- b>void</c-><c- o>*</c-><c- p>)</c-></code>.</p>
@@ -1596,7 +1615,7 @@ or restricting the way it is implemented.</p>
    <p>The authors strongly prefer the first solution as we think retaining value semantics is important.
 It is also important to note that, while not implemented, the first solution has been considered and is deemed
 realistically implementable by both GCC and Clang developers (Jonathan Wakely, Eric Fiselier).</p>
-   <h3 class="heading settled" data-level="2.2" id="removing-current-altogether"><span class="secno">2.2. </span><span class="content">Removing <code class="highlight"><c- n>current</c-><c- p>()</c-></code> altogether ?</span><a class="self-link" href="#removing-current-altogether"></a></h3>
+   <h3 class="heading settled" data-level="3.2" id="removing-current-altogether"><span class="secno">3.2. </span><span class="content">Removing <code class="highlight"><c- n>current</c-><c- p>()</c-></code> altogether ?</span><a class="self-link" href="#removing-current-altogether"></a></h3>
    <p><b> No consensus in San Diego </b></p>
    <p>If LEWG elects to keep value semantics, the authors would like to propose that the <code class="highlight"><c- n>current</c-></code> function is removed,
 since, in its current form, <code class="highlight"><c- n>source_location</c-></code> has a default constructor that has no meaningful use.
@@ -1605,7 +1624,7 @@ Besides being harder to misuse, using the constructor of the type to acquire its
 <c- c1>//or</c->
 <c- b>void</c-> <c- nf>log</c-><c- p>(</c-><c- k>auto</c-> <c- o>&amp;&amp;</c-> <c- n>message</c-><c- p>,</c-> <c- n>std</c-><c- o>::</c-><c- n>source_location</c-> <c- n>sc</c-> <c- o>=</c-> <c- p>{});</c->
 </pre>
-   <h2 class="heading settled" data-level="3" id="user-constructed-source_location"><span class="secno">3. </span><span class="content">User-constructed source_location</span><a class="self-link" href="#user-constructed-source_location"></a></h2>
+   <h2 class="heading settled" data-level="4" id="user-constructed-source_location"><span class="secno">4. </span><span class="content">User-constructed source_location</span><a class="self-link" href="#user-constructed-source_location"></a></h2>
     In San Diego, it was suggested to add the following constructor 
 <pre class="language-cpp highlight"><c- n>consteval</c-> <c- nf>source_location</c-><c- p>(</c-><c- b>uint_least32_t</c-> <c- n>line</c-><c- p>,</c->
 				<c- b>uint_least32_t</c-> <c- n>column</c-><c- p>,</c->
@@ -1618,7 +1637,7 @@ live past the call to that constructor.
    <p><code class="highlight"><c- n>filename</c-></code> and <code class="highlight"><c- n>function</c-></code> would have to be copied (at compile time)
 and it isn’t clear wether it would be possible  to copy them in read only memory.</p>
    <p>Therefore we suggested that this could be the subject of a separate paper to explore these lifetime issues</p>
-   <h2 class="heading settled" data-level="4" id="proposed-wording"><span class="secno">4. </span><span class="content">Proposed Wording</span><a class="self-link" href="#proposed-wording"></a></h2>
+   <h2 class="heading settled" data-level="5" id="proposed-wording"><span class="secno">5. </span><span class="content">Proposed Wording</span><a class="self-link" href="#proposed-wording"></a></h2>
    <p>The following wording correspond to the wording as in [n4758] (Library fundamental), with the exception of
 making source_location::current() an immediate function as decided by LEWG in San Diego.</p>
    <p>Notes To The Editor:</p>
@@ -1724,15 +1743,16 @@ or be placed elsewhere. </ul>
        <p><cxx-returns id="reflection.src_loc.fields.8" para_num="8"></cxx-returns></p>
        <dt>Returns:
        <dd> If this object represents a position in the body of a function,
-          returns an implementation-defined NTBS that should correspond to the function name.
+          returns an implementation-defined NTMBS that should correspond to the function name.
+          The value of the NTMBS is first formed using the basic source character set (with universal-character-names as necessary) then mapped in the manner applied to string literals with no encoding prefix in phases 5 and 6 of translation.
           Otherwise, returns an empty string. 
       </dl>
      </section>
     </section>
    </wording>
-   <h2 class="heading settled" data-level="5" id="feature-macro"><span class="secno">5. </span><span class="content">Feature macro</span><a class="self-link" href="#feature-macro"></a></h2>
+   <h2 class="heading settled" data-level="6" id="feature-macro"><span class="secno">6. </span><span class="content">Feature macro</span><a class="self-link" href="#feature-macro"></a></h2>
     Similarly to the original <a data-link-type="biblio" href="#biblio-n4417">[n4417]</a> wording, we recommend the feature test macro <code class="highlight"><c- n>__cpp_lib_source_location</c-></code> for this feature. 
-   <h2 class="heading settled" data-level="6" id="acknowledgments"><span class="secno">6. </span><span class="content">Acknowledgments</span><a class="self-link" href="#acknowledgments"></a></h2>
+   <h2 class="heading settled" data-level="7" id="acknowledgments"><span class="secno">7. </span><span class="content">Acknowledgments</span><a class="self-link" href="#acknowledgments"></a></h2>
    <p>The authors would like to thanks the people who reviewed early version of this proposal, notably Peter Dimov, Jonathan Wakely Arthur O’Dwyer
 and Geoffrey Romer.
 We would also like to thank Herb Sutter and Niall Douglas for their insightful remarks on std::error and errors handling in general.</p>
