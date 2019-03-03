@@ -25,7 +25,7 @@
 
 
 \title{Range constructor for \tcode{std::span}}
-\docnumber{P1394R0}
+\docnumber{P1394D1}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Casey Carter}{casey@carter.net}
@@ -92,7 +92,7 @@ foo(get_vector()); //ill-formed
 std::vector<int> get_vector();
 void foo(std::span<int>);
 void bar(std::span<const int>);
-bar(get_vector()); //ill-formed
+bar(get_vector()); //valid
 foo(get_vector()); //ill-formed
 \end{minted}
 \end{minipage}
@@ -115,10 +115,6 @@ from all compatible types while offering stronger and more consistent (in regard
 
 
 \section{Design considerations}
-
-Currently, a \tcode{rvalue-ref Container<T>} binds to \tcode{span<const T>}.
-This behavior is surprising, dangerous and fits poorly with the \tcode{forwarding-range} model introduced with ranges.
-We therefore propose that span should only be constructible from \tcode{forwarding-range}s.
 
 We propose to specify all constructors currently accepting a container or pointers in terms of \tcode{ContiguousRange} and \tcode{ContiguousIterator}
 respectively as well as to add or modify the relevant deduction guides for these constructors.
@@ -162,7 +158,7 @@ constexpr span(const array<value_type, N>& arr) noexcept;
 @\removed{template<class Container>}@
 @\removed{constexpr span(const Container\& cont);}@
 @\added{template <ranges::ContiguousRange R>}@
-@\added{requires ranges::SizedRange<R> \&\& \placeholder{forwarding-range}<R> \&\&}@
+@\added{requires ranges::SizedRange<R> \&\& (\placeholder{forwarding-range}<R> ||  std::is_const_v<ElementType>)}@ 
 @\added{ConvertibleTo<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>(*)[], ElementType(*)[]>}@
 @\added{constexpr span(R\&\& r);}@
 
@@ -375,7 +371,7 @@ template<class Container> constexpr span(const Container& cont);
 \begin{addedblock}
 \begin{itemdecl}
 template <ranges::ContiguousRange R>
-requires ranges::SizedRange<R> && @{\placeholder{forwarding-range}<R>}@ &&
+requires ranges::SizedRange<R> && @{(\placeholder{forwarding-range}<R> || std::is_const_v<ElementType>)}@ &&
 ConvertibleTo<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>(*)[], ElementType(*)[]>
 constexpr span(R&& r)
 \end{itemdecl}
