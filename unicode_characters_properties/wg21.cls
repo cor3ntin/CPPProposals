@@ -27,9 +27,8 @@
 \RequirePackage{fixme}
 \RequirePackage{lmodern}
 \RequirePackage[T1]{fontenc}
-\RequirePackage[pdftex, final]{graphicx}
-\RequirePackage[pdftex,
-                bookmarks=true,
+\RequirePackage[final]{graphicx}
+\RequirePackage[bookmarks=true,
                 bookmarksnumbered=true,
                 pdfpagelabels=true,
                 pdfpagemode=UseOutlines,
@@ -396,14 +395,14 @@
         basicstyle=\small\CodeStyle,
         keywordstyle=\color{blue},
         commentstyle=\color{ForestGreen}\itshape\rmfamily,,
-        stringstyle=,
+        stringstyle=\color{Sepia},
         xleftmargin=0em,
         showstringspaces=false,
         columns=flexible,
         keepspaces=true,
         keywords=[2]{char32_t, char8_t, char16_t},
         keywords=[3]{codepoint},
-        keywords=[4]{noexcept,constexpr},
+        keywords=[4]{noexcept,constexpr, static_assert},
         keywordstyle={\color{blue!80!black}},
         keywordstyle=[2]{\color{red!80!black}},
         keywordstyle=[3]{\color{BurntOrange!50!black}},
