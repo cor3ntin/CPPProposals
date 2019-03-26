@@ -16,7 +16,7 @@
 \RequirePackage{parskip}                % handle non-indented paragraphs "properly"
 \RequirePackage{array}                  % new column definitions for tables
 \RequirePackage[normalem]{ulem}
-\RequirePackage{color}                  % define colors for strikeouts and underlines
+\RequirePackage[dvipsnames]{xcolor}                  % define colors for strikeouts and underlines
 \RequirePackage{amsmath}                % additional math symbols
 \RequirePackage{mathrsfs}               % mathscr font
 \RequirePackage{etoolbox}
@@ -27,8 +27,8 @@
 \RequirePackage{fixme}
 \RequirePackage{lmodern}
 \RequirePackage[T1]{fontenc}
-\RequirePackage[pdftex, final]{graphicx}
-\RequirePackage[pdftex,
+\RequirePackage[final]{graphicx}
+\RequirePackage[
                 bookmarks=true,
                 bookmarksnumbered=true,
                 pdfpagelabels=true,
@@ -48,7 +48,6 @@
                 extract-cmdline={gramSec},
                 extract-env={bnftab,simplebnf,bnf,bnfkeywordtab}
                ]{extract} % Grammar extraction
-\usepackage[dvipsnames]{xcolor}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Setup title
@@ -101,7 +100,7 @@
 \hyphenation{tem-plate ex-am-ple in-put-it-er-a-tor name-space name-spaces}
 
 % turn off all ligatures inside \texttt
-\DisableLigatures{encoding = T1, family = tt*}
+%\DisableLigatures{encoding = T1, family = tt*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Macros defined in the C++ standard draft
