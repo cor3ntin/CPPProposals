@@ -1,4 +1,6 @@
 \documentclass{wg21}
+\usepackage{fontspec}
+\setmainfont{DejaVu Sans}
 
 \usepackage{xcolor}
 \usepackage{soul}
@@ -35,8 +37,8 @@
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
-\begin{document}    
-    
+\begin{document}
+
 \maketitle
 
 \section{Abstract}
@@ -50,7 +52,7 @@ This API can be used as a foundation for various Unicode algorithms and Unicode 
 regular expressions.
 
 Being able to query the properties of Unicode characters is important for any application hoping to correctly
-handle any textual content, including compilers and parsers, text editors, graphical applications, databases, 
+handle any textual content, including compilers and parsers, text editors, graphical applications, databases,
 messaging applications, etc.
 
 \begin{minted}
@@ -70,7 +72,7 @@ An important design decision of this proposal is that it is fully \tcode{constex
 Notably, the presented design allows an implementation to only link the Unicode tables that are actually used by
 a program. This can reduce considerably the size requirements of an Unicode-aware executable as most applications
 often depend on a small subset of the Unicode properties.
-While the complete Unicode database has a substantial memory footprint, developers should 
+While the complete Unicode database has a substantial memory footprint, developers should
 not pay for the table they don't use.
 
 
@@ -84,21 +86,21 @@ We expect this to be useful in some cases notably to sanitize data at compile ti
 \subsection{Unicode Versions, Runtime and ABI stability}
 
 The Unicode Standard is updated at the current rate of once a year.
-Each version might add new characters, new scripts, new blocks and change some - but not all 
+Each version might add new characters, new scripts, new blocks and change some - but not all
 properties of existing characters.
 This might in specific cases translate to an observable change of run-time properties.
 It might also be valuable to work with a specific Unicode version.
-At the same time, we want to give implementers the capability to support versions release after the C++ Standard, 
+At the same time, we want to give implementers the capability to support versions release after the C++ Standard,
 while making sure new Unicode versions are actually supported by the standard library.
 
 To this effect, we propose the following:
 
 \begin{itemize}
     \item The C++ Standard mandates a minimum version of Unicode that needs to be supported - That minimum version will change with each new C++ standard.
-    \item The Unicode Character Properties database API proposed here is designed such that it can be extended by implementer wishing to support newer versions \textbf{In addition to the minimum mandated version}. 
+    \item The Unicode Character Properties database API proposed here is designed such that it can be extended by implementer wishing to support newer versions \textbf{In addition to the minimum mandated version}.
     \item The Unicode Character Properties database API proposed here is designed such that implementers can support older versions \textbf{In addition to the minimum mandated version}.
     \item Functions templated on Unicode version are designed to be ABI stable.
-    \item The default behavior is to use the version specified by the standard. 
+    \item The default behavior is to use the version specified by the standard.
 \end{itemize}
 
 \subsection{Properties selection}
@@ -160,7 +162,7 @@ struct script_extensions_view {
     struct iterator {
         using value_type = script;
         using iterator_category = std::forward_iterator_tag;
-        
+
         constexpr iterator(char32_t c);
         constexpr script operator*();
         constexpr iterator& operator++(int);
@@ -170,7 +172,7 @@ struct script_extensions_view {
         constexpr bool operator==(iterator) const;
         constexpr bool operator!=(iterator) const;
     };
-    
+
     constexpr iterator begin() const;
     constexpr sentinel end() const;
     //exposition only
@@ -192,7 +194,7 @@ template<uni::script, uni::version = uni::version::unassigned>
 constexpr bool cp_is(codepoint) noexcept;
 
 template<uni::version Version = uni::version::unassigne>
-constexpr auto cp_script_extensions(codepoint) noexcept 
+constexpr auto cp_script_extensions(codepoint) noexcept
     -> script_extensions_view<Version>;
 
 template<uni::property, uni::version = uni::version::unassigned>
@@ -208,8 +210,8 @@ constexpr bool cp_is_ascii(codepoint) noexcept;
 
 constexpr auto cp_name(codepoint) noexcept
     -> auto ForwardRange<char> @\seebelow@;
-    
-    
+
+
 struct numeric_value {
     constexpr double value() const; //not freestanding
     constexpr int_least64_t numerator() const noexcept;
@@ -225,12 +227,12 @@ cp_numeric_value(codepoint) noexcept;
 \end{quote}
 
 \begin{quote}
-    
-    
+
+
 \begin{itemdecl}
 enum class version : uint32_t {
     v1_1        =  0x010100,
-    v2_0        =  0x020000,   
+    v2_0        =  0x020000,
     v2_1        =  0x020100,
     v3_0        =  0x030000,
     v3_1        =  0x030100,
@@ -324,7 +326,7 @@ enum class block;
 The values are listed at the end of the paper.
 
 \begin{itemdescr}
-    
+
 Represents a block of Unicode codepoints.
 
 Each enumerator is derived from \cite{PropertyValueAliases}, with the following transformation applied:
@@ -347,7 +349,7 @@ enum class script;
 \end{itemdecl}
 
 \begin{itemdescr}
-    
+
 Represents the script of a Unicode code point.
 
 Each enumerator is derived from \cite{PropertyValueAliases}, with the following transformation applied:
@@ -361,7 +363,7 @@ The value of each enumerator is equal to the value of the smallest code point wi
 \begin{note}
     An implementation may add new values to \tcode{script} provided is defined in \cite{PropertyValueAliases} by applying the same transformation as described above.
 \end{note}
-    
+
 \end{itemdescr}
 
 
@@ -371,12 +373,12 @@ enum class property;
 
 
 \begin{itemdescr}
-    
+
 Unless otherwise specified, each enumerator refers to a Boolean property specified by the Unicode Standard in \cite{UCD}.
 As Unicode properties can be aliased, several enumerators may refer to the same Unicode property.
 
 Only a subset of properties is proposed for standardization. We notably excluded properties used for derivation and deprecated or superseded properties.
-    
+
 \begin{longtable}{| l | l | }
 \hline
 \makecell[l]{\lstinline{ahex} \\ \lstinline{ascii_hex_digit}}
@@ -592,7 +594,7 @@ XID_Continue \\
 &
 XID_Start \\
 \hline
-    
+
 \end{longtable}
 \end{itemdescr}
 
@@ -605,9 +607,9 @@ constexpr uni::category cp_category(codepoint cp) noexcept;
 
 \mandates \tcode{UNICODE_VERSION(Version) >= uni::version::minimum_version and UNICODE_VERSION(Version) <= uni::version::version}
 
-\returns The \tcode{category} associated with the codepoint \tcode{cp} according to the Unicode Standard \tcode{UNICODE_VERSION(Version)}, 
+\returns The \tcode{category} associated with the codepoint \tcode{cp} according to the Unicode Standard \tcode{UNICODE_VERSION(Version)},
 or \tcode{uni::category::unassigned} if \tcode{cp} is not a valid codepoint or was not assigned in the specified version.
-    
+
 \end{itemdescr}
 
 
@@ -617,12 +619,12 @@ constexpr bool cp_is(codepoint cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-    
+
 \mandates \tcode{UNICODE_VERSION(Version) >= uni::version::minimum_version and UNICODE_VERSION(Version) <= uni::version::version}
 
-\returns \tcode{true} if the \tcode{category} associated with the codepoint \tcode{cp} according to the \tcode{General_Category} property specified by the the Unicode Standard \tcode{UNICODE_VERSION(Version)}, 
+\returns \tcode{true} if the \tcode{category} associated with the codepoint \tcode{cp} according to the \tcode{General_Category} property specified by the the Unicode Standard \tcode{UNICODE_VERSION(Version)},
 is  \tcode{Category} and \tcode{false} otherwise.
-    
+
 \end{itemdescr}
 
 
@@ -632,12 +634,12 @@ constexpr script cp_script(codepoint cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-    
+
 \mandates \tcode{UNICODE_VERSION(Version) >= uni::version::minimum_version and UNICODE_VERSION(Version) <= uni::version::version}
 
-\returns The \tcode{uni::script} associated with the codepoint \tcode{cp} according to the \tcode{Script} property specified by the Unicode Standard \tcode{UNICODE_VERSION(Version)}, 
+\returns The \tcode{uni::script} associated with the codepoint \tcode{cp} according to the \tcode{Script} property specified by the Unicode Standard \tcode{UNICODE_VERSION(Version)},
 or \tcode{uni::script::unknown} if \tcode{cp} is not a valid codepoint or was not assigned in the specified Unicode version.
-    
+
 \end{itemdescr}
 
 \begin{itemdecl}
@@ -649,19 +651,19 @@ constexpr bool cp_is(codepoint cp) noexcept;
 
 \mandates \tcode{UNICODE_VERSION(Version) >= uni::version::minimum_version and UNICODE_VERSION(Version) <= uni::version::version}
 
-\returns \tcode{true} if the \tcode{script} associated with the codepoint \tcode{cp} according to the Unicode Standard \tcode{UNICODE_VERSION(Version)}, 
+\returns \tcode{true} if the \tcode{script} associated with the codepoint \tcode{cp} according to the Unicode Standard \tcode{UNICODE_VERSION(Version)},
 is  \tcode{Script} and \tcode{false} otherwise.
-    
+
 \end{itemdescr}
 
 \begin{itemdecl}
 template<uni::version Version = uni::version::unassigned>
-constexpr auto cp_script_extensions(codepoint cp) noexcept 
+constexpr auto cp_script_extensions(codepoint cp) noexcept
 -> script_extensions_view<Version>;
 \end{itemdecl}
 
 \begin{itemdescr}
-    
+
 \mandates \tcode{UNICODE_VERSION(Version) >= uni::version::minimum_version and UNICODE_VERSION(Version) <= uni::version::version}
 
 \returns A \tcode{script_extensions_view<Version>} that can iterate over all the script extensions of
@@ -676,7 +678,7 @@ In accordance with to the Unicode standard, if a codepoint has no explicit scrip
 \begin{note}
 The order of elements is unspecified
 \end{note}
-    
+
 \end{itemdescr}
 
 \begin{itemdecl}
@@ -688,9 +690,9 @@ constexpr bool cp_is(codepoint cp) noexcept;
 
 \mandates \tcode{UNICODE_VERSION(Version) >= uni::version::minimum_version and UNICODE_VERSION(Version) <= uni::version::version}
 
-\returns \tcode{true} if the codepoint \tcode{cp} is valid, assigned in the specified version and has the boolean property associated with \tcode{Prop} according to the Unicode Standard \tcode{UNICODE_VERSION(Version)}, 
+\returns \tcode{true} if the codepoint \tcode{cp} is valid, assigned in the specified version and has the boolean property associated with \tcode{Prop} according to the Unicode Standard \tcode{UNICODE_VERSION(Version)},
 and \tcode{false} otherwise.
-    
+
 \end{itemdescr}
 
 
@@ -699,9 +701,9 @@ constexpr uni::version cp_age(codepoint cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-    
+
 \returns The \tcode{version} corresponding to the \tcode{Age} property of this code point or \tcode{version::unassigned} if \tcode{cp} is not a valid assigned codepoint.
-    
+
 \end{itemdescr}
 
 
@@ -710,14 +712,14 @@ constexpr uni::version cp_block(codepoint cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-    
+
 \returns The \tcode{block} corresponding to the \tcode{Block} property of this code point or \tcode{block::no_block} if \tcode{cp} is not a valid codepoint.
 
 \begin{note}
 Unassigned codepoints may still have a block value different from \tcode{block::no_block}.
 \end{note}
 
-    
+
 \end{itemdescr}
 
 
@@ -726,9 +728,9 @@ constexpr bool cp_is_valid(codepoint cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-    
+
 \returns \tcode{true} if the codepoint \tcode{cp} is a valid Unicode codepoint.
-    
+
 \end{itemdescr}
 
 \begin{itemdecl}
@@ -737,7 +739,7 @@ constexpr bool cp_is_assigned(codepoint cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-    
+
 \returns \tcode{true} if the codepoint \tcode{cp} is assigned in \tcode{UNICODE_VERSION(Version)}.
 
 \begin{note}
@@ -751,9 +753,9 @@ constexpr bool cp_is_ascii(codepoint) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-    
+
 \returns \tcode{true} if \tcode{cp <= 0x7F}
-    
+
 \end{itemdescr}
 
 
@@ -763,16 +765,16 @@ cp_numeric_value(codepoint cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-    
+
 \returns if \tcode{cp} is not a valid assigned codepoint or has a \tcode{Numeric_Type} property with the value \tcode{None}, a default constructed optional.
-Otherwise, returns a \tcode{numeric_value} such that: 
+Otherwise, returns a \tcode{numeric_value} such that:
 
 \begin{itemize}
     \item if \tcode{cp} has a "\tcode{Digit}"   \tcode{Numeric_Type} : \tcode{numerator} represents the value of \tcode{Numeric_Value} converted to a \tcode{int64_t} in base 10 and \tcode{denominator} has the value \tcode{1}.
     \item if \tcode{cp} has a "\tcode{Numeric}" \tcode{Numeric_Type} and \tcode{Numeric_Value} does not contain a forward slash: \tcode{numerator} represents the value of \tcode{Numeric_Value} converted to a \tcode{int64_t} in base 10 and \tcode{denominator} has the value \tcode{1}.
     \item if \tcode{cp} has a "\tcode{Numeric}" \tcode{Numeric_Type} and \tcode{Numeric_Value} contains a forward slash: \tcode{numerator} represents the value of the \tcode{Numeric_Value} string up to but not including the forward slash converted to a \tcode{int64_t} in base 10 and \tcode{denominator}  represents the value of the \tcode{Numeric_Value} string starting from the character following the forward slash converted to a \tcode{int64_t} in base 10.
 \end{itemize}
-    
+
 \end{itemdescr}
 
 \begin{itemdecl}
@@ -781,9 +783,9 @@ constexpr auto cp_name(codepoint) noexcept
 \end{itemdecl}
 
 \begin{itemdescr}
-    
+
 \returns A \tcode{View} over the characters representing the \tcode{Name} property associated with this codepoint or an empty range if \tcode{cp} is not a valid assigned codepoint.
-    
+
 \end{itemdescr}
 
 
@@ -793,7 +795,7 @@ constexpr auto cp_name(codepoint) noexcept
 
 \section{Acknowledgments}
 
-Special thanks to Hana Dusíková for her valuable feedbacks while integrating this library to CTRE faster than I could implement it and the Men and Women IN BUSINESS SUIT LEVITATING of SG-16. 
+Special thanks to Hana Dusíková for her valuable feedbacks while integrating this library to CTRE faster than I could implement it and the Men and Women IN BUSINESS SUIT LEVITATING of SG-16.
 
 
 
@@ -1625,27 +1627,27 @@ enum class script {
     Unicode®
     \emph{Unicode Character Database: Derived Property Data - Age Property}\newline
     \url{http://www.unicode.org/Public/12.0.0/ucd/DerivedAge.txt}
-    
+
     \bibitem[PropertyValueAliases.txt]{PropertyValueAliases}
     Unicode®
     \emph{Unicode Character Database: Derived Property Data - Age Property}\newline
     \url{https://www.unicode.org/Public/12.0.0/ucd/PropertyValueAliases.txt}
-    
+
     \bibitem[TR\#51 - Emoji]{Emoji}
     Unicode®
     \emph{Technical Standard \#51  - UNICODE EMOJI}\newline
     \url{http://unicode.org/reports/tr51/}
-    
+
     \bibitem[Unicode® Standard Annex \#44 - UNICODE CHARACTER DATABASE]{UCD}
     Unicode®
     \emph{[Unicode® Standard Annex \#44 - UNICODE CHARACTER DATABASE}\newline
     \url{http://unicode.org/reports/tr44/}
-    
+
     \bibitem[CTRE]{ctre}
     Hana Dusíková
     Unicode Compliant version of CTRE based on this proposal
     \url{https://github.com/hanickadot/compile-time-regular-expressions/tree/ecma-unicode}
-    
+
     \bibitem[Implementation]{impl}
     Experimental implementation of this proposal
     \url{https://github.com/cor3ntin/ext-unicode-db/}
