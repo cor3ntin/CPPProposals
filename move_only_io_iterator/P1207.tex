@@ -1,0 +1,2236 @@
+\documentclass{wg21}
+
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{ulem}
+\usepackage{fullpage}
+\usepackage{parskip}
+\usepackage{csquotes}
+\usepackage{relsize}      % provide relative font size changes
+\usepackage{textcomp}     % provide \text{l,r}angle
+\usepackage{mathrsfs}     % mathscr font
+
+\title{Movability of Single-pass Iterators}
+\docnumber{D1207R2}
+\audience{LWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\usepackage[inner=1cm,outer=2cm]{geometry}
+
+\begin{document}
+\maketitle
+
+\begin{flushright}
+\hfill \break
+\hfill \break
+\textit{I want to move(it), move(it), y'all want to move(it);}
+\end{flushright}
+
+\hypertarget{changes}{%
+	\section{Changes}\label{changes}}
+
+\hypertarget{revision-2}{%
+	\subsection{Revision 2}\label{revision-2}}
+
+\begin{itemize}
+	\item
+	Remove discussions about \texttt{ContiguousIterator}
+\end{itemize}
+
+\hypertarget{revision-1}{%
+	\subsection{Revision 1}\label{revision-1}}
+
+\begin{itemize}
+	\item
+	Refine the impact on the standard
+	\item
+	Mention \texttt{ITER\_CONCEPT}
+	\item
+	Remove the idea the \texttt{ranges::copy} could move from non-copyable
+	iterators
+	\item
+	Replace Cpp17Iterator by LegacyIterator to reflect the standard
+	\item
+	Remove the very wrong idea of having view return \texttt{begin()} by
+	reference.
+	\item
+	Fix some confusing phrasing
+\end{itemize}
+
+\hypertarget{introduction}{%
+	\section{Introduction}\label{introduction}}
+
+Non-forward Input iterators and output iterators, also known as
+``Single-pass iterators'' are semantically move-only. The standard
+states:
+
+Note: For input iterators, a == b does not imply ++a == ++b (Equality
+does not guarantee the substitution property or referential
+transparency.) Algorithms on input iterators should never attempt to
+pass through the same iterator twice. They should be single pass
+algorithms.
+
+This means that once an iterator is copied, only one of the copies can
+be read-from if either one is incremented, which make the usefulness of
+such object questionable. Deferencing multiple copies of a single pass
+iterator often exposes undefined or invalid behavior if either one is
+incremented: the following example exposes Undefined behavior: 
+\begin{codeblock}
+
+auto other = some_input_iterator;
+std::cout << *(++other) << *some_input_iterator << '\n';
+\end{codeblock}
+
+It would, therefore, make sense that classes satisfying the
+\texttt{InputIterator} concept shall only be required to be movable.
+
+Alas, Single-pass iterators and many classes satisfying its requirements
+predate C++11, they do therefore have move only semantic with copy
+syntax. In that regard, they are similar to \texttt{auto\_ptr}.
+
+\hypertarget{terminology}{%
+	\section{Terminology}\label{terminology}}
+
+This paper redefines the requirements of some concepts as specified in
+the Working Draft In the rest of this paper
+
+\begin{itemize}
+	\item
+	\texttt{InputIterator} designs the \texttt{InputIterator} concept as
+	proposed by this paper
+	\item
+	\texttt{Cpp20InputIterator} designs the \texttt{InputIterator} concept
+	as specified in the Working Draft.
+	\item
+	\texttt{OutputIterator} designs the \texttt{OutputIterator} concept as
+	proposed by this paper
+	\item
+	\texttt{OutputIterator} designs the \texttt{OutputIterator} concept as
+	proposed in the Working Draft
+\end{itemize}
+
+\hypertarget{scope}{%
+	\section{Scope}\label{scope}}
+
+This paper proposes changes targeting C++20. Because the modifications
+proposed here changes some requirements and concepts introduced by
+Ranges, the authors strongly suggest they are considered for the
+inclusion in the same version of the standard. Indeed, Concepts
+introduced by ranges gives us a unique opportunity to make the
+modifications proposed, as they might, in some cases, break code, if
+introduced after the publication of C++20.
+
+\hypertarget{non-goal}{%
+	\subsection{Non-Goal}\label{non-goal}}
+
+As a large amount of code depends on the Input/Output iterators
+requirements as specified by C++17, this paper does not propose any
+modifications to the \texttt{LegacyInputIterator} or any class that
+depends on it. Specifically, we do not propose to change the
+requirements or wording of \texttt{istream\_iterator},
+\texttt{ostream\_iterator}, \texttt{istreambuf\_iterator} or
+\texttt{ostreambuf\_iterator}. Furthermore, we do not propose
+modifications to algorithms in the namespace \texttt{std}. The new
+iterators we propose here are in fact mostly incompatible with existing
+algorithms. They are meant to be used in the \texttt{ranges} namespace
+and as basic building blocks of range-based views.
+
+While the ability to use move-only iterators with the algorithms defined
+in the \texttt{std} namespace would certainly be welcomed, doing so
+would weaken the \texttt{Cpp20InputIterator} concept and leads to other
+issues (namely, \texttt{std} based algorithms require iterators to be
+\texttt{EqualityComparable}, which the \texttt{Cpp20InputIterator} does
+not require).
+
+In practice, that means that types satisfying the
+\texttt{LegacyInputIterator} requirements continue to work unaffected
+with algorithms defined in the \texttt{std} namespace. They may not be
+compatible with algorithms defined in the ranges namespace, or with new
+code using non-movable types satisfying the \texttt{InputIterator}
+concept as proposed here.
+
+Inversely, types satisfying the \texttt{InputIterator} concepts may not
+be compatible with algorithms in \texttt{std} as they may not be able to
+satisfy the \texttt{LegacyInputIterator} requirements \textbf{if} they
+are not copyable.
+
+Because it hardly makes sense to copy an Input Iterator (more on that
+later), it would be possible to add support for move-only iterators to
+the \texttt{std} namespace without much change to the standard. However,
+because implementers may copy iterators within the implementation of the
+standard library, along with existing third-party libraries, a lot of
+code would need to be adapted. And there is little pressure to do so as
+existing iterators types cannot be changed.
+
+\textbf{Furthermore, while we propose to add support for movable
+	non-forward iterators, the proposed design does not preclude, in any
+	way, the existance of copyable non-forward iterators.}
+
+\hypertarget{motivation}{%
+	\section{Motivation}\label{motivation}}
+
+\hypertarget{move-only-state}{%
+	\subsection{Move-only state}\label{move-only-state}}
+
+It may be desirable for an iterator to hold a move-only object, becoming
+itself move-only, which is not possible with iterators modeling
+LegacyIterator. A real-world example of such iterator is described in
+\cite{P0902}. While syntactically copyable in the current design,
+a \texttt{coroutine\_handle} such as used by a \texttt{generator} input
+iterator ought to be move-only.
+
+\hypertarget{implicitly-destructive-operations}{%
+	\subsection{Implicitly destructive
+		operations}\label{implicitly-destructive-operations}}
+
+Reading from an input sequence is a destructive operation. But that
+destruction is reflected nowhere in the API. Less experienced developers
+may not be aware of the destructive / single-pass nature of non-forward
+Iterators By making \texttt{InputIterator} move only, developers will
+have to explicitly move them, which both signals the invalidation of the
+move-from object, but, more importantly, that the underlying data will
+be destroyed.
+
+\hypertarget{what-is-a-move-only-iterator}{%
+	\section{What is a move-only
+		iterator?}\label{what-is-a-move-only-iterator}}
+
+Unlike \cite{P0902}, we do not propose to introduce a new
+iterator category.
+
+A move-only Iterator is a non-forward iterator (either input or output
+depending on whether is it writable). This means that a move-only
+iterator has \emph{almost} the same semantic requirements as an
+\texttt{InputIterator}, and offers the same operations. In other words,
+everything that can be expressed and done with a
+\texttt{Cpp20InputIterator} can be equally expressed and done with a
+move-only/non-copyable \texttt{InputIterator}.
+
+Therefore, this paper does not propose to introduce a new iterator
+category, new named-requirement, concept name or iterator tag.
+
+Furthermore, there is no \texttt{ForwardIterator} that is only movable,
+as a \texttt{ForwardIterator} is by definition an iterator that can be
+copied. We will expand on this later.
+
+\hypertarget{a-holistic-approach-to-iterators}{%
+	\section{A Holistic Approach to
+		Iterators}\label{a-holistic-approach-to-iterators}}
+
+While the first part of this paper focuses on making move-only iterators
+possible, as a means to get some code to compile, it is important to
+take a step back and to think about what movability means for Iterators,
+from first principles.
+
+An iterator denotes a position into a sequence of elements (whether that
+sequence maps to memory or not is, for our purpose, irrelevant).
+
+A most basic iterator can be incremented, which means it can move to the
+next position in the sequence. An iterator does not own the sequence
+iterated over (there are exceptions, ie: generators), which means the
+salient property of an iterator is its position in that sequence.
+
+Iterators categories then represent the way an iterator can move along
+that sequence. 
+\begin{itemize}
+	\item Input and FordwardIterator: sequentially, one direction
+	\item BidirectionalIterator: sequentially, both directions
+	\item RandomAccess: both directions in O(1)
+\end{itemize}
+
+ContiguousIterator is an optimization of RandomAccessIterator specific
+to the C++ memory model that further, constrain the underlying sequence
+to be laid out contiguously in memory.
+
+Stepanov theorized an additional category, ``Index iterator'', which has
+O(1) access but in a single direction.
+
+Further work was made on iterator categories, notably the Boost.Iterator
+library focused on separating traversal (how the iterator moves along
+the sequence) from access (whether dereferencing an iterator allows the
+pointed element to be read, written or both). While a very interesting
+concept, it falls outside the scope of this paper. Just keep in mind
+that everything that applies to non-forward \texttt{InputIterator}
+usually applies to OutputIterator - which are always non-Forward, the
+standard lacking that symmetry between read access and write access.
+
+However, focusing on traversal, the set of iterators categories is
+actually rather closed, there are only so many ways a sequence can be
+traversed. An important point of Stepanov design is that each category
+is a refinement of the preceding one. \texttt{RandomAccessIterator} is a
+\texttt{BidirectionalIterator} which in turn is a
+\texttt{ForwardIterator}. Every algorithm applicable to a
+\texttt{ForwardIterator} can be equally applied to a
+\texttt{BidirectionalIterator}, etc.
+
+So, what separates \texttt{InputIterator} from \texttt{ForwardIterator}
+if they are both ``forward'' in that they can both traverse a sequence
+in one direction?
+
+\texttt{ForwardIterator} is defined as being ``multi-pass''. Meaning it
+can traverse a sequence multiple times. That, in turn, implies
+\texttt{ForwardIterator} is copyable, because if a sequence can be
+traversed multiple times, it can also be traversed multiple times at the
+same time and therefore there can be multiple \texttt{ForwardIterator}
+pointing at different elements in the sequence. ForwardIterator is also
+always \texttt{EqualityComparable}. Two \texttt{ForwardIterator} compare
+equal if they point to the same elements in the sequence (remember, that
+in the general case, the position of an iterator in a sequence is its
+sole salient property). And so \texttt{ForwardIterator}, being both
+\texttt{EqualityComparable} and \texttt{Copyable} is Regular.
+
+The standard defines the ``multi pass'' guarantee by stating:
+\textgreater{} a == b implies ++a == ++b \textgreater{} Given X is a
+pointer type or the expression (void)++X(a), \emph{a is equivalent to
+	the expression }a.
+
+In other words: Two identical objects to which is applied the same
+transformation are identical. 
+
+Copying a \texttt{FordwardIterator} copies
+the salient properties of that value and incrementing it does not modify
+the underlying sequence. So \texttt{ForwardIterator} is required to be a
+regular type behaving like a regular type.
+
+Which bring us to \texttt{InputIterator}. InputIterator is a ``single
+pass'' iterator. The underlying sequence can on only be traversed once.
+The existence of an Iterator at the nth position in the sequence implies
+there can be no valid iterator at the position n-1 in that same
+sequence.
+
+\begin{codeblock}
+//Given an InputIterator a 
+auto b = a; a++;
+b; // is invalid.
+\end{codeblock}
+
+However, remember that the sole salient property of an iterator is its
+distance to the start of the sequence. Incrementing an iterator only
+mutates that property (again, conceptually, independently of
+implementation). And the only operation that mutates that property is
+the increment operation (which Stepanov calls \texttt{successor}).
+
+This implies that as a non-forward iterator moves from one element of
+the sequence to the next, that element is destroyed.
+
+All of this is well known and is basically rephrasing ``Input iterators
+are single pass''.
+
+An important point to make is that how an iterator can traverse a
+sequence is derived from the nature of the sequence rather than from the
+iterator itself. The point could be made that there is no such thing as
+an ``Input iterator'' Or a ``Forward Iterator'' because what we really
+mean is ``Iterator over an Input Sequence'' or ``Iterator over a Forward
+Sequence''.
+
+This is saying that, to be able to reason properly about iterators and
+traversal, we must assume that the iterator type associated with a
+sequence is the most specialized possible for that sequence.
+
+The problem is, of course, that we do not have, in the general case, a
+more meaningful way to express the traversability of a sequence than by
+defining what type of iterator is used to iterate over it.
+
+It is then the responsibility of the developer providing the sequence to
+define the most appropriate -- the most specialized -- iterator category
+for that sequence.
+
+In practice, because \texttt{InputIterator} and \texttt{ForwardIterator}
+are syntactically identical and because of the single-pass /
+multi-passes guarantees are poorly taught, it is common for iterators to
+be mis-categorized. Other iterator categories do not have these problems
+as each subsequent refining category adds syntax requirements:
+BidirectionalIiterator require decrement operators, RandomAccessIterator
+has further requirements.
+
+But then, is there a set of operations and semantic requirements,
+translating to actual C++ syntax, that could allow for InputIterator to
+be easily distinguished from each other? Can we avoid requiring a tag
+system? Is there a defining operation that distinguishes
+\texttt{InputIterator} from \texttt{ForwardIterator} in such a way that
+it would both not require an explicit category tagging while at the same
+time offering a better understanding of iterator categories as well as a
+less surprising and safer API for non-forward iterators?
+
+In fact, there is. We established that \texttt{ForwardIterator}s are
+semantically copyable, while \texttt{InputIterator}s are not. So the
+requirement that promotes an \texttt{InputIterator} into a
+\texttt{ForwardIterator} is indeed copyability - which translate in C++
+to a copy constructor. We can, therefore, consider that, in the absence
+of a tag, all non-copyable iterators are \texttt{InputIterator}, while
+all copyable iterators are \texttt{ForwardIterator}.
+
+This model, however, deviates slightly from Stepanov's work and
+\texttt{LegacyInputIterator}: 
+
+Copying a \texttt{LegacyInputIterator}
+does not invalidate either copy. In fact, it is quite valid to deference
+multiple copies of a \texttt{LegacyInputIterator}.
+
+Elements Of Programming has the notion of \texttt{Regular} types (and in
+Stepanov's work all Iterators are regular), but also the notion of
+regular transformations (aka pure functions) - which, given the same
+input, always give the same output. Given a \texttt{ForwardIterator}
+\texttt{fi}, there is a \texttt{successor} function returning an
+incremented copy of \texttt{fi} such as
+\texttt{sucessor(fi)\ ==\ sucessor(fi)}. In C++, that regular
+\texttt{sucessor} function is
+\texttt{ForwardIterator::operator++(int);}, in that
+\texttt{(it++)\ ==\ (it++)} for any given \texttt{ForwardIterator}.
+
+For \texttt{InputIterator}, Stepanov specifies that the
+\texttt{successor} is a pseudo transformation or a non-regular
+transformation that look like a regular one. And therein lies the rub.
+
+Like a pointer, \texttt{InputIterator} is Regular, up until the point a
+transformation of an instance affects all copies.
+
+\begin{codeblock}
+	InputIterator i = /*...*/
+	*i    //ok
+	auto a = i //ok
+	*i    //ok
+	i++;  // a now invalid
+\end{codeblock}
+
+This design accurately models the nature of iterators. Because an
+iterator represents a position in a sequence, it is natural that
+multiple iterators could point to the same position. After one copy is
+incremented, in Stepanov's model, other copies are in a partially formed
+state and cannot be used (but they can be assigned to, or destroyed).
+
+Let's consider the case where we move from an iterator instead of
+copying it.
+
+
+\begin{codeblock}
+	InputIterator i = /*...*/
+	*i           //ok
+	auto a = move(i); //ok
+	*i;          //invalid
+	a++;         //ok
+	i++;         //invalid
+\end{codeblock}
+
+
+Moving from an iterator invalidates it early, albeit artificially. As
+per standard, the moved-from iterator is in a valid, but unspecified
+state, and cannot be used (but can be assigned to, or destroyed). Notice
+the similarity between ``a valid, but unspecified state'' and ``a
+partially formed state''.
+
+The difference is slim. Notably, both models are equally expressive.
+References can be used, should multiple names be necessary. In
+Stepanov's model iterators are made invalid by the natural mutation of
+the sequence upon increment rather than by artificially preventing
+multiple copies.
+
+The second model in which the iterator is moved from, the one we think
+should be the default way to handle non-forward iterators, is however a
+much better fit for the C++ model, and offers much stronger guarantees
+to both the human developer as well as static analysis tools.
+
+In the ``increment invalidates'' model, objects are spiritually
+moved-from at a distance, which neither the theory of special relativity
+nor the C++ memory, model are equipped to handle. This makes it hard for
+tools to detect invalid uses - although it might become possible with
+better tools (See Herb Sutter's CppCon2018 talk). But most concerning,
+there is no way for a developer to know that the iterators are
+entangled.
+
+\begin{codeblock}
+	auto i = troubles.begin();
+	auto schrodingers_iterator = i;
+	i++;
+	auto nasal_demon = *schrodingers_iterator;
+\end{codeblock}
+
+The code above might be perfectly fine. Indeed whether it is well
+defined or not depends on whether the iterator return by
+\texttt{troubles.begin();} is forward or not. It is undecidable in these
+4 lines of slide-code. It is not much more obvious in a complex program
+that may pass iterators to other functions or store them in containers,
+etc. There are, after all, no theoretical limits to the distance in time
+and space over which entanglement perdures.
+
+Even worse, should the type of \texttt{troubles.begin();} be changed
+from Forward to Input, the code would change from perfectly fine to UB,
+with no warning.
+
+Moving non-forward iterators, therefore, better expresses intent, is
+safer and less surprising. Move-only non-forward Iterators also express
+the destructive nature of incrementation and give a better sense of the
+difference between \texttt{InputIterator} and \texttt{ForwardIterator}.
+
+\hypertarget{an-holistic-approach-to-iterator-tags-and-iterator-concepts}{%
+	\subsection{An Holistic Approach to Iterator Tags and Iterator
+		Concepts}\label{an-holistic-approach-to-iterator-tags-and-iterator-concepts}}
+
+Missing the notion of movability pre-c++11 and lacking concepts,
+\texttt{LegacyIterator}s are syntactically distinguished by tags. a
+\texttt{LegacyInputIterator} is one which has an
+\texttt{input\_iterator\_tag} tag, while a
+\texttt{LegacyForwardIterator} is one which has a
+\texttt{forward\_iterator\_tag} tag. This creates a sort of circular,
+self-referential definition. This has carried over to the \texttt{Iterator} concepts definitions. 
+
+Iterators concepts then :
+
+\begin{itemize}
+	\item Have semantic requirements not expressed through syntax and therefore not enforceable at compile time
+	\item Need syntax to artificially subscribe to the correct, most refined concept
+\end{itemize}
+
+
+Of course, it is not always possible to express all of a type's semantic
+requirements through syntax, and in some cases, tags are an unfortunate
+necessity. However, they should be the mechanism of last recourse, and
+whenever possible, the semantic requirements should be reflected in the
+syntax. The idea is that hidden requirements not expressed as code lead
+to easier-to-misuse types, which inevitably translates to runtime bugs.
+\textbf{Ultimately, requirements that can neither be checked at compile
+	time (concepts) or runtime (contracts) are bound to be ignored}. Rooted
+in the belief that not all birds quack like a duck, this proposal
+leverages meaningful syntactic requirements to increase the type safety
+of the iterator taxonomy.
+
+In the case of iterators, all requirements of all iterators categories
+can be expressed syntactically:
+
+\begin{codeblock}
+	template <class I> concept bool InputIterator =
+	Readable<I> &&
+	Iterator<I> ;
+	
+	template <class I> concept bool ForwardIterator =
+	InputIterator<I> &&
+	Copyable<I> &&
+	EqualityComparable<I>;
+	
+	template <class I> concept bool BidirectionalIterator =
+	ForwardIterator<I> &&
+	Decrementable<I>;
+	
+	template <class I> concept bool RandomAccessIterator =
+	BidirectionalIterator<I> &&
+	RandomAccessIncrementable<I>;
+\end{codeblock}
+
+
+This is of course simplified but shows that each iterator category
+subsumes the last and adds a single, cohesive set of requirement
+enforceable at compile-time. In this design, there is no risk of a type
+satisfying the wrong concept because of a poorly chosen tag.
+
+\hypertarget{tags-as-an-opt-in-opt-out-mechanism}{%
+	\subsubsection{Tags as an opt-in opt-out
+		mechanism}\label{tags-as-an-opt-in-opt-out-mechanism}}
+
+Iterators concepts already support semantic-only checking of iterator
+requirements for types that do not define either iterator\_category or
+iterator concept. Currently, this machinery will identify categories
+from ForwardIterator to RandomAccessIterator. With this proposal,
+non-copyable tagless types that otherwise meet the requirements of
+InputIterator be correctly identified as non-forward InputIterator,
+which is always the correct assumption. Copyable tagless iterators will
+remain categorized as ForwardIterator by that machinery.
+
+\hypertarget{qa}{%
+	\section{Q/A}\label{qa}}
+
+\hypertarget{non-regular-iterators-really}{%
+	\subsection{Non-regular iterators,
+		really?}\label{non-regular-iterators-really}}
+
+This proposal advocates for Non-Regular Iterators, and weakens
+\texttt{WeaklyIncrementable} requirements to that effect. Non-Regularity
+is best avoided, so this might feel like going backward.
+
+However, \textbf{non-regular types are easier to reason about than types
+	that just pretend to be regular}. Because \texttt{InputIterator} is
+meant to iterate over a non-regular sequence, it is not regular (whether
+we like it or not), and the best we can do is make sure the syntax
+matches the semantic. It would be accurate to say that
+\texttt{InputIterator} is locally regular, but this doesn't help much in
+the context of the c++ memory model. This paper is in part motivated by
+the conviction that exposing \textbf{a false sense of (Semi-)regularity
+	is much more detrimental to code robustness than non-regularity}.
+
+\hypertarget{what-about-equality-of-input-iterators}{%
+	\subsection{What about Equality of Input
+		Iterators?}\label{what-about-equality-of-input-iterators}}
+
+A first, misguided, version of this paper attempted to prevent
+comparability of types meeting the \texttt{InputIterator} requirements.
+\texttt{InputIterator} should, in general, not be
+\texttt{EqualityComparable}, since they cannot be copied and a
+fundamental idea in Stepanov's teachings is that copy and equality are
+two sides of the same coin.
+
+However, preventing \texttt{Equality} requires dramatic changes to the
+design and the author was reminded that negative-requirements are in
+general a terrible idea.
+
+Early feedback suggested a desire to be able to compare non-forward
+iterators. Consider the following:
+
+\begin{codeblock}
+auto a = stream.begin(); 
+auto b = stream.begin();
+if(a == b) {
+}
+\end{codeblock}
+
+This code will inevitably lead to suffering at some point. However, we
+cannot prevent people from constructing multiple non-forward iterators,
+and these iterators will compare equal until one of them invalidate the
+other.
+
+Two non-forward iterators compare equal if-and-only-if they point to the
+same position of the same sequence (and only one such position can be
+referred to at any given time).
+
+Allowing \texttt{EqualityComparable} on non-forward iterators also
+simplify the interoperability of \texttt{std::} and \texttt{ranges::}
+iterators. However, the author would like to recommend that all future
+non-forward iterators introduced in the standard be \emph{not}
+\texttt{EqualityComparable}. Instead, non-forward iterator should
+compare to a Sentinel, which is a much better model.
+\texttt{common\_iterator} can be used to ease migration and
+interoperability.
+
+\hypertarget{but-moved-from-objects-are-still-objects}{%
+	\subsection{But\ldots{} Moved-from objects are still
+		objects!}\label{but-moved-from-objects-are-still-objects}}
+
+Sure, moving-from leaves a trail of objects in an unspecified state.
+However, it is much more easy for tools and humans alike to understand
+that moved-from objects should not be used, and in fact, all majors
+compilers can warn about these patterns. We think that for the case at
+hand, focusing on the proper handling of values -- as opposed to objects
+-- is a sufficient approximation to reduce the potential for iterators
+misuse while not weakening the stronger mathematical underpinning of the
+STL.
+
+\hypertarget{does-iterators-default-constructability-needs-revisiting}{%
+	\subsection{Does iterators default-constructability needs
+		revisiting?}\label{does-iterators-default-constructability-needs-revisiting}}
+
+Default-constructability of iterator seems to have been added, removed
+and added back to the Ranges TS and the One Ranges Proposal several
+times. To the best of my knowledge, this was done for the sake of
+Semiregularity. Given that this proposal strikes semi-regularity, should
+this question be revisited?
+
+The authors want to point out that default-constructed iterators are
+almost never in a specified state and are almost always unsafe to use.
+Moreover, DefaultConstructible is not a requirement of any algorithm
+using ranges and ultimately, we think enforcing DefaultConstructibility
+weakens the better \texttt{Sentinel} model introduced by ranges.
+
+\hypertarget{what-about-p0902r0}{%
+	\subsection{What about \cite{P0902}?}\label{what-about-p0902r0}}
+
+Andrew Hunter's ``Move-only iterators'' paper proposes a design to
+introduce Move-Only iterators in the taxonomy of
+\texttt{LegacyIterator}. However, this design does not offer a solution
+to use these move-only iterators with existing algorithms, limiting
+their usefulness. The iterators proposed by P0902 are additionally
+\texttt{EqualityComparable}. The advantage of that is that they are
+compatible with algorithms designed with C++17 downward. That's,
+however, a potential source of bugs and confusion.
+
+However, if LEWG feels strongly about a solution compatible with
+existing algorithms it would be possible to relax the requirements of
+concerned algorithms to accept move-only iterators. along with the
+introduction of a new \texttt{move\_iterator\_tag} trait.
+
+Such algorithms would then be compatible with types satisfying
+\texttt{InputIterator} (as proposed by this paper) through a
+\texttt{common\_iterator} adaptor.
+
+If proven with enough confidence that requirements of existing
+algorithms in the \texttt{std} namespace can be relaxed to handle
+move-only iterator, the necessary modifications can be applied in a
+subsequent standard version.
+
+So while there would definitively be value in supporting move-only
+iterators everywhere it makes sense, and the potential for breakage is
+relatively low, we do not propose it for lack of visibility on the
+consequences of such changes.
+
+\hypertarget{why-do-you-want-to-take-my-copyable-inputiterators-away-from-me-i-like-them}{%
+	\subsection{Why do you want to take my Copyable InputIterators away from
+		me, I like
+		them?!}\label{why-do-you-want-to-take-my-copyable-inputiterators-away-from-me-i-like-them}}
+
+We do not propose anything of the sort. But, we propose that
+\begin{itemize}
+	\item Any \texttt{InputIterator} that happens to be \texttt{Copyable} is also a \texttt{ForwardIterator}.
+	\item  It remains possible to opt-out of that behavior by defining \texttt{iterator\_concept} to be
+	\texttt{input\_iterator\_tag}.
+\end{itemize}
+
+\lstnewenvironment{tabularlstlisting}[1][]
+{ \lstset{basicstyle=\tiny}{#1} }
+{}
+
+\begin{tabular}{|l|l|l|}
+Non-copyable Iterator & Copyable Iterator & Copyable Iterator with a tag\\
+\hline
+\begin{tabularlstlisting}
+struct It {
+  It(It&&) = default;
+  It(const It&) = delete;
+  //...
+};
+\end{tabularlstlisting} & \begin{tabularlstlisting}
+struct It {
+  It(const It&) = default;
+  //...
+};
+\end{tabularlstlisting} &
+\begin{tabularlstlisting}
+struct It {
+  It(const It&) = default;
+  using iterator_concept = input_iterator_tag;
+  //...
+};
+\end{tabularlstlisting}
+\\
+\hline
+\begin{tabularlstlisting}
+static_assert(InputIterator<It>);
+static_assert(!ForwardIterator<It>);
+\end{tabularlstlisting} & 
+\begin{tabularlstlisting}
+static_assert(InputIterator<It>);
+static_assert(ForwardIterator<It>);
+\end{tabularlstlisting} &
+\begin{tabularlstlisting}
+static_assert(InputIterator<It>);
+static_assert(!ForwardIterator<It>);
+\end{tabularlstlisting}
+\\
+\end{tabular}
+
+
+\hypertarget{will-this-break-existing-code}{%
+	\subsection{Will this break existing code
+		?!}\label{will-this-break-existing-code}}
+
+We want to reiterate(!) that all the changes proposed in this paper are
+only applicable to concepts, types, and requirements that were added to
+the standard by the Ranges proposal. They do not, in any way, impact
+code depending on types, requirements or algorithms as defined by the
+C++17 standard
+
+\hypertarget{wont-that-implicit-categorization-lead-to-miss-categorization}{%
+	\subsection{Won't that implicit categorization lead to
+		miss-categorization?}\label{wont-that-implicit-categorization-lead-to-miss-categorization}}
+
+The only valid use cases for \texttt{InputIterator} are streams or other
+input devices, and iterators that own a non-copyable generator. Most
+views and iterators are Forward. It turns out that C++ types are
+\texttt{Copyable} by default, therefore, Iterators will be categorized
+as \texttt{ForwardIterator} by default, which is correct in most cases.
+
+This proposal is also a teaching opportunity because the nature of
+\texttt{InputIterator} is often poorly understood and misconstrued. We
+suspect that these tweaks to the taxonomy of Iterator will make them
+easier to teach.
+
+\hypertarget{post-increment-on-non-copyable-iterators}{%
+	\subsection{Post Increment on non-copyable
+		iterators}\label{post-increment-on-non-copyable-iterators}}
+
+Post-incrementing move-only iterators would obviously be incorrect.
+However, a satisfying solution was offered by \cite{P0541}
+
+
+\hypertarget{implementation-experience}{%
+	\section{Implementation experience}\label{implementation-experience}}
+
+We validated the design in cmstl2. However, cmcstl2 deviates from the
+Working Draft as it doesn't have the same Deep Integration system and
+therefore lacks the \texttt{ITER\_CONCEPT} machinery. Furthermore, we
+have not yet completed this work. Some algorithms, like \texttt{count},
+proved to require specialization for \texttt{InputIterator} because of
+implementation specific details.
+
+\hypertarget{acknowledgments}{%
+	\subsection{Acknowledgments}\label{acknowledgments}}
+
+The authors like to thank Connor Waters, Tony Van Eerd, Eric Niebler,
+Casey Carter, Christopher Di Bella, Sean Parent and Arthur O'Dwyer who
+gave tremendously helpful feedbacks during the writing of this paper.
+
+
+\section{Wording}
+
+
+\rSec2[iterator.concepts]{Iterator concepts}
+
+
+\rSec3[iterator.concept.winc]{Concept \tcode{WeaklyIncrementable}}
+
+\pnum
+The \tcode{WeaklyIncrementable} concept specifies the requirements on
+types that can be incremented with the pre- and post-increment operators.
+The increment operations are not required to be equality-preserving,
+nor is the type required to be \libconcept{EqualityComparable}.
+
+\indexlibrary{\idxcode{WeaklyIncrementable}}%
+\begin{codeblock}
+	template<class I>
+	concept WeaklyIncrementable =
+	@\changed{Semiregular}{Movable}@<I> &&
+	requires(I i) {
+		typename iter_difference_t<I>;
+		requires SignedIntegral<iter_difference_t<I>>;
+		{ ++i } -> Same<I&>; // not required to be equality-preserving
+		i++; // not required to be equality-preserving
+	};
+\end{codeblock}
+
+\pnum
+Let \tcode{i} be an object of type \tcode{I}. When \tcode{i} is in the domain of
+both pre- and post-increment, \tcode{i} is said to be \term{incrementable}.
+\tcode{I} models \tcode{WeaklyIncrementable<I>} only if
+
+\begin{itemize}
+	\item The expressions \tcode{++i} and \tcode{i++} have the same domain.
+	\item If \tcode{i} is incrementable, then both \tcode{++i}
+	and \tcode{i++} advance \tcode{i} to the next element.
+	\item If \tcode{i} is incrementable, then
+	\tcode{addressof(++i)} is equal to
+	\tcode{addressof(i)}.
+\end{itemize}
+
+\pnum
+\begin{note}
+	For \added{\tcode{CopyConstructible}} \tcode{WeaklyIncrementable} types, \tcode{a} equals \tcode{b} does not imply that \tcode{++a}
+	equals \tcode{++b}. (Equality does not guarantee the substitution property or referential
+	transparency.) Algorithms on weakly incrementable types should never attempt to pass
+	through the same incrementable value twice. They should be single-pass algorithms. These algorithms
+	can be used with istreams as the source of the input data through the \tcode{istream_iterator} class
+	template.
+\end{note}
+
+\rSec3[iterator.concept.inc]{Concept \tcode{Incrementable}}
+
+\pnum
+The \tcode{Incrementable} concept specifies requirements on types that can be incremented with the pre-
+and post-increment operators. The increment operations are required to be equality-preserving,
+and the type is required to be \libconcept{EqualityComparable}.
+\begin{note}
+	This supersedes the annotations on the increment expressions
+	in the definition of \tcode{WeaklyIncrementable}.
+\end{note}
+
+\indexlibrary{\idxcode{Incrementable}}%
+\begin{codeblock}
+	template<class I>
+	concept Incrementable =
+	Regular<I> &&
+	WeaklyIncrementable<I> &&
+	requires(I i) {
+		{ i++ } -> Same<I>;
+	};
+\end{codeblock}
+
+\pnum
+Let \tcode{a} and \tcode{b} be incrementable objects of type \tcode{I}.
+\tcode{I} models \libconcept{Incrementable} only if
+
+\begin{itemize}
+	\item If \tcode{bool(a == b)} then \tcode{bool(a++ == b)}.
+	\item If \tcode{bool(a == b)} then \tcode{bool(((void)a++, a) == ++b)}.
+\end{itemize}
+
+\pnum
+\begin{note}
+	The requirement that
+	\tcode{a} equals \tcode{b}
+	implies
+	\tcode{++a} equals \tcode{++b}
+	(which is not true for weakly incrementable types)
+	allows the use of multi-pass one-directional
+	algorithms with types that model \libconcept{Increment\-able}.
+\end{note}
+
+\rSec3[iterator.concept.iterator]{Concept \tcode{Iterator}}
+
+\pnum
+The \libconcept{Iterator} concept forms the basis
+of the iterator concept taxonomy; every iterator models \libconcept{Iterator}.
+This concept specifies operations for dereferencing and incrementing
+an iterator. Most algorithms will require additional operations
+to compare iterators with sentinels\iref{iterator.concept.sentinel}, to
+read\iref{iterator.concept.input} or write\iref{iterator.concept.output} values, or
+to provide a richer set of iterator movements (\ref{iterator.concept.forward},
+\ref{iterator.concept.bidir}, \ref{iterator.concept.random.access}).
+
+\indexlibrary{\idxcode{Iterator}}%
+\begin{codeblock}
+	template<class I>
+	concept Iterator =
+	requires(I i) {
+		{ *i } -> @\placeholder{can-reference}@;
+	} &&
+	WeaklyIncrementable<I>;
+\end{codeblock}
+
+\begin{addedm}
+\begin{note}
+	Unlike the \oldconcept{Iterator} requirements\iref{input.iterators},
+	the \libconcept{Iterator} concept does requires copyability of single-pass iterators.
+\end{note}
+\end{addedm}
+
+\rSec3[iterator.concept.forward]{Concept \tcode{ForwardIterator}}
+
+\pnum
+The \libconcept{ForwardIterator} concept adds \added{copyability,} equality comparison and
+the multi-pass guarantee, specified below.
+
+\indexlibrary{\idxcode{ForwardIterator}}%
+\begin{codeblock}
+	template<class I>
+	concept ForwardIterator =
+	InputIterator<I> &&
+	DerivedFrom<@\placeholdernc{ITER_CONCEPT}@(I), forward_iterator_tag> &&
+	Incrementable<I> &&
+	Sentinel<I, I>;
+\end{codeblock}
+
+\pnum
+The domain of \tcode{==} for forward iterators is that of iterators over the same
+underlying sequence. However, value-initialized iterators of the same type
+may be compared and shall compare equal to other value-initialized iterators of the same type.
+\begin{note}
+	Value-initialized iterators behave as if they refer past the end of the same
+	empty sequence.
+\end{note}
+
+\pnum
+Pointers and references obtained from a forward iterator into a range \range{i}{s}
+shall remain valid while \range{i}{s} continues to denote a range.
+
+\pnum
+Two dereferenceable iterators \tcode{a} and \tcode{b} of type \tcode{X}
+offer the \defn{multi-pass guarantee} if:
+
+\begin{itemize}
+	\item \tcode{a == b} implies \tcode{++a == ++b} and
+	\item The expression
+	\tcode{((void)[](X x)\{++x;\}(a), *a)} is equivalent to the expression \tcode{*a}.
+\end{itemize}
+
+\pnum
+\begin{note}
+	The requirement that
+	\tcode{a == b}
+	implies
+	\tcode{++a == ++b}
+	and the removal of the restrictions on the number of assignments through
+	a mutable iterator
+	(which applies to output iterators)
+	allow the use of multi-pass one-directional algorithms with forward iterators.
+\end{note}
+
+
+\rSec1[iterator.primitives]{Iterator primitives}
+
+\rSec2[iterator.operations]{Iterator operations}
+
+\pnum
+Since only random access iterators provide
+\tcode{+}
+and
+\tcode{-}
+operators, the library provides two
+function templates
+\tcode{advance}
+and
+\tcode{distance}.
+These
+function templates
+use
+\tcode{+}
+and
+\tcode{-}
+for random access iterators (and are, therefore, constant
+time for them); for input, forward and bidirectional iterators they use
+\tcode{++}
+to provide linear time
+implementations.
+
+\indexlibrary{\idxcode{advance}}%
+\begin{itemdecl}
+	template<class InputIterator, class Distance>
+	constexpr void advance(InputIterator& i, Distance n);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\expects
+	\tcode{n}
+	is negative only for bidirectional iterators.
+	
+	\pnum
+	\effects
+	Increments \tcode{i} by \tcode{n} if \tcode{n} is non-negative, and
+	decrements \tcode{i} by \tcode{-n} otherwise.
+\end{itemdescr}
+
+\indexlibrary{\idxcode{distance}}%
+\begin{itemdecl}
+	template<class InputIterator>
+	constexpr typename iterator_traits<InputIterator>::difference_type
+	distance(InputIterator first, InputIterator last);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\expects
+	\tcode{last} is reachable from \tcode{first}, or
+	\tcode{InputIterator} meets
+	the \oldconcept{RandomAccessIterator} requirements and
+	\tcode{first} is reachable from \tcode{last}.
+	
+	\pnum
+	\effects
+	If \tcode{InputIterator} meets the \oldconcept{RandomAccessIterator} requirements,
+	returns \tcode{(last - first)}; otherwise, returns
+	the number of increments needed to get from
+	\tcode{first}
+	to
+	\tcode{last}.
+\end{itemdescr}
+
+\indexlibrary{\idxcode{next}}%
+\begin{itemdecl}
+	template<class InputIterator>
+	constexpr InputIterator next(InputIterator x,
+	typename iterator_traits<InputIterator>::difference_type n = 1);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to: \tcode{advance(x, n); return x;}
+\end{itemdescr}
+
+\indexlibrary{\idxcode{prev}}%
+\begin{itemdecl}
+	template<class BidirectionalIterator>
+	constexpr BidirectionalIterator prev(BidirectionalIterator x,
+	typename iterator_traits<BidirectionalIterator>::difference_type n = 1);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to: \tcode{advance(x, -n); return x;}
+\end{itemdescr}
+
+\rSec2[range.iter.ops]{Range iterator operations}
+
+
+\rSec3[range.iter.op.next]{\tcode{ranges::next}}
+
+\indexlibrary{\idxcode{next}}%
+\begin{itemdecl}
+	template<@\added{Forward}@Iterator I>
+	constexpr I ranges::next(I x);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to: \tcode{++x; return x;}
+\end{itemdescr}
+
+\indexlibrary{\idxcode{next}}%
+\begin{itemdecl}
+	template<@\added{Forward}Iterator I>
+	constexpr I ranges::next(I x, iter_difference_t<I> n);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to: \tcode{ranges::advance(x, n); return x;}
+\end{itemdescr}
+
+\indexlibrary{\idxcode{next}}%
+\begin{itemdecl}
+	template<@\added{Forward}Iterator I, Sentinel<I> S>
+	constexpr I ranges::next(I x, S bound);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to: \tcode{ranges::advance(x, bound); return x;}
+\end{itemdescr}
+
+\indexlibrary{\idxcode{next}}%
+\begin{itemdecl}
+	template<@\added{Forward}Iterator I, Sentinel<I> S>
+	constexpr I ranges::next(I x, iter_difference_t<I> n, S bound);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to: \tcode{ranges::advance(x, n, bound); return x;}
+\end{itemdescr}
+
+
+\rSec2[move.iterators]{Move iterators and sentinels}
+
+\pnum
+Class template \tcode{move_iterator} is an iterator adaptor
+with the same behavior as the underlying iterator except that its
+indirection operator implicitly converts the value returned by the
+underlying iterator's indirection operator to an rvalue.
+Some generic algorithms can be called with move iterators to replace
+copying with moving.
+
+\pnum
+\begin{example}
+	
+	\begin{codeblock}
+		list<string> s;
+		// populate the list \tcode{s}
+		vector<string> v1(s.begin(), s.end());          // copies strings into \tcode{v1}
+		vector<string> v2(make_move_iterator(s.begin()),
+		make_move_iterator(s.end())); // moves strings into \tcode{v2}
+	\end{codeblock}
+	
+\end{example}
+
+\rSec3[move.iterator]{Class template \tcode{move_iterator}}
+
+\indexlibrary{\idxcode{move_iterator}}%
+\begin{codeblock}
+	namespace std {
+		template<class Iterator>
+		class move_iterator {
+			public:
+			using iterator_type     = Iterator;
+			using iterator_concept  = input_iterator_tag;
+			using iterator_category = @\seebelow@;
+			using value_type        = iter_value_t<Iterator>;
+			using difference_type   = iter_difference_t<Iterator>;
+			using pointer           = Iterator;
+			using reference         = iter_rvalue_reference_t<Iterator>;
+			
+			constexpr move_iterator();
+			constexpr explicit move_iterator(Iterator i);
+			template<class U> constexpr move_iterator(const move_iterator<U>& u);
+			template<class U> constexpr move_iterator& operator=(const move_iterator<U>& u);
+			
+			constexpr iterator_type base() const;
+			@\added{constexpr iterator_type base() \&\&;}@
+			constexpr reference operator*() const;
+			
+			constexpr move_iterator& operator++();
+			constexpr auto operator++(int);
+			constexpr move_iterator& operator--();
+			constexpr move_iterator operator--(int);
+			
+			constexpr move_iterator operator+(difference_type n) const;
+			constexpr move_iterator& operator+=(difference_type n);
+			constexpr move_iterator operator-(difference_type n) const;
+			constexpr move_iterator& operator-=(difference_type n);
+			constexpr reference operator[](difference_type n) const;
+			
+			template<Sentinel<Iterator> S>
+			friend constexpr bool
+			operator==(const move_iterator& x, const move_sentinel<S>& y);
+			template<Sentinel<Iterator> S>
+			friend constexpr bool
+			operator==(const move_sentinel<S>& x, const move_iterator& y);
+			template<Sentinel<Iterator> S>
+			friend constexpr bool
+			operator!=(const move_iterator& x, const move_sentinel<S>& y);
+			template<Sentinel<Iterator> S>
+			friend constexpr bool
+			operator!=(const move_sentinel<S>& x, const move_iterator& y);
+			template<SizedSentinel<Iterator> S>
+			friend constexpr iter_difference_t<Iterator>
+			operator-(const move_sentinel<S>& x, const move_iterator& y);
+			template<SizedSentinel<Iterator> S>
+			friend constexpr iter_difference_t<Iterator>
+			operator-(const move_iterator& x, const move_sentinel<S>& y);
+			friend constexpr iter_rvalue_reference_t<Iterator>
+			iter_move(const move_iterator& i)
+			noexcept(noexcept(ranges::iter_move(i.current)));
+			template<IndirectlySwappable<Iterator> Iterator2>
+			friend constexpr void
+			iter_swap(const move_iterator& x, const move_iterator<Iterator2>& y)
+			noexcept(noexcept(ranges::iter_swap(x.current, y.current)));
+			
+			private:
+			Iterator current;   // \expos
+		};
+	}
+\end{codeblock}
+
+\pnum
+The member \grammarterm{typedef-name} \tcode{iterator_category} denotes
+\begin{itemize}
+	\item
+	\tcode{random_access_iterator_tag} if
+	the type
+	\tcode{iterator_traits<\brk{}Iterator>::iterator_category} models
+	\libconcept{DerivedFrom<\tcode{random_access_iterator_tag}>}, and
+	\item
+	\tcode{iterator_traits<\brk{}Iterator>::iterator_category} otherwise.
+\end{itemize}
+
+\rSec3[move.iter.requirements]{Requirements}
+
+\pnum
+The template parameter \tcode{Iterator} shall either
+meet the \oldconcept{InputIterator} requirements\iref{input.iterators}
+or model \libconcept{InputIterator}\iref{iterator.concept.input}.
+Additionally, if any of the bidirectional traversal
+functions are instantiated, the template parameter shall either
+meet the \oldconcept{BidirectionalIterator} requirements\iref{bidirectional.iterators}
+or model \libconcept{BidirectionalIterator}\iref{iterator.concept.bidir}.
+If any of the random access traversal functions are instantiated, the
+template parameter shall either
+meet the \oldconcept{RandomAccessIterator} requirements\iref{random.access.iterators}
+or model
+\libconcept{RandomAccess\-Iterator}\iref{iterator.concept.random.access}.
+
+\rSec3[move.iter.cons]{Construction and assignment}
+
+\indexlibrary{\idxcode{move_iterator}!constructor}%
+\begin{itemdecl}
+	constexpr move_iterator();
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Constructs a \tcode{move_iterator}, value-initializing
+	\tcode{current}. Iterator operations applied to the resulting
+	iterator have defined behavior if and only if the corresponding operations are defined
+	on a value-initialized iterator of type \tcode{Iterator}.
+\end{itemdescr}
+
+
+\indexlibrary{\idxcode{move_iterator}!constructor}%
+\begin{itemdecl}
+	constexpr explicit move_iterator(Iterator i);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Constructs a \tcode{move_iterator}, initializing
+	\tcode{current} with \tcode{i}.
+\end{itemdescr}
+
+
+\indexlibrary{\idxcode{move_iterator}!constructor}%
+\begin{itemdecl}
+	template<class U> constexpr move_iterator(const move_iterator<U>& u);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\mandates \tcode{U} is convertible to \tcode{Iterator} \added{and \tcode{Iterator} is \tcode{CopyConstructible}}.
+	
+	\pnum
+	\effects Constructs a \tcode{move_iterator}, initializing
+	\tcode{current} with \tcode{u.base()}.
+\end{itemdescr}
+
+\indexlibrarymember{operator=}{move_iterator}%
+\begin{itemdecl}
+	template<class U> constexpr move_iterator& operator=(const move_iterator<U>& u);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\mandates \tcode{U} is convertible to \tcode{Iterator}.
+	
+	\pnum
+	\effects Assigns \tcode{u.base()} to
+	\tcode{current}.
+\end{itemdescr}
+
+\rSec3[move.iter.op.conv]{Conversion}
+
+\indexlibrarymember{base}{move_iterator}%
+\begin{itemdecl}
+	constexpr Iterator base() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\begin{addedm}
+		\constraints \tcode{CopyConstructible<Iterator>}
+	\end{addedm}
+	
+	\returns \tcode{current}.
+\end{itemdescr}
+
+
+
+\begin{addedm}
+\indexlibrarymember{base}{move_iterator}%
+\begin{itemdecl}
+	constexpr Iterator base() &&;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\returns \tcode{std::move(current);}
+\end{itemdescr}
+\end{addedm}
+
+\rSec3[move.iter.elem]{Element access}
+
+\indexlibrarymember{operator*}{move_iterator}%
+\begin{itemdecl}
+	constexpr reference operator*() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to: \tcode{return ranges::iter_move(current);}
+\end{itemdescr}
+
+\indexlibrarymember{operator[]}{move_iterator}%
+\begin{itemdecl}
+	constexpr reference operator[](difference_type n) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to: \tcode{ranges::iter_move(current + n);}
+\end{itemdescr}
+
+\rSec3[move.iter.nav]{Navigation}
+
+\indexlibrarymember{operator++}{move_iterator}%
+\begin{itemdecl}
+	constexpr move_iterator& operator++();
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects As if by \tcode{++current}.
+	
+	\pnum
+	\returns \tcode{*this}.
+\end{itemdescr}
+
+\indexlibrarymember{operator++}{move_iterator}%
+\begin{itemdecl}
+	constexpr auto operator++(int);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\begin{addedm}
+		\mandates
+		\tcode{CopyConstructible<Iterator>}
+	\end{addedm}
+
+	\effects
+	If \tcode{Iterator} models \libconcept{ForwardIterator}, equivalent to:
+	\begin{codeblock}
+		move_iterator tmp = *this;
+		++current;
+		return tmp;
+	\end{codeblock}
+	Otherwise, equivalent to \tcode{++current}.
+\end{itemdescr}
+
+\indexlibrarymember{operator\dcr}{move_iterator}%
+\begin{itemdecl}
+	constexpr move_iterator& operator--();
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects As if by \tcode{\dcr current}.
+	
+	\pnum
+	\returns \tcode{*this}.
+\end{itemdescr}
+
+\indexlibrarymember{operator\dcr}{move_iterator}%
+\begin{itemdecl}
+	constexpr move_iterator operator--(int);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects
+	As if by:
+	\begin{codeblock}
+		move_iterator tmp = *this;
+		--current;
+		return tmp;
+	\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{operator+}{move_iterator}%
+\begin{itemdecl}
+	constexpr move_iterator operator+(difference_type n) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\returns \tcode{move_iterator(current + n)}.
+\end{itemdescr}
+
+\indexlibrarymember{operator+=}{move_iterator}%
+\begin{itemdecl}
+	constexpr move_iterator& operator+=(difference_type n);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects As if by: \tcode{current += n;}
+	
+	\pnum
+	\returns \tcode{*this}.
+\end{itemdescr}
+
+\indexlibrarymember{operator-}{move_iterator}%
+\begin{itemdecl}
+	constexpr move_iterator operator-(difference_type n) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\returns \tcode{move_iterator(current - n)}.
+\end{itemdescr}
+
+\indexlibrarymember{operator-=}{move_iterator}%
+\begin{itemdecl}
+	constexpr move_iterator& operator-=(difference_type n);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects As if by: \tcode{current -= n;}
+	
+	\pnum
+	\returns \tcode{*this}.
+\end{itemdescr}
+
+\rSec2[iterators.common]{Common iterators}
+
+\rSec3[common.iterator]{Class template \tcode{common_iterator}}
+
+\pnum
+Class template \tcode{common_iterator} is an iterator/sentinel adaptor that is
+capable of representing a non-common range of elements (where the types of the
+iterator and sentinel differ) as a common range (where they are the same). It
+does this by holding either an iterator or a sentinel, and implementing the
+equality comparison operators appropriately.
+
+\pnum
+\begin{note}
+	The \tcode{common_iterator} type is useful for interfacing with legacy
+	code that expects the begin and end of a range to have the same type.
+\end{note}
+
+\pnum
+\begin{example}
+	\begin{codeblock}
+		template<class ForwardIterator>
+		void fun(ForwardIterator begin, ForwardIterator end);
+		
+		list<int> s;
+		// populate the list \tcode{s}
+		using CI = common_iterator<counted_iterator<list<int>::iterator>, default_sentinel_t>;
+		// call \tcode{fun} on a range of 10 ints
+		fun(CI(counted_iterator(s.begin(), 10)), CI(default_sentinel));
+	\end{codeblock}
+\end{example}
+
+\indexlibrary{\idxcode{common_iterator}}%
+\begin{codeblock}
+	namespace std {
+		template<Iterator I, Sentinel<I> S>
+		requires (!Same<I, S>)
+		class common_iterator {
+			public:
+			constexpr common_iterator() = default;
+			constexpr common_iterator(I i);
+			constexpr common_iterator(S s);
+			template<class I2, class S2>
+			requires ConvertibleTo<const I2&, I> && ConvertibleTo<const S2&, S>
+			@\added{\&\& CopyConstructible<I>}@
+			constexpr common_iterator(const common_iterator<I2, S2>& x);
+			
+			template<class I2, class S2>
+			requires ConvertibleTo<const I2&, I> && ConvertibleTo<const S2&, S> &&
+			Assignable<I&, const I2&> && Assignable<S&, const S2&>
+			common_iterator& operator=(const common_iterator<I2, S2>& x);
+			
+			decltype(auto) operator*();
+			decltype(auto) operator*() const
+			requires @\placeholder{dereferenceable}@<const I>;
+			decltype(auto) operator->() const
+			requires @\seebelow@;
+			
+			common_iterator& operator++();
+			decltype(auto) operator++(int);
+			
+			template<class I2, Sentinel<I> S2>
+			requires Sentinel<S, I2>
+			friend bool operator==(
+			const common_iterator& x, const common_iterator<I2, S2>& y);
+			template<class I2, Sentinel<I> S2>
+			requires Sentinel<S, I2> && EqualityComparableWith<I, I2>
+			friend bool operator==(
+			const common_iterator& x, const common_iterator<I2, S2>& y);
+			template<class I2, Sentinel<I> S2>
+			requires Sentinel<S, I2>
+			friend bool operator!=(
+			const common_iterator& x, const common_iterator<I2, S2>& y);
+			
+			template<SizedSentinel<I> I2, SizedSentinel<I> S2>
+			requires SizedSentinel<S, I2>
+			friend iter_difference_t<I2> operator-(
+			const common_iterator& x, const common_iterator<I2, S2>& y);
+			
+			friend iter_rvalue_reference_t<I> iter_move(const common_iterator& i)
+			noexcept(noexcept(ranges::iter_move(declval<const I&>())))
+			requires InputIterator<I>;
+			template<IndirectlySwappable<I> I2, class S2>
+			friend void iter_swap(const common_iterator& x, const common_iterator<I2, S2>& y)
+			noexcept(noexcept(ranges::iter_swap(declval<const I&>(), declval<const I2&>())));
+			
+			private:
+			variant<I, S> v_;   // \expos
+		};
+		
+		template<class I, class S>
+		struct incrementable_traits<common_iterator<I, S>> {
+			using difference_type = iter_difference_t<I>;
+		};
+		
+		template<InputIterator I, class S>
+		struct iterator_traits<common_iterator<I, S>> {
+			using iterator_concept = @\seebelow@;
+			using iterator_category = @\seebelow@;
+			using value_type = iter_value_t<I>;
+			using difference_type = iter_difference_t<I>;
+			using pointer = @\seebelow@;
+			using reference = iter_reference_t<I>;
+		};
+	}
+\end{codeblock}
+
+\rSec3[common.iter.types]{Associated types}
+
+\pnum
+The nested \grammarterm{typedef-name}s of the specialization of
+\tcode{iterator_traits} for \tcode{common_iterator<I, S>} are defined as follows.
+\begin{itemize}
+	\item
+	\tcode{iterator_concept} denotes \tcode{forward_iterator_tag}
+	if \tcode{I} models \libconcept{ForwardIterator};
+	otherwise it denotes \tcode{input_iterator_tag}.
+	
+	\item
+	\tcode{iterator_category} denotes
+	\tcode{forward_iterator_tag}
+	if \tcode{iterator_traits<I>::iterator_category}
+	models \tcode{DerivedFrom<forward_iterator_tag>};
+	otherwise it denotes \tcode{input_iterator_tag}.
+	
+	\item
+	If the expression \tcode{a.operator->()} is well-formed,
+	where \tcode{a} is an lvalue of type \tcode{const common_iterator<I, S>},
+	then \tcode{pointer} denotes the type of that expression.
+	Otherwise, \tcode{pointer} denotes \tcode{void}.
+\end{itemize}
+
+\rSec3[common.iter.const]{Constructors and conversions}
+
+\indexlibrary{\idxcode{common_iterator}!constructor}%
+\begin{itemdecl}
+	constexpr common_iterator(I i);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects
+	Initializes \tcode{v_} as if by \tcode{v_\{in_place_type<I>, std::move(i)\}}.
+\end{itemdescr}
+
+\indexlibrary{\idxcode{common_iterator}!constructor}%
+\begin{itemdecl}
+	constexpr common_iterator(S s);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Initializes \tcode{v_} as if by
+	\tcode{v_\{in_place_type<S>, std::move(s)\}}.
+\end{itemdescr}
+
+\indexlibrary{\idxcode{common_iterator}!constructor}%
+\begin{itemdecl}
+	template<class I2, class S2>
+	requires ConvertibleTo<const I2&, I> && ConvertibleTo<const S2&, S>
+	@\added{\&\& CopyConstructible<I>}@
+	constexpr common_iterator(const common_iterator<I2, S2>& x);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\expects \tcode{x.v_.valueless_by_exception()} is \tcode{false}.
+	
+	\pnum
+	\effects
+	Initializes \tcode{v_} as if by
+	\tcode{v_\{in_place_index<$i$>, get<$i$>(x.v_)\}},
+	where $i$ is \tcode{x.v_.index()}.
+\end{itemdescr}
+
+\indexlibrarymember{operator=}{common_iterator}%
+\begin{itemdecl}
+	template<class I2, class S2>
+	requires ConvertibleTo<const I2&, I> && ConvertibleTo<const S2&, S> &&
+	Assignable<I&, const I2&> && Assignable<S&, const S2&>
+	common_iterator& operator=(const common_iterator<I2, S2>& x);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\expects \tcode{x.v_.valueless_by_exception()} is \tcode{false}.
+	
+	\pnum
+	\effects
+	Equivalent to:
+	\begin{itemize}
+		\item If \tcode{v_.index() == x.v_.index()}, then
+		\tcode{get<$i$>(v_) = get<$i$>(x.v_)}.
+		
+		\item Otherwise, \tcode{v_.emplace<$i$>(get<$i$>(x.v_))}.
+	\end{itemize}
+	where $i$ is \tcode{x.v_.index()}.
+	
+	\pnum
+	\returns \tcode{*this}
+\end{itemdescr}
+
+\rSec3[common.iter.access]{Accessors}
+
+\indexlibrarymember{operator*}{common_iterator}%
+\begin{itemdecl}
+	decltype(auto) operator*();
+	decltype(auto) operator*() const
+	requires @\placeholder{dereferenceable}@<const I>;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\expects \tcode{holds_alternative<I>(v_)}.
+	
+	\pnum
+	\effects Equivalent to: \tcode{return *get<I>(v_);}
+\end{itemdescr}
+
+\indexlibrarymember{operator->}{common_iterator}%
+\begin{itemdecl}
+	decltype(auto) operator->() const
+	requires @\seebelow@;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	The expression in the requires clause is equivalent to:
+	\begin{codeblock}
+		Readable<const I> &&
+		(requires(const I& i) { i.operator->(); } ||
+		is_reference_v<iter_reference_t<I>> ||
+		Constructible<iter_value_t<I>, iter_reference_t<I>>)
+	\end{codeblock}
+	
+	\pnum
+	\expects \tcode{holds_alternative<I>(v_)}.
+	
+	\pnum
+	\effects
+	\begin{itemize}
+		\item
+		If \tcode{I} is a pointer type or if the expression
+		\tcode{get<I>(v_).operator->()} is
+		well-formed, equivalent to: \tcode{return get<I>(v_);}
+		
+		\item
+		Otherwise, if \tcode{iter_reference_t<I>} is a reference type, equivalent to:
+		\begin{codeblock}
+			auto&& tmp = *get<I>(v_);
+			return addressof(tmp);
+		\end{codeblock}
+		
+		\item
+		Otherwise, equivalent to:
+		\tcode{return \placeholder{proxy}(*get<I>(v_));} where
+		\tcode{\placeholder{proxy}} is the exposition-only class:
+		\begin{codeblock}
+			class @\placeholder{proxy}@ {
+				iter_value_t<I> keep_;
+				@\placeholder{proxy}@(iter_reference_t<I>&& x)
+				: keep_(std::move(x)) {}
+				public:
+				const iter_value_t<I>* operator->() const {
+					return addressof(keep_);
+				}
+			};
+		\end{codeblock}
+	\end{itemize}
+\end{itemdescr}
+
+\rSec3[common.iter.nav]{Navigation}
+
+\indexlibrarymember{operator++}{common_iterator}%
+\begin{itemdecl}
+	common_iterator& operator++();
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\expects \tcode{holds_alternative<I>(v_)}.
+	
+	\pnum
+	\effects Equivalent to \tcode{++get<I>(v_)}.
+	
+	\pnum
+	\returns \tcode{*this}.
+\end{itemdescr}
+
+\indexlibrarymember{operator++}{common_iterator}%
+\begin{itemdecl}
+	decltype(auto) operator++(int);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\begin{addedm}
+		\mandates
+		\tcode{CopyConstructible<I>}
+	\end{addedm}
+
+	\expects \tcode{holds_alternative<I>(v_)}.
+	
+	\pnum
+	\effects
+	If \tcode{I} models \libconcept{ForwardIterator}, equivalent to:
+	\begin{codeblock}
+		common_iterator tmp = *this;
+		++*this;
+		return tmp;
+	\end{codeblock}
+	Otherwise, equivalent to: \tcode{return get<I>(v_)++;}
+\end{itemdescr}
+
+
+\rSec2[iterators.counted]{Counted iterators}
+
+\rSec3[counted.iterator]{Class template \tcode{counted_iterator}}
+
+\pnum
+Class template \tcode{counted_iterator} is an iterator adaptor
+with the same behavior as the underlying iterator except that
+it keeps track of the distance to the end of its range.
+It can be used together with \tcode{default_sentinel}
+in calls to generic algorithms to operate on
+a range of $N$ elements starting at a given position
+without needing to know the end position a priori.
+
+\pnum
+\begin{example}
+	\begin{codeblock}
+		list<string> s;
+		// populate the list \tcode{s} with at least 10 strings
+		vector<string> v;
+		// copies 10 strings into \tcode{v}:
+		ranges::copy(counted_iterator(s.begin(), 10), default_sentinel, back_inserter(v));
+	\end{codeblock}
+\end{example}
+
+\pnum
+Two values \tcode{i1} and \tcode{i2} of types
+\tcode{counted_iterator<I1>}
+and
+\tcode{counted_iterator<I2>}
+refer to elements of the same sequence if and only if
+\tcode{next(i1.base(), i1.count())}
+and
+\tcode{next(i2.base(), i2.count())}
+refer to the same (possibly past-the-end) element.
+
+\indexlibrary{\idxcode{counted_iterator}}%
+\begin{codeblock}
+	namespace std {
+		template<Iterator I>
+		class counted_iterator {
+			public:
+			using iterator_type = I;
+			
+			constexpr counted_iterator() = default;
+			constexpr counted_iterator(I x, iter_difference_t<I> n);
+			template<class I2>
+			requires ConvertibleTo<const I2&, I>
+			constexpr counted_iterator(const counted_iterator<I2>& x);
+			
+			template<class I2>
+			requires Assignable<I&, const I2&>
+			constexpr counted_iterator& operator=(const counted_iterator<I2>& x);
+			
+			constexpr I base() const;
+			@\added{constexpr I base() \&\&;}@
+			constexpr iter_difference_t<I> count() const noexcept;
+			constexpr decltype(auto) operator*();
+			constexpr decltype(auto) operator*() const
+			requires @\placeholder{dereferenceable}@<const I>;
+			
+			constexpr counted_iterator& operator++();
+			decltype(auto) operator++(int);
+			constexpr counted_iterator operator++(int)
+			requires ForwardIterator<I>;
+			constexpr counted_iterator& operator--()
+			requires BidirectionalIterator<I>;
+			constexpr counted_iterator operator--(int)
+			requires BidirectionalIterator<I>;
+			
+			constexpr counted_iterator operator+(iter_difference_t<I> n) const
+			requires RandomAccessIterator<I>;
+			friend constexpr counted_iterator operator+(
+			iter_difference_t<I> n, const counted_iterator& x)
+			requires RandomAccessIterator<I>;
+			constexpr counted_iterator& operator+=(iter_difference_t<I> n)
+			requires RandomAccessIterator<I>;
+			
+			constexpr counted_iterator operator-(iter_difference_t<I> n) const
+			requires RandomAccessIterator<I>;
+			template<Common<I> I2>
+			friend constexpr iter_difference_t<I2> operator-(
+			const counted_iterator& x, const counted_iterator<I2>& y);
+			friend constexpr iter_difference_t<I> operator-(
+			const counted_iterator& x, default_sentinel_t);
+			friend constexpr iter_difference_t<I> operator-(
+			default_sentinel_t, const counted_iterator& y);
+			constexpr counted_iterator& operator-=(iter_difference_t<I> n)
+			requires RandomAccessIterator<I>;
+			
+			constexpr decltype(auto) operator[](iter_difference_t<I> n) const
+			requires RandomAccessIterator<I>;
+			
+			template<Common<I> I2>
+			friend constexpr bool operator==(
+			const counted_iterator& x, const counted_iterator<I2>& y);
+			friend constexpr bool operator==(
+			const counted_iterator& x, default_sentinel_t);
+			friend constexpr bool operator==(
+			default_sentinel_t, const counted_iterator& x);
+			
+			template<Common<I> I2>
+			friend constexpr bool operator!=(
+			const counted_iterator& x, const counted_iterator<I2>& y);
+			friend constexpr bool operator!=(
+			const counted_iterator& x, default_sentinel_t y);
+			friend constexpr bool operator!=(
+			default_sentinel_t x, const counted_iterator& y);
+			
+			template<Common<I> I2>
+			friend constexpr bool operator<(
+			const counted_iterator& x, const counted_iterator<I2>& y);
+			template<Common<I> I2>
+			friend constexpr bool operator>(
+			const counted_iterator& x, const counted_iterator<I2>& y);
+			template<Common<I> I2>
+			friend constexpr bool operator<=(
+			const counted_iterator& x, const counted_iterator<I2>& y);
+			template<Common<I> I2>
+			friend constexpr bool operator>=(
+			const counted_iterator& x, const counted_iterator<I2>& y);
+			
+			friend constexpr iter_rvalue_reference_t<I> iter_move(const counted_iterator& i)
+			noexcept(noexcept(ranges::iter_move(i.current)))
+			requires InputIterator<I>;
+			template<IndirectlySwappable<I> I2>
+			friend constexpr void iter_swap(const counted_iterator& x, const counted_iterator<I2>& y)
+			noexcept(noexcept(ranges::iter_swap(x.current, y.current)));
+			
+			private:
+			I current = I();                    // \expos
+			iter_difference_t<I> length = 0;    // \expos
+		};
+		
+		template<class I>
+		struct incrementable_traits<counted_iterator<I>> {
+			using difference_type = iter_difference_t<I>;
+		};
+		
+		template<InputIterator I>
+		struct iterator_traits<counted_iterator<I>> : iterator_traits<I> {
+			using pointer = void;
+		};
+	}
+\end{codeblock}
+
+\rSec3[counted.iter.const]{Constructors and conversions}
+
+\indexlibrary{\idxcode{counted_iterator}!constructor}%
+\begin{itemdecl}
+	constexpr counted_iterator(I i, iter_difference_t<I> n);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\expects \tcode{n >= 0}.
+	
+	\pnum
+	\effects
+	Initializes \tcode{current} with \tcode{i} and
+	\tcode{length} with \tcode{n}.
+\end{itemdescr}
+
+\indexlibrary{\idxcode{counted_iterator}!constructor}%
+\begin{itemdecl}
+	template<class I2>
+	requires ConvertibleTo<const I2&, I>
+	constexpr counted_iterator(const counted_iterator<I2>& x);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+\begin{addedm}
+	\mandates
+	\tcode{CopyConstructible<I>}
+\end{addedm}
+	
+	\effects
+	Initializes \tcode{current} with \tcode{x.current} and
+	\tcode{length} with \tcode{x.length}.
+\end{itemdescr}
+
+\indexlibrarymember{operator=}{counted_iterator}%
+\begin{itemdecl}
+	template<class I2>
+	requires Assignable<I&, const I2&>
+	constexpr counted_iterator& operator=(const counted_iterator<I2>& x);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects
+	Assigns \tcode{x.current} to \tcode{current} and
+	\tcode{x.length} to \tcode{length}.
+	
+	\pnum
+	\returns \tcode{*this}.
+\end{itemdescr}
+
+\rSec3[counted.iter.access]{Accessors}
+
+\indexlibrarymember{base}{counted_iterator}%
+\begin{itemdecl}
+	constexpr I base() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\begin{addedm}
+	\constraints \tcode{CopyConstructible<I>}
+	\end{addedm}	
+	
+	\returns \tcode{current}.
+\end{itemdescr}
+
+
+
+\begin{addedm}
+	\indexlibrarymember{base}{move_iterator}%
+	\begin{itemdecl}
+	
+	constexpr I base() &&;
+	\end{itemdecl}
+	\begin{itemdescr}
+		\pnum	
+		\returns \tcode{std::move(current);}
+
+	\end{itemdescr}
+
+\end{addedm}
+
+
+\indexlibrarymember{count}{counted_iterator}%
+\begin{itemdecl}
+	constexpr iter_difference_t<I> count() const noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to: \tcode{return length;}
+\end{itemdescr}
+
+\rSec3[counted.iter.elem]{Element access}
+
+\indexlibrarymember{operator*}{counted_iterator}%
+\begin{itemdecl}
+	constexpr decltype(auto) operator*();
+	constexpr decltype(auto) operator*() const
+	requires @\placeholder{dereferenceable}@<const I>;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to: \tcode{return *current;}
+\end{itemdescr}
+
+\indexlibrarymember{operator[]}{counted_iterator}%
+\begin{itemdecl}
+	constexpr decltype(auto) operator[](iter_difference_t<I> n) const
+	requires RandomAccessIterator<I>;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\expects \tcode{n < length}.
+	
+	\pnum
+	\effects Equivalent to: \tcode{return current[n];}
+\end{itemdescr}
+
+\rSec3[counted.iter.nav]{Navigation}
+
+\indexlibrarymember{operator++}{counted_iterator}%
+\begin{itemdecl}
+	constexpr counted_iterator& operator++();
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\expects \tcode{length > 0}.
+	
+	\pnum
+	\effects Equivalent to:
+	\begin{codeblock}
+		++current;
+		--length;
+		return *this;
+	\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{operator++}{counted_iterator}%
+\begin{itemdecl}
+	decltype(auto) operator++(int);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+\begin{addedm}
+	\mandates \tcode{CopyConstructible<I>}
+\end{addedm}
+	
+	\expects \tcode{length > 0}.
+	
+	\pnum
+	\effects Equivalent to:
+	\begin{codeblock}
+		--length;
+		try { return current++; }
+		catch(...) { ++length; throw; }
+	\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{operator++}{counted_iterator}%
+\begin{itemdecl}
+	constexpr counted_iterator operator++(int)
+	requires ForwardIterator<I>;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to:
+	\begin{codeblock}
+		counted_iterator tmp = *this;
+		++*this;
+		return tmp;
+	\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{operator{-}-}{counted_iterator}%
+\begin{itemdecl}
+	constexpr counted_iterator& operator--();
+	requires BidirectionalIterator<I>
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to:
+	\begin{codeblock}
+		--current;
+		++length;
+		return *this;
+	\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{operator{-}-}{counted_iterator}%
+\begin{itemdecl}
+	constexpr counted_iterator operator--(int)
+	requires BidirectionalIterator<I>;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to:
+	\begin{codeblock}
+		counted_iterator tmp = *this;
+		--*this;
+		return tmp;
+	\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{operator+}{counted_iterator}%
+\begin{itemdecl}
+	constexpr counted_iterator operator+(iter_difference_t<I> n) const
+	requires RandomAccessIterator<I>;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to: \tcode{return counted_iterator(current + n, length - n);}
+\end{itemdescr}
+
+\indexlibrarymember{operator+}{counted_iterator}%
+\begin{itemdecl}
+	friend constexpr counted_iterator operator+(
+	iter_difference_t<I> n, const counted_iterator& x)
+	requires RandomAccessIterator<I>;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to: \tcode{return x + n;}
+\end{itemdescr}
+
+\indexlibrarymember{operator+=}{counted_iterator}%
+\begin{itemdecl}
+	constexpr counted_iterator& operator+=(iter_difference_t<I> n)
+	requires RandomAccessIterator<I>;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\expects \tcode{n <= length}.
+	
+	\pnum
+	\effects Equivalent to:
+	\begin{codeblock}
+		current += n;
+		length -= n;
+		return *this;
+	\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{operator-}{counted_iterator}%
+\begin{itemdecl}
+	constexpr counted_iterator operator-(iter_difference_t<I> n) const
+	requires RandomAccessIterator<I>;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to: \tcode{return counted_iterator(current - n, length + n);}
+\end{itemdescr}
+
+\indexlibrarymember{operator-}{counted_iterator}%
+\begin{itemdecl}
+	template<Common<I> I2>
+	friend constexpr iter_difference_t<I2> operator-(
+	const counted_iterator& x, const counted_iterator<I2>& y);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\expects
+	\tcode{x} and \tcode{y} refer to elements of the same
+	sequence\iref{counted.iterator}.
+	
+	\pnum
+	\effects Equivalent to: \tcode{return y.length - x.length;}
+\end{itemdescr}
+
+\indexlibrarymember{operator-}{counted_iterator}%
+\begin{itemdecl}
+	friend constexpr iter_difference_t<I> operator-(
+	const counted_iterator& x, default_sentinel_t);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to:
+	\tcode{return -x.length;}
+\end{itemdescr}
+
+\indexlibrarymember{operator-}{counted_iterator}%
+\begin{itemdecl}
+	friend constexpr iter_difference_t<I> operator-(
+	default_sentinel_t, const counted_iterator& y);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Equivalent to: \tcode{return y.length;}
+\end{itemdescr}
+
+\indexlibrarymember{operator-=}{counted_iterator}%
+\begin{itemdecl}
+	constexpr counted_iterator& operator-=(iter_difference_t<I> n)
+	requires RandomAccessIterator<I>;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\expects \tcode{-n <= length}.
+	
+	\pnum
+	\effects Equivalent to:
+	\begin{codeblock}
+		current -= n;
+		length += n;
+		return *this;
+	\end{codeblock}
+\end{itemdescr}
+
+\section{Reference}
+\begin{thebibliography}{9}
+	
+	\bibitem[P0541]{P0541}
+	Eric Niebler
+	\emph{ Ranges TS: Post-Increment on Input and Output Iterators}\newline
+	\url{https://wg21.link/P0541}
+	
+	\bibitem[P0896]{P0896}
+	Eric Niebler, Casey Carter, Christopher Di Bella.
+	\emph{The One Ranges Proposal}\newline
+	\url{https://wg21.link/P0896}
+	
+	\bibitem[P0902]{P0902}
+	Andrew Hunter
+	\emph{Move-only iterators}\newline
+	\url{https://wg21.link/P0902}
+
+	\bibitem[P1035]{P1035}
+	Christopher Di Bella
+	\emph{Input range adaptors}\newline
+	\url{https://wg21.link/P1035}	
+	
+	
+\end{thebibliography}
+
+\end{document}

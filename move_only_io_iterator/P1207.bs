@@ -1,7 +1,7 @@
 <pre class='metadata'>
 Title: Movability of Single-pass Iterators
 Shortname: P1207
-Level: 1
+Level: 2
 Status: P
 Group: wg21
 Editor: Corentin Jabot, corentin.jabot@gmail.com
@@ -106,6 +106,9 @@ Date: 2019-01-21
 
 
 # Changes
+
+## Revision 2
+ * Remove discussions about `ContiguousIterator`
 
 ## Revision 1
 
@@ -305,9 +308,6 @@ In practice, because `InputIterator` and `ForwardIterator` are syntactically ide
 it is common for iterators to be mis-categorized.
 Other iterator categories do not have these problems as each subsequent refining category adds syntax requirements:
 BidirectionalIiterator require decrement operators, RandomAccessIterator has further requirements.
-And while ContiguousIterator is currently not syntactically differentiated from RandomAccessIterator,
-it is possible to require that ContiguousIterator be convertible to a pointer of the type of the underlying sequence's
-elements.
 
 But then, is there a set of operations and semantic requirements, translating to actual C++ syntax, that could allow for
 InputIterator to be easily distinguished from each other?
@@ -428,9 +428,6 @@ template <class I> concept bool RandomAccessIterator =
     BidirectionalIterator<I> &&
     RandomAccessIncrementable<I>;
 
-template <class I> concept bool ContiguousIterator =
-    RandomAccessIterator<I> &&
-    ConvertibleTo<I, std::add_const_t<iter_value_t<I>>*>
 </xmp>
 
 This is of course simplified but shows that each iterator category subsumes the last and adds a single, cohesive set of requirement enforceable at compile-time.
@@ -617,8 +614,6 @@ However, a satisfying solution was offered by [[P0541R1]].
  * Does LEWG agree that, in the absence of an explicit tag, a **copyable** iterator that otherwise meets the requirement of `ForwardIterator` should be recognized as such?
  * Does LEWG want to recommend that future non-forward iterators considered for inclusion in the standard should not be copyable?
  * Does LEWG want to revisit the default constructability of iterators given `Regular` is no longer a requirement of `Iterator`?
- * Does LEWG want to recognize `RandomAccessIterator` providing a conversion operator to the `pointer` type of the underlying sequence as `ContiguousIterator` without the need for an explicit tag?
-
 
 # List of proposed changes
 
@@ -670,24 +665,6 @@ Tagless move-only input iterators will also be correctly identified by the
 The `OuputIterator` iterator concept is left unchanged.
 It implicitly doesn't need to meet the requirement of `Semiegular` any longer
 through `WeaklyIncrementable`.
-
-### ContiguousIterator
-
-<xmp>
-template <class I, class T>
-concept ContiguousIterator =
-   ContiguousIterator =
-        RandomAccessIterator<I> &&
-        std::is_lvalue_reference<iter_reference_t<I>>::value &&
-        Same<iter_value_t<I>, __uncvref<iter_reference_t<I>>> &&
-        (
-            DerivedFrom<ITER_CONCEPT(I), contiguous_iterator_tag> ||
-            ConvertibleTo<I, std::add_const_t<iter_value_t<I>>*>
-        );
-</xmp>
-
-Requiring a conversion operator to `iter_value_t<I>*` (instead of a tag - It could also require a tag **or** a conversion operator)
-allows the whole iterator taxonomy to be semantically and accurately constrainable without the need for tags.
 
 ## Changes to &lt;ranges>
 
@@ -787,7 +764,6 @@ To accommodate and honor the changes proposed here, we suggest that:
  * An iterator facade constructed from a Copyable cursor with an `equal(const cursor &)` member function models an `ForwardIterator`,
       unless it defines a `single_pass = true` trait.
  * `cursor::Forward` should require `Semi-regularC> && !C::single_pass`
- * `cursor::Contiguous` should require something along the line of `ConvertibleTo<value_type_t<C>*, C> || C::contiguous;`
 
 # Implementation experience
 
