@@ -1,0 +1,87 @@
+\documentclass{wg21}
+
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{ulem}
+\usepackage{fullpage}
+\usepackage{parskip}
+\usepackage{csquotes}
+\usepackage{relsize}      % provide relative font size changes
+\usepackage{textcomp}     % provide \text{l,r}angle
+\usepackage{mathrsfs}     % mathscr font
+
+\title{\tcode{basic\_istream\_view::iterator} should not be copyable}
+\docnumber{D1638R0}
+\audience{LEWG, LWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Christopher Di Bella}{cjdb.ns@gmail.com}
+
+\begin{document}
+\maketitle
+
+\section{Proposed change}
+
+In \cite{P1027} we discussed why iterators over a single-pass resource such as a stream
+should not be copyable. \tcode{basic\_istream\_view::iterator} proposed by \cite{P1035}
+is one such iterator (and the only one proposed for C++20), 
+we therefore propose to make it non-copyable.
+
+\section{Applicability}
+
+This papers depends on both \cite{P1027} and \cite{P1035} being accepted by LWG.
+They have been accepted by LEWG in Kona 2019.
+
+\section{Wording}
+
+
+\rSec3[range.istream.iterator]{Class template \tcode{basic_istream_view::iterator}}
+\begin{codeblock}
+namespace std::ranges {
+template<class Val, class CharT, class Traits>
+class basic_istream_view<Val, CharT, Traits>::@\placeholder{iterator}@ { // \expos
+	public:
+	using iterator_category = input_iterator_tag;
+	using difference_type = ptrdiff_t;
+	using value_type = Val;
+	
+	@\placeholder{iterator()}@ = default;
+	constexpr explicit @\placeholder{iterator}@(basic_istream_view& parent) noexcept;
+	
+	@\added{\placeholder{iterator}(const \placeholder{iterator}\&) = delete}@;
+	@\added{constexpr \placeholder{iterator}(\placeholder{iterator}\&\&) noexcept = default}@;
+	
+	@\added{\placeholder{iterator}\& operator=(const \placeholder{iterator}\&) = delete}@;
+	@\added{constexpr \placeholder{iterator}\& operator=(\placeholder{iterator}\&\&) noexcept = default}@;
+	
+	@\placeholder{iterator}@& operator++();
+	void operator++(int);
+	
+	Val& operator*() const;
+	
+	friend bool operator==(@\placeholder{iterator}@ x, default_sentinel);
+	friend bool operator==(default_sentinel y, @\placeholder{iterator}@ x);
+	friend bool operator!=(@\placeholder{iterator}@ x, default_sentinel y);
+	friend bool operator!=(default_sentinel y, @\placeholder{iterator}@ x);
+	private:
+	basic_istream_view<Val, CharT, Traits>* @\placeholder{parent_}@ = nullptr; // \expos
+};
+
+\end{codeblock}
+
+
+\begin{thebibliography}{9}
+	
+	\bibitem[P1027]{P1027}
+	Corentin Jabot
+	\emph{Movability of single-pass iterators}
+	\url{https://wg21.link/P1027}	
+
+	\bibitem[P1035]{P1035}
+	Christopher Di Bella
+	\emph{Input range adaptors}\newline
+	\url{https://wg21.link/P1035}	
+	
+	
+\end{thebibliography}
+
+\end{document}
