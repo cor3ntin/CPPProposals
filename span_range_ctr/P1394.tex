@@ -158,7 +158,7 @@ constexpr span(const array<value_type, N>& arr) noexcept;
 @\removed{template<class Container>}@
 @\removed{constexpr span(const Container\& cont);}@
 @\added{template <ranges::ContiguousRange R>}@
-@\added{requires ranges::SizedRange<R> \&\& (\placeholder{forwarding-range}<R> ||  std::is_const_v<ElementType>)}@ 
+@\added{requires ranges::SizedRange<R> \&\& (\placeholder{forwarding-range}<R> ||  is_const_v<ElementType>)}@
 @\added{ConvertibleTo<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>(*)[], ElementType(*)[]>}@
 @\added{constexpr span(R\&\& r);}@
 
@@ -180,7 +180,7 @@ span(const array<T, N>&) -> span<const T, N>;
 @\added{template <ContiguousIterator It, SizedSentinel<It> End>}@
 @\added{span(It, End) -> span<remove_reference_t<iter_reference_t<It>>>;}@
 @\added{template <ContiguousIterator It, size_t N>}@
-@\added{span(It, N) -> span<remove_reference_t<iter_reference_t<It>>>;}@
+@\added{span(It) -> span<remove_reference_t<iter_reference_t<It>>, N>;}@
 
 template<class T, size_t N>
 span(const array<T, N>&) -> span<const T, N>;
@@ -188,9 +188,9 @@ span(const array<T, N>&) -> span<const T, N>;
 @\removed{span(Container\&) -> span<typename Container::value_type>;}@
 @\removed{template<class Container>}@
 @\removed{span(const Container\&) -> span<const typename Container::value_type>;}@
-@\added{template<ranges::ContiguousRange>}@
+@\added{template<ranges::ContiguousRange R>}@
 @\added{requires ranges::SizedRange<R> \&\& \placeholder{forwarding-range}<R>}@
-@\added{-> span<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>>;}@
+@\added{span(R\&\&) -> span<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>>;}@
 
 \end{codeblock}
 \end{quote}
@@ -201,17 +201,17 @@ In 21.7.3.2 [span.cons]
 
 
 \begin{itemdecl}
-	constexpr span() noexcept;
+    constexpr span() noexcept;
 \end{itemdecl}
 \begin{itemdescr}
-	\pnum
-	\ensures
-	\tcode{size() == 0 \&\& data() == nullptr}.
+    \pnum
+    \ensures
+    \tcode{size() == 0 \&\& data() == nullptr}.
 
-	\pnum
-	\remarks
-	This constructor shall not participate in overload resolution
-	unless \tcode{Extent <= 0} is \tcode{true}.
+    \pnum
+    \remarks
+    This constructor shall not participate in overload resolution
+    unless \tcode{Extent <= 0} is \tcode{true}.
 \end{itemdescr}
 \begin{removedblock}
 \begin{itemdecl}
