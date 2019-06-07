@@ -1,0 +1,150 @@
+\documentclass[a4paper,article]{article}
+               % See geometry.pdf to learn the layout options. There are lots.
+
+\usepackage[final]
+           {listings}     % code listings
+\usepackage{color}        % define colors for strikeouts and underlines
+\usepackage{underscore}   % remove special status of '_' in ordinary text
+\usepackage{xspace}
+\usepackage{xcolor}
+\usepackage{chngcntr}
+
+\input{macros.tex}
+\title{Adopt source\_location from Library Fundamentals V3 for C++20}
+\author{Robert Douglas, Corentin Jabot}
+\date{2019-03-11}
+
+
+
+\begin{document}
+\maketitle
+\begin{tabular}[t]{|l|l|}\hline
+Document Number: &  P1208R4\\\hline
+Audience: & LWG\\\hline
+Date: &  2019-03-11 \\\hline
+Project: & Programming Language C++\\\hline
+\end{tabular}
+
+\section{Class \tcode{source_location} [reflection.src_loc]}
+\subsection{Header \tcode{\textless source_location\textgreater}  Synopsis [reflection.src_loc.intro]}
+\begin{codeblock}
+namespace std {
+  struct source_location {
+    constexpr source_location() noexcept;
+
+    constexpr uint_least32_t line() const noexcept;
+    constexpr uint_least32_t column() const noexcept;
+    constexpr const char* file_name() const noexcept;
+    constexpr const char* function_name() const noexcept;
+
+    static consteval source_location current() noexcept;
+  };
+}
+\end{codeblock}
+[\emph{Note:} The intent of \tcode{source_location} is to have a small size and efficient copying.-- \emph{end note}]
+
+\begin{itemdecl}
+constexpr source_location() noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+\pnum
+\effects
+Constructs an object of class \tcode{source_location}.
+
+\pnum
+\note
+The values are implementation-defined.
+\end{itemdescr}
+
+\begin{itemdecl}
+constexpr uint_least32_t line() const noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+\pnum
+\returns
+The presumed line number (16.8) represented by this object.
+\end{itemdescr}
+
+\begin{itemdecl}
+constexpr uint_least32_t column() const noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+\pnum
+\returns
+An implementation-defined value representing some offset from the start of the line represented by this object.
+\end{itemdescr}
+
+\begin{itemdecl}
+constexpr const char* file_name() const noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+\pnum
+\returns
+The presumed name of the current source file (14.2) represented by this object as an NTBS.
+\end{itemdescr}
+
+\begin{itemdecl}
+constexpr const char* function_name() const noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+\pnum
+\returns
+If this object represents a position in the body of a function, returns an implementation-defined NTBS that should correspond to the function name.  Otherwise, returns an empty string.
+
+\end{itemdescr}
+
+\begin{itemdecl}
+static consteval source_location current() noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+\pnum
+\returns
+When invoked by a function call whose \techterm{postfix-expression} is a (possibly parenthesized) \techterm{id-expression} naming \tcode{current}, returns a \tcode{source_location} with an implementation-defined value. The value should be affected by \tcode{\#line} (14.4) in the same manner as for \tcode{__LINE__} and \tcode{__FILE__}. If invoked in some other way, the value returned is unspecified.
+\end{itemdescr}
+\begin{itemdescr}
+\pnum
+\note
+When a \techterm{brace-or-equal-initializer} is used to initialize a non-static data member, any calls to \tcode{current} should correspond to the location of the constructor or aggregate initialization that initializes the member.
+
+%Member access expression is also precluded
+% source_location l; l.current();
+%binding a ref to it in one trans unit and using ref in another does not trigger wording for unspecified.
+
+%If \tcode{current} is used other than as the \techterm{postfix-expression} of a function call (5.2.2) the program is ill-formed.
+
+\pnum
+[\emph{Note:} When used as a default argument (9.3.6), the value of the \tcode{source_location} will be the location of the call to \tcode{current} at the call site. -- \emph{end note}]
+\end{itemdescr}
+
+[\emph{Example:}
+\begin{codeblock}
+struct s {
+  source_location member = source_location::current();
+  int other_member;
+  s(source_location loc = source_location::current())
+    : member(loc) // values of \tcode{member} will be from call-site
+  {}
+  s(int blather) : // values of \tcode{member} should be hereabouts
+    other_member(blather)
+  {}
+  s(double) // values of \tcode{member} should be hereabouts
+  {}
+};
+void f(source_location a = source_location::current()) {
+  source_location b = source_location::current(); // values in \tcode{b} represent this line
+}
+
+void g() {
+  f(); // \tcode{f}'s first argument corresponds to this line of code
+
+  source_location c = source_location::current();
+  f(c); // \tcode{f}'s first argument gets the same values as \tcode{c}, above
+}
+\end{codeblock}
+-- \emph{end example}]
+
+\section{Feature macro}
+We recommend the feature macro \tcode{__cpp_lib_source_location} for this feature.
+%\end{section}
+
+\end{document}
