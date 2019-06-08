@@ -122,7 +122,7 @@ respectively as well as to add or modify the relevant deduction guides for these
 \section{Future work}
 
 \begin{itemize}
-	\item We suggest that both the wording and the implementation of span would greatly benefit from a trait to detect whether a type has a static extent.
+    \item We suggest that both the wording and the implementation of span would greatly benefit from a trait to detect whether a type has a static extent.
 Because \tcode{std::extent} equals to 0 for types without static extent, and because 0 is a valid extent for containers, \tcode{std::extent} proved too limited. However we do not propose a solution in the present paper.
 \end{itemize}
 
@@ -139,12 +139,10 @@ Change in \textbf{[views.span] 21.7.3}:
 
  // [span.cons], constructors, copy, and assignment
 constexpr span() noexcept;
-@\added{template <ContiguousIterator It>}@
-@\added{requires ConvertibleTo<remove_reference_t<iter_reference_t<It>>(*)[], ElementType(*)[]>}@
+@\added{template <class It>}@
 constexpr span( @\removed{pointer ptr}@ @\added{It begin}@, index_type count);
 @\removed{constexpr span(pointer first, pointer last);}@
-@\added{template <ContiguousIterator It, SizedSentinel<It> End>}@
-@\added{requires ConvertibleTo<remove_reference_t<iter_reference_t<It>>(*)[], ElementType(*)[]>}@
+@\added{template <class It, class End>}@
 @\added{constexpr span(It first, End last);}@
 
 template<size_t N>
@@ -157,9 +155,7 @@ constexpr span(const array<value_type, N>& arr) noexcept;
 @\removed{constexpr span(Container\& cont);}@
 @\removed{template<class Container>}@
 @\removed{constexpr span(const Container\& cont);}@
-@\added{template <ranges::ContiguousRange R>}@
-@\added{requires ranges::SizedRange<R> \&\& (\placeholder{forwarding-range}<R> ||  is_const_v<ElementType>)}@
-@\added{ConvertibleTo<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>(*)[], ElementType(*)[]>}@
+@\added{template <class R>}@
 @\added{constexpr span(R\&\& r);}@
 
 constexpr span(const span& other) noexcept = default;
@@ -177,9 +173,9 @@ template<class T, size_t N>
 span(array<T, N>&) -> span<T, N>;
 template<class T, size_t N>
 span(const array<T, N>&) -> span<const T, N>;
-@\added{template <ContiguousIterator It, SizedSentinel<It> End>}@
+@\added{template <class It, class End>}@
 @\added{span(It, End) -> span<remove_reference_t<iter_reference_t<It>>>;}@
-@\added{template <ContiguousIterator It, size_t N>}@
+@\added{template <class It, size_t N>}@
 @\added{span(It) -> span<remove_reference_t<iter_reference_t<It>>, N>;}@
 
 template<class T, size_t N>
@@ -188,8 +184,7 @@ span(const array<T, N>&) -> span<const T, N>;
 @\removed{span(Container\&) -> span<typename Container::value_type>;}@
 @\removed{template<class Container>}@
 @\removed{span(const Container\&) -> span<const typename Container::value_type>;}@
-@\added{template<ranges::ContiguousRange R>}@
-@\added{requires ranges::SizedRange<R> \&\& \placeholder{forwarding-range}<R>}@
+@\added{template<class R>}@
 @\added{span(R\&\&) -> span<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>>;}@
 
 \end{codeblock}
@@ -220,28 +215,37 @@ constexpr span(pointer ptr, index_type count);
 \end{removedblock}
 \begin{addedblock}
 \begin{itemdecl}
-template <ContiguousIterator It>
-requires ConvertibleTo<remove_reference_t<iter_reference_t<It>>(*)[], ElementType(*)[]>
+template <class It>
 constexpr span(It first, index_type count);
 \end{itemdecl}
 \end{addedblock}
 \begin{itemdescr}
-	\pnum
-	\requires \range{\changed{ptr}{first}}{ \changed{ptr}{first} + count} shall be a valid range.
-	If \tcode{extent} is not equal to \tcode{dynamic_extent},
-	then \tcode{count} shall be equal to \tcode{extent}.
+    \begin{addedblock}
+    \pnum
+    \constraints
+    \begin{itemize}
+    	\item \tcode{ConvertibleTo<remove_reference_t<iter_reference_t<It>>(*)[], element_type(*)[]>} is true.
+    	 \begin{note}The intent is to allow qualification conversions of the iterator reference type to \tcode{element_type} \end{note}
+    \end{itemize}
+    \end{addedblock}
 
-	\pnum
-	\effects
-	Constructs a \tcode{span} that is a view over the range \range{\changed{ptr}{first} }{\changed{ptr}{first}  + count}.
+    \expects
+    \range{\changed{ptr}{first}}{ \changed{ptr}{first} + count} shall be a valid range.
+    If \tcode{extent} is not equal to \tcode{dynamic_extent},
+    then \tcode{count} shall be equal to \tcode{extent}.
 
-	\pnum
-	\ensures
-	\tcode{size() == count \&\& data() == \changed{ptr}{\tcode{std::to_address(first)}}}.
+    \pnum
+    \effects
+    Constructs a \tcode{span} that is a view over the range \range{\changed{ptr}{first} }{\changed{ptr}{first}  + count}.
 
-	\pnum
-	\throws
-	Nothing.
+    \pnum
+    \ensures
+    \tcode{size() == count \&\& data() == \changed{ptr}{\tcode{to_address(first)}}}.
+
+    \pnum
+    \throws
+    Nothing.
+
 \end{itemdescr}
 
 
@@ -253,30 +257,29 @@ constexpr span(pointer first, pointer last);
 \begin{removedblock}
 
 \begin{itemdescr}
-	\pnum
-	\requires
-	\range{first}{last} shall be a valid range.
-	If \tcode{extent} is not equal to \tcode{dynamic_extent},
-	then \tcode{last - first} shall be equal to \tcode{extent}.
+    \pnum
+    \requires
+    \range{first}{last} shall be a valid range.
+    If \tcode{extent} is not equal to \tcode{dynamic_extent},
+    then \tcode{last - first} shall be equal to \tcode{extent}.
 
-	\pnum
-	\effects
-	Constructs a span that is a view over the range \range{first}{last}.
+    \pnum
+    \effects
+    Constructs a span that is a view over the range \range{first}{last}.
 
-	\pnum
-	\ensures
-	\tcode{size() == last - first \&\& data() == first}.
+    \pnum
+    \ensures
+    \tcode{size() == last - first \&\& data() == first}.
 
-	\pnum
-	\throws
-	Nothing.
+    \pnum
+    \throws
+    Nothing.
 \end{itemdescr}
 \end{removedblock}
 
 \begin{addedblock}
 \begin{itemdecl}
-template <ContiguousIterator It, SizedSentinel<It> End>
-requires ConvertibleTo<remove_reference_t<iter_reference_t<It>>(*)[], ElementType(*)[]>
+template <class It, class End>
 constexpr span(It first, End last);
 \end{itemdecl}
 \end{addedblock}
@@ -284,23 +287,34 @@ constexpr span(It first, End last);
 \begin{addedblock}
 
 \begin{itemdescr}
+	 \pnum
+	\constraints
+	\begin{itemize}
+		\item \tcode{ConvertibleTo<remove_reference_t<iter_reference_t<It>>(*)[], element_type(*)[]>} is tru,
+		\begin{note}The intent is to allow qualification conversions of the iterator reference type to \tcode{element_type} \end{note},
+		\item \tcode{End} models \tcode{SizedSentinel<It>}.
+	\end{itemize}
 
-	\pnum
-	\expects
-	If \tcode{extent} is not equal to \tcode{dynamic_extent},
-	then \tcode{last - first} shall be equal to \tcode{extent}.
+    \expects
+    \begin{itemize}
+    \item
+    If \tcode{extent} is not equal to \tcode{dynamic_extent},
+    then \tcode{last - first} shall be equal to \tcode{extent}.
+    \item \range{first}{end} shall be a valid range.
+    \end{itemize}
 
-	\pnum
-	\effects
-	Constructs a span that is a view over the range \range{first}{last}.
+    \pnum
+    \effects
+    Constructs a span that is a view over the range \range{first}{last}.
 
-	\pnum
-	\ensures
-	\tcode{size() == last - first \&\& data() ==  \tcode{std::to_address(first)}}.
+    \pnum
+    \ensures
+    \tcode{size() == last - first \&\& data() ==  \tcode{to_address(first)}}.
 
-	\pnum
-	\throws
-	Nothing.
+    \pnum
+    \throws
+    Nothing.
+
 
 \end{itemdescr}
 \end{addedblock}
@@ -311,21 +325,21 @@ template<size_t N> constexpr span(array<value_type, N>& arr) noexcept;
 template<size_t N> constexpr span(const array<value_type, N>& arr) noexcept;
 \end{itemdecl}
 \begin{itemdescr}
-	\pnum
-	\effects
-	Constructs a \tcode{span} that is a view over the supplied array.
+    \pnum
+    \effects
+    Constructs a \tcode{span} that is a view over the supplied array.
 
-	\pnum
-	\ensures
-	\tcode{size() == N \&\& data() == data(arr)}.
+    \pnum
+    \ensures
+    \tcode{size() == N \&\& data() == data(arr)}.
 
-	\pnum
-	\remarks
-	These constructors shall not participate in overload resolution unless:
-	\begin{itemize}
-		\item \tcode{extent == dynamic_extent || N == extent} is \tcode{true}, and
-		\item \tcode{remove_pointer_t<decltype(data(arr))>(*)[]} is convertible to \tcode{ElementType(*)[]}.
-	\end{itemize}
+    \pnum
+    \remarks
+    These constructors shall not participate in overload resolution unless:
+    \begin{itemize}
+        \item \tcode{extent == dynamic_extent || N == extent} is \tcode{true}, and
+        \item \tcode{remove_pointer_t<decltype(data(arr))>(*)[]} is convertible to \tcode{element_type(*)[]}.
+    \end{itemize}
 \end{itemdescr}
 
 \begin{removedblock}
@@ -333,76 +347,73 @@ template<size_t N> constexpr span(const array<value_type, N>& arr) noexcept;
 template<class Container> constexpr span(Container& cont);
 template<class Container> constexpr span(const Container& cont);
 \end{itemdecl}
-\end{removedblock}
-\begin{removedblock}
+
 \begin{itemdescr}
-	\pnum
-	\requires
-	\range{data(cont)}{data(cont) + size(cont)} shall be a valid range.
-	If \tcode{extent} is not equal to \tcode{dynamic_extent},
-	then \tcode{size(cont)} shall be equal to \tcode{extent}.
+\pnum
+\constraints
+\begin{itemize}
+	\item \tcode{extent == dynamic_extent} is \tcode{true},
+	\item \tcode{Container} is not a specialization of \tcode{span},
+	\item \tcode{Container} is not a specialization of \tcode{array},
+	\item \tcode{is_array_v<Container>} is \tcode{false},
+	\item \tcode{data(cont)} and \tcode{size(cont)} are both well-formed, and
+	\item \tcode{remove_pointer_t<decltype(data(cont))>(*)[]} is convertible to \tcode{ElementType(*)[]}.
+\end{itemize}
 
-	\pnum
-	\effects
-	Constructs a \tcode{span} that is a view over the range \range{data(cont)}{data(cont) + size(cont)}.
+\pnum
+\expects
+\range{data(cont)}{data(cont) + size(cont)} is a valid range.
 
-	\pnum
-	\ensures
-	\tcode{size() == size(cont) \&\& data() == data(cont)}.
+\pnum
+\effects
+Constructs a \tcode{span} that is a view over the range \range{data(cont)}{data(cont) + size(cont)}.
 
-	\pnum
-	\throws
-	What and when \tcode{data(cont)} and \tcode{size(cont)} throw.
+\pnum
+\ensures
+\tcode{size() == size(cont) \&\& data() == data(cont)}.
 
-	\pnum
-	\remarks
-	These constructors shall not participate in overload resolution unless:
-	\begin{itemize}
-		\item \tcode{Container} is not a specialization of \tcode{span},
-		\item \tcode{Container} is not a specialization of \tcode{array},
-		\item \tcode{is_array_v<Container>} is \tcode{false},
-		\item \tcode{data(cont)} and \tcode{size(cont)} are both well-formed, and
-		\item \tcode{remove_pointer_t<decltype(data(cont))>(*)[]} is convertible to \tcode{ElementType(*)[]}.
-	\end{itemize}
+\pnum
+\throws
+What and when \tcode{data(cont)} and \tcode{size(cont)} throw.
 \end{itemdescr}
 \end{removedblock}
 
 
 \begin{addedblock}
 \begin{itemdecl}
-template <ranges::ContiguousRange R>
-requires ranges::SizedRange<R> && @{(\placeholder{forwarding-range}<R> || std::is_const_v<ElementType>)}@ &&
-ConvertibleTo<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>(*)[], ElementType(*)[]>
+template <class R>
 constexpr span(R&& r)
 \end{itemdecl}
 \end{addedblock}
 
 \begin{addedblock}
 \begin{itemdescr}
-	\pnum
-	\expects
-	If \tcode{extent} is not equal to \tcode{dynamic_extent},
-	then \tcode{size(r)} shall be equal to \tcode{extent}.
+    \pnum
+    \constraints
+    \begin{itemize}
+       \item \tcode{extent == dynamic_extent} is \tcode{true},
+       \item \tcode{R} models \tcode{ranges::ContiguousRange} and \tcode{ranges::SizedRange},
+       \item either \tcode{R} models \placeholder{forwarding-range} or \tcode{is_const_v<element_type>} is true,
+       \item \tcode{R} is not a specialization of \tcode{span},
+       \item \tcode{R} is not a specialization of \tcode{array},
+       \item \tcode{is_array_v<R>} is \tcode{false},
+       \item \tcode{ConvertibleTo<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>(*)[], element_type(*)[]>} is true
+       \begin{note}The intent is to allow qualification conversions of the iterator reference type to \tcode{element_type} \end{note}.
+    \end{itemize}
 
-	\pnum
-	\effects
-	Constructs a \tcode{span} that is a view over the range \tcode{r}.
 
-	\pnum
-	\ensures
-	\tcode{ranges::size() == ranges::size(r) \&\& ranges::data() == ranges::data(r)}.
+    \pnum
+    \effects
+    Constructs a \tcode{span} that is a view over the range \tcode{r}.
 
-	\pnum
-	\throws
-	What and when \tcode{ranges::data(r)} and \tcode{ranges::size(r)} throw.
+    \pnum
+    \ensures
+    \tcode{size() == ranges::size(r) \&\& data() == ranges::data(r)}.
 
-	\pnum
-	\constraints
-	\begin{itemize}
-		\item \tcode{R} is not a specialization of \tcode{span},
-		\item \tcode{R} is not a specialization of \tcode{array},
-		\item \tcode{is_array_v<R>} is \tcode{false},
-	\end{itemize}
+    \pnum
+    \throws
+    What and when \tcode{ranges::data(r)} and \tcode{ranges::size(r)} throw.
+
 \end{itemdescr}
 \end{addedblock}
 
@@ -410,36 +421,74 @@ constexpr span(R&& r)
 constexpr span(const span& other) noexcept = default;
 \end{itemdecl}
 \begin{itemdescr}
-	\pnum
-	\ensures
-	\tcode{other.size() == size() \&\& other.data() == data()}.
+    \pnum
+    \ensures
+    \tcode{other.size() == size() \&\& other.data() == data()}.
 \end{itemdescr}
 
+\end{quote}
+
+
+Add a new section [span.deduction] to describe the following deduction guides:
+
+
+\begin{quote}
+\begin{addedblock}
+\begin{itemdecl}
+template <class It, class End>
+span(It, End) -> span<remove_reference_t<iter_reference_t<It>>>
+\end{itemdecl}
+\begin{itemdescr}
+    \constraints
+\begin{itemize}
+    \item \tcode{It} models \tcode{ranges::ContiguousIterator},
+    \item \tcode{End} models \tcode{SizedSentinel<It>}.
+\end{itemize}
+\end{itemdescr}
+
+\begin{itemdecl}
+template <class It, size_t N>
+span(It) -> span<remove_reference_t<iter_reference_t<It>>, N>
+\end{itemdecl}
+\begin{itemdescr}
+    \constraints \tcode{It} models \tcode{ranges::ContiguousIterator}.
+\end{itemdescr}
+
+
+\begin{itemdecl}
+template<class R>
+span(R&&) -> span<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>
+\end{itemdecl}
+\begin{itemdescr}
+    \constraints \tcode{R} models \tcode{ranges::ContiguousRange}.
+\end{itemdescr}
+
+
+\end{addedblock}
 
 \end{quote}
 
 \section{References}
 \renewcommand{\section}[2]{}%
 \begin{thebibliography}{9}
-	
-	\bibitem[P1419]{P1419}
-	Casey Carter, Corentin Jabot
-	\emph{A SFINAE-friendly trait to determine the extent of statically sized containers}\newline
-	\url{https://wg21.link/P1419}
-	
-	\bibitem[P1391]{P1391}
-	Corentin Jabot
-	\emph{Range constructor for std::string\_view}\newline
-	\url{https://wg21.link/P1391}
-	
-	
-	\bibitem[P1474]{P1474}
-	Casey Carter
-	\emph{Helpful pointers for ContiguousIterator}\newline
-	\url{https://wg21.link/P1474}
-	
-	
-	
+
+    \bibitem[P1419]{P1419}
+    Casey Carter, Corentin Jabot
+    \emph{A SFINAE-friendly trait to determine the extent of statically sized containers}\newline
+    \url{https://wg21.link/P1419}
+
+    \bibitem[P1391]{P1391}
+    Corentin Jabot
+    \emph{Range constructor for std::string\_view}\newline
+    \url{https://wg21.link/P1391}
+
+
+    \bibitem[P1474]{P1474}
+    Casey Carter
+    \emph{Helpful pointers for ContiguousIterator}\newline
+    \url{https://wg21.link/P1474}
+
+
 \end{thebibliography}
 \end{document}
 
