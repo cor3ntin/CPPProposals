@@ -27,9 +27,8 @@
 \RequirePackage{fixme}
 \RequirePackage{lmodern}
 \RequirePackage[T1]{fontenc}
-\RequirePackage[pdftex, final]{graphicx}
-\RequirePackage[pdftex,
-                bookmarks=true,
+\RequirePackage[final]{graphicx}
+\RequirePackage[bookmarks=true,
                 bookmarksnumbered=true,
                 pdfpagelabels=true,
                 pdfpagemode=UseOutlines,
@@ -48,6 +47,7 @@
                 extract-cmdline={gramSec},
                 extract-env={bnftab,simplebnf,bnf,bnfkeywordtab}
                ]{extract} % Grammar extraction
+\usepackage[dvipsnames]{xcolor}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Setup title
@@ -159,7 +159,11 @@
 \def\gramSec[##1]##2{\rSec1[##1]{##2}}%
 \input{std-gram.ext}%
 }
+\renewcommand{\@seccntformat}[1]{}
 \makeatother
+\usepackage[utf8]{inputenc}
+
+
 
 %%--------------------------------------------------
 %% Cross references.
@@ -172,7 +176,10 @@
 % the range [0,5].  (If it proves necessary, it wouldn't take much
 % programming to raise the limit from 5 to something larger.)
 
-
+\usepackage{amssymb,graphicx,stackengine,xcolor}
+\def\ucr{\scalebox{1}{\stackinset{c}{}{c}{-.2pt}{%
+			\textcolor{white}{\sffamily\bfseries\small ?}}{%
+			\rotatebox{45}{$\blacksquare$}}}}
 % The basic sectioning command.  Example:
 %    \Sec1[intro.scope]{Scope}
 % defines a first-level section whose name is "Scope" and whose short
@@ -185,7 +192,7 @@
       \or\let\s=\paragraph
       \or\let\s=\subparagraph
       \fi%
-\s[#3]{#3\hfill[#2]}\label{#2}\addxref{#2}}
+\s[#3]{\ucr\quad\quad #3\hfill[#2]}}
 
 % A convenience feature (mostly for the convenience of the Project
 % Editor, to make it easy to move around large blocks of text):
@@ -209,10 +216,11 @@
 % Indexing
 
 % locations
-\newcommand{\indextext}[1]{\index[generalindex]{#1}}
-\newcommand{\indexlibrary}[1]{\index[libraryindex]{#1}}
-\newcommand{\indexgram}[1]{\index[grammarindex]{#1}}
-\newcommand{\indeximpldef}[1]{\index[impldefindex]{#1}}
+\newcommand{\indextext}[1]{}
+\newcommand{\indexlibrary}[1]{}
+\newcommand{\indexgram}[1]{}
+\newcommand{\indeximpldef}[1]{}
+
 
 \newcommand{\indexdefn}[1]{\indextext{#1}}
 \newcommand{\indexgrammar}[1]{\indextext{#1}\indexgram{#1}}
@@ -222,6 +230,8 @@
 \newcommand{\idxcode}[1]{#1@\tcode{#1}}
 \newcommand{\idxhdr}[1]{#1@\tcode{<#1>}}
 \newcommand{\idxgram}[1]{#1@\textit{#1}}
+
+\newcommand{\indexlibrarymember}[2]{}
 
 %%--------------------------------------------------
 % General code style
@@ -284,6 +294,10 @@
 \newcommand{\Fundesc}[1]{\Fundescx{#1:}}
 \newcommand{\required}{\Fundesc{Required behavior}}
 \newcommand{\requires}{\Fundesc{Requires}}
+\newcommand{\mandates}{\Fundesc{Mandates}}
+\newcommand{\constraints}{\Fundesc{Constraints}}
+\newcommand{\expects}{\Fundesc{Expects}}
+\newcommand{\ensures}{\Fundesc{Ensures}}
 \newcommand{\effects}{\Fundesc{Effects}}
 \newcommand{\postconditions}{\Fundesc{Postconditions}}
 \newcommand{\postcondition}{\Fundesc{Postcondition}}
@@ -308,10 +322,18 @@
 \newcommand{\dtype}{\Fundesc{Default type}}
 \newcommand{\ctemplate}{\Fundesc{Class template}}
 \newcommand{\templalias}{\Fundesc{Alias template}}
+\newcommand{\pnum}{}
+\newcommand{\idxoldconcept}[1]{Cpp17#1@\textit{Cpp17#1}}
+\newcommand{\libconcept}[1]{\tcode{#1}}
+\newcommand{\oldconcept}[1]{\textit{Cpp17#1}}
+\newcommand{\oldconceptdefn}[1]{\defn{Cpp17#1}}
 
 %% Cross reference
 \newcommand{\xref}{\textsc{See also:}\xspace}
 \newcommand{\xsee}{\textsc{See:}\xspace}
+\newcommand{\tref}[1]{}
+\newcommand{\iref}[1]{}
+\newcommand{\indexhdr}[1]{}
 
 %% NTBS, etc.
 \newcommand{\NTS}[1]{\textsc{#1}\xspace}
@@ -393,11 +415,8 @@
 
 \lstset{language=C++,
         basicstyle=\small\CodeStyle,
-        keywordstyle=,
-        stringstyle=,
         xleftmargin=0em,
         showstringspaces=false,
-        commentstyle=\itshape\rmfamily,
         columns=flexible,
         keepspaces=true,
         texcl=true}

@@ -40,6 +40,13 @@ We propose a function to copy or materialize any range (containers and views ali
 
 \section{Revisions}
 
+\subsection*{Revision 2}
+\begin{itemize}
+	\item Remove the implicit const removal when converting an associative container to a container of pairs
+	\item Use CTAD to determine the value type of the returned container
+	\item Attempt at wording
+\end{itemize}
+
 \subsection*{Revision 1}
 \begin{itemize}
 	\item Split out the proposed constructors for string view and span into separate papers (\cite{P1391} and \cite{P1394} respectively)
@@ -66,10 +73,6 @@ Same<std::vector<long>> auto d = ranges::to<std::vector<long>>(l);
 //Supports converting associative container to sequence containers
 Same<std::vector<std::pair<const int, int>>>
 	auto f = ranges::to<vector<std::pair<const int, int>>>(m);
-
-//Removing the const from the key by default
-Same<std::vector<std::pair<int, int>>> auto e = ranges::to<vector>(m);
-
 
 //Supports converting sequence containers to associative ones
 Same<std::map<int, int>> auto g = f | ranges::to<map>();
@@ -331,55 +334,186 @@ it is a more general solution to provide a solution that is not coupled with eac
 
 \section{Proposed wording}
 
-We do not provide wording at this time, but this is what the interface would look like conceptually.
 
 \begin{quote}
+\begin{addedblock}
 \begin{codeblock}
-namespace ranges {
+	
+namespace std::ranges {
+	
+	// {\expos}
+	template<typename Rng, typename Cont, typename Args...>
+	concept convertible-to-container = 
+	Range<Cont> 
+	&& (!View<Cont>) 
+	&& MoveConstructible<Cont> 
+	&& ConvertibleTo<range_value_t<Rng>, range_value_t<Cont>>
+	&& Constructible<Cont, range_common_iterator_t<Rng>,
+	   range_common_iterator_t<Rng>, Args...>;
+	
+	template <typename C, InputRange R, typename... Args>
+	requires @\EXPO{convertible-to-container<Rng, C>}@ 
+	constexpr auto to(const R & r, Args&&...) -> C;
+	
+	template <template <typename...> typename C, InputRange R, typename... Args>
+	constexpr auto to(const R & r, Args&&...) -> @\seebelow@;
 
-	//1
-	template <Container C, Range R, typename...Arg>
-	constexpr auto to(const R & r, Args...&) -> C;
+	// \expos
+	using @\EXPO{common-iterator-type}@ = common_iterator<iterator_t<R>, sentinel_t<R>>;
 
-	//2
-	template <template <typename...> typename C,
-	          Range R, typename T = range_value_t<R>, typename... Args>
-	constexpr auto to(const R & r, Args...&) -> C<T, Args...>;
-
-	//3
-	template <Container C, typename...Args>
-	constexpr auto to(Args...&&) -> @{\impdef}@;
-
-	//4
-	template <template <typename...> typename C>
-	constexpr auto to(Args...&&) -> @{\impdef}@;
-
-	//5
-	template <Range R>
-	constexpr auto operator|(const R && r, @{\impdef}@});
+	
 }
+
 \end{codeblock}
+
+	%	//forward to operator|
+%	template <typename C, typename...Args> 
+%	constexpr auto to(Args&&...) -> @{\impdef}@;
+%	
+%	//forward to operator|
+%	template<template<typename...> typename C, typename... Args>
+%	constexpr auto to(Args&&...) -> @{\impdef}@;
+%	
+%	
+%	template <InputRange R> 
+%	constexpr auto operator| (const R & r,  @{\impdef}@);
+%	
+%	// \expos
+%	template<class Cont>
+%	struct range-to-closure {
+%		template<InputRange R, class... _Args>
+%		requires convertible-to-container<R, Cont, Args...>
+%		constexpr auto operator()(R&& r, _Args&&... args);
+%	};
+
+\end{addedblock}
 \end{quote}
 
-<<<<<<< HEAD
-Functions 3 and 4 return an implementation defined object that can be passed to the pipe operator(5), 
-and provide an implementation defined way of creating a container of the appropriate type.
-=======
-Functions 3 and 4 return an implementation defined object that can be passed to the pipe operator(5),
-and provide an implementation defined way of creating a container ov the appropriate type.
->>>>>>> refs/remotes/origin/master
+\begin{addedblock}
 
-\tcode{range::to} forwards the range to the container if it is constructible from it.
-If not, it tries to construct the container from the \tcode{begin(range)/end(range)} iterators pair.
-Otherwise, it falls-back to \tcode{ranges::copy}.
-This ensure the most efficient strategy is selected to perform the actual copy.
+In [range.utility] Insert after section [range.dangling]
 
-When Deducing the type of a container from the range's value type,
-if that value type is a pair, std::remove_const is applied to the type of the first element of the deduced pair type.
+\rSec2[range.utility.container]{container conversions}
+
+
+The container conversions functions provide functions that efficiently convert ranges to containers.
+The rvalue overloads of the function ranges::to return an implementation defined object that can be 
+passed to the pipe operator, and provide an implementation defined way of creating a container of 
+the appropriate type. 
+The container is constructed from the begin(range)/end(range)iterators pair.
+\begin{note}
+Implementations are encouraged to reserve the container's memory when the range is a \tcode{SizedRange}
+\end{note}
+
+
+\end{addedblock}	
+
+
+\begin{quote}
+\begin{addedblock}
+\begin{itemdecl}
+template <typename C, InputRange R, typename... Args>
+@\EXPO{convertible-to-container<Rng, C, Args...>}@
+constexpr auto to(const R & r, Args&&... args) -> C;
+\end{itemdecl}
+\begin{itemdescr}
+\returns \tcode{C\{\EXPO{common-iterator-type}(ranges::begin(r)), \\ \EXPO{common-iterator-type}(ranges::end(r)), std::forward<Args>(args)...\}} 
+\end{itemdescr}
+\begin{itemdecl}
+template <template <typename...> typename C,  InputRange R, typename... Args> 
+constexpr auto to(const R & r, Args&&... args) -> Ret (@\seebelow@);
+\end{itemdecl}
+\begin{itemdescr}
+
+The return type \tcode{Ret} is determined in the following way:
+\begin{itemize}
+	\item The type of the expression \\ \tcode{C\{range_common_iterator_t<R>\{\}, range_common_iterator_t<R>\{\}\}, args...\}} \\ if it is valid
+	
+	\item Otherwise \tcode{C<range_value_t<R>, Args...>}
+
+\mandates \tcode{\EXPO{convertible-to-container<Rng, C, Args...>}} is true
+
+\returns \tcode{Ret\{\EXPO{common-iterator-type}(ranges::begin(r)), \\ \EXPO{common-iterator-type}(ranges::end(r)), std::forward<Args>(args)...\}} 
+\end{itemize}
+
+\end{itemdescr}
+
+%\begin{itemdecl}
+%template <typename C, typename... Args> 
+%constexpr auto to(Args&&...) -> @\EXPO{range-to-closure}@;
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%
+%\returns a closure object ??
+%
+%\end{itemdescr}
+%
+%
+%\begin{itemdecl}
+%template<template<class...> typename C, typename... Args>
+%constexpr auto to(Args&&...) ->  @\EXPO{range-to-closure}@;
+%\end{itemdecl}
+%
+%
+%\begin{itemdescr}
+%
+%\returns a closure object ??
+%
+%\end{itemdescr}
+%\begin{itemdecl}
+%template <InputRange R> 
+%constexpr auto operator| (const R & r,  @\EXPO{range-to-closure});
+%\end{itemdecl}
+%\begin{itemdescr}
+%
+%\effects ??
+%
+%\end{itemdescr}
+
+
+\rSec3[range.utility.container.adapters]{\tcode{ranges::to} adaptors}
+
+
+\pnum
+In additions to the functions described above, \tcode{ranges::to} also defines a closure object that accepts a \tcode{ViewableRange} argument and returns a Container such that the expressions \tcode{r | ranges::to<Container>(args...)} and \tcode{ranges::to<Container>(r, args...)} have equivalent semantics.
+\begin{note}
+Container denotes either a class or a class template
+\end{note}.
+
+In the absence of arguments, \tcode{r | ranges::to<Container>} denotes a valid expression equivalent to \tcode{r | ranges::to<Container>()}.
+
+\pnum
+The bitwise OR operator is overloaded for the purpose of chaining \tcode{ranges::to} to the end of an adaptor chain pipeline. 
+
+\pnum
+\begin{example}
+\begin{codeblock}
+list<int> ints{0,1,2,3,4,5};
+
+auto v1 = ints | to<vector>();
+auto v2 = ints | to<vector>;
+auto v3 = ints | to<vector<int>>();
+auto v4 = ints | to<vector<int>>;
+auto v5 = ints | to<vector>(ints);
+auto v6 = ints | to<vector<int>>(ints);
+
+assert(v1 == v2 && v2 == v3 && v3 == v4 && v4 == v5 && v5 == v6);
+
+
+
+\end{codeblock}
+\end{example}
+
+
+
+\end{addedblock}
+\end{quote}
+
 
 \section{Implementation Experience}
 
-Implementations of this proposal are available on in the 1.0 branch of \cite{Range V3} and on \cite{Compiler Explorer} (Incomplete cmcstl2-based prototype).
+Implementations of this proposal are available on in the 1.0 branch of \cite{Range V3} and in \cite{cmcstl2}.
 
 To make sure the parentheses are optional (\tcode{v| ranges::to<vector>;}) our implementations use a default constructed
 tag which dispatch through a function pointer.
@@ -414,8 +548,8 @@ and Tristan Brindle.\\
 \renewcommand{\section}[2]{}%
 \begin{thebibliography}{9}
 
-\bibitem[Compiler Explorer]{Compiler Explorer}
-	\url{https://godbolt.org/z/m1I9NE}
+\bibitem[cmcstl2]{cmcstl2}
+	\url{https://github.com/CaseyCarter/cmcstl2/blob/a7a714a9159b08adeb00a193e77b782846b3b20e/include/stl2/detail/to.hpp}
 
 \bibitem[RangeV3]{Range V3}
     Eric Niebler
