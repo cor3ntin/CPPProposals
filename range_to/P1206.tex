@@ -341,6 +341,10 @@ it is a more general solution to provide a solution that is not coupled with eac
 	
 namespace std::ranges {
 	
+	// \expos
+	template <Range R>
+	using @\EXPO{common-iterator-type}@ = common_iterator<iterator_t<R>, sentinel_t<R>>;
+	
 	// {\expos}
 	template<typename Rng, typename Cont, typename Args...>
 	concept convertible-to-container = 
@@ -348,20 +352,30 @@ namespace std::ranges {
 	&& (!View<Cont>) 
 	&& MoveConstructible<Cont> 
 	&& ConvertibleTo<range_value_t<Rng>, range_value_t<Cont>>
-	&& Constructible<Cont, range_common_iterator_t<Rng>,
-	   range_common_iterator_t<Rng>, Args...>;
+	&& Constructible<Cont, range_common_iterator_t<Rng>, @\EXPO{common-iterator-type}@<Rng>, Args...>;
+	   
+	// \expos
+	template<InputRange R, typename Cont, typename... Args>
+	concept @\EXPO{reserve-assignable}@ = SizedRange<R> 
+	&& Constructible<Cont, Args...>
+	&& MoveConstructible<Cont>
+	&& requires(Cont& mc, const Cont& cc) {
+		{ cc.capacity() } -> Integral;
+		mc.reserve(cc.capacity());
+		requires Assignable<
+			iter_reference_t<iterator_t<Cont>>, 
+			iter_reference_t<iterator_t<R>>
+		>;
+		mc.assign(@\EXPO{common-iterator-type}<R>@(), @\EXPO{common-iterator-type}<R>@());
+	};
 	
 	template <typename C, InputRange R, typename... Args>
-	requires @\EXPO{convertible-to-container<Rng, C>}@ 
+	requires @\EXPO{convertible-to-container<Rng, C, Args...>}@ 
 	constexpr auto to(const R & r, Args&&...) -> C;
 	
 	template <template <typename...> typename C, InputRange R, typename... Args>
 	constexpr auto to(const R & r, Args&&...) -> @\seebelow@;
 
-	// \expos
-	using @\EXPO{common-iterator-type}@ = common_iterator<iterator_t<R>, sentinel_t<R>>;
-
-	
 }
 
 \end{codeblock}
@@ -397,14 +411,7 @@ In [range.utility] Insert after section [range.dangling]
 
 
 The container conversions functions provide functions that efficiently convert ranges to containers.
-The rvalue overloads of the function ranges::to return an implementation defined object that can be 
-passed to the pipe operator, and provide an implementation defined way of creating a container of 
-the appropriate type. 
 The container is constructed from the begin(range)/end(range)iterators pair.
-\begin{note}
-Implementations are encouraged to reserve the container's memory when the range is a \tcode{SizedRange}
-\end{note}
-
 
 \end{addedblock}	
 
@@ -417,7 +424,19 @@ template <typename C, InputRange R, typename... Args>
 constexpr auto to(const R & r, Args&&... args) -> C;
 \end{itemdecl}
 \begin{itemdescr}
-\returns \tcode{C\{\EXPO{common-iterator-type}(ranges::begin(r)), \\ \EXPO{common-iterator-type}(ranges::end(r)), std::forward<Args>(args)...\}} 
+\returns \tcode{C\{\EXPO{common-iterator-type}<R>(ranges::begin(r)), \\ \EXPO{common-iterator-type}<R>(ranges::end(r)), std::forward<Args>(args)...\}}
+
+
+If \tcode{\EXPO{reserve-assignable}<R, C, Args...>} is true, an implementation may return an object initialized in a manner equivalent to:
+
+\begin{codeblock}
+	C c(sdtd::forward<Args>(args)...);
+	c.reserve(ranges::size(r));
+	c.assign(@\EXPO{common-iterator-type}@<R>(ranges::begin(r)), 
+		@\EXPO{common-iterator-type}@<R>(ranges::end(r)));
+\end{codeblock}
+
+
 \end{itemdescr}
 \begin{itemdecl}
 template <template <typename...> typename C,  InputRange R, typename... Args> 
@@ -431,10 +450,22 @@ The return type \tcode{Ret} is determined in the following way:
 	
 	\item Otherwise \tcode{C<range_value_t<R>, Args...>}
 
+\end{itemize}
+
+
 \mandates \tcode{\EXPO{convertible-to-container<Rng, C, Args...>}} is true
 
-\returns \tcode{Ret\{\EXPO{common-iterator-type}(ranges::begin(r)), \\ \EXPO{common-iterator-type}(ranges::end(r)), std::forward<Args>(args)...\}} 
-\end{itemize}
+\returns \tcode{Ret\{\EXPO{common-iterator-type}<R>(ranges::begin(r)), \\ \EXPO{common-iterator-type}<R>(ranges::end(r)), std::forward<Args>(args)...\}}
+
+If \tcode{\EXPO{reserve-assignable}<R, Ret, Args...>} is true, an implementation may return an object initialized in a manner equivalent to:
+
+\begin{codeblock}
+	Ret c(sdtd::forward<Args>(args)...);
+	c.reserve(ranges::size(r));
+	c.assign(@\EXPO{common-iterator-type}@<R>(ranges::begin(r)), 
+		 @\EXPO{common-iterator-type}@<R>(ranges::end(r)));
+\end{codeblock}
+
 
 \end{itemdescr}
 
@@ -495,8 +526,8 @@ auto v1 = ints | to<vector>();
 auto v2 = ints | to<vector>;
 auto v3 = ints | to<vector<int>>();
 auto v4 = ints | to<vector<int>>;
-auto v5 = ints | to<vector>(ints);
-auto v6 = ints | to<vector<int>>(ints);
+auto v5 = to<vector>(ints);
+auto v6 = to<vector<int>>(ints);
 
 assert(v1 == v2 && v2 == v3 && v3 == v4 && v4 == v5 && v5 == v6);
 
