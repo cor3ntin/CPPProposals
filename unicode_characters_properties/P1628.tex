@@ -38,8 +38,8 @@
 
 
 \title{Unicode character properties}
-\docnumber{D1628R0}
-\audience{LEWG}
+\docnumber{P1628R0}
+\audience{SG-16, LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 \begin{document}
@@ -85,12 +85,16 @@ often depend on a small subset of the Unicode properties.
 While the complete Unicode database has a substantial memory footprint, developers should
 not pay for the table they don't use.
 
-
 It also ensures that developers can enforce a specific version of the Unicode Database at compile time and get a
 consistent and predictable run-time behavior.
 
 Given that, and because the API is otherwise non-allocating, there is no reason not to make it \tcode{constexpr}.
-We expect this to be useful in some cases notably to sanitize data at compile time.
+We expect this to be useful in some cases notably to sanitize data at compile time, as well as make possible to use 
+locale-independent Unicode manipulation available on memory constrained devices or devices on which ICU is not available.
+
+The proposed design ultimately strive to fight the incorrect sentiment that Unicode is "bloated" or hard to deploy.
+only the CLDR (Unicode Common Locale Data Repository) or the name/alias properties (which we are not proposing) represent
+a significant amount of data.
 
 
 \subsection{Unicode Versions, Runtime and ABI stability}
@@ -116,7 +120,10 @@ To this effect, we propose the following:
 \subsection{Properties selection}
 
 Not all properties are equally useful.
-We do therefore not propose to standardize deprecated properties, local-specific or algorithm-specific properties.
+We do therefore not propose to standardize deprecated properties, local-specific or algorithm-specific properties. We do not propose the name or alias properties which had a significant amount of data (around 500KB) and is not generally considered useful in most cases.
+Beyond that, given that individual properties are cheap and the proposed design does not incur any cost
+for not used properties, we feel reluctant to further select properties as we are not unicode expert.
+Strictly algorithm-specific properties could be omitted provided the algorithms themselves are provided by the standard library.
 
 
 \subsection{String representation of enumerated property values}
@@ -129,9 +136,8 @@ the use cases are limited and the desired values could be extracted with the cur
 This proposal is implemented in \cite{impl}.
 Several strategies are possible, notably:
 \begin{itemize}
-    \item Put the implementation in a single-header. Compile times can be optimized with the caveat of \tcode{cp_name} which in our implementation declares a few arrays for a total of 380KB - research is on-going to reduce this further but the minimum size should be upward of 200K.
+    \item Put the implementation in a single-header.
     \item Put the implementation in a single module-interface-unit.
-    \item Use compiler intrinsic for the biggest tables, notably \tcode{cp_name}
     \item Use \tcode{is_constant_evaluated} to provide runtime specific implementations.
 \end{itemize}
 
@@ -153,21 +159,10 @@ enum class grapheme_cluster_break;
 enum class sentence_break;
 enum class canonical_combining_class;
 
-//exposition only
-struct codepoint {
-    constexpr codepoint(char8_t c) noexcept : v(c) {}
-    constexpr codepoint(char16_t c) noexcept : v(c) {}
-    constexpr codepoint(char32_t c) noexcept : v(c) {}
-    constexpr operator char32_t() const { return v; };
-    constexpr codepoint(char) = delete;
-    constexpr codepoint(wchar_t) = delete;
-};
-
-
 
 template<uni::version v = uni::version::standard_unicode_version>
 struct script_extensions_view {
-    constexpr script_extensions_view(char32_t c);
+    constexpr script_extensions_view(uint32_t c);
     struct sentinel;
     struct iterator {
         using value_type = script;
@@ -192,35 +187,31 @@ struct script_extensions_view {
 
 
 template<uni::version = uni::version::unassigned>
-constexpr category cp_category(codepoint) noexcept;
+constexpr category cp_category(uint32_t) noexcept;
 
 template<uni::category, uni::version = uni::version::unassigned>
-constexpr bool cp_is(codepoint) noexcept;
+constexpr bool cp_is(uint32_t) noexcept;
 
 template<uni::version = uni::version::unassigned>
-constexpr script cp_script(codepoint) noexcept;
+constexpr script cp_script(uint32_t) noexcept;
 
 template<uni::script, uni::version = uni::version::unassigned>
-constexpr bool cp_is(codepoint) noexcept;
+constexpr bool cp_is(uint32_t) noexcept;
 
 template<uni::version Version = uni::version::unassigne>
-constexpr auto cp_script_extensions(codepoint) noexcept
+constexpr auto cp_script_extensions(uint32_t) noexcept
     -> script_extensions_view<Version>;
 
 template<uni::property, uni::version = uni::version::unassigned>
-constexpr bool cp_is(codepoint) noexcept;
+constexpr bool cp_is(uint32_t) noexcept;
 
-constexpr uni::version cp_age(codepoint) noexcept;
+constexpr uni::version cp_age(uint32_t) noexcept;
 
-constexpr uni::block cp_block(codepoint) noexcept;
+constexpr uni::block cp_block(uint32_t) noexcept;
 
-constexpr bool cp_is_valid(codepoint) noexcept;
-constexpr bool cp_is_assigned(codepoint) noexcept;
-constexpr bool cp_is_ascii(codepoint) noexcept;
-
-constexpr auto cp_name(codepoint) noexcept
-    -> auto ForwardRange<char> @\seebelow@;
-
+constexpr bool cp_is_valid(uint32_t) noexcept;
+constexpr bool cp_is_assigned(uint32_t) noexcept;
+constexpr bool cp_is_ascii(uint32_t) noexcept;
 
 struct numeric_value {
     constexpr double value() const; //not freestanding
@@ -229,7 +220,7 @@ struct numeric_value {
 };
 
 constexpr std::optional<numeric_value>
-cp_numeric_value(codepoint) noexcept;
+cp_numeric_value(uint32_t) noexcept;
 
 }
 
@@ -293,21 +284,6 @@ are the value of the number \tcode{<minor>}\textsubscript{10}.
 
 Given a valid \tcode{uni::version} \tcode{Version},  If \tcode{Version} is equal to \tcode{uni::version::unassigned} then \tcode{UNICODE_VERSION(Version)} is equal to \tcode{uni::version::latest_version}.
 Otherwise, \tcode{UNICODE_VERSION(Version)} is equal to \tcode{Version}.
-
-
-\begin{itemdecl}
-
-struct codepoint;
-
-\end{itemdecl}
-\begin{itemdescr}
-\tcode{codepoint} is an exposition-only(?) type used as parameter of all methods expecting a Unicode code-point. It is implicitly convertible from \tcode{char8_t}, \tcode{char16_t} and \tcode{char32_t}.
-\tcode{codepoint} is implicitly convertible to \tcode{char32_t}.
-\tcode{codepoint} is \emph{not} constructible from  \tcode{char} and  \tcode{wchar_t}.
-
-This ensures the API is not misused on systems where the execution encoding is not a form of UTF.
-
-\end{itemdescr}
 
 
 \begin{itemdecl}
@@ -610,7 +586,7 @@ XID_Start \\
 
 \begin{itemdecl}
 template<uni::version Version = uni::version::unassigned>
-constexpr uni::category cp_category(codepoint cp) noexcept;
+constexpr uni::category cp_category(uint32_t cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -625,7 +601,7 @@ or \tcode{uni::category::unassigned} if \tcode{cp} is not a valid codepoint or w
 
 \begin{itemdecl}
 template<uni::category Category, uni::version Version = uni::version::unassigned>
-constexpr bool cp_is(codepoint cp) noexcept;
+constexpr bool cp_is(uint32_t cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -640,7 +616,7 @@ is  \tcode{Category} and \tcode{false} otherwise.
 
 \begin{itemdecl}
 template<uni::version Version = uni::version::unassigned>
-constexpr script cp_script(codepoint cp) noexcept;
+constexpr script cp_script(uint32_t cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -654,7 +630,7 @@ or \tcode{uni::script::unknown} if \tcode{cp} is not a valid codepoint or was no
 
 \begin{itemdecl}
 template<uni::script Script, uni::version Version = uni::version::unassigned>
-constexpr bool cp_is(codepoint cp) noexcept;
+constexpr bool cp_is(uint32_t cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -668,7 +644,7 @@ is  \tcode{Script} and \tcode{false} otherwise.
 
 \begin{itemdecl}
 template<uni::version Version = uni::version::unassigned>
-constexpr auto cp_script_extensions(codepoint cp) noexcept
+constexpr auto cp_script_extensions(uint32_t cp) noexcept
 -> script_extensions_view<Version>;
 \end{itemdecl}
 
@@ -693,7 +669,7 @@ The order of elements is unspecified
 
 \begin{itemdecl}
 template<uni::property Prop, uni::version Version = uni::version::unassigned>
-constexpr bool cp_is(codepoint cp) noexcept;
+constexpr bool cp_is(uint32_t cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -707,7 +683,7 @@ and \tcode{false} otherwise.
 
 
 \begin{itemdecl}
-constexpr uni::version cp_age(codepoint cp) noexcept;
+constexpr uni::version cp_age(uint32_t cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -718,7 +694,7 @@ constexpr uni::version cp_age(codepoint cp) noexcept;
 
 
 \begin{itemdecl}
-constexpr uni::version cp_block(codepoint cp) noexcept;
+constexpr uni::version cp_block(uint32_t cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -734,7 +710,7 @@ Unassigned codepoints may still have a block value different from \tcode{block::
 
 
 \begin{itemdecl}
-constexpr bool cp_is_valid(codepoint cp) noexcept;
+constexpr bool cp_is_valid(uint32_t cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -745,7 +721,7 @@ constexpr bool cp_is_valid(codepoint cp) noexcept;
 
 \begin{itemdecl}
 template<uni::version Version = uni::version::unassigned>
-constexpr bool cp_is_assigned(codepoint cp) noexcept;
+constexpr bool cp_is_assigned(uint32_t cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -759,7 +735,7 @@ This function is equivalent to \tcode{cp_age(cp) <= UNICODE_VERSION(Version)}
 \end{itemdescr}
 
 \begin{itemdecl}
-constexpr bool cp_is_ascii(codepoint) noexcept;
+constexpr bool cp_is_ascii(uint32_t) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -771,7 +747,7 @@ constexpr bool cp_is_ascii(codepoint) noexcept;
 
 \begin{itemdecl}
 constexpr std::optional<numeric_value>
-cp_numeric_value(codepoint cp) noexcept;
+cp_numeric_value(uint32_t cp) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -786,18 +762,6 @@ Otherwise, returns a \tcode{numeric_value} such that:
 \end{itemize}
 
 \end{itemdescr}
-
-\begin{itemdecl}
-constexpr auto cp_name(codepoint) noexcept
--> auto ForwardRange<char> @\seebelow@;
-\end{itemdecl}
-
-\begin{itemdescr}
-
-\returns A \tcode{View} over the characters representing the \tcode{Name} property associated with this codepoint or an empty range if \tcode{cp} is not a valid assigned codepoint.
-
-\end{itemdescr}
-
 
 
 \end{quote}

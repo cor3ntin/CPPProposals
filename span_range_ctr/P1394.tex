@@ -13,11 +13,11 @@
 
 
 \lstdefinestyle{base}{
-  language=c++,
-  breaklines=false,
-  basicstyle=\ttfamily\color{black},
-  moredelim=**[is][\color{green!50!black}]{@}{@},
-  escapeinside={(*@}{@*)}
+language=c++,
+breaklines=false,
+basicstyle=\ttfamily\color{black},
+moredelim=**[is][\color{green!50!black}]{@}{@},
+escapeinside={(*@}{@*)}
 }
 
 \newcommand{\cc}[1]{\mintinline{c++}{#1}}
@@ -25,8 +25,8 @@
 
 
 \title{Range constructor for \tcode{std::span}}
-\docnumber{P1394D1}
-\audience{LEWG}
+\docnumber{P1394R2}
+\audience{LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Casey Carter}{casey@carter.net}
 
@@ -47,7 +47,7 @@ Before & After\\ \hline
 \begin{minipage}[t]{0.5\textwidth}
 \begin{minted}[fontsize=\footnotesize]{cpp}
 std::vector<int> v(42);
-std::span<int> foo = 
+std::span<int> foo =
     v | view::take(3); //ill-formed
 \end{minted}
 \end{minipage}
@@ -108,9 +108,9 @@ However, while defined, \tcode{Container} is not a concept and as such \tcode{Co
 Furthermore, there exist some non-container ranges that would otherwise be valid ranges to construct span from.
 As such span as currently specified fits poorly with the iterators / ranges model of the rest of the standard library.
 
-The intent of span was always to be constructible from a wide number of compatible types, 
+The intent of span was always to be constructible from a wide number of compatible types,
 whether standard contiguous containers, non-standard equivalent types, or views.
-This proposal ensure that span, especially when used as parameter of a function will be constructible 
+This proposal ensure that span, especially when used as parameter of a function will be constructible
 from all compatible types while offering stronger and more consistent (in regard to Range) lifetime guarantees.
 
 
@@ -130,14 +130,14 @@ Because \tcode{std::extent} equals to 0 for types without static extent, and bec
 
 
 The following wording assumes \tcode{std::to_address} will be specialized for \tcode{ContiguousIterator} as proposed
-in \cite{P1474}.  
+in \cite{P1474}.
 
 
 Change in \textbf{[views.span] 21.7.3}:
 \begin{quote}
 \begin{codeblock}
 
- // [span.cons], constructors, copy, and assignment
+// [span.cons], constructors, copy, and assignment
 constexpr span() noexcept;
 @\added{template <class It>}@
 constexpr span( @\removed{pointer ptr}@ @\added{It begin}@, index_type count);

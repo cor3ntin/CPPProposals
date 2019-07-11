@@ -25,8 +25,8 @@ escapeinside={(*@}{@*)}
 
 
 \title{Range constructor for std::string\_view}
-\docnumber{D1391R1}
-\audience{LEWG}
+\docnumber{P1391R2}
+\audience{LEWG, LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 
@@ -83,6 +83,35 @@ Finally, this makes contiguous views operating on characters easier to use with 
     \item The construction is implicit because it is cheap and a contiguous range of character is the same platonic thing as a string_view.
 
 \end{itemize}
+
+
+\section{Arrays and null terminated strings}
+
+During review by LWG, it was noticed that the proposed change introduces this arguably surprising behavior:
+
+\begin{codeblock}
+
+char const t[] = "text";
+std::string_view s(t); // s.size() == 4;
+
+
+std::span<char> tv(t);
+std::string_view s(tv); // s.size() == 5;
+
+\end{codeblock}
+
+This is not an ambiguity of the overload set but rather a consequences of both null-terminated terminated strings and array of characters being both
+sequence of characters with array of characters implicitly convertible to pointers.
+
+To be consistent with C++17 and not introduce a behavior change, we make sure arrays of characters decay to const charT*.
+We think this proposed design is consistent with existing practices of having to be explicit about the size in the presence of embedded nulls as well as the general behavior of C functions, and does not introduce a new problem - how unfortunate that problem might be.
+It is also worth noting that while embedded nulls have a lot of known usages they are not the common case.
+
+Finding a better solution to that problem is not possible at the level of this proposal and would require major breaking language changes.
+
+
+
+
 
 \section{Proposed wording}
 
