@@ -303,6 +303,7 @@
 \newcommand{\postcondition}{\Fundesc{Postcondition}}
 \newcommand{\preconditions}{\requires}
 \newcommand{\precondition}{\requires}
+\newcommand{\equivalent}{\Fundesc{Equivalent to}}
 \newcommand{\returns}{\Fundesc{Returns}}
 \newcommand{\throws}{\Fundesc{Throws}}
 \newcommand{\default}{\Fundesc{Default behavior}}

@@ -183,8 +183,7 @@ Indeed, given all containers are ranges (ie: an iterator-sentinel pair) the abov
 \end{codeblock}
 
 
-The above example is a common pattern as it is frequently preferable to copy the content of a \cc{std::list} to
-a \cc{std::vector} before feeding it an algorithm and then copying it back to a \cc{std::vector}.\\
+The above example is a common pattern as it is frequently preferable to copy the content of a \cc{std::list} to a \cc{std::vector} before feeding it an algorithm and then copying it back to a \cc{std::vector}.\\
 
 As all containers and views are ranges, it is logical they can themselves be easily built out of ranges.
 
@@ -334,6 +333,9 @@ it is a more general solution to provide a solution that is not coupled with eac
 
 \section{Proposed wording}
 
+Wording is relative to \cite{N4820}.
+
+Add to the synopsis in [ranges.syn]:
 
 \begin{quote}
 \begin{addedblock}
@@ -353,190 +355,124 @@ namespace std::ranges {
 	&& MoveConstructible<Cont> 
 	&& ConvertibleTo<range_value_t<Rng>, range_value_t<Cont>>
 	&& Constructible<Cont, range_common_iterator_t<Rng>, @\EXPO{common-iterator-type}@<Rng>, Args...>;
-	   
-	// \expos
-	template<InputRange R, typename Cont, typename... Args>
-	concept @\EXPO{reserve-assignable}@ = SizedRange<R> 
-	&& Constructible<Cont, Args...>
-	&& MoveConstructible<Cont>
-	&& requires(Cont& mc, const Cont& cc) {
-		{ cc.capacity() } -> Integral;
-		mc.reserve(cc.capacity());
-		requires Assignable<
-			iter_reference_t<iterator_t<Cont>>, 
-			iter_reference_t<iterator_t<R>>
-		>;
-		mc.assign(@\EXPO{common-iterator-type}<R>@(), @\EXPO{common-iterator-type}<R>@());
-	};
 	
-	template <typename C, InputRange R, typename... Args>
-	requires @\EXPO{convertible-to-container<Rng, C, Args...>}@ 
-	constexpr auto to(const R & r, Args&&...) -> C;
-	
-	template <template <typename...> typename C, InputRange R, typename... Args>
-	constexpr auto to(const R & r, Args&&...) -> @\seebelow@;
-
+	using to = \EXPO{implementation-specified};
 }
 
 \end{codeblock}
-
-	%	//forward to operator|
-%	template <typename C, typename...Args> 
-%	constexpr auto to(Args&&...) -> @{\impdef}@;
-%	
-%	//forward to operator|
-%	template<template<typename...> typename C, typename... Args>
-%	constexpr auto to(Args&&...) -> @{\impdef}@;
-%	
-%	
-%	template <InputRange R> 
-%	constexpr auto operator| (const R & r,  @{\impdef}@);
-%	
-%	// \expos
-%	template<class Cont>
-%	struct range-to-closure {
-%		template<InputRange R, class... _Args>
-%		requires convertible-to-container<R, Cont, Args...>
-%		constexpr auto operator()(R&& r, _Args&&... args);
-%	};
-
 \end{addedblock}
 \end{quote}
 
-\begin{addedblock}
-
-In [range.utility] Insert after section [range.dangling]
-
-\rSec2[range.utility.container]{container conversions}
-
-
-The container conversions functions provide functions that efficiently convert ranges to containers.
-The container is constructed from the begin(range)/end(range)iterators pair.
-
-\end{addedblock}	
-
+Insert into [range.req] a new section describing convertible ranges after [range.view]:
 
 \begin{quote}
 \begin{addedblock}
+
+\rSec1[range.convertible]{Container-Convertible Ranges}
+
+A range is convertible to a container if it is a \tcode{View}, if construction of the container using its \EXPO{common-iterator-type} plus any additionally specified arguments is well-formed, and the value type of the range is convertible to the value type of the container.
+
+\begin{codeblock}
+// \expos
+template <Range R>
+	using @\EXPO{common-iterator-type}@ = common_iterator<iterator_t<R>, sentinel_t<R>>;
+
+// {\expos}
+template<typename Rng, typename Cont, typename Args...>
+concept convertible-to-container = 
+	Range<Cont> 
+	&& (!View<Cont>) 
+	&& MoveConstructible<Cont> 
+	&& ConvertibleTo<range_value_t<Rng>, range_value_t<Cont>>
+	&& Constructible<Cont, range_common_iterator_t<Rng>, @\EXPO{common-iterator-type}@<Rng>, Args...>;
+
+\end{codeblock}
+\end{addedblock}
+\end{quote}
+
+In [range.adaptors], insert a new section [range.to]:
+
+\begin{quote}
+\begin{addedblock}
+
+\rSec2[range.to]{To}
+
+\pnum \textsuperscript{1} \tcode{ranges::to} denotes a customization point object [\href{http://eel.is/c++draft/customization.point.object}{customization.point.object}]. It is a class template whose first template argument receives either a class or a class template. facilitates explicit container conversion from ranges to containers by using the \tcode{ranges::begin} and \tcode{ranges::end} functions on the input range to create the specified container type. The type of `ranges::to` is implementation defined.
+
+\begin{itemdecl}
+	template <typename C>
+	class @\EXPO{implementation-specified}@ {
+		// @\EXPO{see-below}@
+	};
+\end{itemdecl}
+
+\pnum \textsuperscript{2} It can be invoked, as if it had the following function call operators defined on it:
+
 \begin{itemdecl}
 template <typename C, InputRange R, typename... Args>
 @\EXPO{convertible-to-container<Rng, C, Args...>}@
-constexpr auto to(const R & r, Args&&... args) -> C;
+constexpr auto operator()(const R & r, Args&&... args) -> C;
 \end{itemdecl}
 \begin{itemdescr}
-\returns \tcode{C\{\EXPO{common-iterator-type}<R>(ranges::begin(r)), \\ \EXPO{common-iterator-type}<R>(ranges::end(r)), std::forward<Args>(args)...\}}
-
-
-If \tcode{\EXPO{reserve-assignable}<R, C, Args...>} is true, an implementation may return an object initialized in a manner equivalent to:
-
-\begin{codeblock}
-	C c(sdtd::forward<Args>(args)...);
-	c.reserve(ranges::size(r));
-	c.assign(@\EXPO{common-iterator-type}@<R>(ranges::begin(r)), 
-		@\EXPO{common-iterator-type}@<R>(ranges::end(r)));
-\end{codeblock}
-
+\pnum \textsuperscript{3} \returns \equivalent \tcode{C\{\EXPO{common-iterator-type}<R>(ranges::begin(r)), \\ \EXPO{common-iterator-type}<R>(ranges::end(r)), std::forward<Args>(args)...\}}
 
 \end{itemdescr}
 \begin{itemdecl}
-template <template <typename...> typename C,  InputRange R, typename... Args> 
-constexpr auto to(const R & r, Args&&... args) -> Ret (@\seebelow@);
+template <template <typename...> typename C, typename R, typename... Args> 
+constexpr auto operator()(const Rng& r, Args&&... args) -> To (@\seebelow@);
 \end{itemdecl}
 \begin{itemdescr}
 
-The return type \tcode{Ret} is determined in the following way:
-\begin{itemize}
-	\item The type of the expression \\ \tcode{C\{range_common_iterator_t<R>\{\}, range_common_iterator_t<R>\{\}\}, args...\}} \\ if it is valid
-	
-	\item Otherwise \tcode{C<range_value_t<R>, Args...>}
+\pnum \textsuperscript{4} \mandates \tcode{\EXPO{convertible-to-container<R, C, Args...>}} is true.
 
+\pnum \textsuperscript{5} Let \tcode{To} be:
+\begin{itemize}
+	\item \tcode{decltype(C\{range_common_iterator_t<R>\{\}, range_common_iterator_t<R>\{\}\}, forward<Args>(args)...\})}, if the expression is well-formed;
+	\item otherwise, \tcode{C<range_value_t<R>, Args...>}.
 \end{itemize}
 
-
-\mandates \tcode{\EXPO{convertible-to-container<Rng, C, Args...>}} is true
-
-\returns \tcode{Ret\{\EXPO{common-iterator-type}<R>(ranges::begin(r)), \\ \EXPO{common-iterator-type}<R>(ranges::end(r)), std::forward<Args>(args)...\}}
-
-If \tcode{\EXPO{reserve-assignable}<R, Ret, Args...>} is true, an implementation may return an object initialized in a manner equivalent to:
-
-\begin{codeblock}
-	Ret c(sdtd::forward<Args>(args)...);
-	c.reserve(ranges::size(r));
-	c.assign(@\EXPO{common-iterator-type}@<R>(ranges::begin(r)), 
-		 @\EXPO{common-iterator-type}@<R>(ranges::end(r)));
-\end{codeblock}
-
+\pnum \textsuperscript{6} \returns \equivalent \tcode{To\{\EXPO{common-iterator-type}<R>(ranges::begin(r)), \\ \EXPO{common-iterator-type}<R>(ranges::end(r)), forward<Args>(args)...\}}
 
 \end{itemdescr}
 
-%\begin{itemdecl}
-%template <typename C, typename... Args> 
-%constexpr auto to(Args&&...) -> @\EXPO{range-to-closure}@;
-%\end{itemdecl}
-%
-%\begin{itemdescr}
-%
-%\returns a closure object ??
-%
-%\end{itemdescr}
-%
-%
-%\begin{itemdecl}
-%template<template<class...> typename C, typename... Args>
-%constexpr auto to(Args&&...) ->  @\EXPO{range-to-closure}@;
-%\end{itemdecl}
-%
-%
-%\begin{itemdescr}
-%
-%\returns a closure object ??
-%
-%\end{itemdescr}
-%\begin{itemdecl}
-%template <InputRange R> 
-%constexpr auto operator| (const R & r,  @\EXPO{range-to-closure});
-%\end{itemdecl}
-%\begin{itemdescr}
-%
-%\effects ??
-%
-%\end{itemdescr}
+\rSec3[range.to.adaptor]{To adaptors}
 
+\pnum \textsuperscript{1} \tcode{ranges::to} is also a \href{http://eel.is/c++draft/range.adaptors#def:range_adaptors}{\EXPO{range adaptor closure object}} that accepts a \tcode{ViewableRange} argument and returns an object of type \tcode{Container} such that the following expressions are equivalent and yield a container:
 
-\rSec3[range.utility.container.adapters]{\tcode{ranges::to} adaptors}
+\begin{codeblock}
+	r | ranges::to<Container>(args...)
+	ranges::to<Container>(r, args...)
+\end{codeblock}
 
-
-\pnum
-In additions to the functions described above, \tcode{ranges::to} also defines a closure object that accepts a \tcode{ViewableRange} argument and returns a Container such that the expressions \tcode{r | ranges::to<Container>(args...)} and \tcode{ranges::to<Container>(r, args...)} have equivalent semantics.
+\pnum \textsuperscript{2}
 \begin{note}
-Container denotes either a class or a class template
+\tcode{Container} denotes either a class or a class template.
 \end{note}.
 
-In the absence of arguments, \tcode{r | ranges::to<Container>} denotes a valid expression equivalent to \tcode{r | ranges::to<Container>()}.
+\pnum \textsuperscript{3} In the absence of arguments, the following expressions are equivalent:
+\begin{codeblock}
+	r | ranges::to<Container>
+	r | ranges::to<Container>()
+	ranges::to<Container>(r)
+\end{codeblock}
 
-\pnum
-The bitwise OR operator is overloaded for the purpose of chaining \tcode{ranges::to} to the end of an adaptor chain pipeline. 
+\pnum \textsuperscript{4} The bitwise OR operator is overloaded for the purpose of chaining \tcode{ranges::to} to the end of a \EXPO{range adaptors} chain pipeline.
 
 \pnum
 \begin{example}
 \begin{codeblock}
 list<int> ints{0,1,2,3,4,5};
 
-auto v1 = ints | to<vector>();
-auto v2 = ints | to<vector>;
-auto v3 = ints | to<vector<int>>();
-auto v4 = ints | to<vector<int>>;
-auto v5 = to<vector>(ints);
-auto v6 = to<vector<int>>(ints);
+auto v1 = ints | ranges::to<vector>();
+auto v2 = ints | ranges::to<vector>;
+auto v3 = ints | ranges::to<vector<int>>();
+auto v4 = ints | ranges::to<vector<int>>;
+auto v5 = ranges::to<vector>(ints);
+auto v6 = ranges::to<vector<int>>(ints);
 
 assert(v1 == v2 && v2 == v3 && v3 == v4 && v4 == v5 && v5 == v6);
-
-
-
 \end{codeblock}
 \end{example}
-
-
 
 \end{addedblock}
 \end{quote}
@@ -647,6 +583,11 @@ Eric Niebler
     Jeffrey Yasskin
     \emph{[Ranges] Traversable arguments for container constructors and methods}\newline
     \url{https://wg21.link/n3686}
+    
+\bibitem[N4820]{N4820}
+    Richard Smith
+    \emph{Working Draft, Standard for Programming Language C++}\newline
+    \url{https://wg21.link/n4820}
 
 \bibitem[P1072R1]{P1072R1}
 	Chris Kennelly, Mark Zeren
