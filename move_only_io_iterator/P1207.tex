@@ -11,7 +11,7 @@
 \usepackage{mathrsfs}     % mathscr font
 
 \title{Movability of Single-pass Iterators}
-\docnumber{D1207R2}
+\docnumber{P1207R4}
 \audience{LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -28,6 +28,13 @@
 
 \hypertarget{changes}{%
 	\section{Changes}\label{changes}}
+
+\hypertarget{revision-3}{%
+	\subsection{Revision 3}\label{revision-3}}
+
+\begin{itemize}
+	\item tweak wording
+\end{itemize}
 
 \hypertarget{revision-2}{%
 	\subsection{Revision 2}\label{revision-2}}
@@ -769,6 +776,7 @@ gave tremendously helpful feedbacks during the writing of this paper.
 
 \section{Wording}
 
+Wording is relative to \cite{N4820}.
 
 \rSec2[iterator.concepts]{Iterator concepts}
 
@@ -785,7 +793,7 @@ nor is the type required to be \libconcept{EqualityComparable}.
 \begin{codeblock}
 	template<class I>
 	concept WeaklyIncrementable =
-	@\changed{Semiregular}{Movable}@<I> &&
+	@\changed{Semiregular}{DefaultConstructible<I> \&\& Movable}@<I> &&
 	requires(I i) {
 		typename iter_difference_t<I>;
 		requires SignedIntegral<iter_difference_t<I>>;
@@ -810,7 +818,7 @@ both pre- and post-increment, \tcode{i} is said to be \term{incrementable}.
 
 \pnum
 \begin{note}
-	For \added{\tcode{CopyConstructible}} \tcode{WeaklyIncrementable} types, \tcode{a} equals \tcode{b} does not imply that \tcode{++a}
+	For \tcode{WeaklyIncrementable} types, \tcode{a} equals \tcode{b} does not imply that \tcode{++a}
 	equals \tcode{++b}. (Equality does not guarantee the substitution property or referential
 	transparency.) Algorithms on weakly incrementable types should never attempt to pass
 	through the same incrementable value twice. They should be single-pass algorithms. These algorithms
@@ -885,7 +893,7 @@ to provide a richer set of iterator movements (\ref{iterator.concept.forward},
 \begin{addedm}
 \begin{note}
 	Unlike the \oldconcept{Iterator} requirements\iref{input.iterators},
-	the \libconcept{Iterator} concept does not requires copyability of single-pass iterators.
+	the \libconcept{Iterator} concept does not require copyability.
 \end{note}
 \end{addedm}
 
@@ -1041,7 +1049,7 @@ implementations.
 
 \indexlibrary{\idxcode{next}}%
 \begin{itemdecl}
-	template<@\added{Forward}@Iterator I>
+	template<Iterator I>
 	constexpr I ranges::next(I x);
 \end{itemdecl}
 
@@ -1052,7 +1060,7 @@ implementations.
 
 \indexlibrary{\idxcode{next}}%
 \begin{itemdecl}
-	template<@\added{Forward}Iterator I>
+	template<Iterator I>
 	constexpr I ranges::next(I x, iter_difference_t<I> n);
 \end{itemdecl}
 
@@ -1063,7 +1071,7 @@ implementations.
 
 \indexlibrary{\idxcode{next}}%
 \begin{itemdecl}
-	template<@\added{Forward}Iterator I, Sentinel<I> S>
+	template<Iterator I, Sentinel<I> S>
 	constexpr I ranges::next(I x, S bound);
 \end{itemdecl}
 
@@ -1074,7 +1082,7 @@ implementations.
 
 \indexlibrary{\idxcode{next}}%
 \begin{itemdecl}
-	template<@\added{Forward}Iterator I, Sentinel<I> S>
+	template<Iterator I, Sentinel<I> S>
 	constexpr I ranges::next(I x, iter_difference_t<I> n, S bound);
 \end{itemdecl}
 
@@ -1128,7 +1136,7 @@ copying with moving.
 			template<class U> constexpr move_iterator(const move_iterator<U>& u);
 			template<class U> constexpr move_iterator& operator=(const move_iterator<U>& u);
 			
-			constexpr iterator_type base() const;
+			constexpr iterator_type base() const @\added{\&}@;
 			@\added{constexpr iterator_type base() \&\&;}@
 			constexpr reference operator*() const;
 			
@@ -1227,7 +1235,7 @@ or model
 \begin{itemdescr}
 	\pnum
 	\effects Constructs a \tcode{move_iterator}, initializing
-	\tcode{current} with \tcode{i}.
+	\tcode{current} with \changed{\tcode{i}}{\tcode{std::move(i)}}.
 \end{itemdescr}
 
 
@@ -1238,8 +1246,8 @@ or model
 
 \begin{itemdescr}
 	\pnum
-	\mandates \tcode{U} is convertible to \tcode{Iterator} \added{and \tcode{Iterator} is \tcode{CopyConstructible}}.
-	
+	\mandates \tcode{U} is convertible to \tcode{Iterator}.
+
 	\pnum
 	\effects Constructs a \tcode{move_iterator}, initializing
 	\tcode{current} with \tcode{u.base()}.
@@ -1248,6 +1256,8 @@ or model
 \indexlibrarymember{operator=}{move_iterator}%
 \begin{itemdecl}
 	template<class U> constexpr move_iterator& operator=(const move_iterator<U>& u);
+
+	
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -1263,14 +1273,17 @@ or model
 
 \indexlibrarymember{base}{move_iterator}%
 \begin{itemdecl}
-	constexpr Iterator base() const;
+	constexpr Iterator base() const @\added{\&};
 \end{itemdecl}
 
 \begin{itemdescr}
 	\pnum
-	\begin{addedm}
-		\constraints \tcode{CopyConstructible<Iterator>}
-	\end{addedm}
+	\begin{addedblock}
+		\pnum
+		\constraints \tcode{Iterator} satisfies \tcode{CopyConstructible}.	
+		
+		\expects \tcode{Iterator} models \tcode{CopyConstructible}.
+	\end{addedblock}
 	
 	\returns \tcode{current}.
 \end{itemdescr}
@@ -1285,7 +1298,7 @@ or model
 
 \begin{itemdescr}
 	\pnum
-	\returns \tcode{std::move(current);}
+	\returns \tcode{std::move(current).}
 \end{itemdescr}
 \end{addedm}
 
@@ -1333,10 +1346,6 @@ or model
 
 \begin{itemdescr}
 	\pnum
-	\begin{addedm}
-		\mandates
-		\tcode{CopyConstructible<Iterator>}
-	\end{addedm}
 
 	\effects
 	If \tcode{Iterator} models \libconcept{ForwardIterator}, equivalent to:
@@ -1466,13 +1475,13 @@ equality comparison operators appropriately.
 			constexpr common_iterator(S s);
 			template<class I2, class S2>
 			requires ConvertibleTo<const I2&, I> && ConvertibleTo<const S2&, S>
-			@\added{\&\& CopyConstructible<I>}@
 			constexpr common_iterator(const common_iterator<I2, S2>& x);
 			
 			template<class I2, class S2>
 			requires ConvertibleTo<const I2&, I> && ConvertibleTo<const S2&, S> &&
 			Assignable<I&, const I2&> && Assignable<S&, const S2&>
 			common_iterator& operator=(const common_iterator<I2, S2>& x);
+			
 			
 			decltype(auto) operator*();
 			decltype(auto) operator*() const
@@ -1584,7 +1593,6 @@ The nested \grammarterm{typedef-name}s of the specialization of
 \begin{itemdecl}
 	template<class I2, class S2>
 	requires ConvertibleTo<const I2&, I> && ConvertibleTo<const S2&, S>
-	@\added{\&\& CopyConstructible<I>}@
 	constexpr common_iterator(const common_iterator<I2, S2>& x);
 \end{itemdecl}
 
@@ -1720,10 +1728,6 @@ The nested \grammarterm{typedef-name}s of the specialization of
 
 \begin{itemdescr}
 	\pnum
-	\begin{addedm}
-		\mandates
-		\tcode{CopyConstructible<I>}
-	\end{addedm}
 
 	\expects \tcode{holds_alternative<I>(v_)}.
 	
@@ -1791,9 +1795,10 @@ refer to the same (possibly past-the-end) element.
 			template<class I2>
 			requires Assignable<I&, const I2&>
 			constexpr counted_iterator& operator=(const counted_iterator<I2>& x);
-			
-			constexpr I base() const;
+			constexpr I base() const @\added{\& requires CopyConstructible<I>}@;
 			@\added{constexpr I base() \&\&;}@
+			
+			
 			constexpr iter_difference_t<I> count() const noexcept;
 			constexpr decltype(auto) operator*();
 			constexpr decltype(auto) operator*() const
@@ -1911,10 +1916,6 @@ refer to the same (possibly past-the-end) element.
 
 \begin{itemdescr}
 	\pnum
-\begin{addedm}
-	\mandates
-	\tcode{CopyConstructible<I>}
-\end{addedm}
 	
 	\effects
 	Initializes \tcode{current} with \tcode{x.current} and
@@ -1942,16 +1943,13 @@ refer to the same (possibly past-the-end) element.
 
 \indexlibrarymember{base}{counted_iterator}%
 \begin{itemdecl}
-	constexpr I base() const;
+	constexpr I base() const @\added{\& requires CopyConstructible<I>}@;
 \end{itemdecl}
 
 \begin{itemdescr}
-	\pnum
-	\begin{addedm}
-	\constraints \tcode{CopyConstructible<I>}
-	\end{addedm}	
-	
+
 	\returns \tcode{current}.
+
 \end{itemdescr}
 
 
@@ -1964,7 +1962,7 @@ refer to the same (possibly past-the-end) element.
 	\end{itemdecl}
 	\begin{itemdescr}
 		\pnum	
-		\returns \tcode{std::move(current);}
+		\returns \tcode{std::move(current).}
 
 	\end{itemdescr}
 
@@ -2036,9 +2034,6 @@ refer to the same (possibly past-the-end) element.
 
 \begin{itemdescr}
 	\pnum
-\begin{addedm}
-	\mandates \tcode{CopyConstructible<I>}
-\end{addedm}
 	
 	\expects \tcode{length > 0}.
 	
@@ -2232,7 +2227,12 @@ refer to the same (possibly past-the-end) element.
 	\bibitem[P1035]{P1035}
 	Christopher Di Bella
 	\emph{Input range adaptors}\newline
-	\url{https://wg21.link/P1035}	
+	\url{https://wg21.link/P1035}
+	
+	\bibitem[N4820]{N4820}
+	Richard Smith
+	\emph{Working Draft, Standard for Programming Language C++}\newline
+	\url{https://wg21.link/n4820}
 	
 	
 \end{thebibliography}

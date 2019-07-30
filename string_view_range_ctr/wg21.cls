@@ -108,7 +108,7 @@
 
 %%--------------------------------------------------
 %% Difference markups
-\definecolor{addclr}{rgb}{0,.39,0}
+\definecolor{addclr}{rgb}{0,.6,.6}
 \definecolor{remclr}{rgb}{1,0,0}
 \definecolor{noteclr}{rgb}{0,0,1}
 

@@ -141,9 +141,9 @@ public:
 };
 @\added{template<class R>}@
 @\added{basic_string_view(const R\&)}@
-@\added{    -> basic_string_view<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>>;}@
+@\added{    -> basic_string_view<iter_value_t<ranges::iterator_t<R>>>;}@
 @\added{template<class It, class End>}@
-@\added{basic_string_view(It, End) -> basic_string_view<remove_reference_t<iter_reference_t<It>>>;}@
+@\added{basic_string_view(It, End) -> basic_string_view<iter_reference_t<It>>;}@
 
 \end{codeblock}
 \end{quote}
@@ -163,16 +163,21 @@ constexpr basic_string_view(const R& r);
 \begin{itemdescr}
     \constraints
     \begin{itemize}
-        \item \tcode{R} models \tcode{ranges::ContiguousRange},
-        \item \tcode{ranges::SizedRange<const R>} is true,
-        \item \tcode{Same<iter_value_t<iterator_t<const R>>, charT>} is true,
+        \item \tcode{const R} satisfies \tcode{ranges::ContiguousRange},
+        \item \tcode{const R} satisfies \tcode{ranges::SizedRange},
+        \item \tcode{is_same_v<iter_value_t<iterator_t<const R>>, charT>} is true,
         \item \tcode{is_convertible_v<const R\&, const charT*>} is \tcode{false},
-        \item \tcode{R} does not derive from a specialization of \tcode{std::basic\_string},
-        \item \tcode{R} does not derive from a specialization of \tcode{std::basic\_string\_view}.
+        \item If the qualified-id \tcode{R::traits_type} is valid and denotes a type, \tcode{is_same_v<R::traits\_type,traits>} is true.
     \end{itemize}
+ 
+	\expects
+	 \begin{itemize}
+		\item \tcode{const R} models \tcode{ranges::ContiguousRange},
+		\item \tcode{const R} models \tcode{ranges::SizedRange}.
+	\end{itemize}
 
     \effects
-    Constructs a \tcode{basic\_string\_view} over the \tcode{ContiguousRange} \tcode{r} by initializing \tcode{data\_} with \tcode{ranges::data(r)} and \tcode{size\_} with \tcode{ranges::size(r)}.
+    Initialize \tcode{data\_} with \tcode{ranges::data(r)} and \tcode{size\_} with \tcode{ranges::size(r)}.
 
 
     \throws
@@ -191,22 +196,27 @@ constexpr basic_string_view(It begin, End end);
 \begin{itemdescr}
     \constraints
     \begin{itemize}
-        \item \tcode{It} models \tcode{ContiguousIterator},
-        \item \tcode{End} models \tcode{SizedSentinel<It>},
-        \item \tcode{Same<iter_value_t<It>, charT>} is true,
-        \item \tcode{It} does not derive from an instantiation of  \tcode{std::basic_string::iterator} or  \tcode{std::basic_string::const_iterator},
-        \item \tcode{It} does not derive from an instantiation of  \tcode{std::basic_string_view::iterator},
-        \tcode{std::basic_string_view::const_iterator},
-        \item \tcode{It} and \tcode{End} are not of the same type or \tcode{End} is not convertible to a pointer of \tcode{charT}.
+        \item \tcode{It} satisfies \tcode{ContiguousIterator},
+        \item \tcode{End} satisfies \tcode{SizedSentinel<It>},
+        \item \tcode{is_same_v<iter_value_t<It>, charT>} is true.
+        \item \tcode{is_convertible<End, size_type>} is false.
     \end{itemize}
 
     \expects
-    \range{begin}{end} shall be a valid range.
+    \begin{itemize}
+	    \item \range{begin}{end} is a valid range,
+	    \item \tcode{It} models \tcode{ContiguousIterator},
+    	\item \tcode{End} models \tcode{SizedSentinel<It>}.
+	\end{itemize}
 
     \effects
-    Constructs a \tcode{basic\_string\_view} over the range [begin, end) by initializing \tcode{data_} with \tcode{data(begin)} and \tcode{size_} with \tcode{distance(begin, end)}.
+    Initialize
+    
+    \begin{itemize}
+    	\item \tcode{data_} with \tcode{addressof(*begin)} if \tcode{begin != end} is true, or \tcode{nullptr} otherwise,
+    	\item \tcode{size_} with \tcode{ranges::distance(begin, end)}.
+    \end{itemize}
 
-    %
 \end{itemdescr}
 \end{addedblock}
 \end{quote}
@@ -220,23 +230,23 @@ Add a new section [string.view.deduction] to describe the following deduction gu
 \begin{addedblock}
 \begin{itemdecl}
 template <class It, class End>
-basic_string_view(It, End) -> basic_string_view<remove_reference_t<iter_reference_t<It>>>
+basic_string_view(It, End) -> basic_string_view<iter_value_t<It>>;
 \end{itemdecl}
 \begin{itemdescr}
     \constraints
     \begin{itemize}
-        \item \tcode{It} models \tcode{ranges::ContiguousIterator},
-        \item \tcode{End} models \tcode{SizedSentinel<It>}.
+        \item \tcode{It} satisfies \tcode{ContiguousIterator},
+        \item \tcode{End} satisfies \tcode{SizedSentinel<It>}.
     \end{itemize}
 \end{itemdescr}
 
 \begin{itemdecl}
 template<class R>
 basic_string_view(const R&)
--> basic_string_view<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>
+-> basic_string_view<iter_value_t<ranges::iterator_t<R>>>;
 \end{itemdecl}
 \begin{itemdescr}
-    \constraints \tcode{R} models \tcode{ranges::ContiguousRange}.
+    \constraints \tcode{const R} satisfies \tcode{ranges::ContiguousRange}.
 \end{itemdescr}
 
 \end{addedblock}
