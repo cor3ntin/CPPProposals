@@ -1,0 +1,118 @@
+\documentclass{wg21}
+
+
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{ulem}
+\usepackage{fullpage}
+\usepackage{parskip}
+\usepackage{csquotes}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{makecell}
+\usepackage{longtable}
+\usepackage[utf8x]{inputenc}
+\usepackage{graphicx}
+\usepackage{amssymb}
+
+
+%\DeclareUnicodeCharacter{201F}{‟}
+
+
+\lstdefinestyle{base}{
+  language=c++,
+  breaklines=false,
+  basicstyle=\ttfamily\color{black},
+  moredelim=**[is][\color{green!50!black}]{@}{@},
+  escapeinside={(*@}{@*)}
+}
+
+\newcommand{\cc}[1]{\mintinline{c++}{#1}}
+%\newminted[cpp]{c++}{}
+
+
+\title{Locales and encodings in a globalized world}
+\docnumber{DXXXXXR0}
+\audience{SG-16, EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+
+\maketitle
+
+\begin{flushright}
+	\hfill \break
+	\hfill \break
+	\textit{It's just semantic! - Kevlin Henney}
+\end{flushright}
+
+
+\section{Abstract}
+
+For historical reasons, all text encodings mentioned in the standard are derived from
+a locale object, which does not necessarily match the reality of how programs and system interact.
+
+This models works poorly with modern understanding of text, ie the Unicode model separates encoding
+from locales which are purely rules for formatting and text transformations but do not affect
+which characters are represented by a sequence of code units.
+
+Moreover, the standard does not provide a way to query which encoding are expected or used by the system,
+leading to guess work and unavoidable UB.
+
+\section{The many text encodings of a C++ system}
+
+Text in a technical sense is a sequence of bytes to which is virtually attached an encoding.
+Without encoding, a blob of data simply cannot be interpreted as text.
+
+In many case the encoding used to encode a string is not communicated along with that string and its
+encoding is therefore presumed with more or less success.
+
+Generally, it is useful to know the encoding of a string when
+
+\begin{itemize}
+	\item Transferring data as text between systems or processes (io)
+	\item Textual transforming of data
+	\item Interpretation of a piece of data
+\end{itemize}
+
+In the purview of the standard, text i/o text originates from
+\begin{itemize}
+	\item The source code (literals)
+	\item The iostream library as well as system functions
+\end{itemize}
+
+Locales provide transformations and conversions facilities and as such, in the current model have an encoding attached to them.
+
+There are therefore 2 set of encodings of primary interest:
+
+\begin{itemize}
+	\item The encoding of narrow and wide characters and string literals
+	\item The narrow and wide encodings used by a program when sending of receiving string from it's environment
+\end{itemize}
+
+\note Because they have different code units sizes, narrow and wide strings have different encodings.
+char8_t, char16_t, char32_t literals are assumed to be respectively UTF-8, UTF-16 and UTF-32 encoded.
+\endnote
+
+C++ does not differentiate at runtime
+
+
+
+\section{Impact on the standard and implementations}
+
+\section{Proposed wording}
+
+ 
+\section{References}
+%\begin{thebibliography}
+%
+%
+%
+%\bibitem[N4830]{N4830}
+%Richard Smith
+%\emph{Working Draft, Standard for Programming Language C++}\newline
+%\url{https://wg21.link/n4830}
+%
+%\end{thebibliography}
+
+\end{document}
