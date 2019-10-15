@@ -25,7 +25,7 @@ escapeinside={(*@}{@*)}
 
 
 \title{Range constructor for \tcode{std::span}}
-\docnumber{D1394R3}
+\docnumber{P1394R3}
 \audience{LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Casey Carter}{casey@carter.net}
@@ -179,7 +179,7 @@ span(const array<T, N>&) -> span<const T, N>;
 @\removed{template<class Container>}@
 @\removed{span(const Container\&) -> span<const typename Container::value_type>;}@
 @\added{template<class R>}@
-@\added{span(R\&\&) -> span<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>>;}@
+@\added{span(R\&\&) -> span<ranges::range_value_t<R>>;}@
 
 \end{codeblock}
 \end{quote}
@@ -305,7 +305,7 @@ constexpr span(It first, End last);
 		\begin{note}The intent is to allow only qualification conversions of the iterator reference type to \tcode{element_type} \end{note},
 		\item \tcode{It} satisfies \tcode{ContiguousIterator},
 		\item \tcode{End} satisfies \tcode{SizedSentinel<It>},
-		\item \tcode{is_convertible<End, size_t>} is false.
+		\item \tcode{is_convertible_v<End, size_t>} is false.
 	\end{itemize}
 
     \expects
@@ -421,7 +421,7 @@ constexpr span(R&& r);
        \begin{note}The intent is to allow only qualification conversions of the iterator reference type to \tcode{element_type} \end{note}.
     \end{itemize}
 
-	\expects \tcode{R} models \tcode{ranges::ContiguousRange} and \tcode{ranges::SizedRange},
+	\expects \tcode{R} models \tcode{ranges::ContiguousRange} and \tcode{ranges::SizedRange}.
 
     \pnum
     \ensures
@@ -466,7 +466,7 @@ span(It, End) -> span(It, End) -> span<remove_reference_t<iter_reference_t<It>>>
 
 \begin{itemdecl}
 template<class R>
-span(R&&) -> span<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>>;
+span(R&&) -> span<ranges::range_value_t<R>>;
 \end{itemdecl}
 \begin{itemdescr}
     \constraints \tcode{R} satisfies \tcode{ranges::ContiguousRange}.

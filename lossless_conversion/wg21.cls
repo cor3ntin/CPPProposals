@@ -108,7 +108,7 @@
 
 %%--------------------------------------------------
 %% Difference markups
-\definecolor{addclr}{rgb}{0,.39,0}
+\definecolor{addclr}{rgb}{0,.6,.6}
 \definecolor{remclr}{rgb}{1,0,0}
 \definecolor{noteclr}{rgb}{0,0,1}
 
@@ -154,7 +154,11 @@
 \def\gramSec[##1]##2{\rSec1[##1]{##2}}%
 \input{std-gram.ext}%
 }
+\renewcommand{\@seccntformat}[1]{}
 \makeatother
+\usepackage[utf8]{inputenc}
+
+
 
 %%--------------------------------------------------
 %% Cross references.
@@ -167,7 +171,10 @@
 % the range [0,5].  (If it proves necessary, it wouldn't take much
 % programming to raise the limit from 5 to something larger.)
 
-
+\usepackage{amssymb,graphicx,stackengine,xcolor}
+\def\ucr{\scalebox{1}{\stackinset{c}{}{c}{-.2pt}{%
+			\textcolor{white}{\sffamily\bfseries\small ?}}{%
+			\rotatebox{45}{$\blacksquare$}}}}
 % The basic sectioning command.  Example:
 %    \Sec1[intro.scope]{Scope}
 % defines a first-level section whose name is "Scope" and whose short
@@ -180,7 +187,7 @@
       \or\let\s=\paragraph
       \or\let\s=\subparagraph
       \fi%
-\s[#3]{#3\hfill[#2]}\label{#2}\addxref{#2}}
+\s[#3]{\ucr\quad\quad #3\hfill[#2]}}
 
 % A convenience feature (mostly for the convenience of the Project
 % Editor, to make it easy to move around large blocks of text):
@@ -204,10 +211,11 @@
 % Indexing
 
 % locations
-\newcommand{\indextext}[1]{\index[generalindex]{#1}}
-\newcommand{\indexlibrary}[1]{\index[libraryindex]{#1}}
-\newcommand{\indexgram}[1]{\index[grammarindex]{#1}}
-\newcommand{\indeximpldef}[1]{\index[impldefindex]{#1}}
+\newcommand{\indextext}[1]{}
+\newcommand{\indexlibrary}[1]{}
+\newcommand{\indexgram}[1]{}
+\newcommand{\indeximpldef}[1]{}
+
 
 \newcommand{\indexdefn}[1]{\indextext{#1}}
 \newcommand{\indexgrammar}[1]{\indextext{#1}\indexgram{#1}}
@@ -217,6 +225,8 @@
 \newcommand{\idxcode}[1]{#1@\tcode{#1}}
 \newcommand{\idxhdr}[1]{#1@\tcode{<#1>}}
 \newcommand{\idxgram}[1]{#1@\textit{#1}}
+
+\newcommand{\indexlibrarymember}[2]{}
 
 %%--------------------------------------------------
 % General code style
@@ -307,11 +317,18 @@
 \newcommand{\dtype}{\Fundesc{Default type}}
 \newcommand{\ctemplate}{\Fundesc{Class template}}
 \newcommand{\templalias}{\Fundesc{Alias template}}
-\newcommand{\pnum}
+\newcommand{\pnum}{}
+\newcommand{\idxoldconcept}[1]{Cpp17#1@\textit{Cpp17#1}}
+\newcommand{\libconcept}[1]{\tcode{#1}}
+\newcommand{\oldconcept}[1]{\textit{Cpp17#1}}
+\newcommand{\oldconceptdefn}[1]{\defn{Cpp17#1}}
 
 %% Cross reference
 \newcommand{\xref}{\textsc{See also:}\xspace}
 \newcommand{\xsee}{\textsc{See:}\xspace}
+\newcommand{\tref}[1]{}
+\newcommand{\iref}[1]{}
+\newcommand{\indexhdr}[1]{}
 
 %% NTBS, etc.
 \newcommand{\NTS}[1]{\textsc{#1}\xspace}
@@ -393,20 +410,10 @@
 
 \lstset{language=C++,
         basicstyle=\small\CodeStyle,
-        keywordstyle=\color{blue},
-        commentstyle=\color{ForestGreen}\itshape\rmfamily,,
-        stringstyle=\color{Sepia},
         xleftmargin=0em,
         showstringspaces=false,
         columns=flexible,
         keepspaces=true,
-        keywords=[2]{char32_t, char8_t, char16_t},
-        keywords=[3]{codepoint},
-        keywords=[4]{noexcept,constexpr, static_assert},
-        keywordstyle={\color{blue!80!black}},
-        keywordstyle=[2]{\color{red!80!black}},
-        keywordstyle=[3]{\color{BurntOrange!50!black}},
-        keywordstyle=[4]{\color{green!50!black}},
         texcl=true}
 
 % Our usual abbreviation for 'listings'.  Comments are in

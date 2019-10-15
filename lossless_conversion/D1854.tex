@@ -11,9 +11,9 @@
 \usepackage{enumitem}
 \usepackage{makecell}
 \usepackage{longtable}
-\usepackage[utf8x]{inputenc}
-\usepackage{graphicx}
-\usepackage{amssymb}
+%\usepackage[utf8x]{inputenc}
+%\usepackage{graphicx}
+%\usepackage{amssymb}
 
 
 %\DeclareUnicodeCharacter{201F}{‟}
@@ -32,7 +32,7 @@
 
 
 \title{Conversion to execution encoding should not lead to loss of meaning}
-\docnumber{D1854R0}
+\docnumber{P1854R0}
 \audience{SG-16, EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -49,24 +49,24 @@
 
 \section{Abstract}
 
-The current wording does not guarantees that sequences of characters will be preserved by compilation, which reduces the portability and reliability of
+The current wording does not guarantee that sequences of characters will be preserved by compilation, which reduces the portability and reliability of
 C++ source code.  
 
 \section{Motivation}
 
-Implementation defined behaviors related conversion to execution encoding reduce the portability of C++ program, and lead to silently incorrect
-programs as implementation are allowed to modify the characters they cannot represent in the execution encoding.
+Implementation defined behaviors related conversion to execution encoding reduce the portability of C++ programs, and lead to silently incorrect
+programs as implementations are allowed to modify the characters they cannot represent in the execution encoding.
 Strings are text which carries intent and meaning;  An implementation should not be able to alter that meaning.
 
 \section{Impact on the standard and implementations}
 
-This constitute a breaking change in the wording, as well as some implementations(MSVC) and matches other existing implementations.
+This constitutes a breaking change in the wording, as well as some implementations(MSVC) and matches other existing implementations' behaviour.
 However, the code that would break would not be code that matches the developer intent. 
 
 \section{Proposed wording}
 
 
-Modify 5.2.5 as follow
+Modify 5.2.5 [lex.phases] as follow
 
 \begin{quote}
 
@@ -75,7 +75,7 @@ Each basic source character set member in a character literal or a string litera
 \end{quote}
 
 
-Modify 5.13.3.2 as follow
+Modify 5.13.3.2 [lex.icon] as follow
 
 \begin{quote}
 A character literal that does not begin with
@@ -91,12 +91,12 @@ An ordinary character literal that contains more than one \grammarterm{c-char} i
 A multicharacter literal\removed{, or an ordinary character literal containing
 a single \grammarterm{c-char} not representable in the execution
 character set}, is conditionally-supported, has type \tcode{int},
-and has an implementation-defined value.}
+and has an implementation-defined value.
 \added{An ordinary character literal containing a single \grammarterm{c-char} not representable in the execution character set is ill-formed.}
 
 \end{quote}
 
-Modify 5.13.3.6 as follow
+Modify 5.13.3.6 [lex.icon] as follow
 
 \begin{quote}
 \pnum
@@ -114,7 +114,7 @@ The value of a wide-character literal containing multiple \grammarterm{c-char}{s
 
 \end{quote}
 
-Modify 5.13.3.8 as follow
+Modify 5.13.3.8 [lex.icon] as follow
 
 \begin{quote}
 The escape
@@ -148,18 +148,20 @@ range defined for \tcode{char} (for character literals with no prefix) or
 
 \end{quote}
 
+\section{Acknowledgments}
+
+Many thanks to JeanHeyd Meneide, Peter Bindels, Zach Laine, Tom Honermann and Steve Downey who reviewed this paper and offered valuable feedback.
+
 
 \section{References}
 \renewcommand{\section}[2]{}%
 \begin{thebibliography}{9}
-
-\end{thebibliography}
 
 	\bibitem[N4830]{N4830}
 Richard Smith
 \emph{Working Draft, Standard for Programming Language C++}\newline
 \url{https://wg21.link/n4830}
 
-
+\end{thebibliography}
 
 \end{document}
