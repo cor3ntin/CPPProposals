@@ -25,7 +25,7 @@ escapeinside={(*@}{@*)}
 
 
 \title{Range constructor for \tcode{std::span}}
-\docnumber{P1394R3}
+\docnumber{D1394R4}
 \audience{LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Casey Carter}{casey@carter.net}
@@ -104,7 +104,7 @@ foo(get_vector()); //ill-formed
 \section{Motivation}
 
 \tcode{std::span} is specified to be constructible from \tcode{Container} types.
-However, while defined, \tcode{Container} is not a concept and as such \tcode{ContiguousRange} is more expressive.
+However, while defined, \tcode{Container} is not a concept and as such \tcode{contiguous_range} is more expressive.
 Furthermore, there exist some non-container ranges that would otherwise be valid ranges to construct span from.
 As such span as currently specified fits poorly with the iterators / ranges model of the rest of the standard library.
 
@@ -116,7 +116,7 @@ from all compatible types while offering stronger and more consistent (in regard
 
 \section{Design considerations}
 
-We propose to specify all constructors currently accepting a container or pointers in terms of \tcode{ContiguousRange} and \tcode{ContiguousIterator}
+We propose to specify all constructors currently accepting a container or pointers in terms of \tcode{contiguous_range} and \tcode{contiguous_iterator}
 respectively as well as to add or modify the relevant deduction guides for these constructors.
 
 \section{Future work}
@@ -218,7 +218,7 @@ constexpr span(It first, index_type count);
     \pnum
     \constraints
     \begin{itemize}
-    	\item \tcode{It} satisfies \tcode{ContiguousIterator},
+    	\item \tcode{It} satisfies \tcode{contiguous_iterator},
     	\item \tcode{is_convertible_v<remove_reference_t<iter_reference_t<It>>(*)[], element_type(*)[]>} is true.
     	 \begin{note}The intent is to allow only qualification conversions of the iterator reference type to \tcode{element_type} \end{note}
     \end{itemize}
@@ -228,7 +228,7 @@ constexpr span(It first, index_type count);
 \begin{itemize}
     \item \range{\changed{ptr}{first}}{ \changed{ptr}{first} + count} shall be a valid range.
 \begin{addedblock}
-    \item \tcode{It} models \tcode{ContiguousIterator},
+    \item \tcode{It} models \tcode{contiguous_iterator},
 \end{addedblock}
     \item If \tcode{extent} is not equal to \tcode{dynamic_extent},
     then \tcode{count} shall be equal to \tcode{extent}.
@@ -303,8 +303,8 @@ constexpr span(It first, End last);
 	\begin{itemize}
 		\item \tcode{is_convertible_v<remove_reference_t<iter_reference_t<It>>(*)[], element_type(*)[]>} is true,
 		\begin{note}The intent is to allow only qualification conversions of the iterator reference type to \tcode{element_type} \end{note},
-		\item \tcode{It} satisfies \tcode{ContiguousIterator},
-		\item \tcode{End} satisfies \tcode{SizedSentinel<It>},
+		\item \tcode{It} satisfies \tcode{contiguous_iterator}
+		\item \tcode{End} satisfies \tcode{sized_sentinel_for<It>},
 		\item \tcode{is_convertible_v<End, size_t>} is false.
 	\end{itemize}
 
@@ -314,8 +314,8 @@ constexpr span(It first, End last);
     If \tcode{extent} is not equal to \tcode{dynamic_extent},
     then \tcode{last - first} is equal to \tcode{extent},
     \item \range{first}{last} is a valid range,
-    \item \tcode{It} models \tcode{ContiguousIterator},
-    \item \tcode{End} models \tcode{SizedSentinel<It>}.
+    \item \tcode{It} models \tcode{contiguous_iterator},
+    \item \tcode{End} models \tcode{sized_sentinel_for<It>}.
     \end{itemize}
 
     \pnum
@@ -412,7 +412,7 @@ constexpr span(R&& r);
     \constraints
     \begin{itemize}
        \item \tcode{extent == dynamic_extent} is true,
-       \item \tcode{R} satisfies \tcode{ranges::ContiguousRange} and \tcode{ranges::SizedRange},
+       \item \tcode{R} satisfies \tcode{ranges::contiguous_range} and \tcode{ranges::sized_range},
        \item either \tcode{R} satisfies \placeholder{forwarding-range} or \tcode{is_const_v<element_type>} is true,
        \item \tcode{remove_reference_t<R>} is not a specialization of \tcode{span},
        \item \tcode{remove_reference_t<R>} is not a specialization of \tcode{array},
@@ -421,7 +421,7 @@ constexpr span(R&& r);
        \begin{note}The intent is to allow only qualification conversions of the iterator reference type to \tcode{element_type} \end{note}.
     \end{itemize}
 
-	\expects \tcode{R} models \tcode{ranges::ContiguousRange} and \tcode{ranges::SizedRange}.
+	\expects \tcode{R} models \tcode{ranges::contiguous_range} and \tcode{ranges::sized_range}.
 
     \pnum
     \ensures
@@ -458,8 +458,8 @@ span(It, End) -> span(It, End) -> span<remove_reference_t<iter_reference_t<It>>>
 \begin{itemdescr}
     \constraints
 \begin{itemize}
-    \item \tcode{It} satisfies \tcode{ContiguousIterator},
-    \item \tcode{End} satisfies \tcode{SizedSentinel<It>}.
+    \item \tcode{It} satisfies \tcode{contiguous_iterator},
+    \item \tcode{End} satisfies \tcode{sized_sentinel_for<It>}.
 \end{itemize}
 
 \end{itemdescr}
@@ -469,7 +469,7 @@ template<class R>
 span(R&&) -> span<ranges::range_value_t<R>>;
 \end{itemdecl}
 \begin{itemdescr}
-    \constraints \tcode{R} satisfies \tcode{ranges::ContiguousRange}.
+    \constraints \tcode{R} satisfies \tcode{ranges::contiguous_range}.
 \end{itemdescr}
 
 
@@ -494,7 +494,7 @@ span(R&&) -> span<ranges::range_value_t<R>>;
 
     \bibitem[P1474]{P1474}
     Casey Carter
-    \emph{Helpful pointers for ContiguousIterator}\newline
+    \emph{Helpful pointers for contiguous_iterator}\newline
     \url{https://wg21.link/P1474}
 
 
