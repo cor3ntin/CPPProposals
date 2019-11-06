@@ -11,7 +11,7 @@
 \usepackage{mathrsfs}     % mathscr font
 
 \title{Ranges adaptors for non-copyable iterators}
-\docnumber{P1862R0}
+\docnumber{D1862R1}
 \audience{LEWG, LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -31,7 +31,6 @@ The one range proposal as well as P1035, with the apologies of the author for th
 \section{Points of design}
 
 Views and adaptors constructed from iterators (whether that is two iterators, an iterator and an index or an iterator and a sentinel) need to store these iterators - which would subsequently need to be copied by calls to \tcode{begin()}.
-Therefore \tcode{subrange}, \tcode{common_view} and \tcode{counted_view} require copyable iterators.
 
 Note that because iterating over a container does not invalidate the storage, all sensible ranges with non-copyable iterators are views.
 
@@ -47,8 +46,6 @@ We therefore have two options in the C++20 time frame:
 
 \begin{itemize}
 \item Require copyability for \tcode{subrange}, and adapt \tcode{views::counted} at a later date to be constructed from a range rather than an iterator, therefore bypassing the need for a copy in the \tcode{begin} call.
-
-\addedthree{The provided wording is for this option appears in green.}
 
 \begin{note}
 Neither \tcode{subrange} nor \tcode{views::counted} are necessary to implement other standard views and algorithms operating on non forward iterators and ranges.
@@ -71,7 +68,7 @@ The author prefers \tcode{subrange::begin} to be non-const if the iterator is no
 \tcode{subrange} would not satisfy the requirements of \emph{simple-view}.
 
 
-\addedtwo{The provided wording for this option appears in violet.}
+\added{The provided wording for this second option as approved by LEWG.}
 
 \end{itemize}
 
@@ -179,7 +176,7 @@ namespace std::ranges {
 	enum class subrange_kind : bool { unsized, sized };
 	
 	template<input_or_output_iterator I, sentinel_for<I> S = I, subrange_kind K = @\seebelow@>
-	requires (@\addedthree{copyable<I> \&\& (}@ K == subrange_kind::sized || !sized_sentinel_for<S, I>@\addedthree{)}@)
+	requires (K == subrange_kind::sized || !sized_sentinel_for<S, I>)
 	class subrange;
 	
 	// \ref{range.dangling}, dangling iterator handling
@@ -374,7 +371,7 @@ iterator and a sentinel into a single object that models the
 		
 		template<input_or_output_iterator I, sentinel_for<I> S = I, subrange_kind K =
 		sized_sentinel_for<S, I> ? subrange_kind::sized : subrange_kind::unsized>
-		requires @\addedthree{copyable<I> \&\&}@ (K == subrange_kind::sized || !sized_sentinel_for<S, I>)
+		requires (K == subrange_kind::sized || !sized_sentinel_for<S, I>)
 		class subrange : public view_interface<subrange<I, S, K>> {
 			private:
 			static constexpr bool StoreSize =                      // \expos
@@ -421,8 +418,8 @@ iterator and a sentinel into a single object that models the
 			requires @\placeholder{pair-like-convertible-from}@<PairLike, const I&, const S&>
 			constexpr operator PairLike() const;
 			
-			constexpr I begin() const @\addedtwo{requires forward_iterator<I>}@;
-			@\addedtwo{[[nodiscard]] constexpr I begin() requires !forward_iterator<I>}@;
+			constexpr I begin() const @\added{requires copyable<I>}@;
+			@\added{[[nodiscard]] constexpr I begin() requires (!copyable<I>)}@;
 			constexpr S end() const;
 			
 			constexpr bool empty() const;
@@ -430,8 +427,8 @@ iterator and a sentinel into a single object that models the
 			requires (K == subrange_kind::sized);
 			
 			[[nodiscard]] constexpr subrange next(iter_difference_t<I> n = 1) const 
-			@\addedtwo{\& requires forward_iterator<I>}@;
-			@\addedtwo{[[nodiscard]] constexpr subrange next(iter_difference_t<I> n = 1) \&\&;}@
+			@\added{\& requires forward_iterator<I>}@;
+			@\added{[[nodiscard]] constexpr subrange next(iter_difference_t<I> n = 1) \&\&;}@
 			
 			[[nodiscard]] constexpr subrange prev(iter_difference_t<I> n = 1) const
 			requires bidirectional_iterator<I>;
@@ -466,9 +463,9 @@ iterator and a sentinel into a single object that models the
 		requires (N < 2)
 		constexpr auto get(const subrange<I, S, K>& r);
 		
-		@\addedtwo{template<size_t N, class I, class S, subrange_kind K>}@
-		@\addedtwo{requires (N < 2)}@
-		@\addedtwo{constexpr auto get(subrange<I, S, K>\&\& r);}@
+		@\added{template<size_t N, class I, class S, subrange_kind K>}@
+		@\added{requires (N < 2)}@
+		@\added{constexpr auto get(subrange<I, S, K>\&\& r);}@
 	}
 	
 	namespace std {
@@ -490,7 +487,7 @@ iterator and a sentinel into a single object that models the
 	
 	\pnum
 	\effects
-	Initializes \tcode{begin_} with \tcode{\changedtwo{i}{std::move(i)}} and \tcode{end_} with
+	Initializes \tcode{begin_} with \tcode{\changed{i}{std::move(i)}} and \tcode{end_} with
 	\tcode{s}.
 \end{itemdescr}
 
@@ -508,7 +505,7 @@ iterator and a sentinel into a single object that models the
 	
 	\pnum
 	\effects
-	Initializes \tcode{begin_} with \tcode{\changedtwo{i}{std::move(i)}} and \tcode{end_} with
+	Initializes \tcode{begin_} with \tcode{\changed{i}{std::move(i)}} and \tcode{end_} with
 	\tcode{s}. If \tcode{StoreSize} is \tcode{true}, initializes \tcode{size_} with
 	\tcode{n}.
 	
@@ -557,7 +554,7 @@ iterator and a sentinel into a single object that models the
 
 \indexlibrarymember{begin}{subrange}%
 \begin{itemdecl}
-	constexpr I begin() const @\addedtwo{requires forward_iterator<I>}@;
+	constexpr I begin() const @\added{requires copyable<I>}@;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -566,10 +563,10 @@ iterator and a sentinel into a single object that models the
 	Equivalent to: \tcode{return begin_;}
 \end{itemdescr}
 
-\begin{addedblocktwo}
+\begin{addedblock}
 \indexlibrarymember{begin}{subrange}%
 \begin{itemdecl}
-	constexpr I begin() requires !forward_iterator<I>@;
+	constexpr I begin() requires (!copyable<I>)@;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -577,7 +574,7 @@ iterator and a sentinel into a single object that models the
 	\effects
 	Equivalent to: \tcode{return std::move(begin_);}
 \end{itemdescr}
-\end{addedblocktwo}
+\end{addedblock}
 
 \indexlibrarymember{end}{subrange}%
 \begin{itemdecl}
@@ -619,7 +616,7 @@ iterator and a sentinel into a single object that models the
 \indexlibrarymember{next}{subrange}%
 \begin{itemdecl}
 	[[nodiscard]] constexpr subrange next(iter_difference_t<I> n = 1) const
-	@\addedtwo{\& requires forward_iterator<I>}@;
+	@\added{\& requires forward_iterator<I>}@;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -641,7 +638,7 @@ iterator and a sentinel into a single object that models the
 \end{removedblock}
 \end{itemdescr}
 
-\begin{addedblocktwo}
+\begin{addedblock}
 \indexlibrarymember{next}{subrange}%
 \begin{itemdecl}
 	[[nodiscard]] constexpr subrange next(iter_difference_t<I> n = 1) &&;
@@ -656,7 +653,7 @@ iterator and a sentinel into a single object that models the
 		return std::move(*this);
 	\end{codeblock}
 \end{itemdescr}
-\end{addedblocktwo}
+\end{addedblock}
 
 
 \indexlibrarymember{prev}{subrange}%
@@ -709,6 +706,14 @@ iterator and a sentinel into a single object that models the
 	requires (N < 2)
 	constexpr auto get(const subrange<I, S, K>& r);
 \end{itemdecl}
+\begin{addedblock}
+\indexlibrarymember{get}{subrange}%
+\begin{itemdecl}
+	template<size_t N, class I, class S, subrange_kind K>
+	requires (N < 2)
+	constexpr auto get(subrange<I, S, K>&& r);
+\end{itemdecl}
+\end{addedblock}
 
 \begin{itemdescr}
 	\pnum
@@ -721,28 +726,6 @@ iterator and a sentinel into a single object that models the
 		return r.end();
 	\end{codeblock}
 \end{itemdescr}
-
-
-\begin{addedblocktwo}
-\indexlibrarymember{get}{subrange}%
-\begin{itemdecl}
-	template<size_t N, class I, class S, subrange_kind K>
-	requires (N < 2)
-	constexpr auto get(subrange<I, S, K>&& r);
-\end{itemdecl}
-
-\begin{itemdescr}
-	\pnum
-	\effects
-	Equivalent to:
-	\begin{codeblock}
-		if constexpr (N == 0)
-		return std::move(r.begin());
-		else
-		return r.end();
-	\end{codeblock}
-\end{itemdescr}
-\end{addedblocktwo}
 
 
 
@@ -938,7 +921,7 @@ then \tcode{iterator_category} denotes \tcode{bi\-directional_iterator_tag}.
 \tcode{\libconcept{derived_from}<forward_iterator_tag>},
 then \tcode{iterator_category} denotes \tcode{forward_iterator_tag}.
 
-\item Otherwise, \added{if \tcode{C} models copyable, }\tcode{iterator_category} denotes \tcode{input_iterator_tag}.
+\item Otherwise, \added{if \tcode{iterator_t<V>} models \tcode{copyable}, }\tcode{iterator_category} denotes \tcode{input_iterator_tag}.
 
 \begin{addedblock}
 \item Otherwise, \tcode{iterator_category} denotes \tcode{output_iterator_tag}
@@ -1110,9 +1093,7 @@ Let \tcode{C} denote the type
 \tcode{iterator_traits<iterator_t<Base>>::iterator_category}.
 If \tcode{C} models \tcode{\libconcept{derived_from}<contiguous_iterator_tag>},
 then \tcode{iterator_category} denotes
-\tcode{random_access_iterator_tag}; otherwise,
-\added{if \tcode{C} models \tcode{copyable} then} \tcode{iterator_category} denotes \tcode{C}.
-\added{Otherwise, \tcode{iterator_category} denotes \tcode{output_iterator_tag}.}
+\tcode{random_access_iterator_tag}; otherwise, \tcode{iterator_category} denotes \tcode{C}.
 
 \indexlibrary{\idxcode{iterator}!\idxcode{transform_view::iterator}}
 \begin{itemdecl}
@@ -1274,7 +1255,7 @@ Equivalent to: \tcode{return base_;}
 constexpr auto begin()
 requires (@\added{forward_range<R> \&\&}@ !(@\placeholder{simple-view}@<R> && random_access_range<R>));
 constexpr auto begin() const
-requires @\added{!forward_range<R> ||}@ random_access_range<const R>;
+requires @\added{(!forward_range<R>) ||}@ random_access_range<const R>;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -1342,7 +1323,7 @@ namespace std::ranges {
 		constexpr const Pred& pred() const;
 		
 		@\added{constexpr auto begin() requires forward_range<R>;}@
-		constexpr auto begin() @\added{const requires !forward_range<R>}@;
+		constexpr auto begin() @\added{const requires (!forward_range<R>)}@;
 		
 		
 		constexpr auto end()
@@ -1395,11 +1376,10 @@ Equivalent to: \tcode{return *pred_;}
 \indexlibrarymember{begin}{drop_while_view}%
 \begin{itemdecl}
 @\added{constexpr auto begin() requires forward_range<R>;}@
-constexpr auto begin() @\added{const requires !forward_range<R>}@;
+constexpr auto begin() @\added{const requires (!forward_range<R>)}@;
 
 
 \end{itemdecl}
-
 \begin{itemdescr}
 \pnum
 \returns
@@ -1444,7 +1424,7 @@ is expression-equivalent to \tcode{drop_while_view\{E, F\}}.
 	\placeholder{OUTERC} and \placeholder{INNERC} each model
 	\tcode{derived_from<for\-ward_iterator_tag>}, \tcode{iterator_category}
 	denotes \tcode{forward_iterator_tag}.
-	\item Otherwise, \added{if \placeholder{OUTERC} and  \placeholder{INNERC} model = \tcode{coyable},} \tcode{iterator_category} denotes \tcode{input_iterator_tag}.
+	\item Otherwise, \added{if \tcode{iterator_t<Base>} models \tcode{coyable},} \tcode{iterator_category} denotes \tcode{input_iterator_tag}.
 	\item
 	\added{Otherwise, \tcode{iterator_category} denotes \tcode{output_iterator_tag}.}
 \end{itemize}
@@ -1854,16 +1834,19 @@ namespace std::ranges {
 
 \pnum
 
-The \grammarterm{typedef-name} \tcode{iterator_category} denotes \tcode{forward_iterator_tag} if
-\tcode{iterator_traits<iterator_t<Base>>::iterator_category} models
-\tcode{derived_from<forward_iterator_tag>}.
+The \grammarterm{typedef-name} \tcode{iterator_category} denotes \added{:}
 \begin{removedblock}
-, and \tcode{input_iterator_tag} otherwise.
+\tcode{forward_iterator_tag} if
+\tcode{iterator_traits<iterator_t<Base>>::iterator_category} models
+\tcode{derived_from<forward_iterator_tag>}, and \tcode{input_iterator_tag} otherwise.
 \end{removedblock}
 
 \begin{addedblock}
-Otherwise, \tcode{iterator_category} denotes \tcode{input_iterator_tag} if \tcode{iterator_t<Base>} models \tcode{copyable}}.
-Otherwise, \tcode{iterator_category} denotes \tcode{output_iterator_tag}.
+\begin{itemize}
+\item \tcode{forward_iterator_tag} if \tcode{iterator_traits<iterator_t<Base>>::iterator_category} models \tcode{derived_from<forward_iterator_tag>}
+\item Otherwise, if \tcode{iterator_t<Base>} and \tcode{iterator_t<range_reference_t<Base>>} are copyable, \tcode{iterator_category} denotes \tcode{input_iterator_tag}.
+\item Otherwise, \tcode{iterator_category} denotes \tcode{output_iterator_tag}.
+\end{itemize}
 \end{addedblock}
 
 \indexlibrary{\idxcode{inner_iterator}!\idxcode{split_view::inner_iterator}}%
@@ -1993,7 +1976,7 @@ and let \tcode{T} be \tcode{decay_t<decltype((E))>}.
 Then the expression \tcode{views::counted(E, F)} is expression-equivalent to:
 
 \begin{itemize}
-\item If \tcode{T} models \libconcept{input_or_output_iterator}\addedthree{ and  \libconcept{copyable}} and
+\item If \tcode{T} models \libconcept{input_or_output_iterator} and
 \tcode{decltype((F))} models \tcode{\libconcept{convertible_to}<iter_differ\-ence_t<T>>},
 \begin{itemize}
 	\item \tcode{subrange\{E, E + static_cast<iter_difference_t<T>>(F)\}}
