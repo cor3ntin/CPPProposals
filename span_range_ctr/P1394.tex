@@ -25,7 +25,7 @@ escapeinside={(*@}{@*)}
 
 
 \title{Range constructor for \tcode{std::span}}
-\docnumber{D1394R4}
+\docnumber{P1394R4}
 \audience{LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Casey Carter}{casey@carter.net}
@@ -136,7 +136,7 @@ Change in \textbf{[views.span] 21.7.3}:
 // [span.cons], constructors, copy, and assignment
 constexpr span() noexcept;
 @\added{template <class It>}@
-constexpr span( @\removed{pointer ptr}@ @\added{It begin}@, size_type count);
+constexpr span( @\removed{pointer ptr}@ @\added{It first}@, size_type count);
 @\removed{constexpr span(pointer first, pointer last);}@
 @\added{template <class It, class End>}@
 @\added{constexpr span(It first, End last);}@
@@ -179,7 +179,7 @@ span(const array<T, N>&) -> span<const T, N>;
 @\removed{template<class Container>}@
 @\removed{span(const Container\&) -> span<const typename Container::value_type>;}@
 @\added{template<class R>}@
-@\added{span(R\&\&) -> span<ranges::range_value_t<R>>;}@
+@\added{span(R\&\&) -> span<remove_reference_t<ranges::range_reference_t<R>>>;}@
 
 \end{codeblock}
 \end{quote}
@@ -219,7 +219,7 @@ constexpr span(It first, size_type count);
     \constraints
     \begin{itemize}
     	\item \tcode{It} satisfies \tcode{contiguous_iterator}, and
-    	\item \tcode{is_convertible_v<remove_reference_t<iter_reference_t<It>>(*)[], element_type(*)[]>} is true.
+    	\item \tcode{is_convertible_v<remove_reference_t<iter_reference_t<It>>(*)[], element_type(*)[]>} is \tcode{true}.
     	 \begin{note}The intent is to allow only qualification conversions of the iterator reference type to \tcode{element_type} \end{note}
     \end{itemize}
     \end{addedblock}
@@ -228,7 +228,7 @@ constexpr span(It first, size_type count);
 \begin{itemize}
     \item \range{\changed{ptr}{first}}{ \changed{ptr}{first} + count} shall be a valid range.
 \begin{addedblock}
-    \item \tcode{It} models \tcode{contiguous_iterator}.
+    \item \tcode{It} models \tcode{contiguous_iterator}, and
 \end{addedblock}
     \item If \tcode{extent} is not equal to \tcode{dynamic_extent},
     then \tcode{count} shall be equal to \tcode{extent}.
@@ -237,20 +237,17 @@ constexpr span(It first, size_type count);
 
     \pnum
     \effects
-    Constructs a \tcode{span} that is a view over the range \range{\changed{ptr}{first} }{\changed{ptr}{first}  + count}.
-
-    \pnum
-    \ensures
     \begin{removedblock}
-    	\tcode{size() == count \&\& data() == ptr}.
+    Constructs a \tcode{span} that is a view over the range \range{ptr}{ptr  + count}.
     \end{removedblock}
-    \begin{addedblock}
-    \begin{itemize}
-    	\item \tcode{size() == count} is \tcode{true}.
-    	\item \tcode{to_address(first) == data()} is \tcode{true}.
-    %%	\item if \tcode{count} is not equal to \tcode{0}, \tcode{data() == addressof(*first)} is true, otherwise, \tcode{data() == nullptr} is true.
-    \end{itemize}
-	\end{addedblock}	
+	\begin{addedblock}
+    Initializes \tcode{data_} with \tcode{to_address(first)} and \tcode{size_} with \tcode{first + count}.
+    \end{addedblock}
+    \pnum
+    \begin{removedblock}
+    \ensures
+    \tcode{size() == count \&\& data() == ptr}.
+    \end{removedblock}	
     		
 
     \pnum
@@ -305,7 +302,7 @@ constexpr span(It first, End last);
 		\begin{note}The intent is to allow only qualification conversions of the iterator reference type to \tcode{element_type} \end{note},
 		\item \tcode{It} satisfies \tcode{contiguous_iterator},
 		\item \tcode{End} satisfies \tcode{sized_sentinel_for<It>}, and
-		\item \tcode{is_convertible_v<End, size_t>} is false.
+		\item \tcode{is_convertible_v<End, size_t>} is \tcode{false}.
 	\end{itemize}
 
     \expects
@@ -314,23 +311,14 @@ constexpr span(It first, End last);
     If \tcode{extent} is not equal to \tcode{dynamic_extent},
     then \tcode{last - first} is equal to \tcode{extent},
     \item \range{first}{last} is a valid range,
-    \item \tcode{It} models \tcode{contiguous_iterator},
+    \item \tcode{It} models \tcode{contiguous_iterator}, and
     \item \tcode{End} models \tcode{sized_sentinel_for<It>}.
     \end{itemize}
 
     \pnum
     \effects
-    Constructs a span that is a view over the range \range{first}{last}.
+    Initializes \tcode{data_} with \tcode{to_address(first)} and \tcode{size_} with \tcode{last - first}.
 
-    \pnum
-    \ensures
-    
-    \begin{itemize}
-    	\item \tcode{size() == last - first} is \tcode{true}, and
-    	\item \tcode{to_address(first) == data()} is \tcode{true}.
-    	%% \item if \tcode{first != last} \tcode{data() == addressof(*first)} is true, otherwise, \tcode{data() == nullptr} is true.
-    \end{itemize}
-   
     \pnum
     \throws
     Nothing.
@@ -411,13 +399,13 @@ constexpr span(R&& r);
     \pnum
     \constraints
     \begin{itemize}
-       \item \tcode{extent == dynamic_extent} is true,
+       \item \tcode{extent == dynamic_extent} is \tcode{true},
        \item \tcode{R} satisfies \tcode{ranges::contiguous_range} and \tcode{ranges::sized_range},
-       \item either \tcode{R} satisfies \tcode{\placeholder{forwarding-range}} or \tcode{is_const_v<element_type>} is true,
+       \item either \tcode{R} satisfies \tcode{\placeholder{forwarding-range}} or \tcode{is_const_v<element_type>} is \tcode{true},
        \item \tcode{remove_cvref_t<R>} is not a specialization of \tcode{span},
        \item \tcode{remove_cvref_t<R>} is not a specialization of \tcode{array},
        \item \tcode{is_array_v<remove_cvref_t<R>>} is \tcode{false}, and
-       \item \tcode{is_convertible_v<remove_reference_t<ranges::range_reference_t<R>>(*)[], element_type(*)[]>} is true
+       \item \tcode{is_convertible_v<remove_reference_t<ranges::range_reference_t<R>>(*)[], element_type(*)[]>} is \tcode{true}
        \begin{note}The intent is to allow only qualification conversions of the iterator reference type to \tcode{element_type} \end{note}.
     \end{itemize}
 
