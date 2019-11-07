@@ -26,7 +26,7 @@
 	\section{Introduction}\label{introduction}}
 
 
-This paper is an addendum. to P1207 and add support where possible to the iterators of the views introduced by
+This paper is an addendum to P1207 and add support where possible to the iterators of the views introduced by
 The one range proposal as well as P1035, with the apologies of the author for the tardiness of that work.
 
 \section{Points of design}
@@ -567,7 +567,7 @@ iterator and a sentinel into a single object that models the
 \begin{addedblock}
 \indexlibrarymember{begin}{subrange}%
 \begin{itemdecl}
-	constexpr I begin() requires (!copyable<I>)@;
+	[[nodiscard]] constexpr I begin() requires (!copyable<I>)@;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -843,7 +843,7 @@ constexpr iterator begin();
 
 \pnum
 \remarks In order to provide the amortized constant time complexity required by
-the \libconcept{range} concept, \added{when \tcode{filter_view} models \tcode{forward_range}} this function caches the result within the
+the \libconcept{range} concept \added{when \tcode{filter_view} models \tcode{forward_range}}, this function caches the result within the
 \tcode{filter_view} for use on subsequent calls.
 \end{itemdescr}
 
@@ -922,11 +922,7 @@ then \tcode{iterator_category} denotes \tcode{bi\-directional_iterator_tag}.
 \tcode{\libconcept{derived_from}<forward_iterator_tag>},
 then \tcode{iterator_category} denotes \tcode{forward_iterator_tag}.
 
-\item Otherwise, \added{if \tcode{iterator_t<V>} models \tcode{copyable}, }\tcode{iterator_category} denotes \tcode{input_iterator_tag}.
-
-\begin{addedblock}
-\item Otherwise, \tcode{iterator_category} denotes \tcode{output_iterator_tag}
-\end{addedblock}
+\item Otherwise, \tcode{iterator_category} denotes \changed{\tcode{input_iterator_tag}}{C}.
 \end{itemize}
 
 \indexlibrary{\idxcode{iterator}!\idxcode{filter_view::iterator}}%
@@ -1261,9 +1257,9 @@ requires random_access_range<const R>;
 \pnum
 \remarks
 In order to provide the amortized constant-time complexity required
-by the \tcode{range} concept,
+by the \tcode{range} concept
+\added{when \tcode{drop_view} models \tcode{forward_range}},
 the first overload caches the result within the \tcode{drop_view}
-\added{when \tcode{drop_view} models \tcode{forward_range}}
 for use on subsequent calls.
 \begin{note}
 	Without this,
@@ -1382,9 +1378,9 @@ constexpr auto begin();
 \pnum
 \remarks
 In order to provide the amortized constant-time complexity
-required by the \tcode{range} concept,
+required by the \tcode{range} concept
+\added{when \tcode{drop_while_view} models \tcode{forward_range}},
 the first call caches the result within the \tcode{drop_while_view}
-\added{when \tcode{drop_while_view} models \tcode{forward_range}}
 for use on subsequent calls.
 \begin{note}
 	Without this,
@@ -1419,7 +1415,8 @@ is expression-equivalent to \tcode{drop_while_view\{E, F\}}.
 	\placeholder{OUTERC} and \placeholder{INNERC} each model
 	\tcode{derived_from<for\-ward_iterator_tag>}, \tcode{iterator_category}
 	denotes \tcode{forward_iterator_tag}.
-	\item Otherwise, \added{if \tcode{iterator_t<Base>} models \tcode{coyable},} \tcode{iterator_category} denotes \tcode{input_iterator_tag}.
+	\item Otherwise, \added{if \placeholder{OUTERC} and \placeholder{INNERC} each model
+	\tcode{derived_from<input_iterator_tag>},} \tcode{iterator_category} denotes \tcode{input_iterator_tag}.
 	\item
 	\added{Otherwise, \tcode{iterator_category} denotes \tcode{output_iterator_tag}.}
 \end{itemize}
@@ -1758,12 +1755,12 @@ constexpr inner_iterator<Const> begin() const @\added{requires copyable<outer_it
 
 \begin{addedblock}
 \begin{itemdecl}
-	constexpr inner_iterator<Const> begin() requires (!copyable<outer_iterator>);
+constexpr inner_iterator<Const> begin() requires (!copyable<outer_iterator>);
 \end{itemdecl}
 
 \begin{itemdescr}
-	\pnum
-	\effects Equivalent to: \tcode{return inner_iterator<Const>\{std::move(i_)\};}
+\pnum
+\effects Equivalent to: \tcode{return inner_iterator<Const>\{std::move(i_)\};}
 \end{itemdescr}
 \end{addedblock}
 
@@ -1828,18 +1825,21 @@ namespace std::ranges {
 \end{codeblock}
 
 \pnum
-The \grammarterm{typedef-name} \tcode{iterator_category} denotes \added{:}
+The \grammarterm{typedef-name} \tcode{iterator_category} denotes\added{:}
 \begin{removedblock}
 \tcode{forward_iterator_tag} if
 \tcode{iterator_traits<iterator_t<Base>>::iterator_category} models
-\tcode{derived_from<forward_iterator_tag>}, and \tcode{input_iterator_tag} otherwise.
+\tcode{\libconcept{derived_from}<forward_iterator_tag>}, and \tcode{input_iterator_tag} otherwise.
 \end{removedblock}
 
 \begin{addedblock}
 \begin{itemize}
-\item \tcode{forward_iterator_tag} if \tcode{iterator_traits<iterator_t<Base>>::iterator_category} models \tcode{derived_from<forward_iterator_tag>}
-\item Otherwise, if \tcode{iterator_t<Base>} and \tcode{iterator_t<range_reference_t<Base>>} are copyable, \tcode{iterator_category} denotes \tcode{input_iterator_tag}.
-\item Otherwise, \tcode{iterator_category} denotes \tcode{output_iterator_tag}.
+\item
+  \tcode{forward_iterator_tag} if
+  \tcode{iterator_traits<iterator_t<Base>>::iterator_category} models
+  \tcode{\libconcept{derived_from}<forward_iterator_tag>};
+\item
+  otherwise, \tcode{iterator_traits<iterator_t<Base>>::iterator_category}.
 \end{itemize}
 \end{addedblock}
 
@@ -2367,7 +2367,7 @@ namespace std::ranges {
 \begin{itemdescr}
 	\pnum
 	\effects
-	Initializes \tcode{current_} with \tcode{i.current_}.
+	Initializes \tcode{current_} with \tcode{\added{std::move(}i.current_\added{)}}.
 \end{itemdescr}
 
 \begin{itemdecl}
