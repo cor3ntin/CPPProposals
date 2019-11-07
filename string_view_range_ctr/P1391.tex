@@ -132,7 +132,7 @@ public:
     constexpr basic_string_view(const charT* str, size_type len);
 
     @\added{template <class R>}@
-    @\added{constexpr basic_string_view(R\&\& r);}@
+    @\added{constexpr basic_string_view(const R\& r);}@
 
     @\added{template <class It, class End>}@
     @\added{constexpr basic_string_view(It begin, End end);}@
@@ -140,7 +140,7 @@ public:
     [...]
 };
 @\added{template<class R>}@
-@\added{basic_string_view(R\&\&)}@
+@\added{basic_string_view(const R\&)}@
 @\added{    -> basic_string_view<ranges::range_value_t<R>>;}@
 @\added{template<class It, class End>}@
 @\added{basic_string_view(It, End) -> basic_string_view<remove_reference_t<iter_reference_t<It>>>;}@
@@ -156,24 +156,24 @@ Add after 7
 \begin{addedblock}
 \begin{itemdecl}
 template <class R>
-constexpr basic_string_view(R&& r);
+constexpr basic_string_view(const R& r);
 
 \end{itemdecl}
 
 \begin{itemdescr}
     \constraints
     \begin{itemize}
-        \item \tcode{R} satisfies \tcode{ranges::contiguous_range},
-        \item \tcode{R} satisfies \tcode{ranges::sized_range},
-        \item \tcode{is_same_v<ranges::range_value_t<R>, charT>} is true,
-        \item \tcode{is_convertible_v<R, const charT*>} is \tcode{false},
-        \item If the qualified-id \tcode{remove_reference_t<R>::traits_type} is valid and denotes a type, \tcode{is_same_v<remove_reference_t<R>::traits_type}, traits> is true.
+        \item \tcode{const R} satisfies \tcode{ranges::contiguous_range},
+        \item \tcode{const R} satisfies \tcode{ranges::sized_range},
+        \item \tcode{is_same_v<ranges::range_value_t<const R>, charT>} is true,
+        \item \tcode{is_convertible_v<const R\&, const charT*>} is \tcode{false},
+        \item If the qualified-id \tcode{R::traits_type} is valid and denotes a type, \tcode{is_same_v<R::traits\_type,traits>} is true.
     \end{itemize}
  
 	\expects
 	 \begin{itemize}
-		\item \tcode{R} models \tcode{ranges::contiguous_range},
-		\item \tcode{R} models \tcode{ranges::sized_range}.
+		\item \tcode{const R} models \tcode{ranges::contiguous_range},
+		\item \tcode{const R} models \tcode{ranges::sized_range}.
 	\end{itemize}
 
     \effects
