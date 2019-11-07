@@ -25,7 +25,7 @@ escapeinside={(*@}{@*)}
 
 
 \title{Range constructor for std::string\_view}
-\docnumber{D1391R4}
+\docnumber{P1391R4}
 \audience{LEWG, LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -131,22 +131,25 @@ public:
     constexpr basic_string_view(const charT* str);
     constexpr basic_string_view(const charT* str, size_type len);
 
-    @\added{template <class R>}@
-    @\added{constexpr basic_string_view(const R\& r);}@
+    
 
     @\added{template <class It, class End>}@
     @\added{constexpr basic_string_view(It begin, End end);}@
 
     [...]
 };
-@\added{template<class R>}@
-@\added{basic_string_view(const R\&)}@
-@\added{    -> basic_string_view<ranges::range_value_t<R>>;}@
 @\added{template<class It, class End>}@
-@\added{basic_string_view(It, End) -> basic_string_view<remove_reference_t<iter_reference_t<It>>>;}@
+@\added{basic_string_view(It, End) -> basic_string_view<iter_value_t<It>>;}@
+
 
 \end{codeblock}
 \end{quote}
+
+%@\added{template <class R>}@
+%@\added{constexpr basic_string_view(const R\& r);}@
+%@\added{template<class R>}@
+%@\added{basic_string_view(const R\&)}@
+%@\added{    -> basic_string_view<ranges::range_value_t<const R>>;}@
 
 Change in \textbf{[string.view.cons] 20.4.2.1}:
 
@@ -154,38 +157,38 @@ Add after 7
 
 \begin{quote}
 \begin{addedblock}
-\begin{itemdecl}
-template <class R>
-constexpr basic_string_view(const R& r);
+%\begin{itemdecl}
+%template <class R>
+%constexpr basic_string_view(const R& r);
+%
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \constraints
+%    \begin{itemize}
+%        \item \tcode{const R} satisfies \tcode{ranges::contiguous_range},
+%        \item \tcode{const R} satisfies \tcode{ranges::sized_range},
+%        \item \tcode{is_same_v<ranges::range_value_t<const R>, charT>} is \tcode{true},
+%        \item \tcode{is_convertible_v<const R\&, const charT*>} is \tcode{false}, and
+%        \item If the qualified-id \tcode{R::traits_type} is valid and denotes a type, \tcode{is_same_v<R::traits\_type,traits>} is \tcode{true}.
+%    \end{itemize}
+% 
+%	\expects
+%	 \begin{itemize}
+%		\item \tcode{const R} models \tcode{ranges::contiguous_range}, and
+%		\item \tcode{const R} models \tcode{ranges::sized_range}.
+%	\end{itemize}
+%
+%    \effects
+%    Initializes \tcode{data\_} with \tcode{ranges::data(r)} and \tcode{size\_} with \tcode{ranges::size(r)}.
+%
+%
+%    \throws
+%    What and when \tcode{ranges::data(r)} and \tcode{ranges::size(r)} throw.
+%
 
-\end{itemdecl}
 
-\begin{itemdescr}
-    \constraints
-    \begin{itemize}
-        \item \tcode{const R} satisfies \tcode{ranges::contiguous_range},
-        \item \tcode{const R} satisfies \tcode{ranges::sized_range},
-        \item \tcode{is_same_v<ranges::range_value_t<const R>, charT>} is true,
-        \item \tcode{is_convertible_v<const R\&, const charT*>} is \tcode{false},
-        \item If the qualified-id \tcode{R::traits_type} is valid and denotes a type, \tcode{is_same_v<R::traits\_type,traits>} is true.
-    \end{itemize}
- 
-	\expects
-	 \begin{itemize}
-		\item \tcode{const R} models \tcode{ranges::contiguous_range},
-		\item \tcode{const R} models \tcode{ranges::sized_range}.
-	\end{itemize}
-
-    \effects
-    Initializes \tcode{data\_} with \tcode{ranges::data(r)} and \tcode{size\_} with \tcode{ranges::size(r)}.
-
-
-    \throws
-    What and when \tcode{ranges::data(r)} and \tcode{ranges::size(r)} throw.
-
-
-
-\end{itemdescr}
+%\end{itemdescr}
 
 \begin{itemdecl}
 template <class It, class End>
@@ -198,24 +201,19 @@ constexpr basic_string_view(It first, End last);
     \begin{itemize}
         \item \tcode{It} satisfies \tcode{contiguous_iterator},
         \item \tcode{End} satisfies \tcode{sized_sentinel_for<It>},
-        \item \tcode{is_same_v<iter_value_t<It>, charT>} is true,
-        \item \tcode{is_convertible_v<End, size_type>} is false.
+        \item \tcode{is_same_v<iter_value_t<It>, charT>} is \tcode{true}, and
+        \item \tcode{is_convertible_v<End, size_type>} is \tcode{false}.
     \end{itemize}
 
     \expects
     \begin{itemize}
 	    \item \range{first}{last} is a valid range,
-	    \item \tcode{It} models \tcode{contiguous_iterator},
+	    \item \tcode{It} models \tcode{contiguous_iterator}, and
     	\item \tcode{End} models \tcode{sized_sentinel_for<It>}.
 	\end{itemize}
 
     \effects
-    Initializes
-    
-    \begin{itemize}
-    	\item \tcode{data_} with \tcode{to_address(first)},
-    	\item \tcode{size_} with \tcode{last - first}.
-    \end{itemize}
+    Initializes \tcode{data_} with \tcode{to_address(first)}, and \tcode{size_} with \tcode{last - first}.
 
 \end{itemdescr}
 \end{addedblock}
@@ -230,7 +228,7 @@ Add a new section [string.view.deduction] to describe the following deduction gu
 \begin{addedblock}
 \begin{itemdecl}
 template <class It, class End>
-basic_string_view(It, End) -> basic_string_view<remove_reference_t<iter_reference_t<It>>>;
+basic_string_view(It, End) -> basic_string_view<iter_value_t<It>>;
 \end{itemdecl}
 \begin{itemdescr}
     \constraints
@@ -240,14 +238,14 @@ basic_string_view(It, End) -> basic_string_view<remove_reference_t<iter_referenc
     \end{itemize}
 \end{itemdescr}
 
-\begin{itemdecl}
-template<class R>
-basic_string_view(const R&)
--> basic_string_view<ranges::range_value_t<R>>;
-\end{itemdecl}
-\begin{itemdescr}
-    \constraints \tcode{const R} satisfies \tcode{ranges::contiguous_range}.
-\end{itemdescr}
+%\begin{itemdecl}
+%template<class R>
+%basic_string_view(const R&)
+%-> basic_string_view<ranges::range_value_t<const R>>;
+%\end{itemdecl}
+%\begin{itemdescr}
+%    \constraints \tcode{const R} satisfies \tcode{ranges::contiguous_range}.
+%\end{itemdescr}
 
 \end{addedblock}
 \end{quote}

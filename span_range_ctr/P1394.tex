@@ -136,7 +136,7 @@ Change in \textbf{[views.span] 21.7.3}:
 // [span.cons], constructors, copy, and assignment
 constexpr span() noexcept;
 @\added{template <class It>}@
-constexpr span( @\removed{pointer ptr}@ @\added{It begin}@, index_type count);
+constexpr span( @\removed{pointer ptr}@ @\added{It begin}@, size_type count);
 @\removed{constexpr span(pointer first, pointer last);}@
 @\added{template <class It, class End>}@
 @\added{constexpr span(It first, End last);}@
@@ -204,13 +204,13 @@ In 21.7.3.2 [span.cons]
 \end{itemdescr}
 \begin{removedblock}
 \begin{itemdecl}
-constexpr span(pointer ptr, index_type count);
+constexpr span(pointer ptr, size_type count);
 \end{itemdecl}
 \end{removedblock}
 \begin{addedblock}
 \begin{itemdecl}
 template <class It>
-constexpr span(It first, index_type count);
+constexpr span(It first, size_type count);
 \end{itemdecl}
 \end{addedblock}
 \begin{itemdescr}
@@ -218,7 +218,7 @@ constexpr span(It first, index_type count);
     \pnum
     \constraints
     \begin{itemize}
-    	\item \tcode{It} satisfies \tcode{contiguous_iterator},
+    	\item \tcode{It} satisfies \tcode{contiguous_iterator}, and
     	\item \tcode{is_convertible_v<remove_reference_t<iter_reference_t<It>>(*)[], element_type(*)[]>} is true.
     	 \begin{note}The intent is to allow only qualification conversions of the iterator reference type to \tcode{element_type} \end{note}
     \end{itemize}
@@ -228,7 +228,7 @@ constexpr span(It first, index_type count);
 \begin{itemize}
     \item \range{\changed{ptr}{first}}{ \changed{ptr}{first} + count} shall be a valid range.
 \begin{addedblock}
-    \item \tcode{It} models \tcode{contiguous_iterator},
+    \item \tcode{It} models \tcode{contiguous_iterator}.
 \end{addedblock}
     \item If \tcode{extent} is not equal to \tcode{dynamic_extent},
     then \tcode{count} shall be equal to \tcode{extent}.
@@ -246,8 +246,8 @@ constexpr span(It first, index_type count);
     \end{removedblock}
     \begin{addedblock}
     \begin{itemize}
-    	\item \tcode{size() == count} is true
-    	\item \tcode{to_address(first) == data()} is true
+    	\item \tcode{size() == count} is \tcode{true}.
+    	\item \tcode{to_address(first) == data()} is \tcode{true}.
     %%	\item if \tcode{count} is not equal to \tcode{0}, \tcode{data() == addressof(*first)} is true, otherwise, \tcode{data() == nullptr} is true.
     \end{itemize}
 	\end{addedblock}	
@@ -301,10 +301,10 @@ constexpr span(It first, End last);
 	 \pnum
 	\constraints
 	\begin{itemize}
-		\item \tcode{is_convertible_v<remove_reference_t<iter_reference_t<It>>(*)[], element_type(*)[]>} is true,
+		\item \tcode{is_convertible_v<remove_reference_t<iter_reference_t<It>>(*)[], element_type(*)[]>} is \tcode{true},
 		\begin{note}The intent is to allow only qualification conversions of the iterator reference type to \tcode{element_type} \end{note},
-		\item \tcode{It} satisfies \tcode{contiguous_iterator}
-		\item \tcode{End} satisfies \tcode{sized_sentinel_for<It>},
+		\item \tcode{It} satisfies \tcode{contiguous_iterator},
+		\item \tcode{End} satisfies \tcode{sized_sentinel_for<It>}, and
 		\item \tcode{is_convertible_v<End, size_t>} is false.
 	\end{itemize}
 
@@ -326,8 +326,8 @@ constexpr span(It first, End last);
     \ensures
     
     \begin{itemize}
-    	\item \tcode{size() == last - first} is true,
-    	\item \tcode{to_address(first) == data()} is true.
+    	\item \tcode{size() == last - first} is \tcode{true}, and
+    	\item \tcode{to_address(first) == data()} is \tcode{true}.
     	%% \item if \tcode{first != last} \tcode{data() == addressof(*first)} is true, otherwise, \tcode{data() == nullptr} is true.
     \end{itemize}
    
@@ -413,19 +413,22 @@ constexpr span(R&& r);
     \begin{itemize}
        \item \tcode{extent == dynamic_extent} is true,
        \item \tcode{R} satisfies \tcode{ranges::contiguous_range} and \tcode{ranges::sized_range},
-       \item either \tcode{R} satisfies \placeholder{forwarding-range} or \tcode{is_const_v<element_type>} is true,
-       \item \tcode{remove_reference_t<R>} is not a specialization of \tcode{span},
-       \item \tcode{remove_reference_t<R>} is not a specialization of \tcode{array},
-       \item \tcode{is_array_v<remove_reference_t<R>>} is \tcode{false},
-       \item \tcode{is_convertible_v<remove_reference_t<iter_reference_t<ranges::iterator_t<R>>>(*)[], element_type(*)[]>} is true
+       \item either \tcode{R} satisfies \tcode{\placeholder{forwarding-range}} or \tcode{is_const_v<element_type>} is true,
+       \item \tcode{remove_cvref_t<R>} is not a specialization of \tcode{span},
+       \item \tcode{remove_cvref_t<R>} is not a specialization of \tcode{array},
+       \item \tcode{is_array_v<remove_cvref_t<R>>} is \tcode{false}, and
+       \item \tcode{is_convertible_v<remove_reference_t<ranges::range_reference_t<R>>(*)[], element_type(*)[]>} is true
        \begin{note}The intent is to allow only qualification conversions of the iterator reference type to \tcode{element_type} \end{note}.
     \end{itemize}
 
-	\expects \tcode{R} models \tcode{ranges::contiguous_range} and \tcode{ranges::sized_range}.
+	\expects 
+	\begin{itemize}
+	\item \tcode{R} models \tcode{ranges::contiguous_range} and \tcode{ranges::sized_range}, and
+	\item If \tcode{is_const_v<element_type>} is \tcode{false}, \tcode{R} models \tcode{\placeholder{forwarding-range}}.
+	\end{itemize}
 
     \pnum
-    \ensures
-    \tcode{size() == ranges::size(r) \&\& data() == ranges::data(r)} is true.
+    \effects Initializes \tcode{data_} with \tcode{ranges::data(r)} and \tcode{size_} with \tcode{ranges::size(r)}.
 
     \pnum
     \throws
@@ -453,20 +456,16 @@ Add a new section [span.deduction] to describe the following deduction guides:
 \begin{addedblock}
 \begin{itemdecl}
 template <class It, class End>
-span(It, End) -> span(It, End) -> span<remove_reference_t<iter_reference_t<It>>>;
+span(It, End) -> span<remove_reference_t<iter_reference_t<It>>>;
 \end{itemdecl}
 \begin{itemdescr}
     \constraints
-\begin{itemize}
-    \item \tcode{It} satisfies \tcode{contiguous_iterator},
-    \item \tcode{End} satisfies \tcode{sized_sentinel_for<It>}.
-\end{itemize}
-
+    \tcode{It} satisfies \tcode{contiguous_iterator}.
 \end{itemdescr}
 
 \begin{itemdecl}
 template<class R>
-span(R&&) -> span<ranges::range_value_t<R>>;
+span(R&&) -> span<remove_reference_t<ranges::range_reference_t<R>>>;
 \end{itemdecl}
 \begin{itemdescr}
     \constraints \tcode{R} satisfies \tcode{ranges::contiguous_range}.
