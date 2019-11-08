@@ -869,8 +869,8 @@ namespace std::ranges {
 		constexpr iterator_t<V> base() const @\added{\& requires copyable<iterator_t<V>>}@;
 		@\added{constexpr iterator_t<V> base() \&\&;}@
 		constexpr range_reference_t<V> operator*() const;
-		constexpr iterator_t<V> operator->() const @\added{requires copyable<iterator_t<V>>}@;
-		requires @\placeholder{has-arrow}@<iterator_t<V>>;
+		constexpr iterator_t<V> operator->() const
+		requires @\placeholder{has-arrow}@<iterator_t<V>> @\added{\&\& copyable<iterator_t<V>>}@;
 
 		constexpr iterator& operator++();
 		constexpr void operator++(int);
@@ -972,8 +972,8 @@ constexpr range_reference_t<V> operator*() const;
 
 \indexlibrarymember{operator->}{filter_view::iterator}%
 \begin{itemdecl}
-	constexpr iterator_t<V> operator->() const @\added{requires copyable<iterator_t<V>>}@;
-	requires @\placeholder{has-arrow}@<iterator_t<V>>;
+	constexpr iterator_t<V> operator->() const
+	requires @\placeholder{has-arrow}@<iterator_t<V>> @\added{\&\& copyable<iterator_t<V>>}@;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -1438,7 +1438,88 @@ the expression \tcode{views::drop_while(E, F)}
 is expression-equivalent to \tcode{drop_while_view\{E, F\}}.
 
 \rSec2[range.join]{Join view}
-...
+\rSec3[range.join.iterator]{Class template \tcode{join_view::iterator}}
+
+\begin{codeblock}
+namespace std::ranges {
+	template<class V>
+	template<bool Const>
+	struct join_view<V>::iterator {
+		private:
+		using Parent =                                              // \expos
+		conditional_t<Const, const join_view, join_view>;
+		using Base   = conditional_t<Const, const V, V>;            // \expos
+		
+		static constexpr bool ref_is_glvalue =                      // \expos
+		is_reference_v<range_reference_t<Base>>;
+		
+		iterator_t<Base> outer_ = iterator_t<Base>();               // \expos
+		iterator_t<range_reference_t<Base>> inner_ =                // \expos
+		iterator_t<range_reference_t<Base>>();
+		Parent* parent_ = nullptr;                                  // \expos
+		
+		constexpr void satisfy();                                   // \expos
+		public:
+		using iterator_concept  = @\seebelow@;
+		using iterator_category = @\seebelow@;
+		using value_type        = range_value_t<range_reference_t<Base>>;
+		using difference_type   = @\seebelow@;
+		
+		iterator() = default;
+		constexpr iterator(Parent& parent, iterator_t<V> outer);
+		constexpr iterator(iterator<!Const> i)
+		requires Const &&
+		convertible_to<iterator_t<V>, iterator_t<Base>> &&
+		convertible_to<iterator_t<InnerRng>,
+		iterator_t<range_reference_t<Base>>>;
+		
+		constexpr decltype(auto) operator*() const { return *inner_; }
+		
+		constexpr iterator_t<Base> operator->() const
+		requires @\placeholder{has-arrow}@<iterator_t<Base>> @\added{\&\& copyable<iterator_t<Base>>}@;
+		
+		constexpr iterator& operator++();
+		constexpr void operator++(int);
+		constexpr iterator operator++(int)
+		requires ref_is_glvalue && forward_range<Base> &&
+		forward_range<range_reference_t<Base>>;
+		
+		constexpr iterator& operator--()
+		requires ref_is_glvalue && bidirectional_range<Base> &&
+		bidirectional_range<range_reference_t<Base>>;
+		
+		constexpr iterator operator--(int)
+		requires ref_is_glvalue && bidirectional_range<Base> &&
+		bidirectional_range<range_reference_t<Base>>;
+		
+		friend constexpr bool operator==(const iterator& x, const iterator& y)
+		requires ref_is_glvalue && equality_comparable<iterator_t<Base>> &&
+		equality_comparable<iterator_t<range_reference_t<Base>>>;
+		
+		friend constexpr decltype(auto) iter_move(const iterator& i)
+		noexcept(noexcept(ranges::iter_move(i.inner_))) {
+			return ranges::iter_move(i.inner_);
+		}
+		
+		friend constexpr void iter_swap(const iterator& x, const iterator& y)
+		noexcept(noexcept(ranges::iter_swap(x.inner_, y.inner_)));
+	};
+}
+\end{codeblock}
+\pnum
+\tcode{iterator::iterator_concept} is defined as follows:
+\begin{itemize}
+	\item If \tcode{ref_is_glvalue} is \tcode{true} and
+	\tcode{Base} and \tcode{range_reference_t<Base>} each model
+	\libconcept{bidirectional_range}, then \tcode{iterator_concept} denotes
+	\tcode{bidirectional_iterator_tag}.
+	\item Otherwise, if \tcode{ref_is_glvalue} is \tcode{true} and
+	\tcode{Base} and \tcode{range_reference_t<Base>}
+	each model \libconcept{forward_range}, then \tcode{iterator_concept} denotes
+	\tcode{forward_iterator_tag}.
+	\item Otherwise, \tcode{iterator_concept} denotes \tcode{input_iterator_tag}.
+\end{itemize}
+
 \pnum
 \tcode{iterator::iterator_category} is defined as follows:
 \begin{itemize}
@@ -1460,6 +1541,47 @@ is expression-equivalent to \tcode{drop_while_view\{E, F\}}.
 	\added{Otherwise, \tcode{iterator_category} denotes \tcode{output_iterator_tag}.}
 \end{itemize}
 ...
+
+
+\begin{itemdecl}
+	constexpr iterator(Parent& parent, iterator_t<V> outer)
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects
+	Initializes \tcode{outer_} with \tcode{\added{std::move(}outer\added{)}} and
+	\tcode{parent_} with \tcode{addressof(parent)}; then calls \tcode{satisfy()}.
+\end{itemdescr}
+
+
+\begin{itemdecl}
+	constexpr iterator(iterator<!Const> i)
+		requires Const &&
+		convertible_to<iterator_t<V>, iterator_t<Base>> &&
+		convertible_to<iterator_t<InnerRng>,
+		iterator_t<range_reference_t<Base>>>;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects
+	Initializes \tcode{outer_} with \tcode{std::move(i.outer_)},
+	\tcode{inner_} with \tcode{std::move(i.inner_)}, and
+	\tcode{parent_} with \tcode{i.parent_}.
+\end{itemdescr}
+
+
+\begin{itemdecl}
+	constexpr iterator_t<Base> operator->() const
+	requires @\placeholder{has-arrow}@<iterator_t<Base>>  @\added{\&\& copyable<iterator_t<Base>>}@;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects
+	Equivalent to \tcode{return inner_;}
+\end{itemdescr}
 
 \rSec2[range.split]{Split view}
 
