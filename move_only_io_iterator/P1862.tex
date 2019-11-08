@@ -869,7 +869,7 @@ namespace std::ranges {
 		constexpr iterator_t<V> base() const @\added{\& requires copyable<iterator_t<V>>}@;
 		@\added{constexpr iterator_t<V> base() \&\&;}@
 		constexpr range_reference_t<V> operator*() const;
-		constexpr iterator_t<V> operator->() const
+		constexpr iterator_t<V> operator->() const @\added{requires copyable<iterator_t<V>>}@;
 		requires @\placeholder{has-arrow}@<iterator_t<V>>;
 
 		constexpr iterator& operator++();
@@ -968,6 +968,45 @@ constexpr range_reference_t<V> operator*() const;
 \begin{itemdescr}
 \pnum
 \effects Equivalent to: \tcode{return *current_;}
+\end{itemdescr}
+
+\indexlibrarymember{operator->}{filter_view::iterator}%
+\begin{itemdecl}
+	constexpr iterator_t<V> operator->() const @\added{requires copyable<iterator_t<V>>}@;
+	requires @\placeholder{has-arrow}@<iterator_t<V>>;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects
+	Equivalent to: \tcode{return current_;}
+\end{itemdescr}
+
+\indexlibrarymember{operator++}{filter_view::iterator}%
+\begin{itemdecl}
+	constexpr iterator& operator++();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock} 
+   current_ = ranges::find_if(@\added{std::move(}@++current_@\added{)}@, 
+        ranges::end(parent_->base_), ref(*parent_->pred_));
+   return *this;
+\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{operator++}{filter_view::iterator}%
+\begin{itemdecl}
+	constexpr void operator++(int);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects
+	Equivalent to \tcode{++*this}.
 \end{itemdescr}
 
 ...
