@@ -1,0 +1,216 @@
+\documentclass[a4paper,11pt]{article}
+\title{\textbf{Reflection on attributes}}
+\author{Corentin Jabot}
+\date{}
+
+\usepackage[margin=0.5in]{geometry}
+\usepackage[usenames, dvipsnames]{color}
+\definecolor{light-gray}{gray}{0.98}
+
+\usepackage{listings}
+\lstset{language=C++,
+                basicstyle=\ttfamily,
+                keywordstyle=\color{blue}\ttfamily,
+                stringstyle=\color{red}\ttfamily,
+                commentstyle=\color{OliveGreen}\ttfamily,
+                xleftmargin=0cm,
+                backgroundcolor=\color{light-gray},
+                frame=tlbr,framesep=6pt,framerule=0pt
+}
+
+\begin{document}
+
+\maketitle
+
+\section{Reflection on attributes}\label{reflection-on-attributes}
+
+There are numerous use cases for reflection on attributes and they do
+open possibilities that reflection on other entity do not.
+
+Most importantly, it could be used as tags/filters to apply
+transformations to only specific entities. For example, :
+
+\begin{lstlisting}
+[[qt::signal]] void f();
+void g();
+\end{lstlisting}
+
+Here, \texttt{f()} is a Qt signal, but since signals are regular
+functions, it make no sense to abuse the type-system with something like
+\texttt{QSignal\textless{}void\textgreater{}\ f();} to be able to filter
+signals.
+
+A prime use case for reflection is also serialization and data mapping.
+Users may want to only serialize specific field. Here we map the member
+\texttt{m\_name} to a json field \texttt{name}
+
+\begin{lstlisting}
+struct Foo {
+    [[json:json_value("name")]] std::string m_name;
+    std::string m_buffer;
+};
+\end{lstlisting}
+
+Beyond filtering, reflecting on attributes combined with code-injection
+would also enable features similar to python generators.
+
+But, how can you extract attributes parameters ? \textbf{I propose that
+user-defined attributes can be declared before use.}
+
+Placeholder syntax: :
+
+\begin{lstlisting}
+namespace json {
+    using json_value_attribute = [[json_value(const char*)]];
+}
+\end{lstlisting}
+
+This declares an attribute \texttt{json:json\_value} taking a single
+parameter as a \texttt{const\ char*}.
+
+From this declaration, the compiler would generate a structure that
+could look like :
+
+\begin{lstlisting}
+struct json_value_attribute {
+    json_value_attribute() = delete;
+    static auto name();  // returns "json_value"
+    auto get_args_count() const; // returns 1;
+    template<int N, std::enable_if_t<N == 0, int> = 0>
+    const char* arg() const;
+};
+\end{lstlisting}
+
+Where:
+\begin{itemize}
+\item
+  name() is the name of the attribute
+\item
+  args\_count() returns the number of attributes. This can varies at
+  each instantiation because attributes support variadic parameters
+\item
+  arg\textless{}N\textgreater{} returns the parameter at position N
+\end{itemize}
+
+Attributes can have a variadic number of parameters, for example
+\texttt{{[}{[}foo(double,\ int...){]}{]}}. From this attribute, the
+compiler can generate the following structure. :
+
+\begin{lstlisting}
+struct foo_attribute {
+    foo_attribute() = delete;
+    auto get_args_count() const;
+    template<int N, std::enable_if_t<N == 0, int> = 0>
+    double arg() const;
+    template<int N, std::enable_if_t<N >= 1, int> = 0>
+    int arg() const;
+};
+\end{lstlisting}
+
+Because the number of parameters may vary from instance to instance, we
+can not make use of a tuple-like object.
+
+From there, querying attributes would be rather straight forward.
+
+For example, to iterate over the serializable field of a struct/class
+(using syntax from P0953R0) :
+
+\begin{lstlisting}
+constexpr for(RecordMember const * member 
+                 : meta->get_public_data_members()) {
+    constexpr for(reflect::Attribute const* attribute 
+                                    : member->get_attributes()) {
+        if(std::is_same_v<unreflexpr(attribute), json::json_value_attribute>) {
+            json[attribute->args().get<0>()] = to_json(....);
+        }
+    }
+}
+\end{lstlisting}
+
+There are a few benefits to this approach:
+
+Forcing attributes to be declared can let the compiler provide better
+diagnostics when a typo is made. :
+
+\begin{lstlisting}
+[[json:jsonvalue("name")]]  //Warning, did you mean json_value ?
+\end{lstlisting}
+
+It also enforces that the proper number and type of parameters are
+given. For example, \texttt{{[}{[}deprecated(){]}{]}} requires that its
+optional parameter be a string, which is currently handled on a case by
+case basis by the compiler.
+
+Similarly, when querying for attributes, there is no need to fiddle with
+strings, this can it can lead to better tooling (attribute completion)
+and make it impossible to reflect on attributes that do not exist. :
+
+\begin{lstlisting}
+// typo, but how can the compiler possibly know that ?
+member->has_attribute("json_vale");
+\end{lstlisting}
+
+It also unify the type system namespaces with the attributes namespaces,
+which would be hard to reconcile otherwise.
+
+The type of attributes parameters is not enforced at the language level,
+so the language accept mixed-type attributes value. :
+
+\begin{lstlisting}
+[[foo(0)]] void f();
+[[foo("bar")]] void g();
+\end{lstlisting}
+
+I do not offer a mechanism to support this use case. However, it could
+be solved by the use of a \texttt{constexpr} variant-like type: :
+
+\begin{lstlisting}
+namespace foo {
+    using foo_attribute = [[foo(std::static_variant<int, const char*>)]];
+}
+\end{lstlisting}
+
+I do believe this is out of scope of the reflection proposal, even if it
+would be worth exploring.
+
+In the same fashion, we could support optional parameters by using a
+\texttt{constexpr} \texttt{std::optional} like type, and/or supporting
+default values for attributes :
+
+\begin{lstlisting}
+namespace foo {
+    using foo_attribute = [[foo(int, int = 0)]];
+}
+\end{lstlisting}
+
+\subsection{Compatibility with toolings and undeclared
+attributes:}\label{compatibility-with-toolings-and-undeclared-attributes}
+
+Some attributes are used only by external tools and should therefore not
+required to be declared before being used. However that begs the
+question of how compilers should handle attributes they do not know
+about. Requiring a declaration would be a breaking change so it is not
+possible.
+
+Obviously, only attributes that are declared can be reflected upon.
+
+\subsection{Compatibility with standard
+attributes:}\label{compatibility-with-standard-attributes}
+
+Attributes that we want to expose to reflection could be declared in the
+namespace std. We may need to have a special handling so that standard
+attributes can be declared in the namespace std while not being in any
+namespace.
+
+User-defined attributes must be in a namespace. This is to avoid name
+collision with future standard attributes. It is therefore invalid to
+declare attributes in the global namespace.
+
+\subsection{Compatibility with
+contracts}\label{compatibility-with-contracts}
+
+Contracts-related attributes are not declared (and therefore)
+reflect-able upon both because it would make little sense and their
+format is not identical to other attribute.
+
+\end{document}
