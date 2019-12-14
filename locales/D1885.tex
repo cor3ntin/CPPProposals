@@ -81,33 +81,33 @@ encoding is therefore presumed with more or less success.
 Generally, it is useful to know the encoding of a string when
 
 \begin{itemize}
-    \item Transferring data as text between systems or processes (io)
-    \item Textual transforming of data
+    \item Transferring data as text between systems or processes (I/O)
+    \item Textual transformation of data
     \item Interpretation of a piece of data
 \end{itemize}
 
-In the purview of the standard, text i/o text originates from
+In the purview of the standard, text I/O text originates from
 \begin{itemize}
     \item The source code (literals)
     \item The iostream library as well as system functions
     \item Environment variables and command-line arguments intended to be interpreted as text.
 \end{itemize}
 
-Locales provide text and transformations and conversions facilities and as such, in the current model have an encoding attached to them.
+Locales provide text transformation and conversion facilities and as such, in the current model have an encoding attached to them.
 
 There are therefore 3 sets of encodings of primary interest:
 
 \begin{itemize}
     \item The encoding of narrow and wide characters and string literals
     \item The narrow and wide encodings used by a program when sending or receiving strings from its environment
-    \item The encoding of narrow and wide characters attached to a std::locale object
+    \item The encoding of narrow and wide characters attached to a \tcode{std::locale} object
 \end{itemize}
 
 \note Because they have different code units sizes, narrow and wide strings have different encodings.
-char8_t, char16_t, char32_t literals are assumed to be respectively UTF-8, UTF-16 and UTF-32 encoded.
+\tcode{char8_t}, \tcode{char16_t}, \tcode{char32_t} literals are assumed to be respectively UTF-8, UTF-16 and UTF-32 encoded.
 \endnote
 
-\note A program may have to deal with more encoding - for example, on windows, the encoding of the console attached to cout may be different from the system encoding. 
+\note A program may have to deal with more encoding - for example, on Windows, the encoding of the console attached to \tcode{cout} may be different from the system encoding. 
 
 Likewise depending on the platform, paths may or may not have an encoding attached to them, and that encoding may either be a property of the platform or the filesystem itself. 
 \endnote
@@ -151,7 +151,7 @@ This database lists over 250 registered character sets and for each:
     \item A set of known aliases
 \end{itemize}
 
-We propose to use that information to reliably identify encoding across implementation and systems.
+We propose to use that information to reliably identify encoding across implementations and systems.
 
 
 \section{Design Considerations}
@@ -222,7 +222,7 @@ int main() {
 }
 \end{codeblock}
 
-compiled with \tcode{g++ -fwide-exec-charset=EBCDIC-US -fexec-charset=SHIFT_JIS}, this program may display:
+Compiled with \tcode{g++ -fwide-exec-charset=EBCDIC-US -fexec-charset=SHIFT_JIS}, this program may display:
 
 \begin{codeblock}
 Literal Encoding: SHIFT_JIS (iana mib: 17)
@@ -249,7 +249,7 @@ Aliases:
 
 The following proposal has been prototyped using a modified version of GCC to expose the encoding information.
 
-On windows, the run-time encoding can be determined by \tcode{GetACP} - and then map to MIB values, while on POSIX platform it corresponds to value of \tcode{nl_langinfo} when the user ("") locale is set - before the program's locale is set to \tcode{C}.
+On Windows, the run-time encoding can be determined by \tcode{GetACP} - and then map to MIB values, while on POSIX platform it corresponds to value of \tcode{nl_langinfo} when the user ("") locale is set - before the program's locale is set to \tcode{C}.
 
 On OSX \tcode{CFStringGetSystemEncoding} and \tcode{CFStringConvertEncodingToIANACharSetName} can also be used.
 
@@ -258,10 +258,10 @@ While exposing the literal encoding is novel, a few libraries do expose the syst
 
 \section{Future work}
 
-Exposing the notion of text encoding in the core and library language give use the tools to simplify some
+Exposing the notion of text encoding in the core and library language gives us the tools to solve some
 problems in the standard.
 
-Notably, it offers a sensible way to do locale-independent, encoding aware padding in \tcode{std::format} as in described in \cite{P1868}.
+Notably, it offers a sensible way to do locale-independent, encoding-aware padding in \tcode{std::format} as in described in \cite{P1868}.
 
 While this give us the tools to handle encoding, it does not fix the core wording.
 
@@ -270,21 +270,19 @@ While this give us the tools to handle encoding, it does not fix the core wordin
 
 \section{Proposed wording}
 
-(which is known to be terrible)
-
-New header <text_encoding>
+Add a new header \tcode{<text_encoding>}.
 
 \begin{quote}
 \begin{addedblock}
     
-A \tcode{text\_encoding} describe a text encoding portably across platforms by exposing data from the Character Sets databased described by \cite{rfc2978} and \cite{rfc3808}.
+A \tcode{text\_encoding} describes a text encoding portably across platforms by exposing data from the Character Sets database described by \cite{rfc2978} and \cite{rfc3808}.
     
 \begin{codeblock}
     
 namespace std {
 
 struct text_encoding {    
-    enum id {
+    enum class id {
         other = 1,
         unknown = 2,
         ascii = 3,
@@ -298,7 +296,7 @@ struct text_encoding {
         reserved = 3000
     };
     
-    constexpr text_encoding(const char* name);
+    constexpr explicit text_encoding(const char* name);
     
     constexpr int mib() const noexcept;
     constexpr const char* name() const noexcept;
@@ -318,7 +316,7 @@ struct text_encoding {
     static text_encoding wide_for_locale(const std::locale&);
     
     private:
-        unsigned mib_; // \expos
+        int mib_; // \expos
         std::string name_; // \expos
     };
 }
@@ -331,19 +329,20 @@ struct text_encoding {
 
 \begin{addedblock}
     
-\pnum A \defn{register-character-set} is a character set registered by the process described in \cite{rfc2978} and which is known of the implementation.
+\pnum A \defn{registered-character-set} is a character set registered by the process described in \cite{rfc2978} and which is known of the implementation.
 
-\pnum Let \tcode{bool COMP_NAME(const char* a, const char* b)} be a function that returns \tcode{true} if two ASCII string are identical equal, ignoring case and all \tcode{-} and  \tcode{_} characters.
+\pnum Let \tcode{bool COMP_NAME(const char* a, const char* b)} be a function that returns \tcode{true} if two ASCII strings are identical equal, ignoring case and all \tcode{-} and  \tcode{_} characters.
 
 \pnum 
     
 \begin{itemdecl}
-constexpr text_encoding(const char* name);
+constexpr explicit text_encoding(const char* name);
 \end{itemdecl}
 
 \begin{itemdescr}
-    For each implementation-defined alias \tcode{a} of each \defn{register-character-set}, if \tcode{COMP_NAME(a, name.c_str())} is true, initialize
-    \tcode{mib_} with the \tcode{MIBenum} associated with that \defn{register-character-set}. Otherwise initialize \tcode{mib_} with \tcode{text_encoding::id::other}.    
+    \effects
+    If there exists an implementation-defined alias \tcode{a} of \defn{registered-character-set} such that \tcode{COMP_NAME(a, name.c_str())} is \tcode{true}, initialize
+    \tcode{mib_} with the \tcode{MIBenum} associated with that \defn{registered-character-set}. Otherwise, initialize \tcode{mib_} with \tcode{text_encoding::id::other}.
  
 
     \ensures \tcode{name == name_}.
@@ -351,7 +350,7 @@ constexpr text_encoding(const char* name);
 
 
 \begin{itemdecl}
-constexpr int text_encoding::mib() const noexcept;
+constexpr int mib() const noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -374,11 +373,11 @@ constexpr const char* name() const noexcept;
 
 
 \begin{itemdecl}
-constexpr auto text_encoding::aliases() const noexcept;
+constexpr auto aliases() const noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-\returns an implementation defined object \tcode{r} representing a sequences of aliases such that:
+\returns an implementation-defined object \tcode{r} representing a sequence of aliases such that:
 \begin{itemize}
     \item \tcode{ranges::view<decltype(r)>} is true,
     \item \tcode{ranges::random_access_range<decltype(r)>} is true,
@@ -386,13 +385,13 @@ constexpr auto text_encoding::aliases() const noexcept;
     \item \tcode{!ranges::empty(r) || mib() == id::other} is true.
 \end{itemize}
 
-\pnum If \tcode{mib()} is equal to the \tcode{MIBEnum} value of one of the \defn{register-character-sets}, \tcode{r[0]} is the name of the \defn{register-character-set}.
+\pnum If \tcode{mib()} is equal to the \tcode{MIBEnum} value of one of the \defn{registered-character-sets}, \tcode{r[0]} is the name of the \defn{registered-character-set}.
 
-\tcode{r} contains the aliases of the \defn{register-character-set} as specified by \cite{rfc2978}.
+\tcode{r} contains the aliases of the \defn{registered-character-set} as specified by \cite{rfc2978}.
 
-\pnum \tcode{r} may contain implementation defined values.
+\pnum \tcode{r} may contain implementation-defined values.
 
-\pnum \tcode{r} does not contain duplicated values - The equality of 2 values is determined by \tcode{COMP_NAME}.
+\pnum \tcode{r} does not contain duplicated values - the equality of 2 values is determined by \tcode{COMP_NAME}.
 
 \begin{note}
 The order of elements in \tcode{r} is unspecified.
@@ -401,7 +400,7 @@ The order of elements in \tcode{r} is unspecified.
 \end{itemdescr}
 
 \begin{itemdecl}
-constexpr bool text_encoding::operator==(const text_encoding & other) const;
+constexpr bool operator==(const text_encoding & other) const;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -412,15 +411,15 @@ otherwise
 \end{itemdescr}
 
 \begin{itemdecl}
-constexpr bool text_encoding::operator==(text_encoding::id i) const;
+constexpr bool operator==(text_encoding::id i) const;
 \end{itemdecl}
 
 \begin{itemdescr}
-\returns \tcode{(mib() != id::other)? mib() == i : false}.
+\returns \tcode{(mib() != id::other) ? mib() == i : false}.
 \end{itemdescr}
 
 \begin{itemdecl}
-static consteval text_encoding text_encoding::literal();
+static consteval text_encoding literal();
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -428,7 +427,7 @@ static consteval text_encoding text_encoding::literal();
 \end{itemdescr}
 
 \begin{itemdecl}
-static consteval text_encoding text_encoding::wide_literal();
+static consteval text_encoding wide_literal();
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -436,7 +435,7 @@ static consteval text_encoding text_encoding::wide_literal();
 \end{itemdescr}
 
 \begin{itemdecl}
-static text_encoding text_encoding::system();
+static text_encoding system();
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -450,7 +449,7 @@ This function should always return the same value during the lifetime of a progr
 \end{itemdescr}
 
 \begin{itemdecl}
-static text_encoding text_encoding::wide_system();
+static text_encoding wide_system();
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -465,7 +464,7 @@ This function should always during the same value during the lifetime of a progr
 
 \end{addedblock}
 
-In <locale>
+In \tcode{<locale>}:
 
 \begin{quote}
 \begin{addedblock}
