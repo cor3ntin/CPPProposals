@@ -161,9 +161,11 @@ In the context of \cite{P1935R1}, it is useful to keep in mind that locales affe
 \section{Specific issues with locale handling in C++}
 
 \subsection{Character Classification}
-Classification functions are affected by locales and work on code unit
-Classifications functions should be encoding dependent but not locale-dependent.
-Abstract characters properties are not affected by locale
+\begin{itemize}
+    \item Classification functions are affected by locales and work on code unit.
+    \item Classifications functions should be encoding dependent but not locale-dependent.
+    \item Abstract characters properties are not affected by locale.
+\end{itemize}
 
 \tcode{std::isalpha(‘a’)} should be universally true.
 
@@ -257,12 +259,14 @@ While mentioned frequently, this is simply something outside of our purview.
 Languages that do force UTF-8 are either less portable than C++ or force text conversions on I/O in environments that are not UTF-8.
 Several options can improve the situation
 
-1.  The initial call to \tcode{setlocale(LC_ALL, "C")} should respect the encoding, such that if the locale environment is \tcode{xx_YY.FOOBAR}, the call to \tcode{setlocale} should be \tcode{setlocale(LC_ALL, "C.FOOBAR")} on platforms on which such locale exist.
+\begin{enumerate}
+\item The initial call to \tcode{setlocale(LC_ALL, "C")} should respect the encoding, such that if the locale environment is \tcode{xx_YY.FOOBAR}, the call to \tcode{setlocale} should be \tcode{setlocale(LC_ALL, "C.FOOBAR")} on platforms on which such locale exist.
 For example, if the environment locale is \tcode{"en_GB.UTF-8"}, the locale at the beginning of the program should be \tcode{"C.UTF-8"}.
 
-2. \tcode{setlocale} should not modify the encoding implicitly or at all. Under a better model, locale and encoding should not be tied.
+\item \tcode{setlocale} should not modify the encoding implicitly or at all. Under a better model, locale and encoding should not be tied.
 However, not all encodings can represent all locales.
 In fact, only encodings mapping the entire Unicode character sets can represent all locale.
+\end{enumerate}
 
 Instead of passing the desired encoding in the locale string (i.e. \tcode{"en_US[.ENCODING]"}), \tcode{setlocale} could take an extra parameter
 \tcode{setlocale(int category, const char* name, text_encoding narrow_encoding);}
@@ -277,8 +281,10 @@ A call to the setlocale function may introduce a data race with other calls to t
 \end{quoteblock}
 
 This has a couple of well-documented issues:
-The lack of thread safety make usages of functions depending on the global locale racy and as such unusable in multi-threaded programs (the majority of programs going forward)
-The existence of a mutable global state force libraries to fend each other against improper \tcode{setlocale} usage, knowing there is no proper usage of \tcode{setlocale}.
+\begin{itemize}
+    \item The lack of thread safety make usages of functions depending on the global locale racy and as such unusable in multi-threaded programs (the majority of programs going forward).
+    \item The existence of a mutable global state force libraries to fend each other against improper \tcode{setlocale} usage, knowing there is no proper usage of \tcode{setlocale}.
+\end{itemize}
 
 
 This stem from a few incorrect assumptions:
