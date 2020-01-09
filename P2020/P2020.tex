@@ -96,7 +96,7 @@ By listing some of the issues and limitations of the current interfaces, we hope
 
 Wikipedia defines a locale as "\textbf{a set of parameters that defines the user's language, region and any special variant preferences that the user wants to see in their user interface}".
 
-There are over 4000 thousand spoken languages, hundreds of scripts (over 140 supported by Unicode) and 195 countries.
+There are over 4000 spoken languages, hundreds of scripts (over 140 supported by Unicode) and 195 countries.
 While platforms will not support as many locales as there are cultures, new locales are added regularly to platforms.
 The Common Locale Data Repository used by most platforms currently support over 700 locales.
 
@@ -110,15 +110,15 @@ Therefore, changing the locale affects the encoding and the encoding is not expo
 
 This of course stemmed from the fact that most, if not all, character sets used at the time these things were standardized were only able to represent a fraction of existing characters, and so were designed to be able to represent the characters most in use in a given language, or region.
 
-There is, however, no such thing as region-specific characters (This sentence contains the characters 로케일, a word meaning "locale" in Korean).
+There is, however, no such thing as region-specific characters (this sentence contains the characters 로케일, a word meaning "locale" in Korean).
 
 Locale, in the context of C++, is better understood as the set of rules governing the display and transformation of textual information, for a desired region, language, or culture.
 
 \section{What should be affected by locale}
 
-In a vacuum, a piece of text has an encoding, whether explicitly or not: The existence of an encoding is what defines text as opposed to a sequence of bytes that does not have an associated encoding.
+In a vacuum, a piece of text has an encoding, whether explicitly or not: the existence of an encoding is what defines text as opposed to a sequence of bytes that does not have an associated encoding.
 
-Text, however, does not have an associated locale: A given piece of text is unaffected by locale.
+Text, however, does not have an associated locale: a given piece of text is unaffected by locale.
 But locale may affect how that text was created and how it may be transformed.
 
 The following text operations may be affected by locales:
@@ -144,7 +144,7 @@ However there exist many numeral systems in use, most of which require character
 
 \subsection{Timezones and Calendars}
 
-Timezone are not related to locales. A timezone may span multiple locale regions and a single region may extend to many locales.
+Timezones are not related to locales. A timezone may span multiple locale regions and a single region may extend to many locales.
 However, locales do have an associated preferred calendar.
 For a given calendar, such as the gregorian calendar, locales may differ on what days are considered week days, or by which day is considered the fist of the week.
 This doesn't seem to be an issue in C++ at the present as a single calendar is provided.
@@ -161,9 +161,11 @@ In the context of \cite{P1935R1}, it is useful to keep in mind that locales affe
 \section{Specific issues with locale handling in C++}
 
 \subsection{Character Classification}
-Classification functions are affected by locales and work on code unit
-Classifications functions should be encoding dependent but not locale-dependent.
-Abstract characters properties are not affected by locale
+\begin{itemize}
+    \item Classification functions are affected by locales and work on code unit.
+    \item Classifications functions should be encoding dependent but not locale-dependent.
+    \item Abstract characters properties are not affected by locale.
+\end{itemize}
 
 \tcode{std::isalpha(‘a’)} should be universally true.
 
@@ -195,17 +197,17 @@ Alternatively, we might consider providing classification functions for Unicode 
 
 \subsection{\tcode{tolower}/\tcode{toupper} are broken}
 
-The two characters-based transformations tolower and toupper functions provided by C and C++ suffer from all the same issues as classification functions(see the previous section).
+The two characters-based transformations tolower and toupper functions provided by C and C++ suffer from all the same issues as classification functions (see the previous section).
 They do make an additional broken assumption:
-They return a single value representing a single code unit. \tcode{std::toupper} is declared as follow:
+they return a single value representing a single code unit. \tcode{std::toupper} is declared as follows:
 
 \begin{codeblock}
 template< class charT >
 charT toupper( charT ch, const locale& loc );
 \end{codeblock}
 
-These functions being transformations they may, in fact, be dependent of locale (regardless of encoding)
-The canonical example being the letter \UnicodeLetter{i} which might be uppercased \UnicodeLetter{I} or \UnicodeLetter{İ} (LATIN CAPITAL LETTER I WITH DOT ABOVE in a Turkish locale).
+These functions being transformations they may, in fact, be dependent of locale (regardless of encoding),
+the canonical example being the letter \UnicodeLetter{i} which might be uppercased \UnicodeLetter{I} or \UnicodeLetter{İ} (LATIN CAPITAL LETTER I WITH DOT ABOVE in a Turkish locale).
 
 There are also cases where a single codepoint is mapped to multiple code points when operating a case transformation.
 An example is \UnicodeLetter{ß} which might be uppercased as SS. The German language recently adopted \UnicodeLetter{ẞ} (LATIN CAPITAL LETTER SHARP S), both SS and \UnicodeLetter{ẞ} being valid and widespread upper casing of \UnicodeLetter{ß}.
@@ -236,16 +238,16 @@ auto unicode_toupper(codepoint, std::locale) -> codepoint;
 \subsection{The encoding of the system is not preserved at the start of the program}
 
 The \cite{C} standard specifies (C17 7.11.1.1.5) that
-At program startup, the equivalent of \tcode{setlocale(LC_ALL, "C");} is executed.
+at program startup, the equivalent of \tcode{setlocale(LC_ALL, "C");} is executed.
 
 There is no doubt that having the default behavior of C++ be independent of regional and localization settings is the right default.
 Many programs do not interact with users or need consistent behavior across environments that require they should not be affected by regionalization preferences.
 
 However, locale and encoding being tied under the \tcode{POSIX} and \tcode{C} models,
-The \tcode{"C"} locale specifies a limited character set that can be represented by the \tcode{ASCII} or \tcode{EBCDIC} encoding - although an encoding is not specified.
+the \tcode{"C"} locale specifies a limited character set that can be represented by the \tcode{ASCII} or \tcode{EBCDIC} encoding - although an encoding is not specified.
 
 However, in many cases, the environment is set up to handle UTF-8.
-On Linux, OSX, Android, iOS and many other environments, the environment encoding is UTF-8. The locale will often be of the form \tcode{lang_COUNTRY.UTF-8}
+On Linux, OSX, Android, iOS and many other environments, the environment encoding is UTF-8. The locale will often be of the form \tcode{lang_COUNTRY.UTF-8}.
 
 By setting the locale to \tcode{"C"} at the start of the program, the encoding information is lost.
 While P1885 \cite{P1885R0} offers a mechanism to query the environment encoding, we think the encoding information should be preserved.
@@ -257,18 +259,20 @@ While mentioned frequently, this is simply something outside of our purview.
 Languages that do force UTF-8 are either less portable than C++ or force text conversions on I/O in environments that are not UTF-8.
 Several options can improve the situation
 
-1.  The initial call to \tcode{setlocale(LC_ALL, "C")} should respect the encoding, such that if the locale environment is \tcode{xx_YY.FOOBAR}, the call to \tcode{setlocale} should be \tcode{setlocale(LC_ALL, "C.FOOBAR")} on platforms on which  such locale exist.
-For example if the environment locale is \tcode{"en_GB.UTF-8"}, the locale at the beginning of the program should be \tcode{"C.UTF-8"}
+\begin{enumerate}
+\item The initial call to \tcode{setlocale(LC_ALL, "C")} should respect the encoding, such that if the locale environment is \tcode{xx_YY.FOOBAR}, the call to \tcode{setlocale} should be \tcode{setlocale(LC_ALL, "C.FOOBAR")} on platforms on which such locale exist.
+For example, if the environment locale is \tcode{"en_GB.UTF-8"}, the locale at the beginning of the program should be \tcode{"C.UTF-8"}.
 
-2. \tcode{setlocale} should not modify the encoding implicitly or at all. Under a better model, locale and encoding should not be tied.
+\item \tcode{setlocale} should not modify the encoding implicitly or at all. Under a better model, locale and encoding should not be tied.
 However, not all encodings can represent all locales.
 In fact, only encodings mapping the entire Unicode character sets can represent all locale.
+\end{enumerate}
 
-Instead of passing the desired encoding in the locale string (ie \tcode{"en_US[.ENCODING]"}), \tcode{setlocale} could take an extra parameter
+Instead of passing the desired encoding in the locale string (i.e. \tcode{"en_US[.ENCODING]"}), \tcode{setlocale} could take an extra parameter
 \tcode{setlocale(int category, const char* name, text_encoding narrow_encoding);}
 
 \subsection{locale is a global state}
-Calls to setlocale are notoriously not thread-safe
+Calls to setlocale are notoriously not thread-safe.
 
 The C standard (ISO/IEC 9899:2017 7.11.1.5) mentions
 
@@ -277,15 +281,17 @@ A call to the setlocale function may introduce a data race with other calls to t
 \end{quoteblock}
 
 This has a couple of well-documented issues:
-The lack of thread safety make usages of functions depending on the global locale racy and as such unusable in multi-threaded programs (the majority of programs going forward)
-The existence of a mutable global state force libraries to fend each other against improper \tcode{setlocale} usage, knowing there is no proper usage of \tcode{setlocale}.
+\begin{itemize}
+    \item The lack of thread safety make usages of functions depending on the global locale racy and as such unusable in multi-threaded programs (the majority of programs going forward).
+    \item The existence of a mutable global state force libraries to fend each other against improper \tcode{setlocale} usage, knowing there is no proper usage of \tcode{setlocale}.
+\end{itemize}
 
 
 This stem from a few incorrect assumptions:
 
 \begin{itemize}
-    \item \textbf{All text processing on behalf of a user is done in the same locale}. In practice, programs will need to use both the C locale (the non-locale) and the user environment locale for different tasks
-    \item \textbf{A program only has one user at any given time}. In practice some applications such as web servers, communications applications may serve many users with different locales. Or an application may print receipts for clients of many different nationalities, etc
+    \item \textbf{All text processing on behalf of a user is done in the same locale}. In practice, programs will need to use both the C locale (the non-locale) and the user environment locale for different tasks.
+    \item \textbf{A program only has one user at any given time}. In practice some applications such as web servers, communications applications may serve many users with different locales. Or an application may print receipts for clients of many different nationalities, etc.
 \end{itemize}
 
 
@@ -295,7 +301,7 @@ I don’t think there are many ways to fix that.
 Functions depending implicitly on the global locale need to be replaced and deprecated.
 This work has started with \tcode{std::format} which, by default is independent of locale and provides localization for dates and numbers as an explicit opt-in.
 
-\textbf{A first step towards that work would be to list the list of locale-specific behavior in the standard (Direct and indirect)}.
+\textbf{A first step towards that work would be to list the list of locale-specific behavior in the standard (direct and indirect)}.
 
 \tcode{iostream} and \tcode{regex} are not impacted as they take ownership of a copy of the global locale.
 Having a global object is not bad per se (as long as the locale constructor and global methods were thread-safe) as a means to have preferred locale developers can refer to, as long as it is not used implicitly.
@@ -305,27 +311,27 @@ Still, it might be interesting to give \tcode{iostreams} a constructor accepting
 \subsection{Facets and \tcode{iostream} are tightly coupled}
 
 Some facets, including \tcode{num_get}, \tcode{num_put}, \tcode{time_get}, \tcode{time_put}, etc are tightly coupled with \tcode{iostream}.
-This makes them unusable with non-iostream based interfaces such that \tcode{std::format} and the proposed text parsing facility \cite{P1729R1} - which then have to resort to \tcode{numpunct}, \tcode{moneypunct}
+This makes them unusable with non-iostream based interfaces such that \tcode{std::format} and the proposed text parsing facility \cite{P1729R1} - which then have to resort to \tcode{numpunct}, \tcode{moneypunct}.
 
 \subsection{Text conversions function have a hard to use interface and poor error management}
 
-See \cite{P1629R0} for these issues and solutions
+See \cite{P1629R0} for these issues and solutions.
 In any, case transcoding is affected by encoding but not by locale.
 \subsection{Facets do not support standard UTF types}
 
 In addition to the many functions failing to account for multi bytes encoding (including all the classification and character transformation encoding), facets are not required to have a specialization for \tcode{char8_t}, \tcode{char16_t}, \tcode{char32_t}
 
 \subsection{Some facets do more than localization}
-Once again because encoding and locales are hopelessly tied, and because many encodings have small charsets many encoding only have one or a few currency symbols. Sometimes a currency symbol such as \UnicodeLetter{\$} and a generic currency symbol (\UnicodeLetter{¤} CURRENCY SIGN).
+Once again because encoding and locales are hopelessly tied, and because many encodings have small charsets, many encodings only have one or a few currency symbols. Sometimes a currency symbol such as \UnicodeLetter{\$} and a generic currency symbol (\UnicodeLetter{¤} CURRENCY SIGN).
 
 Because of that, the symbol used for currency formatting is tied to the locale in use.
-But of course, the currency is tied to the value, not to the locale (if you send 10\$ to a European, they should get 10\$, not 10€)
+But of course, the currency is tied to the value, not to the locale (if you send 10\$ to a European, they should get 10\$, not 10€).
 Selecting the correct currency is a difficult exercise \cite{Stackoverflow}
 
 Solutions to this problem include:
 
 \begin{itemize}
-    \item  Deprecating monetary formatting 
+    \item Deprecating monetary formatting
     \item Introducing a strong type to represent an amount + a currency along with ways to format it (ICU approach)
     \item Or alternatively, introduce a facility that let the user specify which symbol or name to use (\cite{QLocale} approach), and which precision to use (precision is currently tied to locale)
 \end{itemize}
@@ -335,14 +341,14 @@ Solutions to this problem include:
 Translation support - wherein at runtime a string, format string or key will be replaced by a translation suitable for the language and region is a more complex problem than the formatting of standard types.
 
 Notably, translation requires tooling support, pluralization (with sometimes complex rules), support for positional arguments.
-The Standard can help with some of these issues (for example std::format supports positional arguments) but given the many frameworks and tools that exist for translation and the complexity involved, we think this is a problem best left for third party libraries.
+The Standard can help with some of these issues (for example \tcode{std::format} supports positional arguments), but given the many frameworks and tools that exist for translation and the complexity involved, we think this is a problem best left for third party libraries.
 A quick search reveals that the existing translation facility, \tcode{std::messages} has very little use in open source code.
-It is tailored for \tcode{catgets}, does not support pluralization and has no implementation suited to some operating systems such as Android or iOS
+It is tailored for \tcode{catgets}, does not support pluralization and has no implementation suited to some operating systems such as Android or iOS.
 
 
 \subsection{Locale names are not portable across platforms and implementation.}
 
-Different implementations might use or accept slightly different scheme as locale names
+Different implementations might use or accept slightly different scheme as locale names:
 
 \begin{codeblock}
 Greek_Greece.ACP
@@ -350,9 +356,9 @@ el_GR
 el-GR.UTF-8
 \end{codeblock}
 
-Some implementations (OSX, ICU) support a script parameter, ie \tcode{el_Latn_GR}
+Some implementations (OSX, ICU) support a script parameter, ie \tcode{el_Latn_GR}.
 
-Some implementations (notably ICU) support additional properties \tcode{el_GR@collation=phonebook}
+Some implementations (notably ICU) support additional properties \tcode{el_GR@collation=phonebook}.
 
 
 Moreover, constructing a locale requires the user to resort to string manipulation and once constructed it is hard to extract individual components from the locale.
@@ -394,7 +400,7 @@ That design has been adopted by many platforms and popular languages (including 
 
 Some of the issues described here might benefit from input from the C committee.
 However, fixing these issues in C is not strictly necessary.
-In fact, on some platforms such as Windows, the POSIX behavior has to be emulated as win32 API differentiate locale and encoding already. 
+In fact, on some platforms such as Windows, the POSIX behavior has to be emulated as win32 API differentiate locale and encoding already.
 
 The key point in C++ is to deprecate any use of functions that rely implicitly on a global locale and to provide the necessary replacements.
 
@@ -476,7 +482,7 @@ In doubt, read the Unicode documentation
     
     \bibitem[Stackoverflow]{Stackoverflow}
     \emph{Currency format in C++}\newline
-    \url{https://stackoverflow.com/questions/51481646/currency-format-in-c}        
+    \url{https://stackoverflow.com/questions/51481646/currency-format-in-c}
      
 \end{thebibliography}
 
