@@ -137,6 +137,9 @@ Formatting of numbers, units, time and other measurements are also affected by l
 However, the unit of a given value is not affected by locale.
 The user may have preferred units for some measurement in a given locale but that may require conversion of the value.
 
+Note that because of Han Unification, some CJK Unicode characters may need to be shaped according to locale during text rendering.
+While this is not a concern, it is worth keeping in mind if the committee wanted to standardize features involving rendering text.
+
 \subsection{Numeral systems}
 
 C and C++ make the assumption that numbers are represented with the Arabic numerals system, when scanning and printing them.
@@ -146,7 +149,7 @@ However there exist many numeral systems in use, most of which require character
 
 Timezones are not related to locales. A timezone may span multiple locale regions and a single region may extend to many locales.
 However, locales do have an associated preferred calendar.
-For a given calendar, such as the gregorian calendar, locales may differ on what days are considered week days, or by which day is considered the fist of the week.
+For a given calendar, such as the Gregorian calendar, locales may differ on what days are considered week days, or by which day is considered the fist of the week.
 This doesn't seem to be an issue in C++ at the present as a single calendar is provided.
 
 \subsection{Measurement Units}
@@ -169,7 +172,7 @@ In the context of \cite{P1935R1}, it is useful to keep in mind that locales affe
 
 \tcode{std::isalpha(‘a’)} should be universally true.
 
-But the question answered by \tcode{isalpha} is whether the letter \UnicodeLetter{a} is representable in the global or specified locale.
+But the question answered by \tcode{isalpha} is whether the code unit corresponding to \UnicodeLetter{a} is representable in the global or specified locale - assuming the global locale associated encoding is a superset of the execution encoding-.
 This often leads these functions to be misused.
 
 More critically these functions operate on code units rather than codepoints.
@@ -186,7 +189,7 @@ for the entire set of classification functions.
 By dissociating from locale, it would possible to provide constexpr implementation for some encodings.
 Reorganizing the order of parameters makes the functions usable with bind_front.
 
-This would be accompanied by functions to convert a range of code units to a code point for encoding.
+This would be accompanied by functions to convert a range of code units to a code point for the given encoding.
 
 Alternatively, we might consider providing classification functions for Unicode only (see P1628 \cite{P1628R0}), along with functions to convert a range of code units of a given encoding to a single Unicode codepoint. This would reduce the aggregated volume of data needed for every supported encoding while separating the two conflated question \tcode{std::isalpha} tries to answer:
 
@@ -194,6 +197,10 @@ Alternatively, we might consider providing classification functions for Unicode 
 \item Is this character representable by that encoding?
 \item Is this abstract character known to be a letter?
 \end{itemize}
+
+
+\textbf{Only providing classification for Unicode would greatly reduce the complexity of both the API and implementation and several
+people expressed a desire to only support Unicode classification. Others encoding would be supported by explicit codepoint conversion functions.}
 
 \subsection{\tcode{tolower}/\tcode{toupper} are broken}
 
@@ -231,7 +238,7 @@ Because of the complexity of casing in the general case, it might be interesting
 \begin{codeblock}
 
 auto ascii_toupper(char) -> char;
-auto unicode_toupper(codepoint, std::locale) -> codepoint;
+auto unicode_toupper(codepoint, std::locale) -> rangeof<codepoint>;
 
 \end{codeblock}
 
@@ -325,7 +332,8 @@ In addition to the many functions failing to account for multi bytes encoding (i
 Once again because encoding and locales are hopelessly tied, and because many encodings have small charsets, many encodings only have one or a few currency symbols. Sometimes a currency symbol such as \UnicodeLetter{\$} and a generic currency symbol (\UnicodeLetter{¤} CURRENCY SIGN).
 
 Because of that, the symbol used for currency formatting is tied to the locale in use.
-But of course, the currency is tied to the value, not to the locale (if you send 10\$ to a European, they should get 10\$, not 10€).
+But of course, the currency is tied to the value, not to the locale (if you send \$10 to a European, they should get \$10, not 10 €).
+
 Selecting the correct currency is a difficult exercise \cite{Stackoverflow}
 
 Solutions to this problem include:
@@ -410,7 +418,7 @@ Here is a short summary of the possible directions envisioned by the present pap
 \item Use the preferred environment encoding when setting the global \tcode{"C"} locale at program startup
 \item Document and deprecates facilities depending on a global locale, either directly or indirectly
 \item Deprecate ctype classification functions and replace them with functions working on codepoints and text encoding.
-\item Or, alternatively, deprecate ctype transformation functions and replace them with functions working on codepoints \& text encoding and returning codepoint sequences
+\item Or, alternatively, deprecate ctype transformation functions and replace them with functions working on \textbf{Unicode} codepoints exclusively \& text encoding and returning codepoint sequences
 \item Separate locale from encoding and decide on a case by case basis what each function should operate on.
 \item Provides classification and transformation functions for Unicode, possibly \tcode{constexpr}
 \item Provides \tcode{constexpr} classification and transformation functions for ASCII
@@ -420,7 +428,7 @@ Here is a short summary of the possible directions envisioned by the present pap
 \item Better specify what are valid locale names and provide better ways to construct and query locales and their components
 \item Provide a way to list supported locales
 \item Deprecate facilities that change the semantic of values upon locale-based formatting such as \tcode{money_put}/\tcode{money_get}
-\item Deprecate incomplete and not widely used facilities such as std::messages
+\item Deprecate incomplete and not widely used facilities such as \tcode{std::messages}
 \item Add support for \tcode{char8_t}, \tcode{char16_t} in locale facilities
 \end{itemize}
 

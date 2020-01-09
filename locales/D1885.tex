@@ -21,7 +21,7 @@
 
 
 \title{Naming Text Encodings to Demystify Them}
-\docnumber{P1885R0}
+\docnumber{P1885}
 \audience{SG-16, LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -175,10 +175,26 @@ Because there is a rather large number of encodings and because this list may ev
 MIB stands for Management Information Base, which is IANA nomenclature, the name has no particular interest beside a desire not to deviate from the existing standards and practices. 
 \end{note}
 
+The enum is purposefully not an \tcode{enum class} so that it can be easily compared to objects from
+third party librairies such as \tcode{QTextCodec}.
+
+The enumerators \tcode{unknown} and \tcode{other} and their value are provided by the very same RFC such as:
+
+\begin{itemize}
+	\item \tcode{other} designs an encoding not registered in the IANA Database, such that 2 encoding with the \tcode{other} mib are identical if their name compare equal.
+	\item \tcode{unknown} is used when the encoding could not be determined. Under the current proposal,  only default constructing a \tcode{text_encoding} object can produce that value. The encoding associated with the
+	locale or environment is always known.
+\end{itemize}
+
+While \tcode{MIBEnum} was necessary to make that proposal implementable consistently across platforms,
+its main purpose is to remediate to the fact that an encoding can have multiple inconsistent names across implementations.
+
+However, 
+
 \subsection{Name and aliases}
 
 The proposed API offers both a name and aliases.
-The \tcode{name} method reflects the name with which the text_encoding object was created, when applicable.
+The \tcode{name} method reflects the name with which the \tcode{text_encoding} object was created, when applicable.
 This is notably important when the encoding is not registered, or its name differs from the IANA name.
 
 \subsection{Implementation flexibility}
@@ -191,10 +207,9 @@ an implementation is aware of all registered encoding, and it let implementers p
 A primary use case is to enable people to write their own conversion functions.
 Unfortunately, most APIs expect NULL-terminated strings. 
 
-\newpage
 \section{Example}
 
-
+\subsection{Listing the encoding}
 
 \begin{codeblock}
 
@@ -244,12 +259,36 @@ Aliases:
 	csUCS4
 \end{codeblock}
 
+\subsection{LWG3314}
+
+[time.duration.io] specifies that the unit for micro seconds is µ on systems able to display it.
+This is currently difficult to detect and implement properly.
+
+The following allows an implementation to use µ if it is supported by both the execution encoding and the encoding
+attached to the stream.
+
+
+\begin{codeblock}
+template<class traits, class Rep, class Period>
+void print_suffix(basic_ostream<char, traits>& os, const duration<Rep, Period>& d)
+{
+	if constexpr(text_encoding::literal() == text_encoding::utf8) {
+		if (os.getloc().encoding() == text_encoding::utf8) {
+			os << d.count() << "\u00B5s"; // µ
+			return;
+		}
+	}
+	os << d.count() << "us";
+}
+\end{codeblock}
+
+A more complex implementation may support more encodings, such as iso-8859-1.
 
 \section{Implementation}
 
 The following proposal has been prototyped using a modified version of GCC to expose the encoding information.
 
-On Windows, the run-time encoding can be determined by \tcode{GetACP} - and then map to MIB values, while on POSIX platform it corresponds to value of \tcode{nl_langinfo} when the user ("") locale is set - before the program's locale is set to \tcode{C}.
+On Windows, the run-time encoding can be determined by \tcode{GetACP} - and then map to MIB values, while on POSIX platform it corresponds to value of \tcode{nl_langinfo} when the environment ("") locale is set - before the program's locale is set to \tcode{C}.
 
 On OSX \tcode{CFStringGetSystemEncoding} and \tcode{CFStringConvertEncodingToIANACharSetName} can also be used.
 
@@ -278,7 +317,7 @@ Add the macro \tcode{__cpp_lib_text_encoding} to \tcode{[version.syn]}, in a
 place that respects the current alphabetic order:
 
 \begin{codeblock}
-#define __cpp_lib_text_encoding 201911L (**placeholder**) // also in \libheader{text_encoding}
+#define __cpp_lib_text_encoding 201911L (**placeholder**) // also in \tcode{text_encoding}
 \end{codeblock}
 
 Add a new header \tcode{<text_encoding>}.
@@ -292,8 +331,8 @@ A \tcode{text\_encoding} describes a text encoding portably across platforms by 
     
 namespace std {
 
-struct text_encoding {    
-    enum class id {
+struct text_encoding final{    
+    enum id : unsigned {
         other = 1,
         unknown = 2,
         ascii = 3,
@@ -309,7 +348,7 @@ struct text_encoding {
     
     constexpr explicit text_encoding(const char* name);
     
-    constexpr int mib() const noexcept;
+    constexpr id mib() const noexcept;
     constexpr const char* name() const noexcept;
     
     constexpr auto aliases() const noexcept -> @{\seebelow}@;
@@ -324,7 +363,7 @@ struct text_encoding {
     static text_encoding wide_system();
 
     private:
-        int mib_; // \expos
+        id mib_; // \expos
         std::string name_; // \expos
     };
 }
@@ -333,7 +372,6 @@ struct text_encoding {
 \end{addedblock}
 \end{quote}
 
-\newpage
 
 \begin{addedblock}
     
@@ -358,7 +396,7 @@ constexpr explicit text_encoding(const char* name);
 
 
 \begin{itemdecl}
-constexpr int mib() const noexcept;
+constexpr id mib() const noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -448,7 +486,7 @@ static text_encoding system();
 
 \begin{itemdescr}
 Return the presumed system narrow encoding.
-On POSIX systems this is the encoding attached to the user locale (\tcode{""}) at the start of the program.
+On POSIX systems this is the encoding attached to the environment locale (\tcode{""}) at the start of the program.
 
 \begin{note}
 This function should always return the same value during the lifetime of a program and is not affected by calls to \tcode{setlocale}.
@@ -462,7 +500,7 @@ static text_encoding wide_system();
 
 \begin{itemdescr}
 Return the presumed system wide encoding.
-On POSIX systems this is the encoding attached to the user locale (\tcode{""}) at the start of the program.
+On POSIX systems this is the encoding attached to the environment locale (\tcode{""}) at the start of the program.
 
 \begin{note}
 This function should always return the same value during the lifetime of a program and is not affected by calls to \tcode{setlocale}.
