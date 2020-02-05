@@ -21,8 +21,8 @@
 \newcommand{\cc}[1]{\mintinline{c++}{#1}}
 
 
-\title{Strongly-Typed Reflection on Attributes}
-\docnumber{P1887R0}
+\title{Reflection on Attributes}
+\docnumber{P1887R1}
 \audience{SG-7}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -73,7 +73,7 @@ namespace Catch {
 namespace test {
     void g() {}
 
-    [[Catch::test_case("Printing something")]]
+    [[+Catch::test_case("Printing something")]]
     void f() {
         g();
         std::cout << "Hello World\n";
@@ -120,7 +120,7 @@ namespace n {
     struct [[decorator]] a {
         constexpr a(int);
     };
-    [[n::a(42)]] void f(); // constructor
+    [[+n::a(42)]] void f(); // constructor
 }
 \end{minted}
 
@@ -134,8 +134,7 @@ namespace n {
     };
     a get_attribute();
     
-    [[n::a(get_attribute())]] void f(); // copy constructor
-    [[get_attribute()]] void g(); // attach a "get_attribute" attribute to g
+    [[+n::a(get_attribute())]] void f(); // copy constructor
 }
 \end{minted}
 
@@ -175,32 +174,19 @@ If different declarations of the same entity do not have the same set of user-de
 It is ill-formed to redeclare user-defined attributes on definitions if there exists a previous declaration of the same entity
 in the same translation units.
 
-\subsection{Ignorable attributes}
+\subsection{Syntax}
 
-Attributes are designed to be ignorable.
-Therefore, an implementation should not have to parse attributes as user-defined attributes until they are reflected upon.
+Because there exist many standard and implementation defined attributes, we need a syntax to disambiguate attributes (which can be unknown from the compiler)
+from user-defined attribute.
+This paper suggest \tcode{[[ + \emph{constructor-expression}]]} as a strawman syntax.
+In Belfast 2019 and in previous versions of this paper, alternatives were explored, including:
 
-Notably, the only difference between user-defined attributes and other attributes is that there exists
-a type of the same name as the attribute. 
-
-To that end, user-defined-attributes are only parsed as such upon a call to \tcode{has_attribute} 
-or \tcode{meta::attribute}.
-
-This also means that the header/module in which the type defining a user-defined attribute only has to be imported before a call to any of these functions.
-
-For any attribute \tcode{A}, a call to \tcode{has_attribute<A>} or \tcode{meta::attribute<A>} on the reflection of an object \tcode{obj} is ill-formed if:
 \begin{itemize}
-    \item A is not defined
-    \item \tcode{obj} has an attribute named "A" but that attribute cannot be evaluated as a valid C++ constant expression constructing an object of type \tcode{A}.
-    \item \tcode{A} does not model \tcode{regular} or does not have a \tcode{constexpr} copy constructor and equality comparison operator.
+\item Having a known-set of namespaces in which attributes would not be considered user defined
+\item Delaying the parsing of attributes as user defined until they are reflected upon
 \end{itemize}
 
-Furthermore, a call to \tcode{meta::attribute<A>} on the reflection of an object \tcode{obj} is ill-formed if no attribute of that type appertains to \tcode{obj}.
-
-
-\subsection{Non ignorable attributes}
-
-The syntax \tcode{[[::foo::bar()]]} un-ambiguously designates a user-defined attribute and in this case, we could enforce that the attribute exists and the constructor expression at the point where the attribute is used.
+Ultimately, we came to the disappointing conclusion that attributes and user defined attributes need separate syntaxes. 
 
 \section{Use cases}
 
@@ -212,8 +198,8 @@ Consider the following meta-class:
 \begin{minted}{C++}
 class(qobject) my_class {
 public:
-    [[qt::slot()]] void show();
-    [[qt::signal()]] void stateChanged();
+    [[+qt::slot()]] void show();
+    [[+qt::signal()]] void stateChanged();
 };
 
 \end{minted}
@@ -237,13 +223,13 @@ class(qobject) my_clas {
 };
 \end{minted}
 
-It also makes the intent less clear to the reader as they can't know that the `qt::signal` type is merely a tag that will not be a part of the generated class.
+It also makes the intent less clear to the reader as they can't know that the \tcode{qt::signal} type is merely a tag that will not be a part of the generated class.
 More critically it makes it almost impossible to combine several tags.
 
 \begin{minted}{C++}
 class(qobject) my_class {
-    [[qt::signal()]]
-    [[qt::notify_property("state")]]; 
+    [[+qt::signal()]]
+    [[+qt::notify_property("state")]]; 
     void stateChanged();
 };
 
@@ -260,8 +246,8 @@ However, it is often beneficial that the name of the serialized field differs fr
 
 \begin{minted}{C++}
 struct my_object {
-    [[json_serializer::field_name("case")]]
-    [[json_serializer::default_value(42)]]
+    [[+json_serializer::field_name("case")]]
+    [[+json_serializer::default_value(42)]]
     int caseNumber;
     std::mutex mutex;
 };
@@ -270,9 +256,9 @@ struct my_object {
 
 \begin{minted}{C++}
 struct my_options {
-    [[command_line_parser::short_name("L")]]
-    [[command_line_parser::help("Specify the compression level")]]
-    [[command_line_parser::default_value(5)]]
+    [[+command_line_parser::short_name("L")]]
+    [[+command_line_parser::help("Specify the compression level")]]
+    [[+command_line_parser::default_value(5)]]
     int compression_level;
 };
 \end{minted}

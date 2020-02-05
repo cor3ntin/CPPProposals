@@ -1,0 +1,134 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}%
+\documentclass{wg21}
+
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{ulem}
+\usepackage{fullpage}
+\usepackage{parskip}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{makecell}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\RequirePackage{fontspec}
+\usepackage{newunicodechar}
+\usepackage{url}
+
+\setmonofont{Inconsolatazi4}
+\setmainfont{Noto Serif}
+\usepackage{csquotes}
+
+
+\lstdefinestyle{CPP}{language=C++,
+    keywordstyle=\color{blue}\ttfamily,
+    stringstyle=\color{red}\ttfamily,
+    commentstyle=\color{OliveGreen}\ttfamily,
+    morecomment=[l][\color{magenta}]{\#},
+    morekeywords={reflexpr,valueof,exprid,typeof, concept,constexpr,consteval,unqualid}
+}
+
+\lstdefinestyle{ASM}{
+    basicstyle=\tiny\ttfamily,
+    numbers=left, 
+    numberstyle=\tiny\ttfamily, 
+    keywordstyle=\color{blue}\ttfamily,
+    stringstyle=\color{red}\ttfamily,
+    commentstyle=\color{OliveGreen}\ttfamily,
+    breaklines=true,
+    columns=fullflexible,
+    literate={\_}{{\_}}1,
+    postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space},
+    frame = single, 
+    language=[x86masm]{Assembler}, 
+    % with these extra keywords:
+    morekeywords={CDQE,CQO,CMPSQ,CMPXCHG16B,JRCXZ,LODSQ,MOVSXD, %
+        POPFQ,PUSHFQ,SCASQ,STOSQ,IRETQ,RDTSCP,SWAPGS, %
+        rax,rdx,rcx,rbx,rsi,rdi,rsp,rbp, %
+        r8,r8d,r8w,r8b,r9,r9d,r9w,r9b, %
+        r10,r10d,r10w,r10b,r11,r11d,r11w,r11b, %
+        r12,r12d,r12w,r12b,r13,r13d,r13w,r13b, %
+        r14,r14d,r14w,r14b,r15,r15d,r15w,r15b}
+} % etc.
+
+
+\title{Add a step parameter to \tcode{iota\_view}}
+\docnumber{P2016R0}
+\audience{LEWG, LEWGI}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+    
+\maketitle
+
+
+\section{Abstract}
+
+We propose adding a step parameter to \tcode{iota\_view}.
+
+\section{Proposal}
+
+We propose adding a step parameter to \tcode{iota_view} such that
+
+\begin{itemize}
+\item \tcode{views::iota} can generate increasing values with an increment different than 1
+\item \tcode{views::iota} can generate decreasing values, by the mean of a negative increment (-1 or arbitrary integral value) 
+\end{itemize}
+
+\begin{lstlisting}[style=CPP]
+view::iota(0, 10, 2); // [0, 4, 6, 8]
+view::iota(10, 0, -2); // [10, 8, 6, 6, 2]
+view::iota(0, unreacheable_t{}, -1) | views::take(5); // [0, -1, -2, -3, -4]
+\end{lstlisting}
+
+\section{Motivation}
+
+I suggested including a step parameter to \tcode{iota_view} in Belfast while discussing P1894 \cite{P1894R0}.
+This would allow \tcode{views::iota} to offer a feature set equivalent to that of Python's \tcode{range} function.
+
+It is notably useful to iterate over interlaced data such as matrices, images or audio signals.
+It can also be used to implements counters, paging and any other use case requiring linear sequences.
+That feature has been requested in Range-v3 \cite{RangeV3}.
+
+
+However, \tcode{iota_view} can be expressed in terms of \tcode{view::stride} \cite{P1899R0} and \tcode{views::reverse}.
+While \tcode{iota_view} can be more efficient (and less verbose) than combining multiple views, a combination of \tcode{views::stride} and \tcode{views::enumerate} should be preferred over using \tcode{iota_view} when iterating over a container.
+
+As such, despite the relative simplicity of the proposal and the general usefulness of the feature 
+demonstrated by other languages and libraries, it is unclear that the cost/benefit ratio of the present proposal plays
+in its favor.
+In any case, \tcode{view::stride} \cite{P1899R0} or something similar \cite{Conor} should be prioritized over the present proposal.
+
+\section{Implementation}
+An implementation is available  \url{https://github.com/ericniebler/range-v3/pull/1392}
+\section{Wording}
+
+No wording is provided at this time, the paper intends to gauge interest.
+
+\bibliographystyle{plain}
+\bibliography{../wg21}
+
+\let\oldsection=\section
+\renewcommand{\section}[2]{}%
+\begin{thebibliography}{9}    
+    
+    \bibitem[RangeV3]{RangeV3}
+    \emph{step size for monotonically increasing values}\newline
+    \url{https://github.com/ericniebler/range-v3/issues/723} 
+    
+    \bibitem[Conor]{Conor}
+    \emph{CppCon 2019: Conor Hoekstra “23 Ranges: slide \& stride”}\newline
+    \url{https://www.youtube.com/watch?v=-_lqZJK2vjI} 
+\end{thebibliography}
+
+
+
+\let\section=\oldsection
+
+
+\end{document}

@@ -1,0 +1,537 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}%
+\documentclass{wg21}
+
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{ulem}
+\usepackage{fullpage}
+\usepackage{parskip}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{makecell}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\RequirePackage{fontspec}
+\usepackage{newunicodechar}
+\usepackage{url}
+
+\setmonofont{Inconsolatazi4}
+\setmainfont{Noto Serif}
+\usepackage{csquotes}
+
+
+\lstset{language=C++,
+    keywordstyle=\color{blue}\ttfamily,
+    stringstyle=\color{red}\ttfamily,
+    commentstyle=\color{OliveGreen}\ttfamily,
+    morecomment=[l][\color{magenta}]{\#},
+    morekeywords={reflexpr,valueof,exprid,typeof, concept,constexpr,consteval,unqualid}
+}
+
+
+
+
+\title{Reflection-based lazy-evaluation}
+\docnumber{P2040R0}
+\audience{SG-7}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+
+\section{Abstract}
+
+This paper aims to demonstrate how proposed reflection and code injection facilities can be used to replace many usages of the processors
+and provide simple lazy evaluation without introducing new constructs
+I believe the combination of what is presented here, reflection (including reflection on attributes), reification and injection would supersede all use of macro functions.
+
+\section{Disclaimer}
+
+This paper intends to present an idea that I had for a while so that it is on the table and can be considered along already proposed alternatives.
+However, it has not been implemented nor refined. It only aims to present a possible general direction.
+Rather than to propose new features, it aims to illustrate how the reflection and code injection proposals can be leveraged to express things that can currently
+not be conveniently expressed without the C preprocessor. 
+
+\section{Building blocks}
+
+\subsection{Reflection on expressions}
+
+This paper assumes the ability to reflect on arbitrary expressions as presented by \cite{P1240R1}:
+\begin{lstlisting}
+    reflexpr(1+1);
+    reflexpr(std::cout);
+    reflexpr(f());
+\end{lstlisting}
+
+Expressions have a type, and so reflection of expressions have the same type, which might be queried with \tcode{typeof}.
+we can introduce a concept to describe expressions, which we could pass to \tcode{consteval} functions:
+
+\begin{codeblock}
+void f(meta::info expression) requires meta::is_expression;
+//constrains on the type of the expression
+void f(meta::info expression) requires meta::is_expression_of<int>;
+
+f(reflexpr("not an int")); // ko
+f(reflexpr(42)); // ok
+\end{codeblock}
+
+We could further introduce a \tcode{expression} concept
+
+\begin{codeblock}
+template <meta::info I>
+concept any_expression = meta::is_expression(I);
+template <typename T, meta::info I>
+concept expression = meta::is_expression(I) && convertible_to<typeof(I), T>;
+\end{codeblock}
+
+
+\begin{codeblock}
+consteval void f(std::expression<int> auto);
+\end{codeblock}
+
+Although it is not clear to me how the facilities to constrained on values proposed by \cite{P1240R1} and concepts
+would interact, we could then write the following:
+
+\begin{codeblock}
+consteval void f(std::expression<int> auto);
+\end{codeblock}
+
+\subsection{Code Injection}
+
+The ideas presented in this paper rely heavily on [P1717] \cite{P1717R0}
+
+The basic idea is that code fragments, whether expressions or statements can be injected in a given parent scope:
+
+\begin{codeblock}
+consteval void f() {
+    -> { injected_call() };
+}
+
+void g() {
+    f();
+}
+//becomes =>
+void g() {
+    injected_call();
+}
+
+\end{codeblock}
+
+\tcode{-> \{ injected_call(); \}} represents an injected fragment (in this case a statement).
+
+Please read [P1717] \cite{P1717R0} for a better description.
+
+\section{Proposal: reflection/injection-based hygienic macros}
+
+By combining Reflection on expressions and code injection, it is possible to create a powerful
+mechanism to manipulate expressions and inject expressions and statements.
+ 
+Once passed to a \tcode{consteval} function, reflections can either be evaluated if the reflected expression is a constant expression
+- but in the context of this paper, this has limited usefulness - Or injected in the scope in which the function is called.
+
+Injecting the expression does not require it to be evaluated.
+
+\begin{codeblock}
+bool enable_logging = /*....*/;
+
+void consteval log(expression<string_view> auto message) {
+  -> {
+        if(enable_logging) {
+            std::cout << message << "\n";
+        }
+    };
+}
+\end{codeblock}
+
+The above code features a fragment injection statement as described in \cite{P0712R0} and \cite{P0633R0}.
+That fragment will be injected or expanded in the caller scope at the point of invocation.
+
+\begin{codeblock}
+int main() {
+    log(reflexpr("Hello"));
+}
+\end{codeblock}
+
+Is equivalent to:
+
+\begin{codeblock}
+int main() {
+   if(enable_logging) {
+       std::cout << "Hello" << "\n";
+   }
+}
+\end{codeblock}
+
+The important point to note is that the expression used as a parameter to the \tcode{code} function will never be evaluated
+when \tcode{enable_logging} is false.
+
+Below, \tcode{expensive_computation} is never called.
+
+\begin{codeblock}
+std::string expensive_computation();
+int main() {
+    enable_logging = false;
+    log(reflexpr(expensive_computation()));
+}
+\end{codeblock}
+
+As such, using reflection and code injection in that way can enable a form of lazy evaluation.
+However, \tcode{log} is expended more than it is called, which differs from [P0927]\cite{P0927R2}.
+
+It is likely both proposals would generate the same code if the callee can be inlined.
+Both proposal alleviate the use of a macro.
+\begin{lstlisting}
+# define log(message) \char`\\\char`\\
+    if(enable_logging) { std::cout << message << "\n" };
+\end{lstlisting}
+
+And, unlike processor macros, this reflection-based solution
+\begin{itemize}
+    \item Obeys the name lookup rules of C++
+    \item Obeys the scoping rules of C++ and can be declared inside a namespace or a class
+    \item Is semantically checked at the point of declaration
+    \item Can have typed parameters and be overloaded
+    \item Provides better diagnostic at the point of use
+    \item Cannot form partial statements or "token soup", which makes it possible to provide good tooling and limit the potential for exotic and clunky DSL.
+\end{itemize}
+
+\section{Comparison with Parametric Expressions}
+
+The facilities presented here are very similar to the Parametric Expression proposal \cite{P1221R1}, with two exceptions:
+\begin{itemize}
+\item They are composed of features otherwise offered by reflection, reification and code injection
+\item Both expressions and complete statements can be injected.
+\end{itemize}
+
+Purposefully, neither proposal supports partial statement or partial expression, which would hinder tooling, maintainability
+and diagnostics.
+
+\section{Examples}
+[P1221] \cite{P1221R1} offers many great example.
+For comparison, here is how the same could be achieve using the facilities we present:
+
+\subsubsection{\tcode{if}}
+
+
+\begin{codeblock}
+consteval void constexpr_if(constexpr bool condition, 
+                   meta::any_expression auto a,
+                   meta::any_expression auto b) {
+    if constexpr(condition){
+        -> exprid(a);
+    }
+    else {
+        -> exprid(b);
+    }
+}
+
+int main() {
+    constexpr_if(
+       true,
+       reflexpr(print("Hello, world!")),
+       reflexpr(print("not evaluated so nothing gets printed"))
+    );
+}
+\end{codeblock}
+
+The above example makes use of \tcode{constexpr} parameters.
+
+\subsubsection{\tcode{fwd}}
+
+
+\begin{codeblock}
+consteval void fwd(meta::any_expression auto x) {
+    -> static_cast<decltype(x)>(exprid(x));
+}
+auto new_f = [](auto&& x) { return fwd(reflexpr(x)); };
+\end{codeblock}
+
+\subsubsection{\tcode{make_array}}
+
+\begin{codeblock}
+consteval void make_array(meta::any_expression auto... x) {
+    -> std::array<std::common_type<typeof(x)...>, sizeof...(x)>{exprid(x)...};
+}
+\end{codeblock}
+
+\subsubsection{\tcode{push_back} (from P0927)}
+
+This example inspired by P0927 \cite{P0927R2} illustrate some un-answered questions and limitations of this proposal:
+\begin{itemize}
+    \item What about member access when the \tcode{consteval} function is defined within a class?
+    \item Injection creates code at the call site, while lazy evaluation introduces a new object. 
+
+Pick your poison.
+\end{itemize}
+
+\begin{codeblock}
+template <typename T>
+consteval reference vector<T>::better_push_back(meta::any_expression auto... args) {
+   -> { [this, &args]{ 
+       __grow_if_needed();
+       new (&__m_array[__m_size]) T(exprid(args)...);
+       _return __m_size[__m_size++];
+    }();
+   };
+}
+std::vector<std::vector<int>> v1;
+v1.better_push_back(reflexpr{ 1, 2, 3 });
+\end{codeblock}
+
+\subsubsection{\tcode{std::assume}}
+
+P1774 \cite{P1774R0} proposes \tcode{std::assume}, which
+could be implemented as 
+
+\begin{codeblock}
+consteval void assume(expression<bool> auto expr) {
+    -> __builtin_assume(exprid(expr));
+}
+\end{codeblock}
+
+This alleviates the need for making it a magic function or to introduce a new language syntax.
+
+\subsection{\tcode{std::assert}}
+
+\begin{codeblock}
+consteval void assert(std::expression<bool> auto expr, std::string_view msg) {
+#ifdef _DEBUG
+    -> { [&expr, &msg]{ 
+            if(!exprid(expr)) {
+                std::format("assert: {} failed : {}", meta::to_string(expr), msg);
+            }
+        }();
+    };
+#endif    
+}
+\end{codeblock}
+
+
+\subsection{\tcode{ABSL_FLAG}}
+
+The Abseil library has a command-line flags feature whose primary API is the \tcode{ABSL_FLAG} macro.
+The following examples are taken from the abseil website:
+
+
+\begin{codeblock}
+ABSL_FLAG(bool, big_menu, true,
+    "Include 'advanced' options in the menu listing");
+ABSL_FLAG(std::string, output_dir, "foo/bar/baz/", "output file dir");
+ABSL_FLAG(std::vector<std::string>, languages,
+    std::vector<std::string>({"english", "french", "german"}),
+    "comma-separated list of languages to offer in the 'lang' menu");
+ABSL_FLAG(absl::Duration, timeout, absl::Seconds(30), "Default RPC deadline");
+\end{codeblock}
+
+Instead of a macro, we can use a \tcode{consteval} function:
+
+\begin{codeblock}
+template <typename T>
+consteval void RegisterFlag(std::string_view name, 
+                            expression<T> default_value,
+                            std::string_view help) {
+    -> namespace :: {
+        void* unqualid("AbslFlagsInitFlag", name) {
+            return absl::flags_internal::MakeFromDefaultValue<T>(exprid(default_value));
+        }
+        constinit absl::Flag<Type> unqualid("ABSEIL_FLAGS_", name) {
+            name, 
+            source_location::current().file_name(),
+            &unqualid("AbslFlagsInitFlag", name),
+            help
+        };
+    };
+}
+\end{codeblock}
+
+This implementation is incomplete compared to Abseil's. Regardless:
+\begin{itemize}
+\item It is much shorter as it does not have to deal with the idiosyncrasies of a preprocessor
+\item It does not present a DSL: this is regular c++ for which it is easy to provide completion and other tooling.
+\item Types are adequately checked
+\item It can be called from any namespace and will still inject the required symbols in the global namespace.
+\end{itemize}
+
+For the specific of \tcode{unqualid} and namespace injection, please refer to Andrew Sutton's P1717 \cite{P1717R0}.
+This example is mostly provided to show that this feature is not limited to lazy evaluation and how the preprocessor \# and \#\#
+operators can be replaced.
+
+
+\section{Expression decomposition and Unit Test frameworks}
+
+Unit test frameworks usually provide features which are cumbersome to use, unless making heavy use of the pre-processor.
+
+\begin{codeblock}
+       REQUIRE(expression == expected_result);
+    REQUIRE_EQ(expression, expected_result);
+\end{codeblock}
+
+These macros, which vary slightly in name or behavior depending on the framework used,
+will usually evaluate each expression and print the expression and its value when the
+test fails.
+An egregious simplification of the implementation of such macro would look like: 
+
+\begin{codeblock}
+template <typename T>
+bool test(std::string_view str, T&& x) {
+    const auto res = x;
+    if(!res) {
+        std::cout << str << ": Failed\n";
+    }
+    return res;
+
+#define REQUIRE(...) test(\#__VA_ARGS__, __VA_ARGS__)
+int main() {
+    REQUIRE(1 + 1 == 2);
+}
+\end{codeblock}
+
+Instead, using reflection and injection we can write the following function which is scoped
+and check the type of its parameters, providing better diagnostic:
+
+\begin{codeblock}
+consteval void REQUIRE(expression<bool> auto expr) {
+    -> [expr] {
+        const auto value = exprid(expr);
+        if(!value) {
+            show_error(meta::to_string(expr));
+        }
+    }(); 
+}
+\end{codeblock}
+
+We could further refine this idea by providing tools to decompose expressions into
+their composing sub-expressions, which in the present case may help provide better
+messages in our test framework.
+
+This idea is somewhat orthogonal to the matter at hand and can be explored separately.
+
+
+\begin{codeblock}
+consteval void REQUIRE(expression<bool> auto expr) {
+    -> [expr] {
+        const auto value = exprid(expr);
+        if(!value) {
+            if(meta::is_binary_expression(expr)) {
+                show_error(meta::to_string(meta::lhs(expr)),
+                           exprid(meta::lhs(expr)),
+                           meta::binary_operator(expr),
+                           meta::to_string(meta::rhs(expr)),
+                           exprid(meta::rhs(expr))               
+                );
+            }
+        }
+        else {
+            show_error(meta::to_string(expr));
+        }
+    }(); 
+}
+\end{codeblock}
+
+\section{Design points}
+
+\subsection{Identifying methods doing code injection}
+
+The presented \tcode{consteval} functions can either: 
+\begin{itemize}
+    \item Return a value
+    \item Inject an expression
+    \item Inject one or more statements
+\end{itemize}
+
+Injected statements are usually valid in a specific scope (function, class, namespace) and may or may not be declarations.
+Should this different type of injection be visually distinguished?
+In general code, injection behaves very differently than a simple call and would benefit from being visible \textbf{at call site}.
+
+\subsection{Lazy evaluation, reflection, and sigils}
+
+When an expression may conditionally not be evaluated, it should be visible as that may otherwise lead to surprising results
+if the code is either conditionally evaluated or conditionally injected, especially for facilities like \tcode{log} or \tcode{assert}.
+We think there are a few options to be considered:
+
+\begin{itemize}
+    \item Explicitely applies the \tcode{reflexpr} operator to every expression. For example \tcode{log(reflexpr("Hello"));}
+    However, this may become overly verbose and cumbersome.
+    
+    We may consider a shorter keyword, for example \tcode{log(\$("Hello"));}
+    
+    While nicely explicit, trying to extend the basic source character has historically been doomed to fail. And it is possible that it would still be considered to verbose.
+    
+    \item Introduce a tool separate from \tcode{consteval} functions for the purpose of code injection, with a different syntax for declaration and use.
+    
+\begin{codeblock}
+consteval log!(expression<std::string_view> auto message) {
+    -> do_log(exprid(message));
+};
+void f() {
+    log!("Hello");
+}
+\end{codeblock}
+     We use the strawman syntax \tcode{consteval} \emph{identifier} \tcode{!(args) {}} to declare hygenic macros (It's not a bad word!) and \emph{identifier!}
+     to invoke/expand them.
+     
+\begin{codeblock}
+f(std::fwd!(args));
+std::assert!(1+1 == 2, "Maths are broken");
+catch2::require!(vec.empty());
+abseil::RegisterFlag<bool>!("ftime-trace", false, "Profile compile time");
+\end{codeblock}
+
+     There is another bit of magic involved here: Expressions are automatically converted to a \tcode{std::meta::info}.
+     
+     This is much nicer to use, but requires new syntax and doesn't allow differentiating between parameters that will always be evaluated and those which won't.
+     
+     \textbf{I think this general approach to the syntax at call site is the most sensible}.
+   
+\begin{note}
+Yes, this looks like Rust macros, as Rust's macros also use a sigil to differentiate themselves from normal rust functions,
+for the same reasons. However, rust macros operate on tokens, which is very different from what is discussed here.
+Exclamation mark \tcode{!} happens to be fairly readable, feel free to bikeshed.
+\end{note}
+     
+\end{itemize}
+
+\section{Comparison of this proposal, Lazy evaluation, and Parametric Expressions}
+
+Lazy evaluation, Parametric Expressions and this proposal all gravitate around the same
+design space and try to solve the same problem from different angles.
+
+We think this proposal is more generic and simpler as it adds less new language features and simply evolves 
+and refines proposed and planned features.
+
+We leverage reflection and code injection to provide a feature akin to AST-level hygienic macro,
+which offer a lot of consistency and synergy with these other features, the sum of which would be able
+to replace all function macro use cases.
+Notably, this proposal allows the expansion to both expressions and statements. 
+
+All of that comes, of course at a price. Code Injection is not yet a mature proposal and represents a rather large body of work, that may not be standardized any time soon.
+In this regard, both lazy evaluation and parametric expressions are simpler because they have no prerequisite and could be standardized faster.
+
+Lazy Evaluation creates an object for every expression and might perform a call.
+On the other hand, a function taking a lazily evaluated parameter can be defined in a separate translation
+unit and may generate less code.
+
+Parametric Expressions are rather similar to the current proposal with a more narrow focus.
+
+\subsection{\tcode{constexpr} parameters}
+
+Some capabilities and example presented, notably \tcode{constexpr_if} may require a
+feature similar to \tcode{constexpr} parameters \cite{P1045R1}.
+While there is some overlap between the problem that either proposal can solve and they
+maybe mutually beneficial, there are mostly orthogonal concerns.
+
+\section{Acknowledgments}
+
+This paper draws \emph{heavily} on the work made on code injection and reflection, notably by
+Daveed Vandevoorde, Andrew Sutton, Faisal Vali, Wyatt Childers and Herb Sutter.
+
+\bibliographystyle{plain}
+\bibliography{../wg21}
+
+\end{document}

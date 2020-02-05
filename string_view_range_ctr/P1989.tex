@@ -1,0 +1,216 @@
+\documentclass{wg21}
+
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{ulem}
+\usepackage{fullpage}
+\usepackage{parskip}
+\usepackage{csquotes}
+\usepackage{listings}
+\usepackage{minted}
+\usepackage{enumitem}
+\usepackage{minted}
+
+
+\lstdefinestyle{base}{
+language=c++,
+breaklines=false,
+basicstyle=\ttfamily\color{black},
+moredelim=**[is][\color{green!50!black}]{@}{@},
+escapeinside={(*@}{@*)}
+}
+
+\newcommand{\cc}[1]{\mintinline{c++}{#1}}
+\newminted[cpp]{c++}{}
+
+
+\title{Range constructor for \tcode{std::string\_view} 2: Constrain Harder}
+\docnumber{P1989R0}
+\audience{LWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Abstract}
+
+in Belfast, LWG accepted P1391 partially over concern about the constraints for the range constructor, and as such only the iterator+sentinel
+constructor was accepted. Please refer to P1391 for the design of the proposed changed.
+(P1391 being now accepted, I needed a new paper number for the range constructor.)
+
+
+\section{Issues found during wording reviews}
+
+The current idiomatic way to construct a \tcode{string_view} is to define a \tcode{string_view} operator on user-defined classes, 
+as does \tcode{std::string}, \tcode{QString} Boost Beast, \tcode{fmt} and other.
+With the changes as proposed in P1391R3, the range constructor may be selected over the conversion function.
+This is not observable in practice, unless the \tcode{string_view} returned by the conversion function is not the same value as what the range constructor would create.
+
+\begin{minted}{c++}
+struct buffer {
+   buffer() {};
+   char const* begin() const { return data; }
+   char const* end() const { return data + 42; }
+   operator basic_string_view<char, s>() const{
+      return basic_string_view<char, s>(data, data +2);
+   }
+private:
+   char data[42];
+};
+\end{minted}
+
+To make sure this conversion function keeps getting selected, we had the fiollowing constraint
+
+\begin{itemize}
+
+\item \tcode{std::remove_cvref_t<R>} has no \tcode{basic\_string\_view<charT, traits>} conversion operator.
+
+\end{itemize}
+
+With that constraint, any type that has a conversion operator will use that conversion operator.
+If a \tcode{const} type has a non-const conversion function the program remains ill-form.
+
+Conversion between \tcode{string_view} types with different \tcode{charT} or different \tcode{type_traits} are ill-formed.
+
+If a type otherwise satisfying the constraints has a conversion operator to a different \tcode{basic_string_view},
+notably \tcode{basic_string_view<charT, some-other-traits-type>}, while not itself defining \tcode{using type_traits =  some-other-traits-type}, a program that was previously ill-formed will call the new range overload. 
+
+
+\subsection{Implementability}
+
+
+The following overload satisfies the desired set of constraints
+
+\begin{minted}{c++}
+
+
+template <typename T, typename Traits>
+concept has_compatible_traits = !requires { typename T::traits_type; } 
+|| r::same_as<typename T::traits_type, Traits>;
+
+
+template<typename charT, typename traits = std::char_traits<char>>
+struct basic_string_view {
+	//...
+	template <r::contiguous_range R>
+	requires r::sized_range<R>
+	  && (!std::is_convertible_v<R, const charT*>) 
+	  &&   std::is_same_v<std::remove_cvref_t<r::range_reference_t<R>>, charT>
+	  &&   has_compatibe_traits<R, traits>
+	  && (!requires (std::remove_cvref_t<R> & d) {
+	      d.operator basic_string_view<char, traits>();
+	  })
+	basic_string_view(R&&);
+}
+
+\end{minted}
+
+% https://godbolt.org/z/3NBtjM
+
+\section{Proposed wording}
+
+Change in \textbf{[string.view] 20.4.2}:
+\begin{quote}
+\begin{codeblock}
+
+template<class charT, class traits = char_traits<charT>>
+class basic_string_view {
+public:
+    [...]
+
+    // construction and assignment
+    constexpr basic_string_view() noexcept;
+    constexpr basic_string_view(const basic_string_view&) noexcept = default;
+    constexpr basic_string_view& operator=(const basic_string_view&) noexcept = default;
+    constexpr basic_string_view(const charT* str);
+    constexpr basic_string_view(const charT* str, size_type len);
+    template <class It, class End>
+    constexpr basic_string_view(It begin, End end);
+    @\added{template <class R>}@
+    @\added{constexpr basic_string_view(R\&\& r);}@
+    
+
+    [...]
+};
+
+@\added{template<class R>}@
+@\added{basic_string_view(R\&\&)}@
+@\added{    -> basic_string_view<remove_reference_t<ranges::range_reference_t<R>>>;}@
+
+template<class It, class End>
+basic_string_view(It, End) -> basic_string_view<iter_value_t<It>>;
+
+
+
+
+\end{codeblock}
+\end{quote}
+
+Change in \textbf{[string.view.cons] 20.4.2.1}:
+
+Add after 7
+
+\begin{quote}
+\begin{addedblock}
+\begin{itemdecl}
+template <class R>
+constexpr basic_string_view(R&& r);
+
+\end{itemdecl}
+
+\begin{itemdescr}
+    \constraints
+    \begin{itemize}
+        \item \tcode{R} satisfies \tcode{ranges::contiguous_range},
+        \item \tcode{R} satisfies \tcode{ranges::sized_range},
+        \item \tcode{is_same_v<remove_reference_t<ranges::range_reference_t<R>>, charT>} is \tcode{true},
+        \item \tcode{is_convertible_v<R, const charT*>} is \tcode{false},
+        \item \tcode{std::remove_cvref_t<R>} has no \tcode{basic_string_view<charT, traits>} conversion operator, and
+        \item If the qualified-id \tcode{R::traits_type} is valid and denotes a type,\\ \tcode{is_same_v<R::traits\_type, traits>} is \tcode{true}.
+    \end{itemize}
+ 
+	\expects
+	 \begin{itemize}
+		\item \tcode{R} models \tcode{ranges::contiguous_range}, and
+		\item \tcode{R} models \tcode{ranges::sized_range}.
+	\end{itemize}
+
+    \effects
+    Initializes \tcode{data\_} with \tcode{ranges::data(r)} and \tcode{size\_} with \tcode{ranges::size(r)}.
+
+
+    \throws
+    What and when \tcode{ranges::data(r)} and \tcode{ranges::size(r)} throw.
+
+
+
+\end{itemdescr}
+
+\end{addedblock}
+\end{quote}
+
+
+Add to the section [string.view.deduct] the following deduction guides:
+
+
+
+\begin{quote}
+\begin{addedblock}
+
+\begin{itemdecl}
+template<class R>
+basic_string_view(R&&)
+-> basic_string_view<remove_reference_t<ranges::range_reference_t<R>>>;
+\end{itemdecl}
+\begin{itemdescr}
+\constraints
+\tcode{R} satisfies \tcode{ranges::contiguous_range}.
+\end{itemdescr}
+
+\end{addedblock}
+\end{quote}
+
+
+\end{document}

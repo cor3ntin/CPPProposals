@@ -60,7 +60,7 @@
 
 \lstdefinestyle{base}{
   language=c++,
-  breaklines=false,
+  breaklines=true,
   basicstyle=\ttfamily\color{black},
   moredelim=**[is][\color{green!50!black}]{@}{@},
   escapeinside={(*@}{@*)}
@@ -71,7 +71,7 @@
 
 
 \title{Locales, Encodings and Unicode}
-\docnumber{D2020R0}
+\docnumber{P2020R0}
 \audience{SG-16, LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -149,7 +149,7 @@ However there exist many numeral systems in use, most of which require character
 
 Timezones are not related to locales. A timezone may span multiple locale regions and a single region may extend to many locales.
 However, locales do have an associated preferred calendar.
-For a given calendar, such as the Gregorian calendar, locales may differ on what days are considered week days, or by which day is considered the fist of the week.
+For a given calendar, such as the Gregorian calendar, locales may differ on what days are considered week days, or by which day is considered the first of the week.
 This doesn't seem to be an issue in C++ at the present as a single calendar is provided.
 
 \subsection{Measurement Units}
@@ -187,7 +187,7 @@ Nevertheless, it might be necessary to deprecate the C functions (taking no loca
 for the entire set of classification functions.
 
 By dissociating from locale, it would possible to provide constexpr implementation for some encodings.
-Reorganizing the order of parameters makes the functions usable with bind_front.
+Reorganizing the order of parameters makes the functions usable with bind\_front.
 
 This would be accompanied by functions to convert a range of code units to a code point for the given encoding.
 
@@ -228,7 +228,7 @@ auto toupper(text_encoding encoding, std::locale locale, uint32_t codepoint) -> 
 \end{codeblock}
 
 
-Note that, while there are some use cases for the character-based casing, correct casing requires to be done over an entire string or word.
+Note that, while there are some use cases for the codepoint-based casing, correct casing requires to be done over an entire string or word.
 
 Unfortunately, the ctype functions operating on character sequences are also specified to operate on a code unit per code unit basis.  
 
@@ -326,7 +326,7 @@ See \cite{P1629R0} for these issues and solutions.
 In any, case transcoding is affected by encoding but not by locale.
 \subsection{Facets do not support standard UTF types}
 
-In addition to the many functions failing to account for multi bytes encoding (including all the classification and character transformation encoding), facets are not required to have a specialization for \tcode{char8_t}, \tcode{char16_t}, \tcode{char32_t}
+In addition to the many functions failing to account for multi bytes encoding (including all the classification and codepoint transformation functions), facets are not required to have a specialization for \tcode{char8_t}, \tcode{char16_t}, \tcode{char32_t}
 
 \subsection{Some facets do more than localization}
 Once again because encoding and locales are hopelessly tied, and because many encodings have small charsets, many encodings only have one or a few currency symbols. Sometimes a currency symbol such as \UnicodeLetter{\$} and a generic currency symbol (\UnicodeLetter{¤} CURRENCY SIGN).
@@ -399,7 +399,6 @@ Qt provides:
 
 ICU has \tcode{Locale::getAvailableLocales()}
 
-
 \section{Where do we go from there?}
 
 The design of locale in C++ is inherited and built upon the C model, itself mirroring the POSIX model.
@@ -444,9 +443,13 @@ Given the scope of the work I am not quite sure whether the best path forward is
 In doubt, read the Unicode documentation
 \end{itemize}
 
+\section{Acknowledgments}
+
+With many thanks to Matteo Italia, Thiago Macieira, Zach Laine for providing valuable feedback and much needed proof-reading.
+
+
 \bibliographystyle{plain}
 \bibliography{../wg21}
-
 
 
 \renewcommand{\section}[2]{}%
