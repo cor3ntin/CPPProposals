@@ -132,7 +132,7 @@ The following code illustrate the totality of the proposed additions:
 void f();
 int main() {
     std::thread thread(
-     std::thread::atributes()
+     std::thread::attributes()
         .name("Worker")
         .stack_size(512*1024),
      f
@@ -146,8 +146,8 @@ int main() {
 This code suggest a thread name as well as a stack size 
 the implementation should used when creating a new thread of execution.
 
-Acheving the same result in C++20 requires duplicating the entire \tcode{std::thread}
-class, which would difficulty fit in a Tony table.
+Achieving the same result in C++20 requires duplicating the entire \tcode{std::thread}
+class, which would be difficult to fit in a Tony table.
 
 \pagebreak
 
@@ -155,9 +155,9 @@ Here is how to set the name and stack size of a thread on most posix implementat
 
 \begin{lstlisting}[style=MYSMALL]
 int libcpp_thread_create(libcpp_thread_t *t, void *(*func)(void *),
-void *arg,
-size_t stack_size,
-const libcpp_threadname_char_t* name)
+                        void *arg,
+                        size_t stack_size,
+                        const libcpp_threadname_char_t* name)
 {
     int res = 0;
     if(stack_size != 0) {
@@ -200,7 +200,7 @@ The name can be used by:
     \item Windows Performance Analyzer and ETW tracing
 \end{itemize} 
 
-The \href{https://docs.microsoft.com/en-us/visualstudio/debugger/how-to-set-a-thread-name-in-native-code?view=vs-2019}{Visual documentation for SetThreadDescription} explains:
+The \href{https://docs.microsoft.com/en-us/visualstudio/debugger/how-to-set-a-thread-name-in-native-code?view=vs-2019}{Visual Studio documentation for SetThreadDescription} explains:
 
 \begin{quoteblock}
 Thread naming is possible in any edition of Visual Studio. Thread naming is useful for identifying threads of interest in the Threads window when debugging a running process. Having recognizably-named threads can also be helpful when performing post-mortem debugging via crash dump inspection and when analyzing performance captures using various tools.
@@ -452,12 +452,12 @@ explicit thread(const attributes &, F&& f, Args&&... args)
 \subsection{This belongs in a library?}
 
 Because the proposed attributes may need to be set during the thread creation, a library would have no choice but
-to reimplement all of \tcode{sd::thread}.
+to reimplement all of \tcode{std::thread}.
 Besides the cost of doing that implementation, it poses composability challenges (cannot put a \tcode{custom_thread} in a \tcode{std::thread_poool} for example)
 
 \subsection{What about GPUs threads?}
 
-While \tcode{sd::thread} has no mechanism to specify an execution context, an implementation that wishes
+While \tcode{std::thread} has no mechanism to specify an execution context, an implementation that wishes
 to use \tcode{std::thread} on a GPU or other hardware could ignore all attributes or the ones not relevant on their platform.
 
 \subsection{What about other properties}
@@ -634,9 +634,6 @@ public:
     
     @\emph{implementation-defined}@ __name; // \expos
     std::size_t __size; // \expos
-    friend class thread;
-    friend class jthread;
-
 };
 \end{codeblock}
 
@@ -799,7 +796,7 @@ synchronizes with the beginning of the invocation of the copy of \tcode{f}.
 
 \section{Acknowledgments}
 
-Thanks to Martin Hořeňovský, Kamil Rytarowski, Clément Grégoire, Bruce Dawson for their valuable feedback.
+Thanks to Martin Hořeňovský, Kamil Rytarowski, Clément Grégoire, Bruce Dawson, Patrice Roy, Ronen Friedman, Billy Baker and others for their valuable feedback.
 
 
 \bibliographystyle{plain}
