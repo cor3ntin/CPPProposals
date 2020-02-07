@@ -65,8 +65,6 @@
 % usage: \audience{<audience>}
 \newcommand*{\audience}[1]{\def\@audience{#1}}
 
-\newcommand*{\target}[1]{\def\@target{#1}}
-
 % Defines the author of the paper and their email address.
 % usage: \author{<author>}{<email>}
 \renewcommand*{\author}[2]{\def\@author{#1} \def\@email{#2}}
@@ -111,12 +109,21 @@
 %%--------------------------------------------------
 %% Difference markups
 \definecolor{addclr}{rgb}{0,.6,.6}
+\definecolor{blue-violet}{rgb}{0.54, 0.17, 0.89}
+\definecolor{ao}{rgb}{0.0, 0.5, 0.0}
 \definecolor{remclr}{rgb}{1,0,0}
 \definecolor{noteclr}{rgb}{0,0,1}
 
 \newcommand{\added}[1]{\textcolor{addclr}{\uline{#1}}}
 \newcommand{\removed}[1]{\textcolor{remclr}{\sout{#1}}}
 \newcommand{\changed}[2]{\removed{#1} \added{#2}}
+
+\newcommand{\addedtwo}[1]{\textcolor{blue-violet}{\uline{#1}}}
+\newcommand{\changedtwo}[2]{\removed{#1} \addedtwo{#2}}
+
+
+\newcommand{\addedthree}[1]{\textcolor{ao}{\uline{#1}}}
+\newcommand{\changedthree}[2]{\removed{#1} \addedthree{#2}}
 
 \newenvironment{addedm}{\color{addclr}}{ }
 \newenvironment{changedm}{\color{noteclr}}{ }
@@ -143,6 +150,14 @@
 }
 {
 \color{black}
+}
+
+\newenvironment{addedblocktwo}
+{
+	\color{blue-violet}
+}
+{
+	\color{black}
 }
 
 %%--------------------------------------------------
@@ -298,8 +313,8 @@
 \newcommand{\effects}{\Fundesc{Effects}}
 \newcommand{\postconditions}{\Fundesc{Postconditions}}
 \newcommand{\postcondition}{\Fundesc{Postcondition}}
-\newcommand{\preconditions}{\requires}
-\newcommand{\precondition}{\requires}
+\newcommand{\preconditions}{\Fundesc{Preconditions}}
+\newcommand{\precondition}{\Fundesc{Precondition}}
 \newcommand{\returns}{\Fundesc{Returns}}
 \newcommand{\throws}{\Fundesc{Throws}}
 \newcommand{\default}{\Fundesc{Default behavior}}

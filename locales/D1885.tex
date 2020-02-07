@@ -1,23 +1,100 @@
-\documentclass{wg21}
+% !TeX program = luatex
+% !TEX encoding = UTF-8
 
+\RequirePackage{luatex85}%
+\documentclass{wg21}
 
 \usepackage{xcolor}
 \usepackage{soul}
 \usepackage{ulem}
 \usepackage{fullpage}
 \usepackage{parskip}
-\usepackage{csquotes}
-\usepackage{listings}
+%\usepackage{listings}
 \usepackage{enumitem}
 \usepackage{makecell}
 \usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\RequirePackageWithOptions{fontspec}
+\usepackage{footnote}
+
+\usepackage{newunicodechar}
+\usepackage{url}
+\usepackage[pass]{geometry}
+
+\setmainfont{Noto Sans}
 
 
-%\DeclareUnicodeCharacter{201F}{‟}
+
+\usepackage{blindtext}
+\usepackage[most]{tcolorbox}
+\definecolor{block-gray}{gray}{0.95}
+
+
+\newtcolorbox{quoteblock}[1][]{%
+    colback=block-gray,
+    grow to right by=-10mm,
+    grow to left by=-10mm,
+    boxrule=0pt,
+    boxsep=0pt,
+    breakable,
+    enhanced jigsaw,
+    borderline west={4pt}{0pt}{gray},
+    #1,
+}
+
+\lstdefinestyle{MY}{language=C++,
+    basicstyle=\small\CodeStyle,
+    keywordstyle=\color{blue},
+    commentstyle=\color{ForestGreen}\itshape\rmfamily,,
+    stringstyle=\color{Sepia},
+    xleftmargin=0em,
+    showstringspaces=false,
+    columns=flexible,
+    keepspaces=true,
+    keywords=[2]{char32_t, char8_t, char16_t},
+    keywords=[3]{codepoint},
+    keywords=[4]{noexcept,constexpr, static_assert},
+    keywordstyle={\color{blue!80!black}},
+    keywordstyle=[2]{\color{red!80!black}},
+    keywordstyle=[3]{\color{BurntOrange!50!black}},
+    keywordstyle=[4]{\color{green!50!black}},
+    texcl=true}
+
+\lstdefinestyle{MYSMALL}{language=C++,
+    basicstyle=\footnotesize\CodeStyle,
+    keywordstyle=\color{blue},
+    commentstyle=\color{ForestGreen}\itshape,
+    stringstyle=\color{Sepia},
+    showstringspaces=false,
+    columns=flexible,
+    keepspaces=true,
+    keywords=[2]{char32_t, char8_t, char16_t},
+    keywords=[3]{codepoint},
+    keywords=[4]{noexcept,constexpr, static_assert},
+    keywordstyle={\color{blue!80!black}},
+    keywordstyle=[2]{\color{red!80!black}},
+    keywordstyle=[3]{\color{BurntOrange!50!black}},
+    keywordstyle=[4]{\color{green!50!black}},
+    texcl=true}
+
+
+\newfontfamily{\fallbackfont}{Noto Sans}
+\DeclareTextFontCommand{\textfallback}{\fallbackfont}
+\newunicodechar{ẞ}{\textfallback{ẞ}}
+
+
+% \setmonofont{Inconsolatazi4}
+\setmainfont{Noto Serif}
+\usepackage{csquotes}
+
+
+
+
+
 
 
 \newcommand{\cc}[1]{\mintinline{c++}{#1}}
-%\newminted[cpp]{c++}{}
 
 
 \title{Naming Text Encodings to Demystify Them}
@@ -54,6 +131,131 @@ Moreover, the standard does not provide a way to query which encodings are expec
 leading to guesswork and unavoidable UB.
 
 This paper introduces the notions of literal encoding, system encoding and a way to query them.
+
+
+\section{Example}
+
+\subsection{Listing the encoding}
+
+\begin{lstlisting}[style=MY]
+#include <text_encoding>
+#include <iostream>
+
+void print(const std::text_encoding & c) {
+    std::cout << c.name()
+    << " (iana mib: " << c.mib() << ")\n"
+    << "Aliases:\n";
+    for(auto && a : c.aliases()) {
+        std::cout << '\t' << a << '\n';
+    }
+}
+
+int main() {
+    std::cout << "Literal Encoding: ";
+    print(std::text_encoding::literal());
+    std::cout << "Wide Literal Encoding: ";
+    print(std::text_encoding::wide_literal());
+    std::cout << "System Encoding: ";
+    print(std::text_encoding::system());
+    std::cout << "Wide system Encoding: ";
+    print(std::text_encoding::wide_system());
+}
+\end{lstlisting}
+
+Compiled with \tcode{g++ -fwide-exec-charset=EBCDIC-US -fexec-charset=SHIFT_JIS}, this program may display:
+
+\begin{codeblock}
+    Literal Encoding: SHIFT_JIS (iana mib: 17)
+    Aliases:
+        Shift_JIS
+        MS_Kanji
+        csShiftJIS
+    
+    Wide Literal Encoding: EBCDIC-US (iana mib: 2078)
+    Aliases:
+        EBCDIC-US
+        csEBCDICUS
+    
+    System Encoding: UTF-8 (iana mib: 106)
+    Aliases:
+        UTF-8
+        csUTF8
+    
+    Wide sytem Encoding: ISO-10646-UCS-4 (iana mib: 1001)
+    Aliases:
+        ISO-10646-UCS-4
+        csUCS4
+\end{codeblock}
+
+\subsection{LWG3314}
+
+[time.duration.io] specifies that the unit for micro seconds is µ on systems able to display it.
+This is currently difficult to detect and implement properly.
+
+The following allows an implementation to use µ if it is supported by both the execution encoding and the encoding
+attached to the stream.
+
+
+\begin{lstlisting}[style=MY]
+    template<class traits, class Rep, class Period>
+    void print_suffix(basic_ostream<char, traits>& os, const duration<Rep, Period>& d)
+    {
+        if constexpr(text_encoding::literal() == text_encoding::utf8) {
+            if (os.getloc().encoding() == text_encoding::utf8) {
+                os << d.count() << "\u00B5s"; // µ
+                return;
+            }
+        }
+        os << d.count() << "us";
+    }
+\end{lstlisting}
+
+A more complex implementation may support more encodings, such as iso-8859-1.
+
+\subsection{Asserting a specific encoding is set}
+
+On POSIX, matching encodings is done by name, which pulls the entire database.
+To avoid that we propose a method to asserting that the system encoding is as expected.
+such method mixed to only pull in the strings associated with this encoding:
+
+\begin{lstlisting}[style=MY]
+int main() {
+    return text_encoding::system_is<text_encoding::id::UTF8>();
+}
+\end{lstlisting}
+
+
+
+
+\subsection{User construction}
+
+To support other use cases such as interoperability with other libraries or internet protocols,
+\tcode{text_encoding} can be constructed by users
+
+\begin{lstlisting}[style=MY]
+text_encoding my_utf8("utf8");
+assert(my_utf8.name() == "utf8"sv); // Get the user provided name back
+assert(my_utf8.mib() == text_encoding::id::UTF8);
+
+text_encoding my_utf8_2(text_encoding::id::UTF8);
+assert(my_utf8_2.name() == "UTF-8"sv); // Get the preferred name for the implementation
+assert(my_utf8_2.mib() == text_encoding::id::UTF8);
+assert(my_utf8 == my_utf8_2);
+\end{lstlisting}
+
+\subsection{Unregistered encoding}
+
+Unregistered encoding are also supported. They have the \tcode{other} mib, no aliases and are compared
+by names:
+
+\begin{lstlisting}[style=MY]
+text_encoding wtf8("WTF-8");
+assert(wtf8.name() == "WTF-8"sv);
+assert(wtf8.mib() == text_encoding::id::other);
+
+//encodings with the \tcode{other} mib are compared by name, ignoring case, hyphens and underscores
+assert(wtf8 == text_encoding("___wtf8__"));
+\end{lstlisting}
 
 
 \section{Revisions}
@@ -233,84 +435,7 @@ Implementations may not extend the \tcode{text_encoding::id} as to guarantee sou
 \subsection{\tcode{const char*}}
 
 A primary use case is to enable people to write their own conversion functions.
-Unfortunately, most APIs expect NULL-terminated strings.
-
-\section{Example}
-
-\subsection{Listing the encoding}
-
-\begin{codeblock}
-
-#include <text_encoding>
-#include <iostream>
-
-void print(const std::text_encoding & c) {
-	std::cout << c.name()
-	<< " (iana mib: " << c.mib() << ")\n"
-	<< "Aliases:\n";
-	for(auto && a : c.aliases()) {
-		std::cout << '\t' << a << '\n';
-	}
-}
-
-int main() {
-	std::cout << "Literal Encoding: ";
-	print(std::text_encoding::literal());
-	std::cout << "Wide Literal Encoding: ";
-	print(std::text_encoding::wide_literal());
-	std::cout << "System Encoding: ";
-	print(std::text_encoding::system());
-	std::cout << "Wide system Encoding: ";
-	print(std::text_encoding::wide_system());
-}
-\end{codeblock}
-
-Compiled with \tcode{g++ -fwide-exec-charset=EBCDIC-US -fexec-charset=SHIFT_JIS}, this program may display:
-
-\begin{codeblock}
-Literal Encoding: SHIFT_JIS (iana mib: 17)
-Aliases:
-	Shift_JIS
-	MS_Kanji
-	csShiftJIS
-Wide Literal Encoding: EBCDIC-US (iana mib: 2078)
-Aliases:
-	EBCDIC-US
-	csEBCDICUS
-System Encoding: UTF-8 (iana mib: 106)
-Aliases:
-	UTF-8
-	csUTF8
-Wide sytem Encoding: ISO-10646-UCS-4 (iana mib: 1001)
-Aliases:
-	ISO-10646-UCS-4
-	csUCS4
-\end{codeblock}
-
-\subsection{LWG3314}
-
-[time.duration.io] specifies that the unit for micro seconds is µ on systems able to display it.
-This is currently difficult to detect and implement properly.
-
-The following allows an implementation to use µ if it is supported by both the execution encoding and the encoding
-attached to the stream.
-
-
-\begin{codeblock}
-template<class traits, class Rep, class Period>
-void print_suffix(basic_ostream<char, traits>& os, const duration<Rep, Period>& d)
-{
-	if constexpr(text_encoding::literal() == text_encoding::utf8) {
-		if (os.getloc().encoding() == text_encoding::utf8) {
-			os << d.count() << "\u00B5s"; // µ
-			return;
-		}
-	}
-	os << d.count() << "us";
-}
-\end{codeblock}
-
-A more complex implementation may support more encodings, such as iso-8859-1.
+Unfortunately, most APIs expect NULL-terminated strings, which is why we return a const char*.
 
 \section{Implementation}
 
@@ -323,6 +448,9 @@ On OSX \tcode{CFStringGetSystemEncoding} and \tcode{CFStringConvertEncodingToIAN
 
 While exposing the literal encoding is novel, a few libraries do expose the system encoding, including Qt and wxWidget, and use the IANA registry.
 
+Part of this proposal is available on \href{https://compiler-explorer.com/z/7D3Z3x}{Compiler explorer}
+(literal and wide_literal are not supported)
+
 
 \section{FAQ}
 \subsection{Why not return a \tcode{text_encoding::id} rather than a \tcode{text_encoding} object?}
@@ -331,11 +459,11 @@ Some implementations may need to return a non-register encoding, in which case t
 \tcode{text_encoding::system()} and \tcode{text_encoding::system_mib()} (not proposed) would generate the same code in an optimized build.
 
 
-\subsection{But handling names is expensive}
+\subsection{But handling names is expensive?}
 To ensure that the proposal is implementable in constrained environment, \tcode{text_encoding} has a limit of 63 characters per encoding name
 which is sufficient to support all encodings we are aware of (registered or not)
 
-\subsection{It seems like names and mib are separate concerns}
+\subsection{It seems like names and mib are separate concerns?}
 
 Not all encodings are registered (event if most are), it is therefore not possible to identify uniquely all encoding uniquely by mib.
 Encodings may have many names, but some platform will have a preferred name.
@@ -343,22 +471,46 @@ Encodings may have many names, but some platform will have a preferred name.
 The combination of a name + a mib covers 100\% of use cases. Aliases further help with integration with third party libraries or to develop
 tools that need mime encoding names.
 
-\subsection{I just want to check that my platform is utf-8 without paying for all these other encoding}
+\subsection{Why can't there be vendor provided MIBs?}
+
+This would be meaningless in portable code. \tcode{mib} is only useful as mechanism to identify \textbf{portably} encoding and to increase compatibility across third party libraries.
+
+It does not prevent the support of unregistered encodings:
+
+\begin{codeblock}
+    text_encoding wtf8("WTF-8");
+    assert(wtf8.name() == "WTF-8"sv);
+    assert(wtf8.mib() == text_encoding::id::other);
+\end{codeblock}
+
+
+\subsection{Why can't there be a \tcode{text_encoding(name, mib)} constructor?}
+
+Same reason, if users are allowed to construct text_encoding from registered names or names otherwise
+unknown from the implementation with an arbitrary mib, it becomes impossible to maintain the invariant of the class
+(the relation between mib and name), which would make the interface much harder to use, without provided
+any functionality.
+
+\subsection{I just want to check that my platform is utf-8 without paying for all these other encoding?}
 
 we added \tcode{system_is} to that end.
 
-\begin{codeblock}
+\begin{lstlisting}[style=MY]
     int main() {
         assert(text_encoding::system_is<text_encoding::id::UTF8>
                   && "Non UTF8 encoding detected, go away");
     }
-\end{codeblock}
+\end{lstlisting}
 
-This can be implemented in a way that does only store in the program the necessary information for that particular encoding.
+
+This can be implemented in a way that only stores in the program the necessary information for that particular encoding (unless \tcode{aliases} is called at runtime).
 
 On windows and OSX, only calling \tcode{encoding::aliases} would pull any data in the program, even if calling \tcode{system}.
 
 
+\subsection{What is the cost of calling \tcode{aliases}?}
+
+My crude implementation pulls in 30Ki of data when calling aliases or the name constructor, or \tcode{system()} (on POSIX).
 \section{Future work}
 
 Exposing the notion of text encoding in the core and library language gives us the tools to solve some
@@ -514,7 +666,7 @@ struct text_encoding final{
         OSDEBCDICDF041 = 117,
         ISO115481 = 118,
         KZ1048 = 119,
-        Unicode = 1000,
+        UCS2 = 1000,
         UCS4 = 1001,
         UnicodeASCII = 1002,
         UnicodeLatin1 = 1003,
@@ -707,7 +859,9 @@ template<> struct hash<text_encoding>;
 
 \pnum Let \tcode{bool COMP_NAME(const char* a, const char* b)} be a function that returns \tcode{true} if two ASCII strings are identical, ignoring case and all \tcode{-} and  \tcode{_} characters.
 
-\pnum
+\begin{note}
+The enumerators of the \tcode{text_encoding::id} and their value match those specified in \cite{rfc3808} with the "cs" prefixed removed. \tcode{text_encoding::id::UCS2} corresponds to \tcode{csUnicode} in \cite{rfc3808}
+\end{note}
 
 \begin{itemdecl}
 constexpr explicit text_encoding(string_view name);
@@ -941,7 +1095,7 @@ text_encoding wide_encoding() const;
 
 \section{Acknowledgments}
 
-Many thanks to Victor Zverovich and Thiago Macieira for reviewing this work and providing valuable feedback.
+Many thanks to Victor Zverovich, Thiago Macieira, Jens Maurer, Tom Honermann and others for reviewing this work and providing valuable feedback.
 
 
 \begin{thebibliography}{9}
