@@ -1,3 +1,8 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}%
 \documentclass{wg21}
 
 \usepackage{xcolor}
@@ -5,23 +10,56 @@
 \usepackage{ulem}
 \usepackage{fullpage}
 \usepackage{parskip}
-\usepackage{csquotes}
-\usepackage{listings}
-\usepackage{minted}
+%\usepackage{listings}
 \usepackage{enumitem}
-\usepackage{minted}
+\usepackage{makecell}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\RequirePackageWithOptions{fontspec}
+\usepackage{footnote}
+
+\usepackage{newunicodechar}
+\usepackage{url}
+\usepackage[pass]{geometry}
+
+% \setmainfont{Noto Sans}
 
 
-\lstdefinestyle{base}{
-  language=c++,
-  breaklines=false,
-  basicstyle=\ttfamily\color{black},
-  moredelim=**[is][\color{green!50!black}]{@}{@},
-  escapeinside={(*@}{@*)}
+
+\usepackage{blindtext}
+\usepackage[most]{tcolorbox}
+\definecolor{block-gray}{gray}{0.95}
+
+
+\newtcolorbox{quoteblock}[1][]{%
+	colback=block-gray,
+	grow to right by=-10mm,
+	grow to left by=-10mm,
+	boxrule=0pt,
+	boxsep=0pt,
+	breakable,
+	enhanced jigsaw,
+	borderline west={4pt}{0pt}{gray},
+	#1,
 }
 
+\newfontfamily{\fallbackfont}{Noto Sans}
+\DeclareTextFontCommand{\textfallback}{\fallbackfont}
+\newunicodechar{ẞ}{\textfallback{ẞ}}
+
+
+% \setmonofont{Inconsolatazi4}
+\setmainfont{Noto Serif}
+\usepackage{csquotes}
+
+
+
+
+
+
+
 \newcommand{\cc}[1]{\mintinline{c++}{#1}}
-\newminted[cpp]{c++}{}
 
 
 \title{Iterators pair constructors for stack and queue}
@@ -43,19 +81,19 @@ This paper proposes to add iterators-pair constructors to \tcode{std::stack} and
 Before & After\\ \hline
 
 \begin{minipage}[t]{0.5\textwidth}
-\begin{minted}[fontsize=\footnotesize]{cpp}
+\begin{lstlisting}
 std::vector<int> v(42);
 std::queue<int> q({v.begin(), v.end()});
 std::stack<int> s({v.begin(), v.end()});
-\end{minted}
+\end{lstlisting}
 \end{minipage}
 &
 \begin{minipage}[t]{0.3\textwidth}
-\begin{minted}[fontsize=\footnotesize]{cpp}
+\begin{lstlisting}
 std::vector<int> v(42);
 std::queue q(v.begin(), v.end());
 std::stack s(v.begin(), v.end());
-\end{minted}
+\end{lstlisting}
 \end{minipage}
 \\\\ \hline
 
@@ -105,7 +143,11 @@ namespace std {
 		explicit queue(Container&&);
 		
 		@\added{template<class InputIterator>}@
-		@\added{queue(InputIterator first, InputIterator last);}@
+		@\added{queue(InputIterator first, InputIterator last,}@
+		@\added{		const Container\& = Container());}@
+		
+		@\added{template<class InputIterator>}@
+		@\added{queue(InputIterator first, InputIterator last, Container\&\& = Container());}@
 				
 		template<class Alloc> explicit queue(const Alloc&);
 		template<class Alloc> queue(const Container&, const Alloc&);
@@ -119,9 +161,10 @@ namespace std {
 	template<class Container>
 	queue(Container) -> queue<typename Container::value_type, Container>;
 	
-	@\added{template<class InputIterator>}@
-	@\added{queue(InputIterator, InputIterator)}@
-	@\added{-> queue<typename iterator_traits<InputIterator>::value_type>;}@
+	@\added{template<class InputIterator,}@
+	@\added{         class Container = deque<typename iterator_traits<InputIterator>::value_type>>>}@
+	@\added{queue(InputIterator, InputIterator, Container c = Container())}@
+	@\added{-> queue<typename iterator_traits<InputIterator>::value_type, Container>;}@
 	
 	template<class Container, class Allocator>
 	queue(Container, Allocator) -> queue<typename Container::value_type, Container>;
@@ -159,13 +202,19 @@ namespace std {
 
 \begin{itemdecl}
 template<class InputIterator>
-queue(InputIterator first, InputIterator last);
+queue(InputIterator first, InputIterator last, const Container & cont );
 \end{itemdecl}
+
+\begin{itemdecl}
+template<class InputIterator>
+queue(InputIterator first, InputIterator last, Container && cont );
+\end{itemdecl}
+
 
 \begin{itemdescr}
 	\pnum
 	\effects
-	Initializes \tcode{c} from the range \range{first}{last}
+	Initializes \tcode{c} from \tcode{cont} (copy constructing or move constructing as appropriate); and calls \tcode{c.insert(c.end(), first, last);}
 \end{itemdescr}
 
 \end{addedblock}
@@ -192,7 +241,11 @@ namespace std {
 		explicit stack(Container&&);
 		
 		@\added{template<class InputIterator>}@
-		@\added{stack(InputIterator first, InputIterator last);}@
+		@\added{stack(InputIterator first, InputIterator last,}@
+		@\added{			const Container\& = Container());}@
+		
+		@\added{template<class InputIterator>}@
+		@\added{stack(InputIterator first, InputIterator last, Container\&\& = Container());}@
 		
 		template<class Alloc> explicit stack(const Alloc&);
 		template<class Alloc> stack(const Container&, const Alloc&);
@@ -206,9 +259,10 @@ namespace std {
 	template<class Container>
 	stack(Container) -> stack<typename Container::value_type, Container>;
 	
-	@\added{template<class InputIterator>}@
-	@\added{stack(InputIterator, InputIterator)}@
-	@\added{-> stack<typename iterator_traits<InputIterator>::value_type>;}@
+	@\added{template<class InputIterator,}@
+	@\added{         class Container = deque<typename iterator_traits<InputIterator>::value_type>>>}@
+	@\added{stack(InputIterator, InputIterator, Container c = Container())}@
+	@\added{-> stack<typename iterator_traits<InputIterator>::value_type, Container>;}@
 	
 	template<class Container, class Allocator>
 	stack(Container, Allocator) -> stack<typename Container::value_type, Container>;
@@ -243,14 +297,19 @@ namespace std {
 \begin{addedblock}
 	
 \begin{itemdecl}
-	template<class InputIterator>
-	stack(InputIterator first, InputIterator last);
+template<class InputIterator>
+stack(InputIterator first, InputIterator last, const Container & cont );
+\end{itemdecl}
+
+\begin{itemdecl}
+template<class InputIterator>
+stack(InputIterator first, InputIterator last, Container && cont );
 \end{itemdecl}
 
 \begin{itemdescr}
-	\pnum
-	\effects
-	Initializes \tcode{c} from the range \range{first}{last}
+\pnum
+\effects
+Initializes \tcode{c} from \tcode{cont} (copy constructing or move constructing as appropriate); and calls \tcode{c.insert(c.end(), first, last);}
 \end{itemdescr}
 	
 \end{addedblock}
