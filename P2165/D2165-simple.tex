@@ -1,0 +1,256 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}%
+\documentclass{wg21}
+
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{ulem}
+\usepackage{fullpage}
+\usepackage{parskip}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{makecell}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\RequirePackage{fontspec}
+\usepackage{newunicodechar}
+\usepackage{url}
+
+\setmonofont{Inconsolatazi4}
+\setmainfont{Noto Serif}
+\usepackage{csquotes}
+
+
+\lstset{language=C++,
+    keywordstyle=\ttfamily,
+    stringstyle=\ttfamily,
+    commentstyle=\ttfamily,
+    morecomment=[l][]{\#},
+    morekeywords={reflexpr,valueof,exprid,typeof, concept,constexpr,consteval,unqualid}
+}
+
+\lstdefinestyle{color}{language=C++,
+        keywordstyle=\color{blue}\ttfamily,
+        stringstyle=\color{red}\ttfamily,
+        commentstyle=\color{OliveGreen}\ttfamily,
+        morecomment=[l][\color{magenta}]{\#},
+        morekeywords={reflexpr,valueof,exprid,typeof, concept,constexpr,consteval,unqualid, static\_assert}
+}
+
+
+
+
+\title{\tcode{Comparing pairs and tuples}}
+\docnumber{D2165R0}
+\audience{LEWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+
+\section{Abstract}
+
+We propose to make tuples of 2 elements and pairs comparable
+
+\section{Tony tables}
+\begin{center}
+\begin{tabular}{l|l}
+Before & After\\ \hline
+
+\begin{minipage}[t]{0.5\textwidth}
+\begin{lstlisting}[style=color]
+
+constexpr std::pair  p {1, 3.0};
+constexpr std::tuple t {1.0, 3};
+static_assert(std::tuple(p) == t);
+static_assert(std::tuple(p) <=> t == 0);
+
+\end{lstlisting}
+\end{minipage}
+&
+\begin{minipage}[t]{0.5\textwidth}
+\begin{lstlisting}[style=color]
+
+constexpr std::pair  p {1, 3.0};
+constexpr std::tuple t {1.0, 3};
+static_assert(p == t);
+static_assert(p <=> t == 0);
+
+\end{lstlisting}
+\end{minipage}
+\\\\ \hline
+
+\end{tabular}
+\end{center}
+
+\section{Motivation}
+
+\tcode{pair}s are platonic tuples of 2 elements. \tcode{pair} and \tcode{tuple} share
+most of their interface.
+
+Notably a tuple can be constructed and assigned fom a pair.
+However, \tcode{tuple} and \tcode{pair} are not comparable.
+This proposal fixes that.
+
+This makes tuple more consistent (assignment and comparison usually form a pair, at least in regular-ish types),
+and makes the library ever so slightly less surprising.
+ 
+\section{Design}
+
+Because \tcode{tuple} is already constructible from \tcode{pair}, and to avoid inter-dependencies between \tcode{<utility>} and \tcode{<tuple>}, 
+we propose to add the comparison operator  in the \tcode{<tuple>} header.
+
+The design of these new operators for comparing a tuple and a pair is similar 
+to the operators for comparing a pair of tuples.  
+
+\section{Proposal}
+
+
+\section{Wording}
+
+
+\rSec2[tuple.syn]{Header \tcode{<tuple>} synopsis}
+
+[...]
+\begin{codeblock}
+
+// [tuple.rel], relational operators
+template<class... TTypes, class... UTypes>
+constexpr bool operator==(const tuple<TTypes...>&, const tuple<UTypes...>&);
+template<class... TTypes, class... UTypes>
+
+@\added{template<class... TTypes, class... UTypes>}@
+@\added{requires (sizeof..(UTyes) == 2)}@
+@\added{constexpr bool operator==(const tuple<TTypes...>\& t, const pair<UTypes...>\& u);}@
+
+constexpr common_comparison_category_t<@\placeholder{synth-three-way-result}@<TTypes, UTypes>...>
+operator<=>(const tuple<TTypes...>&, const tuple<UTypes...>&);
+
+@\added{template<class... TTypes, class... UTypes>}@
+@\added{requires (sizeof..(UTyes) == 2)}@
+@\added{constexpr common_comparison_category_t<\placeholder{synth-three-way-result}<TTypes, UTypes>...>}@
+@\added{operator<=>(const tuple<TTypes...>\& t, const pair<UTypes...>\& u);}@
+
+// [tuple.traits], allocator-related traits
+template<class... Types, class Alloc>
+struct uses_allocator<tuple<Types...>, Alloc>;
+\end{codeblock}
+
+
+\rSec2[tuple.rel]{Relational operators}
+
+\begin{itemdecl}
+template<class... TTypes, class... UTypes>
+constexpr bool operator==(const tuple<TTypes...>& t, const tuple<UTypes...>& u);
+\end{itemdecl}
+
+\begin{addedblock}
+\begin{itemdecl}
+template<class... TTypes, class... UTypes>
+requires (sizeof..(UTyes) == 2)
+constexpr bool operator==(const tuple<TTypes...>& t, const pair<UTypes...>& u);
+\end{itemdecl}
+\end{addedblock}
+
+\begin{itemdescr}
+    \pnum
+    \mandates
+    For all \tcode{i},
+    where $0 \leq \tcode{i} < \tcode{sizeof...(TTypes)}$,
+    \tcode{get<i>(t) == get<i>(u)} is a valid expression
+    returning a type that is convertible to \tcode{bool}.
+    \tcode{sizeof...(TTypes)} equals
+    \tcode{sizeof...(UTypes)}.
+    
+    \pnum
+    \returns
+    \tcode{true} if \tcode{get<i>(t) == get<i>(u)} for all
+    \tcode{i}, otherwise \tcode{false}.
+    For any two zero-length tuples \tcode{e} and \tcode{f}, \tcode{e == f} returns \tcode{true}.
+    
+    \pnum
+    \effects
+    The elementary comparisons are performed in order from the
+    zeroth index upwards.  No comparisons or element accesses are
+    performed after the first equality comparison that evaluates to
+    \tcode{false}.
+\end{itemdescr}
+
+\indexlibrarymember{operator<=>}{tuple}%
+\begin{itemdecl}
+template<class... TTypes, class... UTypes>
+constexpr common_comparison_category_t<@\placeholder{synth-three-way-result}@<TTypes, UTypes>...>
+operator<=>(const tuple<TTypes...>& t, const tuple<UTypes...>& u);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Performs a lexicographical comparison between \tcode{t} and \tcode{u}.
+    For any two zero-length tuples \tcode{t} and \tcode{u},
+    \tcode{t <=> u} returns \tcode{strong_ordering::equal}.
+    Otherwise, equivalent to:
+    \begin{codeblock}
+        if (auto c = @\placeholder{synth-three-way}@(get<0>(t), get<0>(u)); c != 0) return c;
+        return @$\tcode{t}_\mathrm{tail}$@ <=> @$\tcode{u}_\mathrm{tail}$@;
+    \end{codeblock}
+    where $\tcode{r}_\mathrm{tail}$ for some tuple \tcode{r}
+    is a tuple containing all but the first element of \tcode{r}.
+\end{itemdescr}
+
+\pnum
+\begin{note}
+    The above definition does not require \tcode{t$_{\mathrm{tail}}$}
+    (or \tcode{u$_{\mathrm{tail}}$}) to be constructed. It may not
+    even be possible, as \tcode{t} and \tcode{u} are not required to be copy
+    constructible. Also, all comparison functions are short circuited;
+    they do not perform element accesses beyond what is required to determine the
+    result of the comparison.
+\end{note}
+
+\begin{addedblock}
+\begin{itemdecl}
+template<class... TTypes, class... UTypes>
+requires (sizeof...(UTyes) == 2)
+constexpr common_comparison_category_t<@\placeholder{synth-three-way-result}@<TTypes, UTypes>...>
+operator<=>(const tuple<TTypes...>& t, const pair<UTypes...>& u);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Performs a lexicographical comparison between \tcode{t} and \tcode{u}.
+    
+    Equivalent to:
+    \begin{codeblock}
+        if (auto c = @\placeholder{synth-three-way}@(get<0>(t), get<0>(u)); c != 0)
+            return c;
+        return  @\placeholder{synth-three-way}@(get<1>(t), get<1>(u));
+    \end{codeblock}
+\end{itemdescr}
+\end{addedblock}
+
+
+
+\section{Acknowledgments}
+
+
+\section{References}
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{../wg21}
+
+\begin{thebibliography}{9}
+
+    \bibitem[N4861]{N4861}
+    Richard Smith
+    \emph{Working Draft, Standard for Programming Language C++}\newline
+    \url{https://wg21.link/N4861}
+
+\end{thebibliography}
+\end{document}

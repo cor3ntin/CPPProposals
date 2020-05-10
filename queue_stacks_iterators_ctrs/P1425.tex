@@ -63,8 +63,8 @@
 
 
 \title{Iterators pair constructors for stack and queue}
-\docnumber{P1425R0}
-\audience{LEWG}
+\docnumber{P1425R1}
+\audience{LEWG, LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 
@@ -115,6 +115,10 @@ an iterators pair, making them more compatible with \tcode{ranges}.
 
 \pagebreak
 
+\section{Implementation}
+
+This proposal has been \href{https://github.com/cor3ntin/llvm-project/tree/stack_queue_iterators}{Implemented in libc++}
+
 \section{Proposed Wording}
 
 \begin{quote}
@@ -143,8 +147,7 @@ namespace std {
 		explicit queue(Container&&);
 		
 		@\added{template<class InputIterator>}@
-		@\added{queue(InputIterator first, InputIterator last,}@
-		@\added{		const Container\& = Container());}@
+		@\added{queue(InputIterator first, InputIterator last, const Container\&);}@
 		
 		@\added{template<class InputIterator>}@
 		@\added{queue(InputIterator first, InputIterator last, Container\&\& = Container());}@
@@ -162,7 +165,7 @@ namespace std {
 	queue(Container) -> queue<typename Container::value_type, Container>;
 	
 	@\added{template<class InputIterator,}@
-	@\added{         class Container = deque<typename iterator_traits<InputIterator>::value_type>>>}@
+	@\added{         class Container = deque<typename iterator_traits<InputIterator>::value_type>>}@
 	@\added{queue(InputIterator, InputIterator, Container c = Container())}@
 	@\added{-> queue<typename iterator_traits<InputIterator>::value_type, Container>;}@
 	
@@ -241,8 +244,7 @@ namespace std {
 		explicit stack(Container&&);
 		
 		@\added{template<class InputIterator>}@
-		@\added{stack(InputIterator first, InputIterator last,}@
-		@\added{			const Container\& = Container());}@
+		@\added{stack(InputIterator first, InputIterator last, const Container\&);}@
 		
 		@\added{template<class InputIterator>}@
 		@\added{stack(InputIterator first, InputIterator last, Container\&\& = Container());}@
@@ -260,7 +262,7 @@ namespace std {
 	stack(Container) -> stack<typename Container::value_type, Container>;
 	
 	@\added{template<class InputIterator,}@
-	@\added{         class Container = deque<typename iterator_traits<InputIterator>::value_type>>>}@
+	@\added{         class Container = deque<typename iterator_traits<InputIterator>::value_type>>}@
 	@\added{stack(InputIterator, InputIterator, Container c = Container())}@
 	@\added{-> stack<typename iterator_traits<InputIterator>::value_type, Container>;}@
 	
@@ -316,6 +318,10 @@ Initializes \tcode{c} from \tcode{cont} (copy constructing or move constructing 
 
 
 \end{quote}
+
+\section{Acknowledgment}
+
+Thanks to Eric Niebler who reviewed the wording
 
 \section{References}
 \renewcommand{\section}[2]{}%
