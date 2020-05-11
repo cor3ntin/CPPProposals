@@ -1,0 +1,441 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}%
+\documentclass{wg21}
+
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{ulem}
+\usepackage{fullpage}
+\usepackage{parskip}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{makecell}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\RequirePackage{fontspec}
+\usepackage{newunicodechar}
+\usepackage{url}
+
+% \setmonofont{Inconsolatazi4}
+\setmainfont{Noto Serif}
+\usepackage{csquotes}
+
+\lstset{language=C++,
+    keywordstyle=\ttfamily,
+    stringstyle=\ttfamily,
+    commentstyle=\ttfamily,
+    morecomment=[l][]{\#},
+    morekeywords={reflexpr,valueof,exprid,typeof, concept,constexpr,consteval,unqualid}
+}
+
+
+\lstdefinestyle{color}{language=C++,
+        keywordstyle=\color{blue}\ttfamily,
+        stringstyle=\color{red}\ttfamily,
+        commentstyle=\color{OliveGreen}\ttfamily,
+        morecomment=[l][\color{magenta}]{\#},
+        morekeywords={reflexpr,valueof,exprid,typeof, concept,constexpr,consteval,unqualid, static\_assert}
+}
+
+
+
+
+\title{\tcode{std::generator}: Synchronous Coroutine Generator for Ranges}
+\docnumber{D2168R0}
+\audience{LEWG}
+\author{Lewis Baker}{lbaker@fb.com }
+\authortwo{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+
+\section{Abstract}
+
+We propose a standard library type \tcode{std::generator} which implement a coroutine generator compatible with ranges.
+
+\section{Example}
+\begin{lstlisting}[style=color]
+
+std::generator<int> fib (int max) {
+    co_yield 0;
+    auto a = 0, b = 1;
+    
+    for(auto n : std::views::iota(0, max))  {
+        auto next = a + b;
+        a = b, b = next;
+        co_yield next;
+    }
+}
+
+int answer_to_the_universe() {
+    auto coro = fib(7) ;
+    return std::accumulate(coro | std::views::drop(5), 0);
+}
+
+\end{lstlisting}
+
+\section{Motivation}
+
+C++ 20 had a very minimalist library support for coroutines.
+Synchronous generators is an important use case for coroutines, one that cannot be supported without 
+the machinery presented in this paper.
+
+ 
+\section{Design}
+
+While the proposed \tcode{std::generator} is fairly straight-forward, a few decisions are worth pointing out.
+
+\subsection{\tcode{input_view}}
+
+\tcode{std::generator} is a non-copyable \tcode{view} which models \tcode{input_range} and spawn move-only iterators.
+As such calling \tcode{begin} multiple times is UB.
+
+\subsection{Header}
+
+Multiple options are available as to where put the \tcode{generator} class.
+
+\begin{itemize}
+\item \tcode{<coroutine>}, but \tcode{<coroutine>} is a low level header, and \tcode{generator} depends on bits of \tcode{<type_traits>} and \tcode{<iterator>}.
+
+\item \tcode{<ranges>}
+
+\item A new \tcode{<generator>}
+
+\end{itemize}
+
+\subsection{Value Type}
+
+This proposal supports specifying both the "yielded" type, which is the iterator ""reference"" type ( not need to be a reference) and its corresponding value type.
+This allow ranges to handle proxy types and wrapped \tcode{reference}, like this implementation of zip:
+
+\begin{lstlisting}[style=color]
+template<typename Rng1, typename Rng2>
+generator<
+    std::tuple<range_reference_t<Rng1>, range_reference_t<Rng2>,
+    std::tuple<range_value_type_t<Rng1>, range_value_type_t<Rng2>
+>
+zip(Rng1 r1, Rng2 r2) {
+    auto it1 = begin(r1);
+    auto it2 = begin(r2);
+    auto end1 = end(r1);
+    auto end2 = end(r2);
+    while (it1 != end1 && it2 != end2) {
+        co_yield {*it1++, *it2++};
+    }
+}
+\end{lstlisting}
+
+\section{Wording}
+
+
+\rSec2[ranges.syn]{Header \tcode{<ranges>} synopsis}
+
+[...]
+
+\begin{codeblock}
+    
+namespace std {
+
+\end{codeblock}  
+
+\begin{addedblock}
+\begin{codeblock}  
+template<typename Y, typename V  = std::remove_cvref_t<Y>>
+class generator;
+
+template <typename Y, typename V>
+inline constexpr bool ranges::enable_view<generator<Y, V>> = true;
+
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+    
+}
+\end{codeblock}
+
+\begin{addedblock}
+
+
+\rSec2[ranges.generator]{Generator View}
+
+\rSec3[ranges.generator.overview]{Overview}
+
+
+\tcode{generator} produces an \tcode{input_view} over a synchronous coroutine function yielding values.
+
+\begin{example}
+\begin{codeblock}
+generator<int> iota(int start = 0) {
+    while(true)
+        co_yield start++;
+}
+
+void f() {
+    for(auto i : iota() | views::take(3))
+        cout << i << " " ; // prints 0 1 2
+}
+
+\end{codeblock}
+\end{example}
+
+\rSec3[ranges.generator.class]{Class template \tcode{generator}}
+
+\begin{codeblock}
+    
+namespace std {
+
+template <typename Y, typename V = std::remove_cvref_t<Y>>
+class generator : public ranges::view_base {
+    
+    class promise_type;
+    class iterator;
+    class sentinel {};
+    
+    std::coroutine_handle<promise> coroutine_ = nullptr; // \expos
+    
+    
+    explicit generator(std::coroutine_handle<promise> coroutine) noexcept
+    : coroutine_(coroutine) {}
+    
+public:
+    generator() = default;
+    generator(const generator &other) = delete;
+    generator(generator && other)
+        :coroutine_(exchange(other.coroutine_, nullptr)){}
+    
+    ~generator() {
+       if (coroutine_) {
+           coroutine_.destroy();
+       }
+    }
+    
+    generator &operator=(generator && other) noexcept {
+        swap(other);
+        return *this;
+    }
+    
+    iterator begin();
+    sentinel end() noexcept
+    { return {};  }
+    
+    void swap(generator & other) noexcept {
+        std::swap(coroutine_, other.coroutine_);
+    }
+
+};
+\end{codeblock}
+
+\begin{itemdecl}
+iterator begin();
+\end{itemdecl}
+
+\begin{itemdescr}
+    \effects
+    Equivalent to:
+    \begin{codeblock}
+        if(coroutine_) coroutine_.resume();
+        return iterator{std::exchange(coroutine_, nullptr)};
+    \end{codeblock}
+\end{itemdescr}
+
+
+\rSec3[ranges.generator.promise]{Class template \tcode{generator::promise_type}}
+
+\begin{codeblock}
+
+template <typename Y, typename V>
+class generator::promise_type {
+   
+    std::add_pointer_t<Y> value_; // \expos
+    friend generator;     
+    
+public:
+    using value_type = V;
+    using reference = std::add_lvalue_reference_t<Y>;
+    
+    std::coroutine_handle<promise_type> get_return_object() noexcept;
+    
+    std::suspend_always initial_suspend() const {
+        return {};
+    }
+    std::suspend_always final_suspend() const {
+        return {};
+    }
+
+    std::suspend_always
+    yield_value(std::remove_reference_t<reference> && value) noexcept;
+    
+    std::suspend_always
+    yield_value(std::remove_reference_t<reference> &value) noexcept;
+    
+    reference value() const noexcept {
+        return *value_;
+    }
+
+    template <typename U>
+    std::suspend_never await_transform(U &&value) = delete;
+    
+    void return_void() noexcept {}
+    
+    void unhandled_exception() { throw; }
+};  
+\end{codeblock}
+
+\begin{itemdecl}
+std::coroutine_handle<promise_type> get_return_object() noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \effects
+    Equivalent to:
+    \begin{codeblock}
+        return generator{
+            std::coroutine_handle<promise_type>::from_promise(*this)};
+    \end{codeblock}
+\end{itemdescr}
+
+
+\begin{itemdecl}
+std::suspend_always
+yield_value(std::remove_reference_t<reference>) noexcept;
+std::suspend_always
+yield_value(std::remove_reference_t<reference> &value) noexcept;
+\end{itemdecl}
+
+
+\begin{itemdescr}
+\effects
+Equivalent to:
+\begin{codeblock}
+    m_value = std::addressof(value);
+    return {};
+\end{codeblock}
+\end{itemdescr}
+
+\rSec3[ranges.generator.iterator]{Class template \tcode{generator::iterator}}
+
+\begin{codeblock}
+
+template <typename Y, typename V>
+class generator::iterator {
+private:
+    std::coroutine_handle<promise_type> coroutine_ = nullptr;
+    
+    
+public:    
+    using iterator_category = std::input_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = promise_type::value_type;
+    using reference = promise_type::reference;
+    
+    iterator() noexcept = default;
+    iterator(const iterator &) = delete;
+    
+    ~iterator() {
+        if (coroutine_) {
+            coroutine_.destroy();
+        }
+    }
+    
+    iterator(iterator && other) noexcept
+    : coroutine_(exchange(other.coroutine_, nullptr)) {}
+       
+    iterator &operator=(iterator &&other) noexcept {
+        coroutine_ = exchange(other.coroutine_, nullptr);
+    }
+    
+    explicit iterator(std::coroutine_handle<promise_type> coroutine) noexcept
+    : coroutine_(coroutine) {}
+    
+    bool operator==(sentinel) const noexcept {
+         return !coroutine_ || coroutine_.done();
+    }
+    
+    iterator &operator++();
+    void operator++(int);
+    
+    reference operator*() const noexcept;
+    reference operator->() const noexcept requires std::is_reference_v<reference>;
+    
+}; 
+
+\end{codeblock}
+
+\begin{itemdecl}
+iterator &operator++();
+\end{itemdecl}
+
+\begin{itemdescr}
+    \precondition \tcode{coroutine_ \&\& !coroutine_.done()} is \tcode{true}.
+    
+    \effects
+    Equivalent to:
+    \begin{codeblock}
+     m_coroutine.resume();
+     return *this;
+    \end{codeblock}
+\end{itemdescr}
+
+
+\begin{itemdecl}
+void operator++(int);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \precondition \tcode{coroutine_ \&\& !coroutine_.done()} is \tcode{true}.
+    
+    \effects
+    Equivalent to:
+    \begin{codeblock}
+         (void)operator++();
+    \end{codeblock}
+\end{itemdescr}
+
+
+\begin{itemdecl}
+reference operator*() const noexcept;
+reference operator->() const noexcept requires std::is_reference_v<reference>;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \precondition \tcode{coroutine_ \&\& !coroutine_.done()} is \tcode{true}.
+    
+    \effects
+    Equivalent to:
+    \begin{codeblock}
+        return coroutine_.promise().value();
+    \end{codeblock}
+\end{itemdescr}
+
+
+
+\end{addedblock}
+    
+
+\section{Implementation experience}
+
+//TODO Add links cppcoro, ranges v3, rangesnext, etc
+
+
+\section{Acknowledgments}
+
+
+\section{References}
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{../wg21}
+
+\begin{thebibliography}{9}
+
+    \bibitem[N4861]{N4861}
+    Richard Smith
+    \emph{Working Draft, Standard for Programming Language C++}\newline
+    \url{https://wg21.link/N4861}
+
+\end{thebibliography}
+\end{document}
