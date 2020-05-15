@@ -1,0 +1,363 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}%
+\documentclass{wg21}
+
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{ulem}
+\usepackage{fullpage}
+\usepackage{parskip}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{makecell}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\RequirePackage{fontspec}
+\usepackage{newunicodechar}
+\usepackage{url}
+
+\setmonofont{Inconsolatazi4}
+\setmainfont{Noto Serif}
+\usepackage{csquotes}
+
+\lstset{language=C++,
+    keywordstyle=\ttfamily,
+    stringstyle=\ttfamily,
+    commentstyle=\ttfamily,
+    morecomment=[l][]{\#},
+    morekeywords={reflexpr,valueof,exprid,typeof, concept,constexpr,consteval,unqualid}
+}
+
+
+\lstdefinestyle{color}{language=C++,
+        keywordstyle=\color{blue}\ttfamily,
+        stringstyle=\color{red}\ttfamily,
+        commentstyle=\color{OliveGreen}\ttfamily,
+        morecomment=[l][\color{magenta}]{\#},
+        morekeywords={reflexpr,valueof,exprid,typeof, concept,constexpr,consteval,unqualid, static\_assert}
+}
+
+
+
+
+\title{A nice placeholder with no name}
+\docnumber{P2169R0}
+\audience{EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+
+\section{Abstract}
+
+In [P1110]\cite{P1110R0} Jeffrey Yesskin and JF Bastien explore the design space of placeholders
+with the goal of not naming entities for which a name would provide no additional information.
+In this paper, we propose a concrete solution for the use of \tcode{_} (\tcode{U+005F _ LOW LINE}) as such placeholder 
+for variable declarations and pattern matching textbf{in a fully backward compatible manner}.
+
+\section{Tony tables}
+\begin{center}
+\begin{tabular}{l|l}
+Before & After\\ \hline
+
+\begin{minipage}[t]{0.5\textwidth}
+\begin{lstlisting}[style=color]
+std::lock_guard namingIsHard(mutex);
+// Structured binding
+[[maybe_unused]] auto [x, y, iDontCare] = f();
+// Pattern matching
+inspect(foo) { __  => bar; };
+
+\end{lstlisting}
+\end{minipage}
+&
+\begin{minipage}[t]{0.5\textwidth}
+\begin{lstlisting}[style=color]
+std::lock_guard _(mutex);
+// Structured binding
+auto [x, y, _] = f();
+// Pattern matching
+inspect(foo) { _  => bar; };
+
+\end{lstlisting}
+\end{minipage}
+\\\\ \hline
+
+\end{tabular}
+\end{center}
+
+
+\section{Motivation}
+
+Both [P1110]\cite{P1110R0}, [P1469]\cite{P1469R0} and [P0577]\cite{P0577R0} go over the motivation both for a placeholder syntax in general and
+the single underscore \tcode{_}:
+
+\begin{itemize}
+\item Some variable, like locks, \tcode{scope_guard} and other RAII objects are only used for their side effects.
+
+\begin{lstlisting}[style=color]
+std::lock_guard lock(mutex);
+\end{lstlisting}
+
+\item Some structured bindings may not be used, and we would like a syntax to specify that this is the case. Introducing names for variables that
+are not used to convey less meaning than \tcode{_}, which convey the "I don't care meaning".
+It is furthermore not possible to apply attributes to structured bindings and as such, it is not possible to carry the developer's intent to
+the compiler.
+The current wording advises:
+
+\begin{quote}
+Recommended practice: For an entity marked \tcode{[[maybe_unused]]}, implementations should not emit a warning that the entity or its structured bindings (if any) are used or unused. For a structured binding declaration not marked \tcode{[[maybe_unused]]}, implementations should not emit such a warning unless all of its structured bindings are unused.
+\end{quote}
+
+\item We need a wildcard token for pattern matching. The proposed \tcode{_} is, as explained by [P1469]\cite{P1469R0}
+an industry wide-standard and we believe having a single token \tcode{_} for both wildcards and placeholders contribute
+to make C++ more consistent with itself and with other languages (making easier to teach, etc)
+
+\end{itemize}
+
+\section{Design considerations}
+
+The design as presented in this paper takes the following design parameters into consideration
+
+\begin{itemize}
+\item \tcode{_} is recognized as some kind of placeholder in many existing languages, including \tcode{go}, \tcode{python}, \tcode{rust}, \tcode{C\#}.
+\item \tcode{_} is used in existing code and popular frameworks.
+\item \tcode{_} might be defined as a macro function in some files depending on the \tcode{gettext} library.
+\item \tcode{_} already carries the meaning of "I don't want to use this variable". Variables that developers care about have more meaningful names.
+\item \tcode{_} unnamed variables cannot have linkage.
+\item \tcode{_} and \tcode{__} are similar enough that we should not give meaning to both.
+\item Tokens are rare, using a different token for placeholder may needlessly restrict the design space for more important features.
+\item For consistency, we would like to use the same token as the pattern matching placeholder.
+\end{itemize}
+
+\subsection{Proposal}
+
+We propose that when \tcode{_} is used as the identifier for the declaration of a variable, function parameter name,
+lambda capture or structured binding.
+the introduced name is implicitly given the \tcode{[[maybe_unused]]} attribute.
+
+\begin{example}
+\begin{lstlisting}[style=color]
+auto _ = foo(); // equivalent to [[maybe_unused]] auto _  = f();
+\end{lstlisting}
+\end{example}
+
+When a variable, function parameter structured binding or lambda capture is introduced by the identifier \tcode{_}
+at function scope, or at namespace scope within the purview of a module implementation unit,
+if it would redefine an existing declaration, [basic.scope.declarative], it instead defines a variable with an implementation-defined name which does not participate in name lookup
+
+\begin{example}
+\begin{lstlisting}[style=color]
+namespace a {
+    auto _ = f(); // Ok, declare a variable "_"
+    auto _ = f(); // error: "_" is already defined in this namespace scope
+}
+void f() {
+    auto _ = 42; // Ok, declare a variable "_"
+    auto _ = 0;  // Ok, declare a variable with no name
+    {
+        auto _ = 1; // Ok, shaddowing
+        assert( _ == 1 ); // Ok
+    }
+    assert( _ == 42 ); // Ok
+}
+\end{lstlisting}
+\end{example}
+
+In contexts where the grammar expects a pattern matching pattern, \tcode{_} represents the wildcard pattern.
+
+\begin{lstlisting}[style=color]
+inspect(i) {   
+    0  => 0;
+    _  => 1;   // wildcard pattern
+};
+\end{lstlisting}
+
+\subsection{Alternative Design}
+
+Tony van Eeerd suggested that \textbf{use} of a variable named \tcode{_} could be made ill-formed after the introduction
+of a placeholder variable in the same scope.
+This has been implemented as a warning \href{https://godbolt.org/z/JcD76y}{Compiler Explorer}.
+
+\subsection{Pattern matching}
+
+Citing [P1371R0]{\cite{P1371R0}, \tcode{_} can be used as a pattern matching wilcard without ambiguities
+    
+\begin{quote}
+Even though \tcode{_} is a valid identifier, it does not introduce a name as doing so would result in redeclaration
+errors in the case where multiple wildcard \tcode{_} identifiers are used.
+It is possible for users to have already introduced _ as a type or variable name in the same scope where an
+inspect statement is used. As a highly-visible example, the authors are aware of the use of _ as a name in
+the popular “Google Mock” library. Idiomatically this is accessed by introducing _ into the current namespace
+or block scope with a using declaration. Using the wildcard pattern in cases like this is unambiguous since
+the expression pattern requires a ˆ introducer for primary expressions. \tcode{\^_} will always match against an
+existing name and \tcode{_} will always represent the wildcard pattern. An existing \tcode{_} name can be used without
+ambiguity in the matched statement to which control is passed.
+Naturally, the impact of defining \tcode{_} in the pre-processor cannot be predicted or controlled by this paper and
+is thus liable to result in an ill-formed program.
+\end{quote}
+
+\subsection{Impact on P2011 and other pipeline rewrite musing}
+
+Placeholders in pipeline rewrite have a "Bind to this" semantic rather than a "I don't care" semantic.
+As such, these proposals could use a different syntax.
+
+It might also be possible to have \tcode{_}  and \tcode{_1}, ... contextually be used as 
+bind placeholders in pipeline require contexts.
+
+
+\section{Impact on existing code}
+
+\subsection{Google Mock}
+
+Google Mock appear to constitute the most common use of the \tcode{identifier}.
+With this proposal, Google Mock continues to work.
+Variables named \tcode{_} may shadow the \tcode{testing::_} global variable introduced by google mock:
+
+\begin{lstlisting}[style=color]
+namespace testing {
+    const internal::AnythingMatcher _ = {};
+}
+\end{lstlisting}
+
+Because the proposal limits the use of placeholder to function scope (because of linker considerations),
+there is little risk that increased use of \tcode{_} causes shadowing issues for users of this framework.
+
+It is possible to use the feature proposed in this paper along with google mock as long as the \tcode{using namespace testing;}
+appears before any declaration of \tcode{_} in that code.
+
+\href{https://godbolt.org/z/EghbHF}{Compiler explorer link}
+
+\subsection{Gettext}
+
+Some projects using Gettext define \tcode{_} as a function-like macro.
+
+\begin{lstlisting}[style=color]
+# define _(msgid) gettext (msgid)
+\end{lstlisting}
+
+It is important to know that this is not provided in any gettext header.
+It is also technically undefined as the \tcode{_} is reserved at global scope.
+But, regardless, defining this macro would not prevent the use of the proposed syntax, as \tcode{_} is only
+expanded by the preprocessor in this case if followed by parentheses:
+
+\begin{lstlisting}[style=color]
+constexpr const char* gettext(int) { return nullptr;} 
+#define _(msgid) gettext (msgid)
+
+int main() {
+    constexpr auto _ = _(42);
+    auto _ = 42;
+    static_assert(_ == nullptr);
+}
+
+\end{lstlisting}
+
+\href{https://godbolt.org/z/FRFg9-}{Compiler explorer link}
+
+\section{Implementation}
+
+The proposal has been implemented in Clang and the implementation is available on \href{https://godbolt.org/z/5lmnfN}{Compiler Explorer}.
+
+The implementation consists of ignoring existing \tcode{_} variables in the same scope when declaring placeholder variables.
+Note that name lookup is not affected by this proposal, some variables are simply skipped over based on their name.
+The variables otherwise conserve their name for diagnostics purposes.
+
+It is possible to warn about uses of variables called \tcode{_} \href{https://godbolt.org/z/pQeu_r }{Compiler Explorer}.
+
+
+\section{Wording}
+
+// TODO
+
+\section{Rebuttal some wilder ideas explored by P1110}
+
+[P1110] explores the different places where a placeholder may be used.
+
+
+\subsection{Enums}
+
+The code on the left (P1110) can be written in standard C++ in a way that expresses the intent as clearly, if not more. 
+
+\begin{center}
+\begin{tabular}{l|l}
+\begin{minipage}[t]{0.5\textwidth}
+\begin{lstlisting}[style=color]
+enum MmapBits {
+    Shared,
+    Private,
+    _,
+    _,
+    Fixed,
+    Rename,
+    //...
+};
+    
+\end{lstlisting}
+\end{minipage}
+&
+\begin{minipage}[t]{0.5\textwidth}
+\begin{lstlisting}[style=color]
+enum MmapBits {
+    Shared,
+    Private,
+    Fixed = Private + 2,
+    Rename,
+    //...
+};
+    
+\end{lstlisting}
+\end{minipage}
+\end{tabular}
+\end{center}
+
+\subsection{Concept-constrained declarations}
+
+The following example from P1110 is a historical artifact as C++20 uniformizes \tcode{auto} for this purpose. 
+
+\begin{lstlisting}[style=color]
+template<Integral __ N> class integral_constant { ... };
+Numeric multiplyAdd(Numeric __ x, Numeric __ y, Numeric __ z) {
+    Numeric __ multiplied = x * y;
+    return multiplied + z;
+}
+\end{lstlisting}
+
+Here is the C++20 equivalent
+
+\begin{lstlisting}[style=color]
+template<Integral auto N> class integral_constant { ... };
+    Numeric multiplyAdd(Numeric auto x, Numeric auto y, Numeric auto z) {
+    Numeric auto multiplied = x * y;
+    return multiplied + z;
+}
+\end{lstlisting}
+
+
+Other explored areas, including placeholders for function names, type declaration, using and concepts are not
+useful, either because C++ does already provide the desired facilities such as anonymous type, or because the entity needs a name
+(concepts, functions and using declarations without a name cannot be used)
+
+\section{Acknowledgments}
+
+Thanks to Miro Knejp and Tony Van Eerd for providing valuable feedback on very short notice!
+
+\section{References}
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{../wg21}
+
+\begin{thebibliography}{9}
+
+    \bibitem[N4861]{N4861}
+    Richard Smith
+    \emph{Working Draft, Standard for Programming Language C++}\newline
+    \url{https://wg21.link/N4861}
+
+\end{thebibliography}
+\end{document}
