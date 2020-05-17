@@ -38,7 +38,7 @@
         stringstyle=\color{red}\ttfamily,
         commentstyle=\color{OliveGreen}\ttfamily,
         morecomment=[l][\color{magenta}]{\#},
-        morekeywords={reflexpr,valueof,exprid,typeof, concept,constexpr,consteval,unqualid, static\_assert}
+        morekeywords={reflexpr,valueof,exprid,typeof, concept,constexpr,consteval,unqualid, static\_assert, co_yield, co_return}
 }
 
 
@@ -81,7 +81,7 @@ int answer_to_the_universe() {
 
 \section{Motivation}
 
-C++ 20 had a very minimalist library support for coroutines.
+C++ 20 had very minimalist library support for coroutines.
 Synchronous generators are an important use case for coroutines, one that cannot be supported without 
 the machinery presented in this paper.
 Writing an efficient and correctly behaving recursive generator is non-trivial, the standard should provide one.
@@ -153,7 +153,7 @@ zip(Rng1 r1, Rng2 r2) {
 \subsection{Recursive generator}
 
 A "recursive generator" is a coroutine that supports the ability to directly \tcode{co_yield}
-a generator of the same type as a way of emitting emitting the elements of that \tcode{generator}
+a generator of the same type as a way of emitting the elements of that \tcode{generator}
 as elements of the current \tcode{generator}.
 
 Example: A \tcode{generator} can \tcode{co_yield} other generators of the same type
@@ -190,8 +190,7 @@ performance benefits compared to iterating over the contents of the nested gener
 manually yielding each of its elements.
 
 Yielding a nested \tcode{generator} allows the consumer of the top-level coroutine to
-directly resume the current leaf generator when incrementing the iterator, whereas a
-solution that has each generator manually iterating over elements of the child generator
+directly resume the current leaf generator when incrementing the iterator, whereas a solution that has each generator manually iterating over elements of the child generator
 requires O(depth) coroutine resumptions/suspensions per element of the sequence.
 
 Example: Non-recursive form incurs O(depth) resumptions/suspensions per element
@@ -213,7 +212,7 @@ generator<int> slow_visit(Tree& tree) {
 Exceptions that propagate out of the body of nested \tcode{generator} coroutines
 are rethrown into the parent coroutine from the \tcode{co_yield} expression rather
 than propagating out of the top-level `iterator::operator++()`. This follows the
-mental model that `co_yield someGenerator` is a semantically equivalent to manually
+mental model that `co_yield someGenerator` is semantically equivalent to manually
 iterating over the elements and yielding each element.
 
 For example: \tcode{nested_ints()} is semantically equivalent to \tcode{manual_ints()}
@@ -261,7 +260,7 @@ It is difficult to evaluate the runtime cost of our design given the current cor
 However our tests show no noticeable difference between a \tcode{generator} and a \tcode{recursive_generator} 
 which is called non recursively. It is worth noting that the proposed design makes sure that HALO \cite{P0981R0} optimizations are possible.
 
-While we think a single \tcode{generator} type is sufficient, and offers a better API, there are three options:
+While we think a single \tcode{generator} type is sufficient and offers a better API, there are three options:
 
 \begin{itemize}
 \item A single \tcode{generator} type supporting recursive calls (this proposal).
@@ -298,13 +297,36 @@ elements one-by-one or use a helper function that adapts the \tcode{generator} i
 case where the generator was originally written to return a \tcode{recursive_generator},
 as it requires two coroutine resumptions per element instead of a single coroutine resumption.
 
-Because of these limitations we are not recommending this approach.
-
+Because of these limitations, we are not recommending this approach.
 \end{itemize}
+
+\subsection{How to store the yielded value in the promise type?}
+
+The yielded expression is guaranteed to be alive until the coroutine resumes, it is, therefore, sufficient to store
+its address. 
+This makes \tcode{generator} with a large yielded type efficient.
+However, it might pessimize yielding values smaller than a pointer because of the added indirection.
+(It is unclear what the cost of this indirection is, as none of these accesses should result in cache misses).
+
+More annoyingly, this prevents conversions in yielding expressions:
+
+\begin{lstlisting}[style=color]
+generator<string_view> f() {
+    co_yield std::string(); // error: cannot convert std::string to std::string_view \&
+}
+\end{lstlisting}
+
+Storing a copy would allow less indirection and the ability to yield any values convertible to the yielded type,
+at the cost of more storage.
+To avoid that storage cost, a \tcode{generator<const T\&>} can be used.
+
+Given at the value has to be stored in the coroutine frame anyway, it might interesting to add a 
+\tcode{yield_transform} customization point to the core language, to either prevent the value to be stored in the coroutine frame or to
+transform its type, both would allow supporting yielding convertible type at no extra memory cost.  
 
 \section{Future Work}
 
-A-non throwing default allocator with a noexcept generator function should
+A non-throwing default allocator with a noexcept generator function should
 permit not to force the cost of exceptions on users of this type.  
 
 Extend the ability to \tcode{co_yield} another generator of the same type to instead
@@ -446,7 +468,7 @@ iterator begin();
     \end{codeblock}
 
 \begin{note}
-    It is undefined behaviour to call \tcode{begin} multiple times on the same coroutine.
+    It is undefined behavior to call \tcode{begin} multiple times on the same coroutine.
 \end{note}
 
 \end{itemdescr}
@@ -522,7 +544,7 @@ auto yield_value(generator&& g) noexcept;
 This function returns an implementation defined \tcode{awaitable} type which takes ownership of the generator \tcode{g}.
 
 \begin{note}
-This ensures that local variables in-scope in \tcode{g}'s coroutine are destructed prior to
+This ensures that local variables in-scope in \tcode{g}'s coroutine are destructed before
 local variables in-scope in this coroutine being destructed.
 \end{note} 
 
@@ -667,18 +689,19 @@ reference operator->() const noexcept requires std::is_reference_v<reference>;
     Eric Niebler
     \emph{range-v3 Range library for C++14/17/20}\newline
     \url{https://github.com/ericniebler/range-v3}
-
     
+     \bibitem[Implementation]{Implementation}
+    Lewis Baker, Corentin Jabot
+    \emph{\tcode{std::generator} implementation}\newline
+    \url{https://godbolt.org/z/icfqLr}
+    %\url{https://godbolt.org/z/aRDiJY}
+    
+        
     \bibitem[N4861]{N4861}
     Richard Smith
     \emph{Working Draft, Standard for Programming Language C++}\newline
     \url{https://wg21.link/N4861}
     
-    
-     \bibitem[Implementation]{Implementation}
-    Lewis Baker, Corentin Jabot
-    \emph{\tcode{std::generator} implementation}\newline
-    \url{https://godbolt.org/z/aRDiJY}
     
 \end{thebibliography}
 

@@ -107,6 +107,8 @@ That protection is weakened by the existence of the weak ownership model, but, m
 Until the standard decides to break ABI, existing symbols have to be own by the global module.
 That benefit is therefore not currently realizable given our current constraints.
 
+ABI stability or assurance that programs are well-formed. Pick one? 
+
 
 \subsection{Symbol isolation}
 
@@ -139,7 +141,7 @@ But again, that requires a significant refactor of existing implementations whic
 implements to support multiple C++ versions.
 
 
-\section{Should modules be big or small}
+\section{Should modules be big or small?}
 
 The ideal size of modules depends on many factors that are not yet fully understood:
 
@@ -160,6 +162,19 @@ Larger headers may result in larger overload sets.
 
 This is why large modules alone are not a sufficient solution to reduce compile times.
 Solutions to reduce the size of overload sets and lookup are necessary, one of these solutions being to use hidden friends.
+
+In any case, it would be counter-productive to provide modules that are smaller than the current header granularity.
+
+\section{Should new features be introduced as modules?}
+
+It is tempting to introduce new feature solely as modules.
+However, because of ABI, new names should most likely not be own by modules as this would prevent WG21 to move
+declarations between modules or change the order of dependencies between names.
+
+Hopefully, modules should allow LEWG to deprioritize concerns about costs of features in terms 
+of importing more headers.
+On that note, It is unfortunate that WG21 did not mandate the translation of \tcode{\#include} to \tcode{import} for importable standard
+headers. 
 
 
 \section{The teaching argument}
@@ -191,9 +206,11 @@ It is worth asking ourselves whether modularizing the standard library is the be
 \subsection{Recommendations}
 
 \begin{itemize}
-\item Prioritize work to re-specify existing overloaded operators in term of hidden friends over a modularization of the standard library
-\item Consider introducing new library features that would require new headers as modules. This is a double edge sword as symbols owned by modules cannot be moved in an ABI stable world. 
-\item Do not try to replace all headers (\tcode{<cassert>}, \tcode{<version>})
+\item Prioritize work to re-specify existing overloaded operators and customization points in term of hidden friends over a modularization of the standard library.
+\item Assuming work to reduce the cost of large overload sets, prefer large modules.
+\item While freestanding and modularization are orthogonal, freestanding can inform how to best organize standard modules. Features that are at least partially freestanding  should be in the same module.
+\item Do not try to replace all headers (\tcode{<cassert>}, \tcode{<version>}). Features that depend on the conditional compilations should be explicit in their use of the preprocessor. Macros and functions macros that always have the same definition should be replaced.
+\item Assume standard headers are imported for the purpose of determine the cost of proposals in term of compile times.
 \end{itemize}
 
 
