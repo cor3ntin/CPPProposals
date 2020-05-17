@@ -1,20 +1,23 @@
-OUT=$(realpath out)
+OUT=$(realpath .)/generated
 SRC=$(realpath src)
 SRCS=$(wildcard $(SRC)/*.tex)
 OUTS=$(patsubst $(SRC)/%.tex,$(OUT)/%.pdf,$(SRCS))
 OUTS:=$(subst .tex,.pdf,$(OUTS))
 
 
+all: pdfs
+
+pdfs: bib mkoutput $(OUTS)
+	cd $(OUT) && rm *.log *.aux *.xtr 2>/dev/null; true
+
+mkoutput:
+	mkdir -p $(OUT)
+
 $(OUT)/%.pdf: $(SRC)/%.tex
 	cd $(OUT) && TEXINPUTS=$(SRC):$(SRC)/../emojis:$(TEXINPUTS) lualatex -shell-escape --interaction=batchmode $<
 
-.mkoutput:
-	mkdir -p $(OUT)
-
-pdfs: $(OUTS)
-	cd $(OUT) && rm *.log *.aux *.xtr 2>/dev/null; true
-
-all: pdfs
+bib:
+	wget https://wg21.link/index.bib -O $(SRC)/wg21.bib
 
 clean:
-	rm -rf $(OUT)/*
+	rm -r $(OUT)
