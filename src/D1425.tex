@@ -1,0 +1,277 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+\documentclass{wg21}
+
+\title{Iterators pair constructors for stack and queue}
+\docnumber{P1425R1}
+\audience{LEWG, LWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+This paper proposes to add iterators-pair constructors to \tcode{std::stack} and \tcode{std::queue}
+
+\section{Tony tables}
+\begin{center}
+\begin{tabular}{l|l}
+Before & After\\ \hline
+
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+std::vector<int> v(42);
+std::queue<int> q({v.begin(), v.end()});
+std::stack<int> s({v.begin(), v.end()});
+\end{colorblock}
+\end{minipage}
+&
+\begin{minipage}[t]{0.3\textwidth}
+\begin{colorblock}
+std::vector<int> v(42);
+std::queue q(v.begin(), v.end());
+std::stack s(v.begin(), v.end());
+\end{colorblock}
+\end{minipage}
+\\\\ \hline
+
+\end{tabular}
+\end{center}
+
+
+\section{Motivation}
+
+\tcode{std::stack} and \tcode{std::queue} do not provide iterators based constructors which is inconsistent.
+This paper is an offshoot of \cite{P1206}, for which I conducted a review of existing containers and containers adapters constructors.
+
+The lack of these constructors forces the implementation of \tcode{ranges::to} to special case container-adapters or to not support them.
+Their absence make it also impossible to deduce their type using CTAD.
+
+While this is a a small change, we believe its impact on the standard is low and consistent designs are less surprising and therefore easier
+to use: with this change, all container-like types, whether they are \emph{Containers} or container adapters, can be constructed from 
+an iterators pair, making them more compatible with \tcode{ranges}.
+
+\pagebreak
+
+\section{Implementation}
+
+This proposal has been \href{https://github.com/cor3ntin/llvm-project/tree/stack_queue_iterators}{Implemented in libc++}
+
+\section{Proposed Wording}
+
+\begin{quote}
+
+\rSec2[queue.defn]{Definition}
+	
+\begin{codeblock}
+	
+	
+namespace std {
+	template<class T, class Container = deque<T>>
+	class queue {
+		public:
+		using value_type      = typename Container::value_type;
+		using reference       = typename Container::reference;
+		using const_reference = typename Container::const_reference;
+		using size_type       = typename Container::size_type;
+		using container_type  =          Container;
+		
+		protected:
+		Container c;
+		
+		public:
+		queue() : queue(Container()) {}
+		explicit queue(const Container&);
+		explicit queue(Container&&);
+		
+		@\added{template<class InputIterator>}@
+		@\added{queue(InputIterator first, InputIterator last, const Container\&);}@
+		
+		@\added{template<class InputIterator>}@
+		@\added{queue(InputIterator first, InputIterator last, Container\&\& = Container());}@
+				
+		template<class Alloc> explicit queue(const Alloc&);
+		template<class Alloc> queue(const Container&, const Alloc&);
+		template<class Alloc> queue(Container&&, const Alloc&);
+		template<class Alloc> queue(const queue&, const Alloc&);
+		template<class Alloc> queue(queue&&, const Alloc&);
+		
+		//...
+	};
+	
+	template<class Container>
+	queue(Container) -> queue<typename Container::value_type, Container>;
+	
+	@\added{template<class InputIterator,}@
+	@\added{         class Container = deque<typename iterator_traits<InputIterator>::value_type>>}@
+	@\added{queue(InputIterator, InputIterator, Container c = Container())}@
+	@\added{-> queue<typename iterator_traits<InputIterator>::value_type, Container>;}@
+	
+	template<class Container, class Allocator>
+	queue(Container, Allocator) -> queue<typename Container::value_type, Container>;
+	
+	template<class T, class Container>
+	void swap(queue<T, Container>& x, queue<T, Container>& y) noexcept(noexcept(x.swap(y)));
+	
+	template<class T, class Container, class Alloc>
+	struct uses_allocator<queue<T, Container>, Alloc>
+	: uses_allocator<Container, Alloc>::type { };
+}
+\end{codeblock}
+
+\rSec2[queue.cons]{Constructors}
+
+\begin{itemdecl}
+	explicit queue(const Container& cont);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects\ Initializes \tcode{c} with \tcode{cont}.
+\end{itemdescr}
+
+\begin{itemdecl}
+	explicit queue(Container&& cont);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects\ Initializes \tcode{c} with \tcode{std::move(cont)}.
+\end{itemdescr}
+
+\begin{addedblock}
+
+\begin{itemdecl}
+template<class InputIterator>
+queue(InputIterator first, InputIterator last, const Container & cont );
+\end{itemdecl}
+
+\begin{itemdecl}
+template<class InputIterator>
+queue(InputIterator first, InputIterator last, Container && cont );
+\end{itemdecl}
+
+
+\begin{itemdescr}
+	\pnum
+	\effects
+	Initializes \tcode{c} from \tcode{cont} (copy constructing or move constructing as appropriate); and calls \tcode{c.insert(c.end(), first, last);}
+\end{itemdescr}
+
+\end{addedblock}
+
+\rSec3[stack.defn]{Definition}
+
+\begin{codeblock}
+namespace std {
+	template<class T, class Container = deque<T>>
+	class stack {
+		public:
+		using value_type      = typename Container::value_type;
+		using reference       = typename Container::reference;
+		using const_reference = typename Container::const_reference;
+		using size_type       = typename Container::size_type;
+		using container_type  = Container;
+		
+		protected:
+		Container c;
+		
+		public:
+		stack() : stack(Container()) {}
+		explicit stack(const Container&);
+		explicit stack(Container&&);
+		
+		@\added{template<class InputIterator>}@
+		@\added{stack(InputIterator first, InputIterator last, const Container\&);}@
+		
+		@\added{template<class InputIterator>}@
+		@\added{stack(InputIterator first, InputIterator last, Container\&\& = Container());}@
+		
+		template<class Alloc> explicit stack(const Alloc&);
+		template<class Alloc> stack(const Container&, const Alloc&);
+		template<class Alloc> stack(Container&&, const Alloc&);
+		template<class Alloc> stack(const stack&, const Alloc&);
+		template<class Alloc> stack(stack&&, const Alloc&);
+		
+		//...
+	};
+	
+	template<class Container>
+	stack(Container) -> stack<typename Container::value_type, Container>;
+	
+	@\added{template<class InputIterator,}@
+	@\added{         class Container = deque<typename iterator_traits<InputIterator>::value_type>>}@
+	@\added{stack(InputIterator, InputIterator, Container c = Container())}@
+	@\added{-> stack<typename iterator_traits<InputIterator>::value_type, Container>;}@
+	
+	template<class Container, class Allocator>
+	stack(Container, Allocator) -> stack<typename Container::value_type, Container>;
+	
+	template<class T, class Container, class Alloc>
+	struct uses_allocator<stack<T, Container>, Alloc>
+	: uses_allocator<Container, Alloc>::type { };
+}
+\end{codeblock}
+
+\rSec3[stack.cons]{Constructors}
+
+\begin{itemdecl}
+	explicit stack(const Container& cont);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Initializes \tcode{c} with \tcode{cont}.
+\end{itemdescr}
+
+\begin{itemdecl}
+	explicit stack(Container&& cont);
+\end{itemdecl}
+
+\begin{itemdescr}
+	\pnum
+	\effects Initializes \tcode{c} with \tcode{std::move(cont)}.
+\end{itemdescr}
+
+
+\begin{addedblock}
+	
+\begin{itemdecl}
+template<class InputIterator>
+stack(InputIterator first, InputIterator last, const Container & cont );
+\end{itemdecl}
+
+\begin{itemdecl}
+template<class InputIterator>
+stack(InputIterator first, InputIterator last, Container && cont );
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Initializes \tcode{c} from \tcode{cont} (copy constructing or move constructing as appropriate); and calls \tcode{c.insert(c.end(), first, last);}
+\end{itemdescr}
+	
+\end{addedblock}
+
+
+\end{quote}
+
+\section{Acknowledgment}
+
+Thanks to Eric Niebler who reviewed the wording
+
+\section{References}
+\renewcommand{\section}[2]{}%
+\begin{thebibliography}{9}
+	
+	\bibitem[P1206]{P1206}
+	Corentin Jabot
+	\emph{A function to convert any range to a container}\newline
+	\url{https://wg21.link/P1206}
+
+\end{thebibliography}
+\end{document}

@@ -1,0 +1,178 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+\documentclass{wg21}
+
+\title{A SFINAE-friendly trait to determine the extent of statically sized containers}
+\docnumber{P1419R0}
+\audience{LEWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Casey Carter}{Casey@carter.net}
+
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+We propose \tcode{ranges::static_extent}, a SFINAE friendly replacement of \tcode{std::extent} compatible with all statically sized containers.
+
+\section{Tony tables}
+
+Here is a (simplified) wording for span without and with this proposal
+
+\begin{center}
+\begin{tabular}{l|l}
+Before & After\\ \hline
+
+\begin{minipage}[t]{0.5\textwidth}
+
+\begin{colorblock}
+
+template<class ElementType, 
+	ptrdiff_t Extent = dynamic_extent>
+class span {
+
+template<size_t N>
+constexpr span(element_type (&arr)[N]);
+template<size_t N>
+constexpr span(array<value_type, N>& arr);
+template<size_t N>
+constexpr span(const array<value_type, N>& arr);
+template<ContiguousRange R>
+constexpr span(R&& cont);
+
+//...
+}
+\end{colorblock}
+\end{minipage}
+&
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+
+template<class ElementType, 
+ptrdiff_t Extent = dynamic_extent>
+class span {
+
+template <ranges::ContiguousRange R>
+requires Extent == dynamic_extent 
+   || ranges::static_extent_v<R> == dynamic_extent
+constexpr span(R&& r);
+
+//...
+};
+\end{colorblock}
+\end{minipage}
+\\\\ \hline
+
+\end{tabular}
+\end{center}
+
+
+\section{Motivation}
+
+This paper is an offshoot of \cite{P1394}. While writing the wording and the implementation of span constructors, it become clear that
+a trait to determine the extent of a type would simplify both the wording and the implementation of \tcode{std::span} and any code 
+dealing with types with static extent.
+
+\tcode{std::extent} suffers from a few shortcomings that make it ill suited for the task:
+
+\begin{itemize}
+	\item It only supports raw arrays
+	\item \tcode{extent<T>::value} is well-formed for non-array types which means it can't be used in SFINAE contexts
+	\item Because it returns 0 for types with no static extent, types with a static extent of 0 and types with no static extent would not be valid.
+\end{itemize}
+
+\section{Proposal}
+
+We propose a new type trait \tcode{std::ranges::static_extent} to supersede \tcode{std::extent} such that:
+
+\begin{itemize}
+	\item \tcode{ranges::static_extent<T>::value} is well formed if and only if the type has a static extent.
+	\item \tcode{ranges::static_extent} can be specialized for non array types such as  \tcode{std::array}, \tcode{std::span}, \tcode{std::mdspan}
+	and user defined types;
+\end{itemize}
+
+
+\section{Proposed wording}
+
+\begin{addedblock}
+
+\begin{quote}
+\begin{codeblock}
+
+namespace ranges {
+	template<class T, unsigned I = 0>
+	struct static_extent;
+	template <class T, unsigned I>
+	struct static_extent<T[], I> : std::extent<T[], I> {};
+	template<class T, std::size_t N, unsigned I>
+	struct static_extent<T[N], I> : std::extent<T[N], I> {}
+	template <class T, std::size_t N>
+	struct static_extent<std::array<T, N>> : std::integral_constant<size_t, N> {};
+	template <class T, std::size_t N>
+	struct static_extent<std::span<T, N>> : std::integral_constant<size_t, N> {};
+	
+	template<class T, unsigned I = 0>
+	inline constexpr size_t static_extent_v = static_extent<T, I>::value;
+};
+
+\end{codeblock}
+\end{quote}
+
+
+\begin{itemdecl}
+template<class T, unsigned I = 0>
+struct static_extent;
+\end{itemdecl}
+\begin{itemdescr}
+	\pnum
+	If T is an array, the member \tcode{value} shall be equal to \tcode{std::extent_v<T[], I>}.
+	Otherwise, unless this trait is specialized there shall be no member \tcode{value}.
+	
+	Pursuant to [namespace.std], a program may specialize \tcode{static_extent} for statically sized types satisfying the requirements of Ranges
+	such that, given an instance c of type T:
+		\begin{itemize}
+			\item If \tcode{I} equals 0 then \tcode{range::size(c)} shall always be equal to \tcode{static_extent<T>::value}
+			\item Otherwise, range::size(c[I]) shall always be equal to \tcode{static_extent<T, I>::value}
+		\end{itemize}
+	\begin{example}
+	\begin{codeblock}
+	// the following assertions hold:
+	static_assert (static_extent_v<int[2]> == 2);
+	static_assert (static_extent_v<int[2][4], 1> == 4);
+	static_assert (static_extent_v<int[][4], 1> == 4);
+	static_assert (static_extent_v<std::span<int, 5>> == 5);
+	static_assert (static_extent_v<std::array<int, 1>> == 1);
+	// the following expression are ill formed
+	(static_extent_v<int>);
+	(static_extent_v<std::vector<int>>);
+	(static_extent_v<std::span<int>>);
+	(static_extent_v<std::array<int>, 1>);		
+\end{codeblock}
+	\end{example}
+\end{itemdescr}
+
+\subsection{\tcode{std::dynamic_extent}}
+
+For consistency, 
+we propose to move \tcode{std::dynamic_extent} from the header \tcode{<span>} \linebreak
+to \tcode{std::ranges::dynamic_extent} in the header \tcode{<ranges>}
+
+
+\end{addedblock}
+
+\section{Future work}
+
+\tcode{std::span} should be modified to benefits of the changes proposed here.
+
+\section{References}
+\renewcommand{\section}[2]{}%
+\begin{thebibliography}{9}
+	\bibitem[P1394]{P1394}
+	Corentin Jabot, Casey Carter
+	\emph{Range constructor for std::span}\newline
+	\url{https://wg21.link/P1394}
+\end{thebibliography}
+\end{document}
+
+\end{document}

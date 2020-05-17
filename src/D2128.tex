@@ -1,0 +1,326 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{Multidimensional subscript operator}
+\docnumber{P2128R1}
+\audience{EWG, EWGI}
+\author{Mark Hoemmen}{mhoemmen@stellarscience.com}
+\authortwo{Daisy Hollman}{dshollm@sandia.gov}
+\authorthree{Corentin Jabot}{corentin.jabot@gmail.com}
+\authorfive{Christian Trott}{crtrott@sandia.gov}
+\authorfour{Isabella Muerte}{imuerte@opayq.com}
+
+\begin{document}
+\maketitle
+
+
+\section{Abstract}
+
+We propose that user-defined types can define a subscript operator with multiple arguments to better support multi-dimensional containers and views.
+
+\section{Tony tables}
+\begin{center}
+\begin{tabular}{l|l}
+Before & After\\ \hline
+
+\begin{minipage}[t]{0.55\textwidth}
+\begin{colorblock}
+template<class ElementType, class Extents>
+class mdpan {
+  template<class... IndexType>
+  constexpr reference operator()(IndexType...);
+};
+
+int main() {
+  int buffer[2*3*4] = { };
+  auto s = mdspan<int, extents<2, 3, 4>>(buffer);
+  s(1, 1, 1) = 42;
+\end{colorblock}
+\end{minipage}
+&
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+template<class ElementType, class Extents>
+class mdpan {
+  template<class... IndexType>
+  constexpr reference operator[](IndexType...);
+};
+
+int main() {
+  int buffer[2*3*4] = { };
+  auto s = mdspan<int, extents<2, 3, 4>> (buffer);
+  s[1, 1, 1] = 42;
+}
+\end{colorblock}
+\end{minipage}
+\\\\ \hline
+
+\end{tabular}
+\end{center}
+
+\section{Motivation}
+
+Types that represent multidimensional views (\tcode{mdspan}), containers (\tcode{mdarray}), grid, matrixes, images,
+geometric spaces, etc, need to index multiple dimensions.
+
+In the absence of a more suitable solution, these classes overload the call operator.
+While this is functionally equivalent to the proposed multidimensional subscript operator, it does not carry the same semantic, making the code harder to read and reason about. It also encourages non-semantical operator overloading.
+
+\section{Proposal}
+We propose that the \tcode{operator[]} should be able to accept 1 or more argument, including variadic arguments.
+Both its use and definition would match that of \tcode{operator()}, with the exception that at least one argument would be required.
+
+\section{What about comma expressions?}
+
+In C++20 we deprecated the use of comma expressions in subscript expressions [P1161R3]\cite{P1161R3}.
+This proposal would make these ill-formed and give a new meaning to commas in subscript expressions.
+While the timeline is aggressive, we think it is important that this feature be available for the benefit of \tcode{mdspan} and \tcode{mdarray}.
+At the time of writing [P1161R3], \cite{P1161R3} has been implemented by at least GCC, clang and MSVC.
+[P1161R3]\cite{P1161R3} further denotes that the cases where comma expressions appear in subscript are vanishingly rare.
+
+However, an implementation could keep supporting the current behavior as an extension, for example, they could fall-back to a comma expression if no overload is found for an expression list, or always assume a comma expression in the presence of a C-array.
+
+Because we should not make C++ more confusing, we think the standard should not continue to support the old meaning of a comma
+in subscript expressions.
+
+\section{What about [foo][bar]?}
+
+As mentioned in [P1161R3]\cite{P1161R3}, an \tcode{operator[]} can return an object which has itself an \tcode{operator[]}.
+Therefore chaining multiple \tcode{[]} to index a single object isn't a viable proposal.
+
+\section{Wording}
+
+\rSec1[expr]{Expressions}
+\rSec2[expr.post]{Postfix expressions}%
+
+\begin{quote}
+\pnum
+Postfix expressions group left-to-right.
+
+\begin{bnf}
+\nontermdef{postfix-expression}\br
+primary-expression\br
+\removed{postfix-expression \terminal{[} expr-or-braced-init-list \terminal{]}}\br
+\added{postfix-expression \terminal{[}  expression-list \terminal{]}}\br
+\added{postfix-expression \terminal{[} braced-init-list \terminal{]}}\br
+postfix-expression \terminal{(} \opt{expression-list} \terminal{)}\br
+simple-type-specifier \terminal{(} \opt{expression-list} \terminal{)}\br
+typename-specifier \terminal{(} \opt{expression-list} \terminal{)}\br
+simple-type-specifier braced-init-list\br
+\end{bnf}
+\end{quote}
+
+
+
+\rSec3[expr.sub]{Subscripting}
+\begin{quote}
+\pnum
+\indextext{operator!subscripting}%
+\indextext{\idxcode{[]}|see{operator, subscripting}}%
+A postfix expression followed an expression in square brackets is a
+postfix expression. One of the expressions shall be a glvalue of type ``array of
+\tcode{T}'' or a prvalue of type ``pointer
+to \tcode{T}'' and the other shall be a prvalue of unscoped enumeration or integral type.
+The result is of type ``\tcode{T}''.
+\indextext{type!incomplete}%
+The type ``\tcode{T}'' shall be a completely-defined object type.\footnote{This
+    is true even if the subscript operator is used in the following common idiom:
+    \tcode{\&x[0]}.}
+The expression \tcode{E1[E2]} is identical (by definition) to
+\tcode{*((E1)+(E2))},
+except that in the case of an array operand, the result is an lvalue
+if that operand is an lvalue and an xvalue otherwise.
+The expression \tcode{E1} is sequenced before the expression \tcode{E2}.
+
+\pnum
+\begin{removedblock}
+\begin{note}
+    A comma expression\iref{expr.comma}
+    appearing as the \grammarterm{expr-or-braced-init-list}
+    of a subscripting expression is deprecated;
+    see [depr.comma.subscript].
+\end{note}
+\end{removedblock}
+
+\pnum
+\begin{note}
+    Despite its asymmetric appearance, subscripting is a commutative
+    operation except for sequencing.
+    See [expr.unary] and [expr.add] for details of \tcode{*} and
+    \tcode{+} and [dcl.array] for details of array types.
+\end{note}
+
+\pnum
+\changed{A \grammarterm{braced-init-list} shall not be used w}{W}ith the built-in subscript operator\changed{.}{ a \grammarterm{braced-init-list} shall not be used and a \grammarterm{expression-list} shall be a single expression.}
+
+\end{quote}
+
+
+\rSec1[over.oper]{Overloaded operators}%
+
+
+\rSec2[over.sub]{Subscripting}%
+\indextext{subscripting operator!overloaded}%
+\indextext{overloading!subscripting operator}
+
+\pnum
+A subscripting operator function
+is a function named \tcode{operator[]}
+that is a non-static member function with \changed{exactly}{at least} one parameter.
+For an expression of the form\added{s}
+
+\begin{removedblock}
+\begin{ncsimplebnf}
+    postfix-expression \terminal{[} expr-or-braced-init-list \terminal{]}
+\end{ncsimplebnf}
+\end{removedblock}
+
+\begin{addedblock}
+\begin{ncsimplebnf}
+    postfix-expression \terminal{[}  expr-or-braced-init-list \terminal{]}
+    
+    postfix-expression \terminal{[}  expression-list \terminal{]}
+\end{ncsimplebnf}
+\end{addedblock}
+
+the operator function is selected by overload resolution ([over.match.oper]).
+If a member function is selected, the expression is interpreted as 
+
+the operator function
+is selected by overload resolution (xref).
+If a member function is selected, the expression is
+interpreted\added{, respectively,} as
+
+\begin{removedblock}
+\begin{ncsimplebnf}
+    postfix-expression . operator \terminal{[}\terminal{]} \terminal{(} expr-or-braced-init-list \terminal{)}
+\end{ncsimplebnf}
+\end{removedblock}
+
+\begin{addedblock}
+\begin{ncsimplebnf}
+     postfix-expression . operator \terminal{[}\terminal{]} \terminal{(} expresssion-list \terminal{)}
+     
+      postfix-expression . operator \terminal{[}\terminal{]} \terminal{(} 
+      braced-init-list  \terminal{)}
+\end{ncsimplebnf}
+\end{addedblock}
+
+\pnum
+\begin{example}
+\begin{codeblock}
+    struct X {
+        Z operator[](std::initializer_list<int>);
+        Z operator[](auto...);
+    };
+    X x;
+    x[{1,2,3}] = 7;                 // OK: meaning \tcode{x.operator[](\{1,2,3\})}
+    x[1,2,3] = 7;                   // OK: meaning \tcode{x.operator[](1,2,3)}
+    int a[10];
+    a[{1,2,3}] = 7;                 // error: built-in subscript operator
+    a[1,2,3] = 7;                   // error: built-in subscript operator
+\end{codeblock}
+\end{example}
+
+\rSec2[expr.comma]{Comma operator}%
+
+\pnum
+In contexts where comma is given a special meaning,
+\begin{example}
+    in
+    lists of arguments to functions ([expr.call])\added{, subscript expressions} and lists of
+    initializers ([decl.init])
+\end{example}
+the comma operator as
+described in this subclause can appear only in parentheses.
+\begin{example}
+    \begin{codeblock}
+        f(a, (t=3, t+2), c);
+    \end{codeblock}
+    has three arguments, the second of which has the value
+    \tcode{5}.
+\end{example}
+
+\begin{removedblock}
+\pnum
+\begin{note}
+    A comma expression
+    appearing as the \grammarterm{expr-or-braced-init-list}
+    of a subscripting expression [expr.sub] is deprecated;
+    see depr.comma.subscript.
+\end{note}
+\end{removedblock}
+
+
+\begin{addedblock}
+
+\rSec1[diff.cpp20]{\Cpp{} and ISO C++ 2020{}}
+
+
+\rSec2[diff.cpp20.expr.sub]{\tcode{[expr.sub]}: declarations}
+
+
+\change Change the meaning of comma in subscript expressions.
+\rationale
+Enable repurposing a deprecated syntax to support multidimensional indexing.
+\effect Valid C++ program that uses a comma expression within a subscript expression
+may fail to compile.
+
+
+\begin{codeblock}
+arr[1, 2] //was equivalent to \tcode{arr[(1, 2)]}, now equivalent to \tcode{arr.operator[](1, 2)} or ill-formed
+\end{codeblock}
+
+\end{addedblock}
+
+
+\begin{removedblock}
+\rSec1[depr.comma.subscript]{Comma operator in subscript expressions}
+
+\pnum
+A comma expression\iref{expr.comma}
+appearing as the \grammarterm{expr-or-braced-init-list}
+of a subscripting expression\iref{expr.sub} is deprecated.
+\begin{note}
+    A parenthesized comma expression is not deprecated.
+\end{note}
+\begin{example}
+\begin{codeblock}
+    void f(int *a, int b, int c) {
+        a[b,c];                     // deprecated
+        a[(b,c)];                   // OK
+    }
+\end{codeblock}
+\end{example}
+\end{removedblock}
+
+\section{Implementation}
+
+A prototype has been implemented in Clang. 
+
+\href{https://gcc.godbolt.org/z/4szfLo}{Compiler Explorer Demo}.
+
+Github: \url{https://github.com/cor3ntin/llvm-project/tree/subscript}
+
+\section{Acknowledgments}
+
+Thanks to Jens Maurer for his patient help with the wording, and to the many people who provided valuable feedback.
+Thanks to Matt Godbolt for hosting an experimental compiler with the implementation
+of this proposal on compiler explorer. 
+
+\section{References}
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{../wg21}
+
+\begin{thebibliography}{9}
+
+    \bibitem[N4861]{N4861}
+    Richard Smith
+    \emph{Working Draft, Standard for Programming Language C++}\newline
+    \url{https://wg21.link/N4861}
+
+\end{thebibliography}\end{document}
