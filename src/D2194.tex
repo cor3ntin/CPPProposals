@@ -1,0 +1,302 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}%
+\documentclass{wg21}
+\usepackage{newunicodechar}
+
+
+
+\title{The character set of the internal representation should be Unicode}
+\docnumber{D2194R0}
+\audience{EWG, SG-16}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+
+\begin{document}
+\maketitle
+
+
+
+\section{Abstract}
+
+Since 1998, the internal representation of source files after phase 1 is Unicode.
+A few in SG-16 have suggested that it should instead be "a superset of Unicode".
+
+We explain why this is, at best, counter-productive.
+
+\section{Scope}
+
+This is strictly a motivation paper hoping to enlighten a rewording of the first phase of translation.
+The positions expressed in this paper are only valid in this specific context,
+notably handling strings at runtime may have a different sets of constraints.
+
+\section{Unicode}
+
+As of this writing, Unicode describes a character set of 143'859 characters over 154 scripts.
+Unicode can represent all the characters present in almost all encodings, notable exceptions being some rare traditional Chinese Hanzi.
+
+Its 21 bits code space can encode 1'114'112 distinct code points across 154 scripts. New versions of the Unicode are released yearly (on average) since 1991.
+As such Unicode predates C++. UTF-8, one popular Unicode encoding, is used by over 95\% of websites worldwide.
+The effort to encode characters that do not yet exist in any computer is ongoing.
+
+\section{Original Motivation}
+
+As a reminder, the initial goals of SG-16 are a modernization of the terminology and a simplification
+of the description of text handling during the phases of translations 1-6.
+The necessity of this work has been made apparent by the occasional wording-induced confusion among people
+doing that work.
+
+
+\section{Motivation for an "extended super set of Unicode"}
+
+\subsection{Wording artifacts}
+
+One of the reasons suggested for the "superset of Unicode" model was to handle UCNs reversal.
+However, SG-16, fortunately, concluded that this model wasn't suitable and that UCNs should
+not be handled in phase 1, but during phase 4, and only in applicable contexts (identifiers, non-raw string literals and characters literals), 
+this argument therefore no longer applies.
+
+Similarly, it was suggested that the "superset of Unicode" model would allow the handling of trigraphs.
+However, trigraphs represent very specific characters in the Basic Latin 1 block that are used to describe
+elements of the grammar and therefore have to map to these characters, rather than "extended" made-up characters.
+
+WG21 previously decided to remove trigraphs, which are therefore a compiler extension, and implementers should deal with them as they see fit,
+without them having any bearing on the standard.
+If WG21 expresses a strong desire to describe how trigraphs work maybe they should not have been removed.
+  
+\subsection{Bytes-value preservation}
+
+Another reason put forward for why WG21 would need more than the 120K characters currently available un Unicode
+is to handle the duplicated characters in some encodings, such as shift-js.
+The goal is to allow implementations to round-trip through the internal representation without losing the values of the bytes
+when the source encoding and the executions are the same.
+
+However,
+
+\begin{itemize}
+\item Implementations do not guarantee byte-value preservation as they do convert to UTF-8 in phase 1.
+\item Most IDEs and tools do not guarantee byte-value preservation as they use UTF-8 internally.
+\item Byte-value preservation is brittle and will break if the source is reencoded, for example (or edited by most ides)
+\item Byte-value preservation goes against the idea that the source file encoding should not be observable
+\item Users don't ask for this feature
+\item Is already possible in the current wording as part of the implementation encoding of string literals in phase 5. Indeed this problem is a special case of
+"What should an implementation do if a Unicode character has multiple representations in a narrow or wide literal encoding?"
+
+The answer to that is implementation-defined, and it should remain so.
+
+If an implementation wishes to use information from the source it can. The wording for the phases of translation is only a model, not representative of the actual working of a lexer. Furthermore the proposed model of "superset of Unicode" would not be a viable implementation strategy if a compiler desires to preserve bytes values.
+
+Using Unicode as the "internal representation", only mandates \textbf{representability} 
+of source characters without putting further constraints on the implementation.
+\end{itemize}
+
+\subsection{EBCDIC control characters}
+
+One argument for the "Unicode superset" idea is the handling of EBCDIC control characters, noting that Unicode does not have representation for these characters.
+However, Unicode has a set of codepoints reserved for control characters.
+The Unicode standard specifies:
+
+\begin{quoteblock}
+    There are 65 code points set aside in the Unicode Standard for compatibility with the C0
+    and C1 control codes defined in the ISO/IEC 2022 framework. The ranges of these code points are U+0000..U+001F, U+007F, and U+0080..U+009F, which correspond to the 8-
+    bit controls 0016 to 1F16 (C0 controls), 7F16 (delete), and 8016 to 9F16 (C1 controls),
+    respectively. For example, the 8-bit legacy control code character tabulation (or tab) is the
+    byte value 0916; the Unicode Standard encodes the corresponding control code at U+0009.
+    The Unicode Standard provides for the intact interchange of these code points, neither
+    adding to nor subtracting from their semantics. The semantics of the control codes are
+    generally determined by the application with which they are used. However, in the absence
+    of specific application uses, they may be interpreted according to the control function
+    semantics specified in ISO/IEC 6429:1992.
+    In general, the use of control codes constitutes a higher-level protocol and is beyond the
+    scope of the Unicode Standard. For example, the use of ISO/IEC 6429 control sequences
+    for controlling bidirectional formatting would be a legitimate higher-level protocol layered
+    on top of the plain text of the Unicode Standard. Higher-level protocols are not specified
+    by the Unicode Standard; their existence cannot be assumed without a separate agreement
+    between the parties interchanging such data.
+\end{quoteblock}
+
+These control code are mapped to EBCDIC characters in the IBM Character Data Representation Architecture \cite{CDRA} and \cite{UTF-EBCDIC}.
+UTF-EBCDIC is also used by GCC on IBM platforms, and the same mapping will be used by the effort to port Clang to zOS platform
+(as it intends to use platform facilities to convert to UTF-8).
+
+Yet, despite standard practices and standard... standards, WG21 wondered if that was was really enough.
+Should we be able to distinguish EBCDIC control characters from Unicode C0/C1 codepoints?
+What if a source file was converted to EBCDIC from an ISO 8859 encoded file with embedded control characters such that these control characters were replaced
+by a universal character name representing the equivalent Unicode C0 or C1 control as part of that conversion, and then someone put EBCDIC control characters in there, such as the compiler should be able to distinguish the two?
+
+It is interesting to first imagine a C++ source file with embedded control characters. Control characters being by definition non-graphic,
+they do not lend themselves to be inserted in source code, this is why C++ has hexadecimal/octal escape sequences to put specific bytes in strings,
+along with escape sequences for some of these control characters.
+Maybe we need to assume that the file was generated. Then converted to EBCDIC. Then... EBCDIC control characters were inserted, not removed by any tool,
+while the semantic of both the ISO 8859 file AND the transcoded EBCDIC file had been preserved, in a way that is important to the program.
+
+The likelihood of such a scenario is not hard to qualify.
+It has not been an issue on EBCDIC platforms in any programming languages supported by platforms still using EBCDIC.
+Neither IBM nor Unicode consider this an issue.
+It is important to understand that Unicode goal is to replace all encodings if they thought that ISO 6429 and EBCDIC had to or could reasonably
+cohabitate within the same context.
+
+Such inventiveness is expressible by the use of hexadecimal escape sequences in source files.
+The burden of an incredibly unlikely scenario that the compiler would not be able to resolve anyway (because, again, C0/C1 control characters do not have semantics in Unicode, there would be no way for a compiler to decide whether a universal escape sequence with the value of such character represent an EBCDIC character or not).
+
+We must be careful not to invent a bad solution in search of a problem.
+
+
+\section{Constraints}
+\subsection{Tools}
+
+Source code is primarily handled by people, or at least it is read and written by people,
+using text editors, source control software, and other tools.
+These tools in turn use font rendering libraries and other facilities to manipulate text.
+While some of these things are encoding agnostics, many others use Unicode internally.
+As such they are unable to render characters, not in Unicode, not do they make any effort to preserve the values of the bytes of characters.
+Non-graphic characters may not be preserved across tools.
+These tools use different methods to determine an encoding.
+for example, Visual Studio prefers platform encoding while VSCode defaults to UTF-8.
+Even Notepad has recently been updated to use UTF-8 by default.
+
+\subsection{Implementations}
+
+Clang, GCC, MSVC use UTF-8 as their internal representation, converting the entire source code in phase 1.
+These implementations support source files in different encodings (Clang only supports UTF-8).
+GCC can be compiled to use UTF-EBCDIC as its internal representation.
+
+The ongoing effort to use clang on z/OS platforms will convert to UTF-EBCDIC before phase 1.
+
+
+\section{Why Unicode?}
+
+\begin{itemize}
+    \item It's what the standard has been doing for the past 20 years
+    \item It's the model used by most tools and IDEs
+    \item It is an easy model to understand
+    \item Unicode offers a context to describe characters and their properties, which is not offered by other encodings
+    \item It is reflective of industry practices, as new projects favor UTF-8 across the world (including in Japan despite the time we spend focusing on Shift-JIS).
+    \item It is a superset of other encodings supported by implementers making it easier to, for example, describe scenarios where each header has a different encoding
+\end{itemize}
+
+\section{What about the C model?}
+
+C simply avoids describing its internal representation at all, nor does it mandate that UCN are actual characters.
+
+\begin{quoteblock}
+Physical source file multibyte characters are mapped, in an implementation-defined manner, to
+the source character set (introducing new-line characters for end-of-line indicators) if necessary.
+Trigraph sequences are replaced by corresponding single-character internal representations.
+\end{quoteblock}
+
+Therefore the C model is not sufficient to talk about (abstract) character representability.
+It adds confusion as the \emph{source character set} is not that of the source but that of the internal representation,
+and that character set is implementation-defined.
+
+The C model is however superior in that it handles \emph{universal-character-names} \textbf{escape sequences}
+later during translations (when identifiers or literals are formed)
+
+\section{FAQ}
+\subsection{What about trigraphs?}
+
+There is no difference between trigraphs and digraphs, except WG21 elected to remove the formers
+from the wording. They should be considered a compiler extension, as such we should not try to specify their behavior.
+
+\subsection{How to distinguish basic and extended source characters?}
+
+There is no difference between "basic" and "extended" source characters.
+Some characters can appear in punctuators, keywords and operators, while others
+are only valid in identifiers, or strings and comment.
+But the distinction is unecessary.
+
+\subsection{Isn't this model too much work?}
+
+We might have to modify part of \tcode{[lex]} and \tcode{[cpp]}.
+Trying to minimize the asmount of changes was not a goal of the author, who is willing to do work.
+
+\subsection{What about non-characters?}
+
+Lone surrogates, invalid code unit sequences, or non-assigned legacy encoding codepoints
+can appear in source files, notably if the input source file encoding was not determined correctly.
+There is a design decision as to whether they should:
+
+\begin{itemize}
+\item Be replaced by \char"FFFD
+\item Be made ill-formed
+\end{itemize}
+
+Either are valid in terms of Unicode conformance, but making the programm ill-formed is more appropriate in terms of program correctness:
+It is very unlikely that these sequences appear as the result of the programmer intent.
+Implementers should be given some leeway to ignore invalid sequences in comments. 
+
+\section{Conclusion}
+
+\paper{P1238R0} recommends not giving to "excessive inventiveness". Yet it is exactly what the idea of "superset of Unicode" is.
+This idea ignores standard practices, expert guidance (that of Unicode and IBM), implementation experience, and market demands.
+
+\subsection{Rough Wording}
+
+Here is a rough wording assuming that UCNs escape sequences are handled in a later phase of translation.
+Only encoding conversion is handled in phase 1.
+This paper does \textbf{not} proposes to replace the term "implementation-defined mapping" in phase 1,
+as I fear this might be an entirely separate discussion.
+In particular this wording deal neither with character non-representable in Unicode (which despite being a non-problem needs to be specified to be ill-formed),
+nor with invalid code unit sequences in source files.
+
+\begin{itemdescr}
+Physical source file characters are mapped, in an implementation-defined manner to the \changed{basic source character set}{Unicode character set},
+\removed{(introducing new-line characters for end-of-line indicators)} \removed{if necessary}.
+The set of physical source file characters accepted is \impldef{physical source file
+    characters}.
+\removed{Any source file character not in the basic source character
+set\iref{lex.charset} is replaced by the
+\indextext{universal character name}\grammarterm{universal-character-name} that
+designates that character}. An implementation may use any internal
+encoding \changed{, so long as an actual extended character encountered in the
+source file, and the same extended character expressed in the source
+file as a \grammarterm{universal-character-name} (e.g., using the \tcode{\textbackslash
+    uXXXX} notation), are handled equivalently
+except where this replacement is reverted\iref{lex.pptoken} in a raw string literal}{able to represent the Unicode character set}.
+\end{itemdescr}
+
+
+\subsection{Further recommandations}
+
+\begin{itemize}
+\item As in C, deal with UCNs escape sequence in later phases of translations
+\item Do not try to introduce the terms "basic" and "extended" characters (basic \textbf{execution} character may still be useful, but this paper \text{only} deals with phase 1).
+\item Treat trigraphs as a compiler extension (that is that the standard should make no effort to "revert" trigraphs in raw strings having decided to remove trigraphs)
+\item Do not try to offer guidance as to byte value preservation.
+\end{itemize}
+
+
+\section{Acknowledgments}
+
+
+\section{References}
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+\begin{thebibliography}{9}
+    
+    \bibitem[Unicode]{Unicode}
+    Unicode 13\newline
+    \url{http://www.unicode.org/versions/Unicode13.0.0/}
+
+    \bibitem[CDRA]{CDRA}
+    IBM\newline
+    \emph{IBM Character Data Representation Architecture}\newline
+    \url{https://www.ibm.com/downloads/cas/G01BQVRV}
+    
+    
+    \bibitem[UTF-EBCDIC]{UTF-EBCDIC}
+    V.S. Umamaheswaran\newline
+    \emph{UTF-EBCDIC - Unicode Technical Report \#16}\newline
+    \url{http://www.unicode.org/reports/tr16/tr16-8.html}
+
+    \bibitem[N4861]{N4861}
+    Richard Smith\newline
+    \emph{Working Draft, Standard for Programming Language C++}\newline
+    \url{https://wg21.link/N4861}
+
+\end{thebibliography}
+\end{document}

@@ -5,13 +5,13 @@
 \documentclass{wg21}
 
 \title{Multidimensional subscript operator}
-\docnumber{P2128R1}
+\docnumber{P2128R2}
 \audience{EWG, EWGI}
 \author{Mark Hoemmen}{mhoemmen@stellarscience.com}
 \authortwo{Daisy Hollman}{dshollm@sandia.gov}
 \authorthree{Corentin Jabot}{corentin.jabot@gmail.com}
 \authorfive{Christian Trott}{crtrott@sandia.gov}
-\authorfour{Isabella Muerte}{imuerte@opayq.com}
+\authorfour{Isabella Muerte}{imuerte@hey.com}
 
 \begin{document}
 \maketitle
@@ -61,6 +61,16 @@ int main() {
 \end{tabular}
 \end{center}
 
+\section{Revisions}
+
+\section{R2}
+
+\begin{itemize}
+    \item Add explenation about not adapting this proposal to C arrays
+    \item Remove the restriction to require at least one parameter
+    \item Add a paragraph about valarray
+\end{itemize}
+
 \section{Motivation}
 
 Types that represent multidimensional views (\tcode{mdspan}), containers (\tcode{mdarray}), grid, matrixes, images,
@@ -72,6 +82,9 @@ While this is functionally equivalent to the proposed multidimensional subscript
 \section{Proposal}
 We propose that the \tcode{operator[]} should be able to accept 1 or more argument, including variadic arguments.
 Both its use and definition would match that of \tcode{operator()}, with the exception that at least one argument would be required.
+
+We make the expressions deprecated in 20 ill-formed, while allowing multi-dimensional subscripts expressions in \textbf{new} standard types
+and user types. We do not propose modifications to C arrays as to leave a cycle before giving new meaning to syntax that was still valid in C++20.
 
 \section{What about comma expressions?}
 
@@ -90,6 +103,19 @@ in subscript expressions.
 
 As mentioned in [P1161R3]\cite{P1161R3}, an \tcode{operator[]} can return an object which has itself an \tcode{operator[]}.
 Therefore chaining multiple \tcode{[]} to index a single object isn't a viable proposal.
+
+\section{Should we adopt the same syntax for C arrays?}
+
+Code that is deprecated in 20, should be ill-formed in 23 rather than a potentially silent change.
+As such we do not proposed the proposed syntax to apply to C arrays.
+The usefulness of this should be discussed in the C++26 time frame.
+However C arrays are not widely used by C++, spending time on them might therefore not be useful.
+
+\section{Should we add a multidimentional operator to \tcode{valarray}?}
+
+Again, we shouldn't change the meaning erxisting code in C++23.
+We should only add multidimentional operators to new in C++23 types such as \tcode{mdspan}.
+If there are users of \tcode{valarray} interested in this feature, this can be done in C++26
 
 \section{Wording}
 
@@ -168,7 +194,7 @@ The expression \tcode{E1} is sequenced before the expression \tcode{E2}.
 \pnum
 A subscripting operator function
 is a function named \tcode{operator[]}
-that is a non-static member function with \changed{exactly}{at least} one parameter.
+that is a non-static member function \removed{with exactly one parameter}.
 For an expression of the form\added{s}
 
 \begin{removedblock}

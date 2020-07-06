@@ -7,7 +7,7 @@
 
 
 \title{A nice placeholder with no name}
-\docnumber{P2169R0}
+\docnumber{P2169R1}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Michael Park}{mcypark@gmail.com}
@@ -54,6 +54,14 @@ inspect(foo) { _  => bar; };
 \end{tabular}
 \end{center}
 
+\section{Revisions}
+
+\subsection{Revision 1}
+
+\begin{itemize}
+   \item Specify that placeholders can appear as class members
+   \item Make use of \tcode{_} ill-formed once a placeholder has been declared in the same scope 
+\end{itemize}
 
 \section{Motivation}
 
@@ -73,9 +81,9 @@ It is furthermore not possible to apply attributes to structured bindings and as
 the compiler.
 The current wording advises:
 
-\begin{quote}
+\begin{quoteblock}
 Recommended practice: For an entity marked \tcode{[[maybe_unused]]}, implementations should not emit a warning that the entity or its structured bindings (if any) are used or unused. For a structured binding declaration not marked \tcode{[[maybe_unused]]}, implementations should not emit such a warning unless all of its structured bindings are unused.
-\end{quote}
+\end{quoteblock}
 
 \item We need a wildcard token for pattern matching. The proposed \tcode{_} is, as explained by [P1469]\cite{P1469R0}
 an industry wide-standard and we believe having a single token \tcode{_} for both wildcards and placeholders contribute
@@ -100,7 +108,7 @@ The design as presented in this paper takes the following design parameters into
 
 \subsection{Proposal}
 
-We propose that when \tcode{_} is used as the identifier for the declaration of a variable, function parameter name,
+We propose that when \tcode{_} is used as the identifier for the declaration of a variable, non static class member variable, function parameter name,
 lambda capture or structured binding.
 the introduced name is implicitly given the \tcode{[[maybe_unused]]} attribute.
 
@@ -110,9 +118,8 @@ auto _ = foo(); // equivalent to [[maybe_unused]] auto _  = f();
 \end{lstlisting}
 \end{example}
 
-When a variable, function parameter structured binding or lambda capture is introduced by the identifier \tcode{_}
-at function scope, or at namespace scope within the purview of a module implementation unit,
-if it would redefine an existing declaration, [basic.scope.declarative], it instead defines a variable with an implementation-defined name which does not participate in name lookup
+When a variable, function parameter, non-static class member variablem, structured binding or lambda capture is introduced by the identifier \tcode{_}
+at function scope, or at namespace scope within the purview of a module implementation unit, it can redefine an existing declaration, [basic.scope.declarative] in the same scope. After redeclaration, if the variable is used, the programm is ill-formed.
 
 \begin{example}
 \begin{lstlisting}[style=color]
@@ -122,12 +129,12 @@ namespace a {
 }
 void f() {
     auto _ = 42; // Ok, declare a variable "_"
-    auto _ = 0;  // Ok, declare a variable with no name
+    auto _ = 0;  // Ok, re-declare a variable "_"
     {
         auto _ = 1; // Ok, shaddowing
         assert( _ == 1 ); // Ok
     }
-    assert( _ == 42 ); // Ok
+    assert( _ == 42 ); // ill-formed: Use of a redeclared placeholder variables
 }
 \end{lstlisting}
 \end{example}
@@ -141,17 +148,22 @@ inspect(i) {
 };
 \end{lstlisting}
 
+\subsection{Should declaring variables called \tcode{_} be deprecated?}
+
+This paper does not propose to deprecate variables called \tcode{_}, as a few frameworks have legitimate and widely deployed usages of it
+(see the section about google mock), and a depreciation is not necessary for the well-behaving of this proposal.
+We do however think that such depreciation may be useful to consider in a longer time frame.
+
 \subsection{Alternative Design}
 
-Tony van Eeerd suggested that \textbf{use} of a variable named \tcode{_} could be made ill-formed after the introduction
-of a placeholder variable in the same scope.
-This has been implemented as a warning \href{https://godbolt.org/z/JcD76y}{Compiler Explorer}.
+A previous version of this proposal suggested that \tcode{_} should refer to the first declaration in scope,
+but many prefered the approach in this current revision.  
 
 \subsection{Pattern matching}
 
 Citing [P1371R0]{\cite{P1371R0}, \tcode{_} can be used as a pattern matching wilcard without ambiguities
     
-\begin{quote}
+\begin{quoteblock}
 Even though \tcode{_} is a valid identifier, it does not introduce a name as doing so would result in redeclaration
 errors in the case where multiple wildcard \tcode{_} identifiers are used.
 It is possible for users to have already introduced _ as a type or variable name in the same scope where an
@@ -163,7 +175,7 @@ existing name and \tcode{_} will always represent the wildcard pattern. An exist
 ambiguity in the matched statement to which control is passed.
 Naturally, the impact of defining \tcode{_} in the pre-processor cannot be predicted or controlled by this paper and
 is thus liable to result in an ill-formed program.
-\end{quote}
+\end{quoteblock}
 
 \subsection{Impact on P2011 and other pipeline rewrite musing}
 
@@ -225,13 +237,13 @@ int main() {
 
 \section{Implementation}
 
-The proposal has been implemented in Clang and the implementation is available on \href{https://godbolt.org/z/5lmnfN}{Compiler Explorer}.
+R0 of this proposal has been implemented in Clang and the implementation is available on \href{https://godbolt.org/z/5lmnfN}{Compiler Explorer}.
 
 The implementation consists of ignoring existing \tcode{_} variables in the same scope when declaring placeholder variables.
 Note that name lookup is not affected by this proposal, some variables are simply skipped over based on their name.
 The variables otherwise conserve their name for diagnostics purposes.
 
-It is possible to warn about uses of variables called \tcode{_} \href{https://godbolt.org/z/pQeu_r }{Compiler Explorer}.
+The current version of this proposal can be emulaterd with the \tcode{-Werror} flag \href{https://godbolt.org/z/_C6X7L}{Compiler Explorer}.
 
 
 \section{Wording}
@@ -269,7 +281,7 @@ enum MmapBits {
 enum MmapBits {
     Shared,
     Private,
-    Fixed = Private + 2,
+    Fixed = Private + 3,
     Rename,
     //...
 };
@@ -313,7 +325,7 @@ Thanks to Miro Knejp and Tony Van Eerd for providing valuable feedback on very s
 \section{References}
 \renewcommand{\section}[2]{}%
 \bibliographystyle{plain}
-\bibliography{../wg21}
+\bibliography{wg21}
 
 \begin{thebibliography}{9}
 

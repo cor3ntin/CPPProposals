@@ -133,6 +133,8 @@
   \end{flushright}
 }
 
+\newcommand{\paper}[1]{\href{https://wg21.link/#1}{#1} \cite{#1}}
+
 \usepackage{blindtext}
 \usepackage[most]{tcolorbox}
 \definecolor{block-gray}{gray}{0.95}
@@ -362,6 +364,15 @@
 \newcommand{\indexgrammar}[1]{\indextext{#1}\indexgram{#1}}
 \newcommand{\impldef}[1]{\indeximpldef{#1}implementation-defined}
 
+
+\newcommand{\defnadj}[2]{\indextext{#1 #2|see{#2, #1}}\indexdefn{#2!#1}\textit{#1 #2}}
+% Compound defined term with a different form for the primary noun.
+% Usage: \defnadjx{scalar}{types}{type}
+\newcommand{\defnadjx}[3]{\indextext{#1 #3|see{#3, #1}}\indexdefn{#3!#1}\textit{#1 #2}}
+
+\newcommand{\caret}{\char`\^}
+\newcommand{\bnfindent}{\hspace*{\bnfindentfirst}}
+
 % appearance
 \newcommand{\idxcode}[1]{#1@\tcode{#1}}
 \newcommand{\idxhdr}[1]{#1@\tcode{<#1>}}
@@ -381,6 +392,7 @@
 \newcommand{\defn}[1]{\defnx{#1}{#1}}
 \newcommand{\term}[1]{\textit{#1}\xspace}
 \newcommand{\grammarterm}[1]{\textit{#1}\xspace}
+\newcommand{\keyword}[1]{\tcode{#1}\indextext{\idxcode{#1}}}
 \newcommand{\placeholder}[1]{\textit{#1}}
 \newcommand{\placeholdernc}[1]{\textit{#1\nocorr}}
 \newcommand{\exposid}[1]{\tcode{\placeholder{#1}}}
@@ -1502,6 +1514,33 @@
  \begin{lib2dtab2base}{#1}{#2}{#3}{#4}{1.2in}{1.8in}{1.8in}
 }{
  \end{lib2dtab2base}
+}
+
+
+% a column in a multicolfloattable (internal)
+\newenvironment{mcftcol}{%
+ \renewcommand{\columnbreak}{%
+  \end{mcftcol} &
+  \begin{mcftcol}
+ }%
+ \setlength{\tabcolsep}{0pt}%
+ \begin{tabular}[t]{l}
+}{
+ \end{tabular}
+}
+
+% usage: \begin{multicolfloattable}{TITLE}{XREF}{LAYOUT}
+% produces floating table, location determined within limits
+% by LaTeX.
+\newenvironment{multicolfloattable}[3]
+{
+ \begin{floattable}{#1}{#2}{#3}
+ \topline
+ \begin{mcftcol}
+}
+{
+ \end{mcftcol} \\
+ \end{floattable}
 }
 
 \endinput

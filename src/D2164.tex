@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{\tcode{views::enumerate}}
-\docnumber{P2164R0}
+\docnumber{P2164R1}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -17,6 +17,12 @@
 
 We propose a view \tcode{enumerate} whose value type is a struct with 2 members \tcode{index} and \tcode{value}
 representing respectively the position and value of the elements in the adapted range. 
+
+\section{Revisions}
+\subsection{R1}
+\begin{itemize}
+\item Fix the index type
+\end{itemize}
 
 \section{Tony tables}
 \begin{center}
@@ -218,14 +224,15 @@ namespace std::ranges {
     class enumerate_view<V>::@\exposid{iterator}@ {
         
         using Base = conditional_t<Const, const V, V>;
+        using count_type = @\seebelow@;
         
         struct result {
-            const range_difference_t<View> index;
+            const count_type index;
             range_reference_t<Base> value;
         };
     
         iterator_t<Base> current_ = iterator_t<Base>();
-        range_difference_t<Base> pos_ = 0;
+        count_type pos_ = 0;
         
         
       public:
@@ -293,6 +300,14 @@ namespace std::ranges {
 \end{codeblock}
 
 
+\tcode{iterator::count_type} is defined as follow:
+\begin{itemize}
+    \item \tcode{ranges::range_size_t<Base>} if \tcode{Base} models \tcode{ranges::sized_range}
+    \item Otherwise, \tcode{make_unsigned_t<ranges::range_difference_t<Base>>}
+\end{itemize}
+
+
+
 \begin{itemdecl}
     constexpr explicit @\exposid{iterator}@(iterator_t<@\exposid{Base}@> current, range_difference_t<Base> pos = 0);
 \end{itemdecl}
@@ -300,7 +315,7 @@ namespace std::ranges {
 \begin{itemdescr}
     \pnum
     \effects
-    Initializes \tcode{current_} with \tcode{move(current)} and \exposid{pos} with \tcode{pos}.
+    Initializes \tcode{current_} with \tcode{move(current)} and \exposid{pos} with \tcode{static_cast<count_type>(pos)}.
 \end{itemdescr}
 
 \begin{itemdecl}
@@ -311,7 +326,7 @@ namespace std::ranges {
 \begin{itemdescr}
     \pnum
     \effects
-    Initializes \exposid{current_} with \tcode{move(i.\exposid{current_})} and \exposid{pos} with \tcode{pos}..
+    Initializes \exposid{current_} with \tcode{move(i.\exposid{current_})} and \exposid{pos} with \tcode{i.pos_}.
 \end{itemdescr}
 
 \begin{itemdecl}
