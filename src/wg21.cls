@@ -259,7 +259,7 @@
 }
 
 \newcommand{\ColorCodeBlockSetup}{
- \lstset{style=color, escapechar=@}
+ \lstset{style=color, escapechar=@, texcl=false}
  \renewcommand{\tcode}[1]{\textup{\CodeStylex{##1}}}
  \renewcommand{\techterm}[1]{\textit{\CodeStylex{##1}}}
  \renewcommand{\term}[1]{\textit{##1}}
@@ -460,8 +460,8 @@
 \newcommand{\effects}{\Fundesc{Effects}}
 \newcommand{\postconditions}{\Fundesc{Postconditions}}
 \newcommand{\postcondition}{\Fundesc{Postcondition}}
-\newcommand{\preconditions}{\requires}
-\newcommand{\precondition}{\requires}
+\newcommand{\preconditions}{\Fundesc{Preconditions}}
+\newcommand{\precondition}{\Fundesc{Preconditions}}
 \newcommand{\returns}{\Fundesc{Returns}}
 \newcommand{\throws}{\Fundesc{Throws}}
 \newcommand{\default}{\Fundesc{Default behavior}}

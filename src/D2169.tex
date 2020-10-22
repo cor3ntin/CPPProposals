@@ -7,7 +7,7 @@
 
 
 \title{A nice placeholder with no name}
-\docnumber{P2169R1}
+\docnumber{P2169R2}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Michael Park}{mcypark@gmail.com}
@@ -55,6 +55,12 @@ inspect(foo) { _  => bar; };
 \end{center}
 
 \section{Revisions}
+
+\subsection{Revision 2}
+
+\begin{itemize}
+    \item A few more details about interactions with P2011
+\end{itemize}
 
 \subsection{Revision 1}
 
@@ -181,9 +187,34 @@ is thus liable to result in an ill-formed program.
 
 Placeholders in pipeline rewrite have a "Bind to this" semantic rather than a "I don't care" semantic.
 As such, these proposals could use a different syntax.
+However, there are no syntactic ambiguities between the two features, P2169 impacts only declarations, not expressions.
 
-It might also be possible to have \tcode{_}  and \tcode{_1}, ... contextually be used as 
-bind placeholders in pipeline require contexts.
+Independently of P2169, P2011 makes the following ambiguous
+
+\begin{lstlisting}[style=color]
+int _ = 0; // Not a placeholder
+f() |> g(_, _); // placeholder or variable ? 
+\end{lstlisting}
+
+This is simply resolved by having \tcode{_} always be a placeholder in pipeline expression,
+and any \tcode{_} variable can be access either through a reference or by wrapping it in parentheses.
+
+\begin{lstlisting}[style=color]
+int _ = 0; // Not a placeholder
+auto & placeholder = _;
+f() |> g(_, placeholder); // OK
+f() |> g(_, (_)); // OK
+\end{lstlisting} 
+
+
+And so,
+
+\begin{itemize}
+\item There are no adverse synergies between this proposal and pipeline rewrite
+\item There are no adverse synergies between this proposal and pattern matching
+\item This proposal and pattern matching use the \tcode{_} token for similar semantics ("don't care"), whether the pipeline rewrite has a different semantic ("bind to this argument").
+However, both are placeholders and an argument can also be made to use the same syntax in both context, it really boils down to what we think is less surprising.
+\end{itemize}
 
 
 \section{Impact on existing code}

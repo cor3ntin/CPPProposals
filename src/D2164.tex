@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{\tcode{views::enumerate}}
-\docnumber{P2164R1}
+\docnumber{P2164R2}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -19,6 +19,15 @@ We propose a view \tcode{enumerate} whose value type is a struct with 2 members 
 representing respectively the position and value of the elements in the adapted range. 
 
 \section{Revisions}
+
+\subsection{R2, following mailing list reviews}
+\begin{itemize}
+    \item Make \tcode{value_type} different from  \tcode{reference} to match other views
+    \item Remove inconsistencies between the wording and the description
+    \item Add relevant includes and namespaces to the examples
+\end{itemize}
+
+
 \subsection{R1}
 \begin{itemize}
 \item Fix the index type
@@ -35,9 +44,9 @@ Before & After\\ \hline
 std::vector days{"Mon", "Tue", 
   "Wed", "Thu", "Fri", "Sat", "Sun"};
 
-int index = 0;
+int idx = 0;
 for(const auto & d : days) {
-    print("{} {} \n", i, d);
+    print("{} {} \n", idx, d);
     index++;
 }
 
@@ -46,11 +55,13 @@ for(const auto & d : days) {
 &
 \begin{minipage}[t]{0.5\textwidth}
 \begin{colorblock}
+#include <ranges>
 
 std::vector days{"Mon", "Tue", 
   "Wed", "Thu", "Fri", "Sat", "Sun"};
 
-for(const auto & [idx, d] : enumerate(days)) {
+for(const auto & [idx, d] 
+      : std::views::enumerate(days)) {
     print("{} {} \n", idx, d);
 }
 
@@ -85,17 +96,24 @@ The existence of this feature or lack thereof is the subject of recurring stacko
 
 \subsection{The result is a simple aggregate}
 
-Following the trend of using meaningful names instead of returning pairs or tuples, this proposal uses a simple aggregate return type
+Following the trend of using meaningful names instead of returning pairs or tuples, this proposal uses a simple aggregate return type.
+This design was previously discussed by LEWGI in Belfast in the context of \paper{P1894R0}.
 
 \begin{colorblock}
 
-struct __result {
-    difference_type index;
-    reference value;
+struct reference {
+    count_type index;
+    range_reference_t<Base> value;
 };
 \end{colorblock}
 
-This design was previously discussed by LEWGI in the context of \cite{P1894R0}
+\tcode{count_type} is defined as follow:
+\begin{itemize}
+    \item \tcode{ranges::range_size_t<Base>} if \tcode{Base} models \tcode{ranges::sized_range}
+    \item Otherwise, \tcode{make_unsigned_t<ranges::range_difference_t<Base>>}
+\end{itemize}
+
+This is consistent with ranges-v3 and allows the view to support both sized and non sized ranges.
 
 \subsection{constness}
 
@@ -225,11 +243,6 @@ namespace std::ranges {
         
         using Base = conditional_t<Const, const V, V>;
         using count_type = @\seebelow@;
-        
-        struct result {
-            const count_type index;
-            range_reference_t<Base> value;
-        };
     
         iterator_t<Base> current_ = iterator_t<Base>();
         count_type pos_ = 0;
@@ -237,8 +250,17 @@ namespace std::ranges {
         
       public:
         using iterator_category = typename iterator_traits<iterator_t<Base>>::iterator_category;
-        using reference  = result;
-        using value_type = result;
+        
+        struct reference {
+            const count_type index;
+            range_reference_t<Base> value;
+        };
+        
+        struct value_type {
+            const count_type index;
+            range_value_t<Base> value;
+        };
+ 
         using difference_type = range_difference_t<Base>;
         
         
@@ -253,7 +275,7 @@ namespace std::ranges {
         constexpr iterator_t<Base> base() &&;
         
         constexpr decltype(auto) operator*() const {
-             return result{pos_, *current_};
+             return reference{pos_, *current_};
         }
     
         constexpr iterator& operator++();
@@ -270,7 +292,7 @@ namespace std::ranges {
         
         constexpr decltype(auto) operator[](difference_type n) const
         requires random_access_range<Base>
-        { return result{static_cast<difference_type>(pos_ + n), *(current_ + n) }; }
+        { return reference{static_cast<difference_type>(pos_ + n), *(current_ + n) }; }
         
         
         friend constexpr bool operator==(const iterator& x, const iterator& y)

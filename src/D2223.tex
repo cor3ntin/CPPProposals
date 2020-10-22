@@ -1,0 +1,171 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}
+
+
+\documentclass{wg21}
+
+\usepackage{tikz}
+
+\usepackage{luatexja-fontspec}
+
+\setmainjfont{Noto Sans CJK KR}
+
+\usepackage[pdf]{graphviz}
+
+\newcommand{\UnicodeLetter}[1]{\textbf{\textcolor{BrickRed}{\Large\tcode{#1}}}}
+
+\title{Trimming whitespaces before line splicing}
+\docnumber{P2223R1}
+\audience{EWG, CWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+\paperquote{}
+
+\section{Abstract}
+
+We propose to make trailing whitespaces after \textbackslash \ non-significant.
+
+This paper has been extracted from \paper{P2178R0} and is part of a larger effort from SG-16 to improve lexing.
+
+\section{Revisions}
+
+\subsection*{Revision 1}
+\begin{itemize}
+    \item Make it clearer that raw strings are not impacted. 
+    \item Remove CWG 1698 fix following EWG guidance.
+\end{itemize}
+
+\section{Making trailing whitespaces non-significant}
+
+There is a divergence of implementation in how compilers handle spaces between a backslash and the end of a line. 
+
+\begin{colorblock}
+int main() {
+    int i = 1
+    //  \
+    + 42
+    ;
+    return i;
+}
+\end{colorblock}
+
+EDG(tested with icc front-end) GCC and Clang will trim the whitespaces after the backslash - and return \tcode{1} - MSVC will not and return \tcode{43}.
+Both strategies are valid as part of phase 1 "implementation-defined mapping".
+There is a clang issue about this \href{https://bugs.llvm.org/show_bug.cgi?id=15509}{\#15509}
+
+To avoid this surprising implementation divergence we proposed that an implementation must trim all trailing whitespaces before handling \textbackslash \ splicing.
+This is reinforced by the fact that IDES and tools (code formatter for example) may discard such whitespaces. The Google-style guidelines forbid trailing whitespaces.
+
+An additional or alternative approach is to deprecate \textbackslash \ that are not part of a preprocessor directive.
+We are not proposing this at this time.
+
+\textbf{This proposal may be a silent breaking change for code that is only compiled with MSVC.}
+A quick analysis of the packages available in VCPKG didn't find any trailing whitespaces after backslashes.
+
+We have not been able to measure the impact of this proposed change in the MSVC ecosystem. Other compilers, 
+and all code supported by these compilers would be unaffected.
+However, neither tools nor people can be expected to reliably preserve invisible character.
+The lack of usefulness and the brittleness of relying on this behavior makes it unlikely to be relied upon.
+
+GCC, Clang, and ICC provide a warning enabled by default \textbf{warning: backslash and newline separated by space}.
+
+\subsection{Example}
+
+An example of actual issue encountered in the while is people using ASCII art and diagram in comments (Thanks JF for the museum-worthy art piece).
+
+\begin{colorblock}
+int main() {
+    int hax = 0;
+    //  _    _            
+    // | |  | |          
+    // | |__| | __ ___  __
+    // |  __  |/ _` \ \/ /
+    // | |  | | (_| |>  <  
+    // |_|  |_|\__,_/_/\_\
+    hax = 1337;
+    return hax;
+}
+\end{colorblock}
+
+
+\subsection{String literals}
+
+Another interesting example
+
+\begin{colorblock}
+auto str  "\<space>
+";
+\end{colorblock}
+
+Is an empty string in GCC, ICC, Clang and the string \tcode{"\textbackslash \ "} in MSVC.
+As \tcode{'\textbackslash \ '} is not a valid escape sequence, the above code is ill-formed in MSVC.
+
+\subsection{Raw string literals}
+
+The proposed trimming is intended to be reversed in raw string literals.
+However, the reversal of line splicing in raw strings might not be sufficiently specified, leading to some implementation divergence
+and open GCC issues \href{https://gcc.gnu.org/bugzilla/show_bug.cgi?id=91412}{\#91412}, \href{https://gcc.gnu.org/bugzilla/show_bug.cgi?id=43606}{\#43606},
+which the present paper doesn't intend to address.
+
+The proposed wording modifies splicing and splicing is entirely reversed in raw string literals (5.4.3.1), as such we the proposed wording does not change
+the current raw string literals behavior.
+
+\subsection{Whitespaces?}
+
+The proposed wording as well as the standard don't specify what characters are considered whitespaces.
+This will be addressed separately (see \paper{P2178R0}), but the intent is that characters considered whitespaces for the purpose of lines splicing be the same
+as whitespace characters in the rest of the grammar. This includes tabs and other characters considered whitespaces by the Unicode standard. 
+
+
+\subsection{C compatibility}
+
+In effect, the "implementation defined mapping: in phase one makes the content of the program implementation defined,
+and it is a valid behavior in C and C++ alike to trimm or not trailing whitespaces.
+The proposed change only requires that all C++ compilers do this trimming, and therefore doesn't affect C compatibility. 
+
+\section{Proposed Wording}
+
+Modify 5.2.1.2 of [N4861] as follows:
+
+\rSec1[lex]{Lexical conventions}
+
+\gramSec[gram.lex]{Lexical conventions}
+
+
+\rSec1[lex.phases]{Phases of translation}%
+
+Each instance of a backslash character (\textbackslash)
+immediately followed \added{by zero or more whitespace characters (other than new-line) followed by} a new-line character is deleted, splicing
+physical source lines to form logical source lines. Only the last
+backslash on any physical source line shall be eligible for being part
+of such a splice. [...]
+
+
+\section{References}
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+\begin{thebibliography}{9}
+    
+\bibitem[UAX-14]{UAX-14}
+\emph{UNICODE LINE BREAKING ALGORITHM}\newline
+\url{https://www.unicode.org/reports/tr14/}
+
+\bibitem[Unicode]{Unicode}
+Unicode 13\newline
+\url{http://www.unicode.org/versions/Unicode13.0.0/}
+
+\bibitem[N4861]{N4861}
+Richard Smith
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4861}
+
+\end{thebibliography}
+\end{document}

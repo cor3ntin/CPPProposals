@@ -10,12 +10,16 @@
 \usepackage{tikz}
 \usepackage[twitter]{emoji}
 
+\usepackage{luatexja-fontspec}
+
+\setmainjfont{Noto Sans CJK KR}
+
 \usepackage[pdf]{graphviz}
 
-
+\newcommand{\UnicodeLetter}[1]{\textbf{\textcolor{BrickRed}{\Large\tcode{#1}}}}
 
 \title{Misc lexing and string handling improvements}
-\docnumber{P2178R0}
+\docnumber{P2178R1}
 \audience{EWG, SG-16}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -30,8 +34,8 @@ This Omnibus paper proposes a series of small improvements to the lexing of C++ 
 notably to clarify the behavior of Unicode encoded sources files, and to reduce implementation divergence.
 This paper intends to supersede \paper{N3463} and \paper{P1854R0} and proposes a resolution to several core issues.
 
-While some of these changes are unrelated, the intend of this paper's authors and SG-16 is to rewrite the description of lexing
-using more accurate terminology, a wording will, therefore, be provided incorporating all the desired design changes.
+While some of these changes are unrelated, the intent of this paper's authors and SG-16 is to rewrite the description of lexing
+using more accurate terminology. A wording will, therefore, be provided incorporating all the desired design changes.
 
 Updating both the design an the terminology lets us acknowledge and handle the subtilities of text which may not have been fully understood
 in a pre-Unicode world.
@@ -42,8 +46,32 @@ the semantic of text elements is conserved through the different phases of compi
 
 \subsection{R1}
 \begin{itemize}
-\item Add a note about trailing whitespaces in raw string literals following a comment from the BSI
+\item Add a note about trailing whitespaces in raw string literals following a comment from the UK national body 
+\item Add a FAQ
+\item Add some notes about BOM, ill-formed code units sequences, string concatenations.
 \end{itemize}
+
+
+\section{Format and goals of this proposal}
+
+This proposal tries to establish a more or less exhaustive list of issues with lexing in C++.
+Some of these issues are too small to be worth the overhead cost of an individual paper, some may require further exploration,
+many are intertwined.
+Providing wording for individual resolutions may lead to a hard-to-solve N-ways merge, as such we recommend first establishing the design
+then providing a wording that matches the design.    
+
+\subsection{Is it worth it?}
+
+These issues have different severities or priorities. Few of them are critical on their own, however, it's a death-by-thousands cuts situation.
+It is the hope of the author than recensing them in a single paper will allow a holistic fix.
+
+\subsection{What about C?}
+
+Many of these changes could certainly benefit C. C++ seems to be in a better position to lead the charge on these changes, both because of the expertise present in SG-16 and a greater bandwidth.
+
+\subsection{Are these evolutionary?}
+
+It is unclear whether these issues are all evolutionary or merely wording defects (notably 8 and 11).
 
 \section{Proposals}
 
@@ -58,14 +86,22 @@ to ensure that Unicode related features (ex \paper{P1949R3} can be used widely.
 This would also allow us to better specify how Unicode encoded files are handled.
 
 How the source file encoding is detected, and which other input formats are accepted would remain implementation-defined.
+Supporting UTF-8 would also not require mentioning files in the wording, the media providing the stream of UTF-8 data is not important.
 
 Most C++ compilers ( GCC, EDG, MSVC, Clang) support utf8 as one of their input format - Clang only supports utf8.
 
-Unlike \paper{N3463}, we do not intend to mandate or say anything about BOMs, following Unicode recommendations.
+Unlike \paper{N3463}, we do not intend to mandate or say anything about BOMs (Byte Order Mark), following Unicode recommendations.
 BOMs should be ignored (but using BOMs as a means to detect UTF-8 files is a valid implementation strategy, which is notably used by MSVC).
+Indeed, we should give enough freedom to implementers to handle the cases where a BOM contradicts a compiler flag. 
+Web browsers for example found a BOM to not be a reliable mechanism.
+There are further issues with BOMs and toolings, such that they may be removed by IDEs or tooling.
+They are also widely used, and different companies have different policies.
+
+In any case, mandating BOM recognition goes against Unicode recommendations\footnote{Unicode 13 Standard, and confirmed in a \href{https://corp.unicode.org/mailman/private/unicode/2020-June/008716.html}{mailing list discussion} with members of the unicode consortium}. But it is a widespread practice. and as such
+we recommend neither mandating nor precluding any behavior.
 
 We do \textbf{not} propose to make UTF-8 source file a mandated default, nor the only supported format. Just that there must be
-some implementation-defined mechanism (such as a compiler flag) that would tell the compiler to read the file as utf-8.
+some implementation-defined mechanism (such as a compiler flag) that would tell the compiler to read the file as UTF-8.
 
 
 \subsection{Proposal 2: What is a whitespace or a new-line?}
@@ -83,7 +119,7 @@ LS:    Line Separator, U+2028
 PS:    Paragraph Separator, U+2029
 \end{codeblock}
 
-Line terminators and the following characters constitute whitespaces
+Line terminators and the following characters constitute whitespaces:
 
 \begin{codeblock}
 U+0009 HORIZONTAL TAB
@@ -102,48 +138,15 @@ We intend to fix \paper{CWG1655} following this clarification.
 We propose to specify that Unicode encodes files are not normalized in phase 1 or phase 5, as to preserve the integrity 
 of string literals when both the source and the literal associated character set are the Unicode character set.
 Instead, the exact sequence of code points of these literals is preserved.
-In effect, this does not change the existing behavior of tested implementations in phase 1 (and phase 5 is already specified on a per code point basis).
+In effect, this does not change the existing behavior of tested implementations in phase 1 (and phase 5 is already specified on a per-codepoint basis).
 
 \pagebreak
 
-\subsection{Proposal 4: Making trailing whitespaces non-significant}
-
-There is a divergence of implementation in how compilers handle spaces between a backslash and the end of a line. 
-
-\begin{colorblock}
-int main() {
-    int i = 1
-    //  \textbackslash  
-    + 42
-    ;
-    return i;
-}
-\end{colorblock}
-
-EDG(tested with icc front-end) GCC and Clang will trimm the whitespaces after the backslash - and return \tcode{1} - MSVC will not and return \tcode{43}.
-Both strategies are valid as part of phase 1 "implementation-defined mapping".
-There is a clang issue about this \href{https://bugs.llvm.org/show_bug.cgi?id=15509}{\#15509}
-
-To avoid this surprising implementation divergence we proposed that an implementation must trim all trailing whitespaces before handling \textbackslash \ slicing.
-This is reinforced by the fact that IDES and tools may discard such whitespaces. The Google-style guidelines forbid trailing whitespaces.
-
-An additional or alternative approach is to deprecate \textbackslash \ that are not part of a preprocessor directive.
-We are not proposing this at this time.
-
-\textbf{Unlike other proposals in this paper, this maybe is a silent breaking change for code that is only compiled with MSVC.}
-A quick analysis of the VCPKG package didn't find any trailing whitespaces after backslashes
-
-We have not been able to measure the impact of this proposed change in the MSVC ecosystem. Other compilers, 
-and all code supported by these compilers would be unaffected.
+\subsection{Proposal 4: Restricting multi-characters literals to members of the Basic Latin Block}
+To better understand proposal 5 and 6, it is worth keeping in mind that \emph{user perceived characters} such as \UnicodeLetter{공} may be represented by several codepoints - in this case, \UnicodeLetter{ㄱ} and \UnicodeLetter{ㅎ}. \UnicodeLetter{é} might be \UnicodeLetter{e} and \UnicodeLetter{´}. As such what may look like a character literal composed of a single \emph{c-char} may, in fact, be a 'multi-character' literal, without it being visually distinguishable in the source file.
+This is also the case for others scripts, including many Brahmic scripts and emojis\footnote{This is not easily demonstrated in \LaTeX}
 
 
-\textbf{However, raw string literals should preserve the exact sequence of trailing whitespaces after line splicing reversal}.
-The reversal of line splicing in raw strings might not be sufficiently specified, leading to some implementation divergence
-and open GCC issues \href{https://gcc.gnu.org/bugzilla/show_bug.cgi?id=91412}{\#91412}, \href{https://gcc.gnu.org/bugzilla/show_bug.cgi?id=43606}{\#43606}
-
-
-
-\subsection{Proposal 5: Restricting multi-characters literals to members of the Basic Latin Block}
 
 \tcode{int i = 'é';} 
 can be equivalent to either \tcode{int i = '\textbackslash u00e9';} or \tcode{int i = 'e\textbackslash u0301';}
@@ -152,7 +155,7 @@ There is also a lot of divergence of implementations in how literals are interpr
 
 \begin{center}
     \begin{tabular}{ c c | c | c | c | c }
-        \ & Clang & GCC UTF-8 & MSVC UTF-8 & GCC Latin1 & MSVC latin 1\\ 
+        \ & Clang & GCC UTF-8 & MSVC UTF-8 & GCC Latin-1 & MSVC Latin-1\\ 
         \tcode{'\textbf{e}\textbackslash u0301';} & ill-formed & \tcode{int(0x65CC81)} + Warning & \tcode{int(0x65cc81)} & ill-formed & \tcode{int (0x653f)}\\
         \tcode{'\textbackslash u00e9';} & ill-formed & \tcode{int(0xC3A9)} + Warning & \tcode{int(0xC3A9)} & \tcode{0xFFFFFFFFFFFFFFE9}& \tcode{int(0x09)} \\    
     \end{tabular}
@@ -160,7 +163,7 @@ There is also a lot of divergence of implementations in how literals are interpr
 
 Note the presence of two code points in the first line.
 
-We propose to limit multi-character literals to a sequence of code points from the Unicode Basic Latin Block (\tilde ASCII) to limit the current confusion.
+We propose to limit multi-character literals to a sequence of code points from the Unicode Basic Latin Block (More or less equivalent to the ASCII character set) to limit the current confusion.
 
 (We do not propose to deprecate multi-character literals).
 
@@ -171,13 +174,13 @@ With the proposed change:
 'abc' // OK, multi-characters literal
 '\u0080' // OK (if representable in the execution encoding)
 '\u0080\u0080' // ill-formed
-'é' // OK (if representable in the execution encoding) if one code point (nfc,  {U+00e9}), otherwise (e\textbackslash u0301) ill-formed
+'é' // OK (if representable in the execution encoding) if one code point (NFC,  {U+00e9}), otherwise (e\textbackslash u0301) ill-formed
 
 \end{colorblock}
 
 
 
-\subsection{Proposal 6: Making wide characters literals containing multiple or unrepresentable c-char ill-formed}
+\subsection{Proposal 5: Making wide characters literals containing multiple or unrepresentable c-char ill-formed}
 
 The following constructs are well-formed but have widely different interpretations depending on implementations
 
@@ -193,7 +196,7 @@ wchar_t c = L'é';
 MSVC first converts to UTF-16, and truncate to the first code unit which results in an invalid lone high surrogate \tcode{0xd83d}.
 
 
-\item  \tcode{L'ab'} is equivalent to \tcode{L'a'} on msvc and  \tcode{L'b'} on GCC and Clang. All implementation emit a warning under different warning levels 
+\item  \tcode{L'ab'} is equivalent to \tcode{L'a'} on msvc and  \tcode{L'b'} on GCC and Clang. All implementations emit a warning under different warning levels 
 
 \item \tcode{L'é'} can be either 1 or 2 c-char depending on the source normalization: \tcode{L'\textbackslash u00e9'} behaves expectedly on all platforms, 
 while  \tcode{L'e\textbackslash u0301'} will be \tcode{e} in MSVC and \tcode{U+0301} in GCC AND clang.
@@ -204,26 +207,26 @@ As such, we propose to make wide characters literals with multiple-chars or char
 
 Note that wide characters literals with multiple c-char, unlike multi-character-literals are represented by a single \tcode{wchar_t}.
 The other difference is that Unicode combining characters may be representable by a \tcode{wchar_t} whereas they cannot be represented by a \tcode{char}. 
-(Note: the first Unicode combining characters appear in the \emph{Combining Diacritical Marks} block, starting at \tcode{U+0300}).
+The first Unicode combining characters appear in the \emph{Combining Diacritical Marks} block, starting at \tcode{U+0300}.
 
 
-\subsection{Proposal 7: Making conversion of character and string literals to execution and wide execution encoding ill-formed for unrepresentable c-char}
+\subsection{Proposal 6: Making conversion of character and string literals to execution and wide execution encoding ill-formed for unrepresentable c-char}
 
 Implementations diverge on how they handle unrepresentable code points when conversion to execution encodings.
-GCC and Clang make the conversion ill-formed while MSVC usually replaces unrepresentable characters by a single question mark \tcode{?}.
-Strings are text which carries intent and meaning; An implementation should not be able to alter that meaning.
+GCC and Clang make the conversion ill-formed while MSVC usually replaces unrepresentable characters by a single question mark \UnicodeLetter{?}.
+Strings are text which carries intent and meaning; an implementation should not be able to alter that meaning.
 
 We proposed to make such conversion ill-formed rather than implementation-defined.
 
-After discussions, in SG-16, we do not propose to allow implementations to consider multi-code points graphemes clusters
-when doing that conversion. For example considering \tcode{"e\textbackslash u0301"}, \tcode{U+301} does not have a representation in latin 1,
-but the abstract character é does (U+00e9 maps to 0x00E9 in ISO/IEC 8859-1).
+After discussions in SG-16, we do not propose to allow implementations to consider multi-code points graphemes clusters
+when doing that conversion. For example considering \tcode{"e\textbackslash u0301"}, \tcode{U+0301} does not have a representation in Latin-1,
+but the abstract character é does (U+00e9 maps to 0x00E9 in Latin 1).
 
 However, it does not seems possible to guarantee that an implementation knows about all such mapping, which would lead to further implementation
 divergence and unnecessary burden on compilers.
 We, therefore, propose to be explicit about the conversion being done on each code point independently as is currently the case.
 
-\subsection{Proposal 8: Enforcing the formation of universal escape sequences in phase 2 and 4}
+\subsection{Proposal 7: Enforcing the formation of universal escape sequences in phase 2 and 4}
 
 EDG(icc), GCC, MSVC and Clang form universal character names from the following codes:
 \begin{colorblock}
@@ -235,10 +238,10 @@ CONCAT(\, U0001F431);
 \end{colorblock}
 
 However, these behaviors are currently UB within the standard.
-As such, we propose to make both these behaviors well-defined to follow existing practices. 
+We propose to standardize existing practice by making these behaviors well-defined. 
 
 
-\subsection{Proposal 9: Reaffirming Unicode as the character set of the internal representation}
+\subsection{Proposal 8: Reaffirming Unicode as the character set of the internal representation}
 
 The standard already specifies that characters outside of the basic source character set are converted to UCNs whose values are isomorphic to
 Unicode.
@@ -251,20 +254,20 @@ This mapping is not semantic-preserving, to the extent control characters have s
 }
 , GB 18030 have a unique mapping in Unicode.
 The intent is to avoid the use of unassigned code points or the Private Use Area by the implementers, as well as to preserve semantic meaning in phase 1.
-The preservation of semantic meaning would also make \textbf{invalid utf-8 sequences ill-formed in phase 1}, and other decoding errors (as there exist no mapping for such invalid sequence).
-(Note that octal/hexadecimal escape sequences can be used in string literal to form arbitrary binary data)
+The preservation of semantic meaning would also make \textbf{invalid UTF-8 sequences ill-formed in phase 1}, and other decoding errors (as there exist no mapping for such invalid sequence).
+Octal/hexadecimal escape sequences can be used in string literal to form arbitrary binary data.
 
 
 Notably, it is important to consider that the current specification limits the implementation-defined mapping to universal character names to  valid (0-10FFF) code points,
 and any such valid code point can appear in the source before phase 1.
 It is therefore not possible for an implementation to uniquely map unrepresentable characters to a valid code point.
 
+We only seek to mandate \emph{representability} in Unicode.
 This proposal has no bearing on the actual internal representation strategy of already conforming implementations. Notably, mandating internal as-if Unicode representation doesn't
 preclude bytewise preservation of narrow and wide string literals when the execution encoding is identical to the source encoding,  as long as there exists a Unicode representation,
 as this is otherwise non-observable: It is an important implementation strategy for encoding which are not roundtrip-able through Unicode such as Shift JIS 
 to preserve the byte content of string literals when both source and execution encodings are identical.
 Such preservation is otherwise non-observable and doesn't need to be mandated, but it needs not to be precluded.
-\textbf{We only seek to mandate \emph{representability} in Unicode}. Such representability is notably necessary for the concatenation of literals with different encoding which may happen in phase 6 (\tcode{"foo" u"bar" // u"foobar"}).
 Again, this constraint exists in practice as many implementations use Unicode internally and do not use the "implementation-defined mapping" leeway
 to nefarious ends.
 
@@ -283,8 +286,15 @@ that would neither affect behavior nor prescribe an internal representation).
 
 Following this clarification we hope to fix \paper{CWG1332}
 
+\subsubsection{How to handle ill-formed code unit sequences in phase 1?}
 
-\subsection{Proposal 10: Make \tcode{L} in \tcode{_Pragma} ill-formed}
+Ill-formed code unit sequences can appear if the assumed source encoding does not match the actual source encoding.
+This scenario should be ill-formed as it most certainly is a bug.
+However, if these sequences appear in comments, they may be safely ignored in some cases, and we shouldn't preclude implementers to do so.
+They should just not appear in text elements (identifiers and literals).
+
+
+\subsection{Proposal 9: Make \tcode{L} in \tcode{_Pragma} ill-formed}
 
 \tcode{_Pragma(L"")} is equivalent to \tcode{_Pragma("")}.
 
@@ -293,89 +303,31 @@ C++ handling of text is confusing enough not to add meaningless characters. This
 Note that there is a divergence of implementation between C++ and C where C discard all prefixes and C++ only discards L.
  
 Out of the 90 millions lines of code of the 1300+ open source projects available on vcpkg, a single use of that feature was found within clang's lexer test suite, for a total of ~2000 uses of \tcode{_Pragma}.
-Similarly, the only uses of \tcode{_Pragma (u8"")}, \tcode{_Pragma (u"")}, \tcode{_Pragma (U"")}, etc were found in Clang's  test suite.
+Similarly, the only uses of \tcode{_Pragma (u8"")}, \tcode{_Pragma (u"")}, \tcode{_Pragma (U"")}, etc were found in Clang's  test suite
+(both because these are valid C and because neither GCC nor Clang are comforming, only \tcode{L""} is described as valid by the C++ standard).
 
 
-\subsection{Proposal 11: Make character literals in preprocessor conditional behave like they do in C++ expression}
+\subsection{Proposal 10: Make character literals in preprocessor conditional behave like they do in C++ expression}
 
 \begin{colorblock}
-#if 'A' == '\textbackslash x65'
+#if 'A' == '\textbackslash x41'
 #endif
-if ('A' == 0x65){}
+if ('A' == 0x41){}
 \end{colorblock}
 
 Both conditions are not guaranteed to yield a similar result, as \href{http://eel.is/c++draft/cpp#cond-12}{the value of character literals in preprocessor conditional is not required to be identical to that of character literals in expressions}.
 
 However, a survey of the 1300+ open sources projects available on vcpkg shows that the primary use case for these macros is exactly to detect the
-execution encoding at compile time and all compilers available on compiler explorer treat these literals as if they were in the execution encoding.
+narrow literal encoding at compile time and all compilers available on compiler explorer treat these literals as if they were in the narrow literal encoding.
 
-Notably, a few libraries use that pattern to detect EBCDIC or ASCII execution encoding.
-Of the ~50 usages of the pattern, all but one where in C libraries.
+Notably, a few libraries use that pattern to detect EBCDIC or ASCII narrow literal encoding.
+Of the ~50 usages of the pattern, all but one were in C libraries.
 
 While we think there should be a better way to detect encodings in C++ \cite{P1885R2}, there is no reason to deprecate that feature.
 
-Instead, we recommend adopting the standard practice and user expectation of converting these literals to the execution encoding before evaluating them.
+Instead, we recommend adopting the standard practice and user expectation of converting these literals to the narrow literal encoding before evaluating them.
 
 This also removes yet another theoretical encoding, which further simplifies the mental model. 
-
-\pagebreak
-
-\subsection{Proposal 12: Phase 6 needs fixing}
-
-String literal concatenation happen \textbf{after} each literal has been converted to its associated encoding in phase 5, and as such the standard is actively encouraging mojibake in the following scenarios:
-
-\begin{colorblock}
-    L"" ""
-    u8"" ""
-    u"" ""
-    U"" ""
-    "" u""
-    "" L""
-    "" U""
-    "" u8""
-\end{colorblock}
-
-While string conversion is definitively useful, the current behavior is not.
-
-Indeed, each fragment may be in a different encoding after concatenation: utf-8 data concatenated to shift-jis data, for example.
-
-We propose 2 possible resolutions:
-
-\begin{itemize}
-    \item The program is ill-formed unless each \emph{string-literal} part of a concatenation has the same prefix
-    
-    \item The encoding of the first  \emph{string-literal} determines the encoding of the  \emph{string-literal} resulting from the concatenation and the program is ill-formed if any but the first  \emph{string-literal} literal has an encoding prefix:
-
-\begin{colorblock}
-"" ""    // OK, const char*
-u8"" ""  // OK, equivalent to u8"" u8"", const char8_t*
-u"" ""   // OK, equivalent to u"" u"", const char16_t*
-U"" ""   // OK, equivalent to U"" U"", const char32_t*
-L"" ""   // OK, equivalent to L"" L"", const wchar_t*
-"" L""    // ill-formed
-L"" u""   // ill-formed
-
-\end{colorblock}
-
-
-In which case, each string-literal should be interpreted as having the same prefix in phase 5, so they are converted to the same encoding
-prior to concatenation.
-
-\end{itemize}
-
-There is \href{https://godbolt.org/z/-5BTcT}{implementation divergence} in the handling of concatenation:
-
-MSVC converts each string to its associated execution encoding, as specified by phase 6,
-while GCC and clang consider the following snippets equivalent (where \tcode{X} is any valid \emph{encoding-prefix})
-
-\begin{colorblock}
-    X""  ""
-     "" X""
-    X"" X""
-\end{colorblock}
-
-
-
 
 \pagebreak
 
@@ -451,13 +403,34 @@ Unicode character set.
 }
 
 \section{Acknowledgments}
-Thanks to the people who provided feedback on the proposed changes, notably Tom Honnermann, Hubert Tong, Aaron Ballman, Steve Downey.
+Thanks to the people who provided feedback on the proposed changes, notably Tom Honnermann, Hubert Tong, Aaron Ballman, Steve Downey, Roger Orr, Jeans Maurer.
+
+Many thanks to Peter Brett for his support and his thorough feedback.
 \section{References}
 \renewcommand{\section}[2]{}%
 \bibliographystyle{plain}
 \bibliography{wg21}
 
 \begin{thebibliography}{9}
+    
+    \bibitem[UAX-14]{UAX-14}
+    \emph{UNICODE LINE BREAKING ALGORITHM}\newline
+    \url{https://www.unicode.org/reports/tr14/}
+    
+    \bibitem[Unicode]{Unicode}
+    Unicode 13\newline
+    \url{http://www.unicode.org/versions/Unicode13.0.0/}
+    
+    \bibitem[CDRA]{CDRA}
+    IBM\newline
+    \emph{IBM Character Data Representation Architecture}\newline
+    \url{https://www.ibm.com/downloads/cas/G01BQVRV}
+    
+    
+    \bibitem[UTF-EBCDIC]{UTF-EBCDIC}
+    V.S. Umamaheswaran\newline
+    \emph{UTF-EBCDIC - Unicode Technical Report \#16}\newline
+    \url{http://www.unicode.org/reports/tr16/tr16-8.html}
 
     \bibitem[N4861]{N4861}
     Richard Smith

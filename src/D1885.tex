@@ -4,7 +4,7 @@
 \documentclass{wg21}
 
 \title{Naming Text Encodings to Demystify Them}
-\docnumber{P1885R2}
+\docnumber{P1885R3}
 \audience{SG-16, LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -23,7 +23,7 @@ C++23
 \section{Abstract}
 
 For historical reasons, all text encodings mentioned in the standard are derived from
-a locale object, which does not necessarily match the reality of how programs and system interact.
+a locale object, which does not necessarily match the reality of how programs and systems interact.
 
 This model works poorly with modern understanding of text, ie the Unicode model separates encoding
 from locales which are purely rules for formatting and text transformations but do not affect
@@ -35,7 +35,7 @@ leading to guesswork and unavoidable UB.
 This paper introduces the notions of literal encoding, system encoding and a way to query them.
 
 
-\section{Example}
+\section{Examples}
 
 \subsection{Listing the encoding}
 
@@ -83,7 +83,7 @@ Compiled with \tcode{g++ -fwide-exec-charset=EBCDIC-US -fexec-charset=SHIFT_JIS}
         UTF-8
         csUTF8
     
-    Wide sytem Encoding: ISO-10646-UCS-4 (iana mib: 1001)
+    Wide system Encoding: ISO-10646-UCS-4 (IANA mib: 1001)
     Aliases:
         ISO-10646-UCS-4
         csUCS4
@@ -91,7 +91,7 @@ Compiled with \tcode{g++ -fwide-exec-charset=EBCDIC-US -fexec-charset=SHIFT_JIS}
 
 \subsection{LWG3314}
 
-[time.duration.io] specifies that the unit for micro seconds is µ on systems able to display it.
+[time.duration.io] specifies that the unit for microseconds is µ on systems able to display it.
 This is currently difficult to detect and implement properly.
 
 The following allows an implementation to use µ if it is supported by both the execution encoding and the encoding
@@ -161,6 +161,14 @@ assert(wtf8 == text_encoding("___wtf8__"));
 
 
 \section{Revisions}
+
+\subsection*{Revision 3}
+\begin{itemize}
+    \item Add a list of encodings NOT registed by IANA 
+    \item Add a comparative list of IANA/WHATWG
+    \item Address names that do not uniquely identify encodings
+    \item Add more examples
+\end{itemize}
 
 \subsection*{Revision 2}
 \begin{itemize}
@@ -244,7 +252,7 @@ That implies that the standard assumes that string literals are encoded in a sub
 
 This has to hold notably because it is not generally possible to differentiate runtime strings from compile-time literals at runtime.
 
-This model does, however, present several shortcomings:
+This model does, however, present l shortcomings:
 
 First, in practice, C++ software are often no longer compiled in the same environment as the one on which they are run and the entity providing the program may not have control over the environment on which it is run.
 
@@ -298,22 +306,21 @@ fact that a C++ program has, in the general case, no control over the encoding i
 We provide a \tcode{text_encoding::id} enum with the MIBEnum value of a few often used encodings for convenience.
 Because there is a rather large number of encodings and because this list may evolve faster than the standard, it was pointed out during early review that it would be detrimental to attempt to provide a complete list.
 \begin{note}
-MIB stands for Management Information Base, which is IANA nomenclature, the name has no particular interest beside a desire not to deviate from the existing standards and practices.
+MIB stands for Management Information Base, which is IANA nomenclature, the name has no particular interest besides a desire not to deviate from the existing standards and practices.
 \end{note}
 
 The enum is purposefully not an \tcode{enum class} so that it can be easily compared to objects from
-third party librairies such as \tcode{QTextCodec}.
+third party libraries such as \tcode{QTextCodec}.
 
 The enumerators \tcode{unknown} and \tcode{other} and their value are provided by the very same RFC such as:
 
 \begin{itemize}
-	\item \tcode{other} designs an encoding not registered in the IANA Database, such that 2 encoding with the \tcode{other} mib are identical if their name compare equal.
-	\item \tcode{unknown} is used when the encoding could not be determined. Under the current proposal,  only default constructing a \tcode{text_encoding} object can produce that value. The encoding associated with the
-	locale or environment is always known.
+	\item \tcode{other} designs an encoding not registered in the IANA Database, such that 2 encodings with the \tcode{other} mib are identical if their names compare equal.
+	\item \tcode{unknown} is used when the encoding could not be determined. Under the current proposal,  only default constructing a \tcode{text_encoding} object can produce that value. The encoding associated with the locale or environment is always known.
 \end{itemize}
 
 While \tcode{MIBEnum} was necessary to make that proposal implementable consistently across platforms,
-its main purpose is to remediate to the fact that an encoding can have multiple inconsistent names across implementations.
+its main purpose is to remediate to the fact that encoding can have multiple inconsistent names across implementations.
 
 However,
 
@@ -323,13 +330,20 @@ The proposed API offers both a name and aliases.
 The \tcode{name} method reflects the name with which the \tcode{text_encoding} object was created, when applicable.
 This is notably important when the encoding is not registered, or its name differs from the IANA name.
 
+\subsection{Unique identification of encodings}
+
+The IANA database intends that the name refers to a specific set of characters.
+However, for historical reasons, there exist some names (like Shift-JIS) which describes several slightly different encoding.
+The intent of this proposal is that the names refer to the character sets as described by IANA.
+Further differentiation can be made in the application through out-of-band information such as the provenance of the text to which the encoding is associated. RFC2978 mandates that all names and aliases are unique.
+
 \subsection{Implementation flexibility}
 
 This proposal aims to be implementable on all platforms as such, it supports encoding not registered with IANA, does not impose that
 a freestanding implementation is aware of all registered encodings, and it let implementers provide their own aliases for IANA-registered encoding.
-Because the process for registering encoding is documented \cite{rfc2978} implementations can (but are not required to) provide
-registered encodings not defined in \cite{rfc3808} - in the case that rfc is updated out of sync of the standard.
-However, \cite{rfc3808} is from 2004 and has not been updated. As the world converge to utf-8, new encodings are less likely to
+Because the process for registering encodings is documented \cite{rfc2978} implementations can (but are not required to) provide
+registered encodings not defined in \cite{rfc3808} - in the case that RFC is updated out of sync of the standard.
+However, \cite{rfc3808} is from 2004 and has not been updated. As the world converges to utf-8, new encodings are less likely to
 be registered.
 
 Implementations may not extend the \tcode{text_encoding::id} as to guarantee source compatibility.
@@ -354,7 +368,69 @@ Part of this proposal is available on \href{https://compiler-explorer.com/z/7D3Z
 (literal and wide_literal are not supported)
 
 
+\section{Compatibility with 3rd party systems}
+
+\subsection{Qt}
+
+\begin{colorblock}
+// Get a QTextCodec able to convert the system encoding to QString
+auto codec = QTextCodec::codecForMib(std::text_encoding::system().mib());
+\end{colorblock}
+
+\subsection{ICU}
+
+\begin{colorblock}
+// Get a UConverter object able to convert to and from the system encoding to
+//ICU's internal encoding.
+UErrorCode err;
+UConverter* converter = ucnv_open(std::text_encoding::system().name(), &err);
+\end{colorblock}
+
+\begin{colorblock}
+// Check whether a UConverter converts to the system encoding
+bool compatibleWithSystemEncoding(UConverter* converter)
+{
+    UErrorCode err;
+    const char* name == ucnv_getName(converter, &err);
+    assert(U_SUCCESS(err));
+    return std::text_encoding(name) == std::text_encoding::system();
+}
+\end{colorblock}
+
+\subsection{ICONV}
+
+\begin{colorblock}
+// Convert from utf-8 to the system encoding, transliterating if necessary
+iconv_t converter 
+    = iconv_open(std::format("{}//TRANSLIT", std::text_encoding::literal()).c_str(), "utf-8");
+\end{colorblock}
+
+
 \section{FAQ}
+
+\subsection{Why rely on the IANA registry ?}
+
+The IANA registry has been picked for several reasons
+
+\begin{itemize}
+\item It can be referenced through an RFC in the standard
+\item It has wide vendor buy-in
+\item It is used as a primary source for many tools including ICU and iconv, and many programming languages and libraries.
+\item It has an extensive number of entries which makes it uniquely suitable for the wide portability requirements of C++. Notably, it supports IBM codepages.
+\item It provides stable enum values designed for efficient and portable comparison in programming languages
+\item There is a well-specified support for unregistered encoding
+\item There is a well-specified process to register new encodings
+\end{itemize}
+
+We also considered the WHATWG Encoding specification. But this specification is designed specifically for the web
+and has no provision for EBCDIC encodings., provide no numerical values, etc.
+
+Annex A provides a comparative list of IANA and WHATWG lists.
+
+Extensive research didn't found any other registry worth considering.
+It would be possible to maintain our own list in the standard, but this would put an undue burden on the committee and
+risks reducing portability with existing tools, libraries and other languages.
+
 \subsection{Why not return a \tcode{text_encoding::id} rather than a \tcode{text_encoding} object?}
 Some implementations may need to return a non-register encoding, in which case they would return \tcode{mib::other} and a custom name.
 
@@ -362,20 +438,20 @@ Some implementations may need to return a non-register encoding, in which case t
 
 
 \subsection{But handling names is expensive?}
-To ensure that the proposal is implementable in constrained environment, \tcode{text_encoding} has a limit of 63 characters per encoding name
+To ensure that the proposal is implementable in a constrained environment, \tcode{text_encoding} has a limit of 63 characters per encoding name
 which is sufficient to support all encodings we are aware of (registered or not)
 
 \subsection{It seems like names and mib are separate concerns?}
 
-Not all encodings are registered (event if most are), it is therefore not possible to identify uniquely all encoding uniquely by mib.
-Encodings may have many names, but some platform will have a preferred name.
+Not all encodings are registered (even if most are), it is therefore not possible to identify all encoding uniquely by mib.
+Encodings may have many names, but some platforms will have a preferred name.
 
-The combination of a name + a mib covers 100\% of use cases. Aliases further help with integration with third party libraries or to develop
+The combination of a name + a mib covers 100\% of use cases. Aliases further help with integration with third-party libraries or to develop
 tools that need mime encoding names.
 
 \subsection{Why can't there be vendor provided MIBs?}
 
-This would be meaningless in portable code. \tcode{mib} is only useful as mechanism to identify \textbf{portably} encoding and to increase compatibility across third party libraries.
+This would be meaningless in portable code. \tcode{mib} is only useful as a mechanism to identify \textbf{portably} encoding and to increase compatibility across third-party libraries.
 
 It does not prevent the support of unregistered encodings:
 
@@ -390,10 +466,10 @@ It does not prevent the support of unregistered encodings:
 
 Same reason, if users are allowed to construct text_encoding from registered names or names otherwise
 unknown from the implementation with an arbitrary mib, it becomes impossible to maintain the invariant of the class
-(the relation between mib and name), which would make the interface much harder to use, without provided
+(the relation between mib and name), which would make the interface much harder to use, without providing
 any functionality.
 
-\subsection{I just want to check that my platform is utf-8 without paying for all these other encoding?}
+\subsection{I just want to check that my platform is utf-8 without paying for all these other encodings?}
 
 we added \tcode{system_is} to that end.
 
@@ -407,7 +483,7 @@ we added \tcode{system_is} to that end.
 
 This can be implemented in a way that only stores in the program the necessary information for that particular encoding (unless \tcode{aliases} is called at runtime).
 
-On windows and OSX, only calling \tcode{encoding::aliases} would pull any data in the program, even if calling \tcode{system}.
+On Windows and OSX, only calling \tcode{encoding::aliases} would pull any data in the program, even if calling \tcode{system}.
 
 
 \subsection{What is the cost of calling \tcode{aliases}?}
@@ -420,7 +496,7 @@ problems in the standard.
 
 Notably, it offers a sensible way to do locale-independent, encoding-aware padding in \tcode{std::format} as in described in \cite{P1868}.
 
-While this give us the tools to handle encoding, it does not fix the core wording.
+While this gives us the tools to handle encoding, it does not fix the core wording.
 
 \newpage
 
@@ -449,7 +525,7 @@ A \tcode{text\_encoding} describes a text encoding portably across platforms by 
 
 namespace std {
 
-struct text_encoding final{
+struct text_encoding{
     enum class id : unsigned {
         other = 1,
         unknown = 2,
@@ -721,8 +797,8 @@ struct text_encoding final{
 
     constexpr auto aliases() const noexcept -> @{\seebelow}@;
 
-    constexpr bool operator==(const text_encoding & other) const;
-    constexpr bool operator==(text_encoding::id mib) const;
+    constexpr bool operator==(const text_encoding & other) const noexcept;
+    constexpr bool operator==(text_encoding::id mib) const noexcept;
 
     static consteval text_encoding literal();
     static consteval text_encoding wide_literal();
@@ -739,7 +815,7 @@ struct text_encoding final{
 
     private:
         id mib_; // \expos
-        @\impldef{}@ name_; // \expos
+        char name_[64]; // \expos
     };
 
 
@@ -770,7 +846,7 @@ constexpr explicit text_encoding(string_view name);
 \end{itemdecl}
 
 \begin{itemdescr}
-    \expects \tcode{name.size() < 64} is \tcode{true}.
+    \preconditions \tcode{name.size() < 64} is \tcode{true}.
     
     \effects
     If there exists an implementation-defined alias \tcode{a} of \defn{registered-character-set} such that \tcode{COMP_NAME(a, name.c_str())} is \tcode{true}, initialize
@@ -782,7 +858,7 @@ constexpr explicit text_encoding(string_view name);
 	Freestanding implementations are not required to provide this method
 \end{note}
 
-    \ensures \tcode{name_ == name}.
+    \postconditions \tcode{name_ == name}.
 \end{itemdescr}
 
 
@@ -791,9 +867,9 @@ constexpr text_encoding(text_encoding::id mib) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-    \expects \tcode{mib}  has the value of one of the enumerators of \tcode{text_encoding::id}.
+    \preconditions \tcode{mib}  has the value of one of the enumerators of \tcode{text_encoding::id}.
     
-    \ensures \tcode{mib_ == mib}.
+    \postconditions \tcode{mib_ == mib}.
 \end{itemdescr}
 
 
@@ -856,7 +932,7 @@ The order of elements in \tcode{r} is unspecified.
 \end{itemdescr}
 
 \begin{itemdecl}
-constexpr bool operator==(const text_encoding & other) const;
+constexpr bool operator==(const text_encoding & other) const noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -867,7 +943,7 @@ otherwise
 \end{itemdescr}
 
 \begin{itemdecl}
-constexpr bool operator==(text_encoding::id i) const;
+constexpr bool operator==(text_encoding::id i) const noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -908,7 +984,7 @@ static text_encoding wide_system();
 \end{itemdecl}
 
 \begin{itemdescr}
-Return the presumed system wide encoding.
+Return the presumed system-wide encoding.
 On POSIX systems this is the encoding attached to the environment locale (\tcode{""}) at the start of the program.
 
 \begin{note}
@@ -999,48 +1075,359 @@ text_encoding wide_encoding() const;
 
 Many thanks to Victor Zverovich, Thiago Macieira, Jens Maurer, Tom Honermann and others for reviewing this work and providing valuable feedback.
 
+\section{Annex: Registered encodings}
+\begin{longtable}{| p{.40\textwidth} | p{.40\textwidth} |} 
+\hline
+\textbf{IANA} & \textbf{WHATWG} \\ \hline 
+\hline
+ANSI_X3.110-1983 & \\ \hline
+ASMO_449 & \\ \hline
+Adobe-Standard-Encoding & \\ \hline
+Adobe-Symbol-Encoding & \\ \hline
+Amiga-1251 & \\ \hline
+BOCU-1 & \\ \hline
+BRF & \\ \hline
+BS_4730 & \\ \hline
+BS_viewdata & \\ \hline
+Big5 & Big5\\ \hline
+Big5-HKSCS & \\ \hline
+CESU-8 & \\ \hline
+CP50220 & \\ \hline
+CP51932 & \\ \hline
+CSA_Z243.4-1985-1 & \\ \hline
+CSA_Z243.4-1985-2 & \\ \hline
+CSA_Z243.4-1985-gr & \\ \hline
+CSN_369103 & \\ \hline
+DEC-MCS & \\ \hline
+DIN_66003 & \\ \hline
+DS_2089 & \\ \hline
+EBCDIC-AT-DE & \\ \hline
+EBCDIC-AT-DE-A & \\ \hline
+EBCDIC-CA-FR & \\ \hline
+EBCDIC-DK-NO & \\ \hline
+EBCDIC-DK-NO-A & \\ \hline
+EBCDIC-ES & \\ \hline
+EBCDIC-ES-A & \\ \hline
+EBCDIC-ES-S & \\ \hline
+EBCDIC-FI-SE & \\ \hline
+EBCDIC-FI-SE-A & \\ \hline
+EBCDIC-FR & \\ \hline
+EBCDIC-IT & \\ \hline
+EBCDIC-PT & \\ \hline
+EBCDIC-UK & \\ \hline
+EBCDIC-US & \\ \hline
+ECMA-cyrillic & \\ \hline
+ES & \\ \hline
+ES2 & \\ \hline
+EUC-JP & EUC-JP\\ \hline
+EUC-KR & EUC-KR\\ \hline
+Extended_UNIX_Code_Fixed_Width_for_Japanese & \\ \hline
+GB18030 & gb18030\\ \hline
+GB2312 & \\ \hline
+GBK & GBK\\ \hline
+GB_1988-80 & \\ \hline
+GB_2312-80 & \\ \hline
+GOST_19768-74 & \\ \hline
+HP-DeskTop & \\ \hline
+HP-Legal & \\ \hline
+HP-Math8 & \\ \hline
+HP-Pi-font & \\ \hline
+HZ-GB-2312 & \\ \hline
+IBM-Symbols & \\ \hline
+IBM-Thai & \\ \hline
+IBM00858 & \\ \hline
+IBM00924 & \\ \hline
+IBM01140 & \\ \hline
+IBM01141 & \\ \hline
+IBM01142 & \\ \hline
+IBM01143 & \\ \hline
+IBM01144 & \\ \hline
+IBM01145 & \\ \hline
+IBM01146 & \\ \hline
+IBM01147 & \\ \hline
+IBM01148 & \\ \hline
+IBM01149 & \\ \hline
+IBM037 & \\ \hline
+IBM038 & \\ \hline
+IBM1026 & \\ \hline
+IBM1047 & \\ \hline
+IBM273 & \\ \hline
+IBM274 & \\ \hline
+IBM275 & \\ \hline
+IBM277 & \\ \hline
+IBM278 & \\ \hline
+IBM280 & \\ \hline
+IBM281 & \\ \hline
+IBM284 & \\ \hline
+IBM285 & \\ \hline
+IBM290 & \\ \hline
+IBM297 & \\ \hline
+IBM420 & \\ \hline
+IBM423 & \\ \hline
+IBM424 & \\ \hline
+IBM437 & \\ \hline
+IBM500 & \\ \hline
+IBM775 & \\ \hline
+IBM850 & \\ \hline
+IBM851 & \\ \hline
+IBM852 & \\ \hline
+IBM855 & \\ \hline
+IBM857 & \\ \hline
+IBM860 & \\ \hline
+IBM861 & \\ \hline
+IBM862 & \\ \hline
+IBM863 & \\ \hline
+IBM864 & \\ \hline
+IBM865 & \\ \hline
+IBM866 & IBM866\\ \hline
+IBM868 & \\ \hline
+IBM869 & \\ \hline
+IBM870 & \\ \hline
+IBM871 & \\ \hline
+IBM880 & \\ \hline
+IBM891 & \\ \hline
+IBM903 & \\ \hline
+IBM904 & \\ \hline
+IBM905 & \\ \hline
+IBM918 & \\ \hline
+IEC_P27-1 & \\ \hline
+INIS & \\ \hline
+INIS-8 & \\ \hline
+INIS-cyrillic & \\ \hline
+INVARIANT & \\ \hline
+ISO-10646-J-1 & \\ \hline
+ISO-10646-UCS-2 & \\ \hline
+ISO-10646-UCS-4 & \\ \hline
+ISO-10646-UCS-Basic & \\ \hline
+ISO-10646-UTF-1 & \\ \hline
+ISO-10646-Unicode-Latin1 & \\ \hline
+ISO-11548-1 & \\ \hline
+ISO-2022-CN & \\ \hline
+ISO-2022-CN-EXT & \\ \hline
+ISO-2022-JP & ISO-2022-JP\\ \hline
+ISO-2022-JP-2 & \\ \hline
+ISO-2022-KR & \\ \hline
+ISO-8859-1 & \\ \hline
+ISO-8859-1-Windows-3.0-Latin-1 & \\ \hline
+ISO-8859-1-Windows-3.1-Latin-1 & \\ \hline
+ISO-8859-10 & ISO-8859-10\\ \hline
+ISO-8859-13 & ISO-8859-13\\ \hline
+ISO-8859-14 & ISO-8859-14\\ \hline
+ISO-8859-15 & ISO-8859-15\\ \hline
+ISO-8859-16 & ISO-8859-16\\ \hline
+ISO-8859-2 & ISO-8859-2\\ \hline
+ISO-8859-2-Windows-Latin-2 & \\ \hline
+ISO-8859-3 & ISO-8859-3\\ \hline
+ISO-8859-4 & ISO-8859-4\\ \hline
+ISO-8859-5 & ISO-8859-5\\ \hline
+ISO-8859-6 & ISO-8859-6\\ \hline
+ISO-8859-6-E & \\ \hline
+ISO-8859-6-I & \\ \hline
+ISO-8859-7 & ISO-8859-7\\ \hline
+ISO-8859-8 & ISO-8859-8\\ \hline
+ISO-8859-8-E & \\ \hline
+ISO-8859-8-I & ISO-8859-8-I\\ \hline
+ISO-8859-9 & \\ \hline
+ISO-8859-9-Windows-Latin-5 & \\ \hline
+ISO-Unicode-IBM-1261 & \\ \hline
+ISO-Unicode-IBM-1264 & \\ \hline
+ISO-Unicode-IBM-1265 & \\ \hline
+ISO-Unicode-IBM-1268 & \\ \hline
+ISO-Unicode-IBM-1276 & \\ \hline
+ISO_10367-box & \\ \hline
+ISO_2033-1983 & \\ \hline
+ISO_5427 & \\ \hline
+ISO_5427:1981 & \\ \hline
+ISO_5428:1980 & \\ \hline
+ISO_646.basic:1983 & \\ \hline
+ISO_646.irv:1983 & \\ \hline
+ISO_6937-2-25 & \\ \hline
+ISO_6937-2-add & \\ \hline
+ISO_8859-supp & \\ \hline
+IT & \\ \hline
+JIS_C6220-1969-jp & \\ \hline
+JIS_C6220-1969-ro & \\ \hline
+JIS_C6226-1978 & \\ \hline
+JIS_C6226-1983 & \\ \hline
+JIS_C6229-1984-a & \\ \hline
+JIS_C6229-1984-b & \\ \hline
+JIS_C6229-1984-b-add & \\ \hline
+JIS_C6229-1984-hand & \\ \hline
+JIS_C6229-1984-hand-add & \\ \hline
+JIS_C6229-1984-kana & \\ \hline
+JIS_Encoding & \\ \hline
+JIS_X0201 & \\ \hline
+JIS_X0212-1990 & \\ \hline
+JUS_I.B1.002 & \\ \hline
+JUS_I.B1.003-mac & \\ \hline
+JUS_I.B1.003-serb & \\ \hline
+KOI7-switched & \\ \hline
+KOI8-R & KOI8-R\\ \hline
+KOI8-U & KOI8-U\\ \hline
+KSC5636 & \\ \hline
+KS_C_5601-1987 & \\ \hline
+KZ-1048 & \\ \hline
+Latin-greek-1 & \\ \hline
+MNEM & \\ \hline
+MNEMONIC & \\ \hline
+MSZ_7795.3 & \\ \hline
+Microsoft-Publishing & \\ \hline
+NATS-DANO & \\ \hline
+NATS-DANO-ADD & \\ \hline
+NATS-SEFI & \\ \hline
+NATS-SEFI-ADD & \\ \hline
+NC_NC00-10:81 & \\ \hline
+NF_Z_62-010 & \\ \hline
+NF_Z_62-010_(1973) & \\ \hline
+NS_4551-1 & \\ \hline
+NS_4551-2 & \\ \hline
+OSD_EBCDIC_DF03_IRV & \\ \hline
+OSD_EBCDIC_DF04_1 & \\ \hline
+OSD_EBCDIC_DF04_15 & \\ \hline
+PC8-Danish-Norwegian & \\ \hline
+PC8-Turkish & \\ \hline
+PT & \\ \hline
+PT2 & \\ \hline
+PTCP154 & \\ \hline
+SCSU & \\ \hline
+SEN_850200_B & \\ \hline
+SEN_850200_C & \\ \hline
+Shift_JIS & Shift_JIS\\ \hline
+T.101-G2 & \\ \hline
+T.61-7bit & \\ \hline
+T.61-8bit & \\ \hline
+TIS-620 & \\ \hline
+TSCII & \\ \hline
+UNICODE-1-1 & \\ \hline
+UNICODE-1-1-UTF-7 & \\ \hline
+UNKNOWN-8BIT & \\ \hline
+US-ASCII & \\ \hline
+UTF-16 & \\ \hline
+UTF-16BE & UTF-16BE\\ \hline
+UTF-16LE & UTF-16LE\\ \hline
+UTF-32 & \\ \hline
+UTF-32BE & \\ \hline
+UTF-32LE & \\ \hline
+UTF-7 & \\ \hline
+UTF-8 & UTF-8\\ \hline
+VIQR & \\ \hline
+VISCII & \\ \hline
+Ventura-International & \\ \hline
+Ventura-Math & \\ \hline
+Ventura-US & \\ \hline
+Windows-31J & \\ \hline
+dk-us & \\ \hline
+greek-ccitt & \\ \hline
+greek7 & \\ \hline
+greek7-old & \\ \hline
+hp-roman8 & \\ \hline
+iso-ir-90 & \\ \hline
+latin-greek & \\ \hline
+latin-lap & \\ \hline
+macintosh & macintosh\\ \hline
+us-dk & \\ \hline
+videotex-suppl & \\ \hline
+windows-1250 & windows-1250\\ \hline
+windows-1251 & windows-1251\\ \hline
+windows-1252 & windows-1252\\ \hline
+windows-1253 & windows-1253\\ \hline
+windows-1254 & windows-1254\\ \hline
+windows-1255 & windows-1255\\ \hline
+windows-1256 & windows-1256\\ \hline
+windows-1257 & windows-1257\\ \hline
+windows-1258 & windows-1258\\ \hline
+windows-874 & windows-874\\ \hline
+\end{longtable}
+
+\section{Annex B: Known encodings not present in IANA}
+
+Lists of encoding known to some platforms but not registered to IANA.
+These might be incomplete as generating them proved challenging.
+These might still be supported through the \tcode{other} mib, but are not
+suitable for interexchange.
+
+\subsection{Windows}
+\begin{itemize}
+\item 710 Arabic - Transparent Arabic
+\item 72  DOS-720	Arabic (Transparent ASMO); Arabic (DOS)
+\item 737 ibm737	OEM Greek (formerly 437G); Greek (DOS)
+\item 875 cp875	IBM EBCDIC Greek Modern
+\item 1361	Johab	Korean (Johab)
+\item 57002	x-iscii-de	ISCII Devanagari
+\item 57003	x-iscii-be	ISCII Bangla
+\item 57004	x-iscii-ta	ISCII Tamil
+\item 57005	x-iscii-te	ISCII Telugu
+\item 57006	x-iscii-as	ISCII Assamese
+\item 57007	x-iscii-or	ISCII Odia
+\item 57008	x-iscii-ka	ISCII Kannada
+\item 57009	x-iscii-ma	ISCII Malayalam
+\item 57010	x-iscii-gu	ISCII Gujarati
+\item 57011	x-iscii-pa	ISCII Punjabi
+\end{itemize}
+
+\subsection{Iconv}
+\begin{itemize}
+\item CP1131
+\item CP1133
+\item GEORGIAN-ACADEMY
+\item GEORGIAN-PS
+\item CN-GB-ISOIR165
+\item Johab
+\item MacArabic
+\item MacCentralEurope
+\item MacCroatian
+\item MacCyrillic
+\item MacGreek
+\item MacHebrew
+\item MacIceland
+\item MacRoman
+\item MacRomania
+\item MacThai
+\item MacTurkish
+\item MacUkraine
+
+
+\end{itemize}
+
 
 \begin{thebibliography}{9}
 
-    \bibitem[N4830]{N4830}
-    Richard Smith
-    \emph{Working Draft, Standard for Programming Language C++}\newline
-    \url{https://wg21.link/n4830}
+\bibitem[N4830]{N4830}
+Richard Smith
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/n4830}
 
 
-    \bibitem[N2346]{N2346}
-    \emph{Working Draft, Standard for Programming Language C}\newline
-    \url{ http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2346.pdf}
+\bibitem[N2346]{N2346}
+\emph{Working Draft, Standard for Programming Language C}\newline
+\url{ http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2346.pdf}
 
 
+\bibitem[rfc3808]{rfc3808}
+I. McDonald
+\emph{IANA Charset MIB}\newline
+\url{https://tools.ietf.org/HTML/rfc3808}
+
+\bibitem[rfc2978]{rfc2978}
+N. Freed
+\emph{IANA Charset MIB}\newline
+\url{https://tools.ietf.org/HTML/rfc2978}
+
+\bibitem[Character Sets]{mib}
+IANA
+\emph{Character Sets}\newline
+\url{https://www.iana.org/assignments/character-sets/character-sets.xhtml}
 
 
-    \bibitem[rfc3808]{rfc3808}
-    I. McDonald
-    \emph{IANA Charset MIB}\newline
-    \url{https://tools.ietf.org/html/rfc3808}
+\bibitem[iconv encodings]{iconv}
+GNU project
+\emph{Iconv Encodings}\newline
+\url{http://git.savannah.gnu.org/cgit/libiconv.git/tree/lib/encodings.def}
 
-    \bibitem[rfc2978]{rfc2978}
-    N. Freed
-    \emph{IANA Charset MIB}\newline
-    \url{https://tools.ietf.org/html/rfc2978}
-
-    \bibitem[Character Sets]{mib}
-    IANA
-    \emph{Character Sets}\newline
-    \url{https://www.iana.org/assignments/character-sets/character-sets.xhtml}
-
-
-    \bibitem[iconv encodings]{iconv}
-    GNU project
-    \emph{Iconv Encodings}\newline
-    \url{http://git.savannah.gnu.org/cgit/libiconv.git/tree/lib/encodings.def}
-
-    \bibitem[P1868]{P1868}
-    Victor Zverovich
-    \emph{Clarifying units of width and precision in std::format}\newline
-    \url{http://wg21.link/P1868}
-
+\bibitem[P1868]{P1868}
+Victor Zverovich
+\emph{Clarifying units of width and precision in std::format}\newline
+\url{http://wg21.link/P1868}
 
 
 \end{thebibliography}

@@ -29,7 +29,7 @@ Before & After\\ \hline
 \begin{minipage}[t]{0.55\textwidth}
 \begin{colorblock}
 template<class ElementType, class Extents>
-class mdpan {
+class mdspan {
   template<class... IndexType>
   constexpr reference operator()(IndexType...);
 };
@@ -44,7 +44,7 @@ int main() {
 \begin{minipage}[t]{0.5\textwidth}
 \begin{colorblock}
 template<class ElementType, class Extents>
-class mdpan {
+class mdspan {
   template<class... IndexType>
   constexpr reference operator[](IndexType...);
 };
@@ -66,7 +66,7 @@ int main() {
 \section{R2}
 
 \begin{itemize}
-    \item Add explenation about not adapting this proposal to C arrays
+    \item Add explanation about not adapting this proposal to C arrays
     \item Remove the restriction to require at least one parameter
     \item Add a paragraph about valarray
 \end{itemize}
@@ -80,10 +80,10 @@ In the absence of a more suitable solution, these classes overload the call oper
 While this is functionally equivalent to the proposed multidimensional subscript operator, it does not carry the same semantic, making the code harder to read and reason about. It also encourages non-semantical operator overloading.
 
 \section{Proposal}
-We propose that the \tcode{operator[]} should be able to accept 1 or more argument, including variadic arguments.
-Both its use and definition would match that of \tcode{operator()}, with the exception that at least one argument would be required.
+We propose that the \tcode{operator[]} should be able to accept 0 or more arguments, including variadic arguments.
+Both its use and definition would match that of \tcode{operator()}.
 
-We make the expressions deprecated in 20 ill-formed, while allowing multi-dimensional subscripts expressions in \textbf{new} standard types
+We make the expressions deprecated in 20 ill-formed while allowing multi-dimensional subscripts expressions in \textbf{new} standard types
 and user types. We do not propose modifications to C arrays as to leave a cycle before giving new meaning to syntax that was still valid in C++20.
 
 \section{What about comma expressions?}
@@ -91,7 +91,7 @@ and user types. We do not propose modifications to C arrays as to leave a cycle 
 In C++20 we deprecated the use of comma expressions in subscript expressions [P1161R3]\cite{P1161R3}.
 This proposal would make these ill-formed and give a new meaning to commas in subscript expressions.
 While the timeline is aggressive, we think it is important that this feature be available for the benefit of \tcode{mdspan} and \tcode{mdarray}.
-At the time of writing [P1161R3], \cite{P1161R3} has been implemented by at least GCC, clang and MSVC.
+At the time of writing [P1161R3], \cite{P1161R3} has been implemented by at least GCC, clang, and MSVC.
 [P1161R3]\cite{P1161R3} further denotes that the cases where comma expressions appear in subscript are vanishingly rare.
 
 However, an implementation could keep supporting the current behavior as an extension, for example, they could fall-back to a comma expression if no overload is found for an expression list, or always assume a comma expression in the presence of a C-array.
@@ -107,14 +107,14 @@ Therefore chaining multiple \tcode{[]} to index a single object isn't a viable p
 \section{Should we adopt the same syntax for C arrays?}
 
 Code that is deprecated in 20, should be ill-formed in 23 rather than a potentially silent change.
-As such we do not proposed the proposed syntax to apply to C arrays.
+As such we do not propose the proposed syntax to apply to C arrays.
 The usefulness of this should be discussed in the C++26 time frame.
 However C arrays are not widely used by C++, spending time on them might therefore not be useful.
 
 \section{Should we add a multidimentional operator to \tcode{valarray}?}
 
-Again, we shouldn't change the meaning erxisting code in C++23.
-We should only add multidimentional operators to new in C++23 types such as \tcode{mdspan}.
+Again, we shouldn't change the meaning of existing code in C++23.
+We should only add multidimensional operators to new in C++23 types such as \tcode{mdspan}.
 If there are users of \tcode{valarray} interested in this feature, this can be done in C++26
 
 \section{Wording}

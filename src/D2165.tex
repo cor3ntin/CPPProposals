@@ -6,7 +6,7 @@
 \documentclass{wg21}
 
 \title{Compatibility between \tcode{tuple} and tuple-like objects}
-\docnumber{P2165R0}
+\docnumber{P2165R1}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -17,7 +17,7 @@
 \section{Abstract}
 
 We propose to make tuples of 2 elements and pairs comparable.
-We extend comparison and assignment between tuple and any object following the tuple protocol.
+We extend construction, comparison, and assignment between tuple and any object following the tuple protocol, and generalize \tcode{tuple_cat}
 
 \section{Tony tables}
 \begin{center}
@@ -50,6 +50,15 @@ static_assert(p <=> t == 0);
 \end{tabular}
 \end{center}
 
+\section{Revisions}
+
+\subsection{R1}
+\begin{itemize}
+    \item The wording in R0 was non-sensical 
+    \item Add a note on deduction guide
+    \item Modify \tcode{tuple_cat} to unconditionally support \tcode{tuple-like} entities 
+\end{itemize}
+
 \section{Motivation}
 
 \tcode{pair}s are platonic tuples of 2 elements. \tcode{pair} and \tcode{tuple} share
@@ -62,22 +71,48 @@ This proposal fixes that.
 This makes tuple more consistent (assignment and comparison usually form a pair, at least in regular-ish types),
 and makes the library ever so slightly less surprising.
 
-Following that reasoning, we can extend support for these operations to any tuple-like object, aka object following
+Following that reasoning, we can extend support for these operations to any tuple-like object, aka objects following
 the tuple protocol.
  
 \section{Design}
 
-We introduce an exposition only concept \tcode{tuple-like} which can then be used in the definition of tuples
+We introduce an exposition only concept \tcode{tuple-like} which can then be used in the definition of tuples construction,
 comparison and assignment operators.
 
-A type satisfies \tcode{tuple-like} if it implements the tuple protocol (\tcode{std::get, std::tuple_element, std::tuple_size})
+A type satisfies \tcode{\placeholder{tuple-like}} if it implements the tuple protocol (\tcode{std::get, std::tuple_element, std::tuple_size})
 
 That same concept can be used in [ranges] to simplify the specification.
-\tcode{pair} is not modified as to not introduce dependencies between \tcode{<pair>} and \tcode{<tuple>}
+\tcode{pair} is not modified as to not introduce dependencies between \tcode{<pair>} and \tcode{<tuple>}.
+
+In comparisons, One of the 2 objects has to be a tuple, this is done so that comparison operators can be made
+hidden friends, and to avoid enormous overload sets.
+
+We also make \tcode{tuple_cat} support any \tcode{\placeholder{tuple-like}} parameter.
+This is conditionally supported by implementations already (but may be restricted to pair and array, we generalize that).
+
 
 \subsection{Questions For LEWG}
 
 Should \tcode{tuple-like} and \tcode{pair-like} be named concepts (as opposition to exposition only) ?
+
+\subsection{CTAD issues}
+
+A previous version of this paper modified the deduction guides to using the tuple-like constructors for tuple-like objects.
+
+But this would change the meaning of \tcode{tuple \{array<int, 2>\{\}\}}.
+The current version does not add or modify deduction guides.
+As such, \tcode{tuple \{boost::tuple<int, int>\{\}\}} is deduced as \tcode{std::tuple<boost::tuple<int, int>>}
+
+This is obviously not ideal, but, it is a pre-exising problem in C++20. \tcode{tuple {pair<int, int> {}} } is currently deduced to \tcode{std::tuple<int, int>}, 
+while other tuple-like objects T are deduced as \tcode{std::tuple<T>}, which may be surprising.
+This is the same problem that all deduction guides involving wrapper types, and may require a more comprehensive fix, for example:
+
+\begin{colorblock}
+tuple {pair, pair } // ok
+tuple {pair} // ill-formed / deprecated 
+tuple {std::of_value, pair }  // tuple<pair<foo, bar>>
+tuple {std::of_elems, pair }  // tuple<foo, bar>
+\end{colorblock}
 
 
 \section{Future work}
@@ -89,8 +124,31 @@ Tuple comparison operators are good candidates for hidden friends.
 
 \rSec2[tuple.syn]{Header \tcode{<tuple>} synopsis}
 
-[...]
 \begin{codeblock}
+ 
+[...]
+
+// \ref{tuple.creation}, tuple creation functions
+inline constexpr @\unspec@ ignore;
+
+template<class... TTypes>
+constexpr tuple<unwrap_ref_decay_t<TTypes>...> make_tuple(TTypes&&...);
+
+template<class... TTypes>
+constexpr tuple<TTypes&&...> forward_as_tuple(TTypes&&...) noexcept;
+
+template<class... TTypes>
+constexpr tuple<TTypes&...> tie(TTypes&...) noexcept;
+
+template<class... Tuples>
+constexpr tuple<CTypes...> tuple_cat(Tuples&&...);
+
+// \ref{tuple.apply}, calling a function with a tuple of arguments
+template<class F, class Tuple>
+constexpr decltype(auto) apply(F&& f, Tuple&& t);
+
+
+[...] 
     
 template<class T, class... Types>
 constexpr const T& get(const tuple<Types...>& t) noexcept;
@@ -127,12 +185,13 @@ concept @\placeholder{pair-like}@ // \expos
 
 \begin{codeblock}
 // [tuple.rel], relational operators
-template<class... TTypes, class... UTypes>
-constexpr bool operator==(const tuple<TTypes...>&, const @\changed{tuple}{\placeholder{tuple-like}}@<UTypes...>&);
-template<class... TTypes, class... UTypes>
-
+template<class... TTypes, class... UTypes@\added{, template<typename...> typename T}@>
+@\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
+constexpr bool operator==(const tuple<TTypes...>&, const @\changed{tuple}{T}@<UTypes...>&);
+template<class... TTypes, class... UTypes@\added{, template<typename...> typename T}@>
+@\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
 constexpr common_comparison_category_t<@\placeholder{synth-three-way-result}@<TTypes, UTypes>...>
-operator<=>(const tuple<TTypes...>&, const @\changed{tuple}{\placeholder{tuple-like}}@<UTypes...>&);
+operator<=>(const tuple<TTypes...>&, const @\changed{tuple}{T}@<UTypes...>&);
 
 // [tuple.traits], allocator-related traits
 template<class... Types, class Alloc>
@@ -159,10 +218,12 @@ class tuple {
     tuple(const tuple&) = default;
     tuple(tuple&&) = default;
     
-    template<class... UTypes>
-    constexpr explicit(@\seebelow@) tuple(const @\changed{tuple}{\placeholder{tuple-like}}@<UTypes...>&);
-    template<class... UTypes>
-    constexpr explicit(@\seebelow@) tuple(@\changed{tuple}{\placeholder{tuple-like}}@<UTypes...>&&);
+    template<class... UTypes@\added{, template<typename...> typename T}@>
+    @\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
+    constexpr explicit(@\seebelow@) tuple(const @\changed{tuple}{T}@<UTypes...>&);
+    template<class... UTypes@\added{, template<typename...> typename T}@>
+    @\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
+    constexpr explicit(@\seebelow@) tuple(@\changed{tuple}{T}@<UTypes...>&&);
 \end{codeblock}
 
 
@@ -192,12 +253,16 @@ class tuple {
     constexpr tuple(allocator_arg_t, const Alloc& a, const tuple&);
     template<class Alloc>
     constexpr tuple(allocator_arg_t, const Alloc& a, tuple&&);
-    template<class Alloc, class... UTypes>
+    
+    template<class Alloc, class... UTypes@\added{, template<typename...> typename T}@>
+    @\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
     constexpr explicit(@\seebelow@)
-    tuple(allocator_arg_t, const Alloc& a, const @\changed{tuple}{\placeholder{tuple-like}}@<UTypes...>&);
-    template<class Alloc, class... UTypes>
+    tuple(allocator_arg_t, const Alloc& a, const @\changed{tuple}{T}@<UTypes...>&);
+    
+    template<class Alloc, class... UTypes@\added{, template<typename...> typename T}@>
+    @\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
     constexpr explicit(@\seebelow@)
-    tuple(allocator_arg_t, const Alloc& a, @\changed{tuple}{\placeholder{tuple-like}}@<UTypes...>&&);
+    tuple(allocator_arg_t, const Alloc& a, @\changed{tuple}{T}@<UTypes...>&&);
 \end{codeblock}
 \begin{removedblock}
 \begin{codeblock}
@@ -214,10 +279,12 @@ class tuple {
     constexpr tuple& operator=(const tuple&);
     constexpr tuple& operator=(tuple&&) noexcept(@\seebelow@);
     
-    template<class... UTypes>
-    constexpr tuple& operator=(const @\changed{tuple}{\placeholder{tuple-like}}@<<UTypes...>&);
-    template<class... UTypes>
-    constexpr tuple& operator=(@\changed{tuple}{\placeholder{tuple-like}}@<<UTypes...>&&);
+    template<class... UTypes@\added{, template<typename...> typename T}@>
+    @\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
+    constexpr tuple& operator=(const @\changed{tuple}{T}@<UTypes...>&);
+    template<class... UTypes@\added{, template<typename...> typename T}@>
+    @\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
+    constexpr tuple& operator=(@\changed{tuple}{T}@<UTypes...>&&);
 \end{codeblock}
 \begin{removedblock}
 \begin{codeblock}    
@@ -235,18 +302,22 @@ class tuple {
     constexpr void swap(tuple&) noexcept(@\seebelow@);
 };
 
-template<class... UTypes>
-tuple(UTypes...) -> tuple<UTypes...>;
-template<@\changed{class T1, class T2}{class... UTypes}@>
-tuple(@\changed{pair<T1, T2>}{\placeholder{tuple-like}<UTypes..>}@) -> tuple<@\changed{T1, T2}{UTypes...}@>;
-template<class Alloc, class... UTypes>
-tuple(allocator_arg_t, Alloc, UTypes...) -> tuple<UTypes...>;
-@\removed{template<class Alloc, class T1, class T2>}@
-@\removed{tuple(allocator_arg_t, Alloc, pair<T1, T2>) -> tuple<T1, T2>;}@
-template<class Alloc, class... UTypes>
-tuple(allocator_arg_t, Alloc, @\changed{tuple}{\placeholder{tuple-like}}@<UTypes...>) -> tuple<UTypes...>;
-}
+
 \end{codeblock}
+
+%template<class... UTypes>
+%tuple(UTypes...) -> tuple<UTypes...>;
+%template<@\changed{class T1, class T2}{typename... Utypes, template<typename...> typename T}@>
+%@\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
+%tuple(@\changed{pair<T1, T2>}{T<UTypes..>}@) -> tuple<@\changed{T1, T2}{UTypes...}@>;
+%template<class Alloc, class... UTypes>
+%tuple(allocator_arg_t, Alloc, UTypes...) -> tuple<UTypes...>;
+%@\removed{template<class Alloc, class T1, class T2>}@
+%@\removed{tuple(allocator_arg_t, Alloc, pair<T1, T2>) -> tuple<T1, T2>;}@
+%template<class Alloc, class... UTypes@\added{, template<typename...> typename T}@>
+%@\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
+%tuple(allocator_arg_t, Alloc, @\changed{tuple}{T}@<UTypes...>) -> tuple<UTypes...>;
+%}
 
 \rSec3[tuple.cnstr]{Construction}
 
@@ -255,8 +326,9 @@ tuple(allocator_arg_t, Alloc, @\changed{tuple}{\placeholder{tuple-like}}@<UTypes
 
 \indexlibraryctor{tuple}%
 \begin{itemdecl}
-template<class... UTypes> 
-constexpr explicit(@\seebelow@) tuple(const @\changed{tuple}{\placeholder{tuple-like}}@<UTypes...>& u);
+template<class... UTypes@\added{, template<typename...> typename T}@>
+@\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
+constexpr explicit(@\seebelow@) tuple(const @\changed{tuple}{T}@<UTypes...>& u);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -291,8 +363,9 @@ constexpr explicit(@\seebelow@) tuple(const @\changed{tuple}{\placeholder{tuple-
 
 \indexlibraryctor{tuple}%
 \begin{itemdecl}
-template<class... UTypes> 
-constexpr explicit(@\seebelow@) tuple(@\changed{tuple}{\placeholder{tuple-like}}@<UTypes...>&& u);
+template<class... UTypes@\added{, template<typename...> typename T}@> 
+@\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
+constexpr explicit(@\seebelow@) tuple(@\changed{tuple}{T}@<UTypes...>&& u);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -400,12 +473,14 @@ template<class U1, class U2> constexpr explicit(@\seebelow@) tuple(const pair<U1
     constexpr tuple(allocator_arg_t, const Alloc& a, const tuple&);
     template<class Alloc>
     constexpr tuple(allocator_arg_t, const Alloc& a, tuple&&);
-    template<class Alloc, class... UTypes>
+    template<class Alloc, class... UTypes@\added{, template<typename...> typename T}@>
+    @\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
     constexpr explicit(@\seebelow@)
-    tuple(allocator_arg_t, const Alloc& a, const @\changed{tuple}{\placeholder{tuple-like}}@<UTypes...>&);
-    template<class Alloc, class... UTypes>
+    tuple(allocator_arg_t, const Alloc& a, const @\changed{tuple}{T}@<UTypes...>&);
+    template<class Alloc, class... UTypes@\added{, template<typename...> typename T}@>
+    @\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
     constexpr explicit(@\seebelow@)
-    tuple(allocator_arg_t, const Alloc& a, @\changed{tuple}{\placeholder{tuple-like}}@<UTypes...>&&);
+    tuple(allocator_arg_t, const Alloc& a, @\changed{tuple}{T}@<UTypes...>&&);
 
 \end{itemdecl}
 \begin{removedblock}
@@ -494,7 +569,9 @@ template parameter pack named \tcode{UTypes}, where indexing is zero-based.
 
 \indexlibrarymember{operator=}{tuple}%
 \begin{itemdecl}
-    template<class... UTypes> constexpr tuple& operator=(const @\changed{tuple}{\placeholder{tuple-like}}@<UTypes...>& u);
+    template<class... UTypes@\added{, template<typename...> typename T}@>
+    @\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
+    constexpr tuple& operator=(const @\changed{tuple}{T}@<UTypes...>& u);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -517,7 +594,9 @@ template parameter pack named \tcode{UTypes}, where indexing is zero-based.
 
 \indexlibrarymember{operator=}{tuple}%
 \begin{itemdecl}
-    template<class... UTypes> constexpr tuple& operator=(@\changed{tuple}{\placeholder{tuple-like}}@<UTypes...>&& u);
+    template<class... UTypes@\added{, template<typename...> typename T}@> 
+    @\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
+    constexpr tuple& operator=(@\changed{tuple}{T}@<UTypes...>&& u);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -593,13 +672,71 @@ template parameter pack named \tcode{UTypes}, where indexing is zero-based.
 
 \end{removedblock}
 
+\rSec2[tuple.creation]{Tuple creation functions}
 
 
+\indexlibraryglobal{tuple_cat}
+\begin{itemdecl}
+template<class... Tuples>
+@\added{requires (\placeholder{tuple-like}<std::remove_reference_t<Tuples>>\&\&...)}@
+constexpr tuple<CTypes...> tuple_cat(Tuples&&... tpls);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+In the following paragraphs, let $\tcode{T}_i$ be the $i^\text{th}$ type in \tcode{Tuples},
+$\tcode{U}_i$ be \tcode{remove_reference_t<T$_i$>}, and $\tcode{tp}_i$ be the $i^\text{th}$
+parameter in the function parameter pack \tcode{tpls}, where all indexing is
+zero-based.
+
+\pnum
+\expects
+For all $i$, $\tcode{U}_i$ is the type
+$\cv_i$ \tcode{tuple<$\tcode{Args}_i$...>}, where $\cv_i$ is the (possibly empty) $i^\text{th}$
+\grammarterm{cv-qualifier-seq} and $\tcode{Args}_i$ is the template parameter pack representing the element
+types in $\tcode{U}_i$. Let $\tcode{A}_{ik}$ be the ${k}^\text{th}$ type in $\tcode{Args}_i$. For all
+$\tcode{A}_{ik}$ the following requirements are met:
+\begin{itemize}
+    \item If $\tcode{T}_i$ is deduced as an lvalue reference type, then
+    \tcode{is_constructible_v<$\tcode{A}_{ik}$, $\cv{}_i\;\tcode{A}_{ik}$\&> == true}, otherwise
+    \item \tcode{is_constructible_v<$\tcode{A}_{ik}$, $\cv{}_i\;\tcode{A}_{ik}$\&\&> == true}.
+\end{itemize}
+
+\pnum
+\remarks
+The types in \tcode{CTypes} are equal to the ordered
+sequence of the extended types
+\tcode{$\tcode{Args}_0$..., $\tcode{Args}_1$..., $\dotsc$, $\tcode{Args}_{n-1}$...},
+where $n$ is
+equal to \tcode{sizeof...(Tuples)}. Let \tcode{$\tcode{e}_i$...} be the $i^\text{th}$
+ordered sequence of tuple elements of the resulting \tcode{tuple} object
+corresponding to the type sequence $\tcode{Args}_i$.
+
+\pnum
+\returns
+A \tcode{tuple} object constructed by initializing the ${k_i}^\text{th}$
+type element $\tcode{e}_{ik}$ in \tcode{$\tcode{e}_i$...} with
+\begin{codeblock}
+    get<@$k_i$@>(std::forward<@$\tcode{T}_i$@>(@$\tcode{tp}_i$@))
+\end{codeblock}
+for each valid $k_i$ and each group $\tcode{e}_i$ in order.
+
+\pnum
+\begin{removedblock}
+\begin{note}
+    An implementation may support additional types in the template parameter
+    pack \tcode{Tuples} that support the \tcode{tuple}-like protocol, such as
+    \tcode{pair} and \tcode{array}.
+\end{note}
+\end{removedblock}
+
+\end{itemdescr}
 \rSec2[tuple.rel]{Relational operators}
 
 \begin{itemdecl}
-template<class... TTypes, class... UTypes>
-constexpr bool operator==(const tuple<TTypes...>& t, @\changed{tuple}{\placeholder{tuple-like}}@ tuple<UTypes...>& u);
+template<class... TTypes, class... UTypes@\added{, template<typename...> typename T}@>
+@\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
+constexpr bool operator==(const tuple<TTypes...>& t, @\changed{tuple}{T}@<UTypes...>& u);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -628,9 +765,10 @@ constexpr bool operator==(const tuple<TTypes...>& t, @\changed{tuple}{\placehold
 
 \indexlibrarymember{operator<=>}{tuple}%
 \begin{itemdecl}
-template<class... TTypes, class... UTypes>
+template<class... TTypes, class... UTypes@\added{, template<typename...> typename T}@>
+@\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
 constexpr common_comparison_category_t<@\placeholder{synth-three-way-result}@<TTypes, UTypes>...>
-operator<=>(const tuple<TTypes...>& t, const @\changed{tuple}{\placeholder{tuple-like}}@<UTypes...>& u);
+operator<=>(const tuple<TTypes...>& t, const @\changed{tuple}{T}@<UTypes...>& u);
 \end{itemdecl}
 
 \begin{itemdescr}
