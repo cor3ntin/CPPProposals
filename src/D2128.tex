@@ -117,6 +117,16 @@ Again, we shouldn't change the meaning of existing code in C++23.
 We should only add multidimensional operators to new in C++23 types such as \tcode{mdspan}.
 If there are users of \tcode{valarray} interested in this feature, this can be done in C++26
 
+\section{Should we interpret \tcode{t[a][b]} as a syntactic rewrite that looks for a variadic operator[]?}
+
+After Richard Smith raised this possibility on the EWG reflector, there was some discussion about this possibility. The rationale behind this suggestion was that current and future generic code that uses multidimensional array semantics (particularly code that may need to work with C-style pointer-to-pointer-like multidimensional arrays) would be syntactically incompatible with types that overload variadic \tcode{operator[]}.  The authors have ultimately decided to reject this direction for a number of reasons.
+
+First of all, we reject the premise that significant generic code exists or will ever exist that needs to be instantiated with types like \tcode{double***}. As experts in scientific computing (expected to be the primary consumer of multidimensional arrays and thus of this proposal), we have seen very little of this sort of generic code. The vast majority of such generic code in production today uses overloads of \tcode{operator()}. No suggestion has been made to have \tcode{operator()} look for \tcode{operator[]} when a sufficient \tcode{operator()} overload cannot be found, so such a proposal will not be discussed here (though we find it equally unsatisfying).
+
+Another important reason to shy away from the \tcode{t[a][b]} rewrite is related to one of the overall motivations for the variadic subscript operator in general: \tcode{t[a]} looks like a valid subexpression, even though it isn't necessarily.  This is a confusing and misleading user experience that we'd like to avoid. 
+
+Finally, we believe the broader issue of generic interoperability with C-style pointer-to-pointer arrays can be addressed with a non-breaking, follow-on proposal in the other direction: if \tcode{t[a, b]} fails overload resolution, the compiler could look for \tcode{(t[a])[b]}. This would make things like \tcode{std::array<std::array<T, 3>, 4>} work out of the box, without any library changes. The authors would welcome such a proposal, but do not believe it should be a part of the initial language change proposed herein. This potential extension also solves the problem that \tcode{t[a][b]} is not a syntax that interacts favorably with parameter packs.
+
 \section{Wording}
 
 \rSec1[expr]{Expressions}
