@@ -8,7 +8,7 @@
 
 
 \title{\tcode{ranges::to}: A function to convert any range to a container}
-\docnumber{D1206R2}
+\docnumber{P1206R3}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Eric Niebler}{eric.niebler@gmail.com}
@@ -61,11 +61,10 @@ same_as<std::vector<long>> auto d = ranges::to<std::vector<long>>(l);
 
 
 //Supports converting associative container to sequence containers
-same_as<std::vector<std::pair<const int, int>>>
-	auto f = ranges::to<vector<std::pair<const int, int>>>(m);
+same_as<std::vector<std::pair<const int, int>>> auto f = ranges::to<vector>(m);
 
 //Supports converting sequence containers to associative ones
-same_as<std::map<int, int>> auto g = f | ranges::to<map>();
+same_as<std::map<int, int>> auto g = ranges::to<map>(f);
 
 //Pipe syntaxe
 same_as<std::vector<int>> auto g = l | ranges::view::take(42) | ranges::to<std::vector>();
@@ -78,8 +77,8 @@ auto i = l | ranges::view::take(42) | ranges::to<std::vector<long>>();
 
 // Nested ranges
 std::list<std::forward_list<int>> lst = {{0, 1, 2, 3}, {4, 5, 6, 7}};
-auto vec1 = rangesnext::to<std::vector<std::vector<int>>>(lst);
-auto vec2 = rangesnext::to<std::vector<std::deque<double>>>(lst);
+auto vec1 = ranges::to<std::vector<std::vector<int>>>(lst);
+auto vec2 = ranges::to<std::vector<std::deque<double>>>(lst);
 
 \end{colorblock}
 
@@ -159,7 +158,7 @@ Most containers of the standard library provide a constructors taking a pair of 
     std::vector<int> vec{std::begin(lst), std::end(lst)};
     //equivalent too
     std::vector<int> vec;
-    std::copy(it, end, std::back_inserter(vec));
+    std::copy(std::begin(lst), std::end(lst), std::back_inserter(vec));
 \end{colorblock}
 
 While, this feature is very useful, as converting from one container type to another is a frequent
@@ -243,7 +242,7 @@ Similar ideas have been presented in \cite{P1004}.
 
 Conceptually, \tcode{to} is a function template with multiple overloads:
 \begin{itemize}
-    \item One that is templated on a container type and convert a range to that type using the most efficient method deending on the type of that container.
+    \item One that is templated on a container type and converts a range to that type using the most efficient method depending on the type of that container.
     \item One that accepts a container as template parameter and deduced the value type of that container using CTAD
     \item One that offers a pipe adaptor object over both these overloads
 \end{itemize}
@@ -257,7 +256,7 @@ For performance reasons, \tcode{ranges::to} should be able to reserve memory in 
 This cannot be done in the constructor of individual ranges because a range meeting the requirements of \tcode{SizedRange} 
 doesn't imply that the distance between each of the iterator forming the range can be computed efficiently, if at all. 
 
-Both cmcstl2 and ranges-v3 determine whether or not a container can be reserved and assigned by the mean of a \tcode{ReserveAndAssignable} concept that is not part of the user facing API, similar to the following
+Both cmcstl2 and ranges-v3 determine whether or not a container can be reserved and assigned by means of a \tcode{ReserveAndAssignable} concept that is not part of the user facing API, similar to the following
 
 
 \begin{colorblock}
@@ -278,14 +277,14 @@ LWG made the case that there should be a customization point for this behavior a
 
 
 \item Do we want to document the set of requirements of reservable container as a Named requirements, exposition only concept, concept in the std namespace ?
-\item Do we want a customization point (similar to \tcode{disable_sized_range})? (The author believe the answer to that should be no - the risk of ambiguity is extremely low, we don't have an opt out for Container - in fact we don't have a Container concept at all), and I don't think that all concepts should have an opt-out.
+\item Do we want a customization point (similar to \tcode{disable_sized_range})? (The authors believe the answer to that should be no - the risk of ambiguity is extremely low, we don't have an opt out for Container - in fact we don't have a Container concept at all), and I don't think that all concepts should have an opt-out.
 \end{itemize}
 
 For the purpose of \tcode{ranges::to} we further require that the container be constructible 
 from the extra arguments passed to \tcode{ranges::to}.
 
 
-A conservative approach would be to let the design unchanged for nowe (implementers can do reserve + assign for standard types only), and revisit the question for non-standard containers at a later date.
+A conservative approach would be to leave the design unchanged for now (implementers can do reserve + assign for standard types only), and revisit the question for non-standard containers at a later date.
 
 The wording in this revision of this paper reflects that conservative approach.
 
@@ -294,7 +293,7 @@ The wording in this revision of this paper reflects that conservative approach.
 \section{Alternative designs}
 
 While we believe the range constructor based approach is the cleanest way to solve this problem,
-LEWG was interested in alternative design based on free functions
+LEWG was interested in an alternative design based on free functions
 
 \subsection{Range constructors}
 
@@ -303,13 +302,13 @@ This proved to be unworkable because of std::initializer_list:
 
 \begin{quote}
 \begin{colorblock}
-std::vector<int> foo = ....;
-std::vector a{foo}; //constructs a std:vector<std::vector<int>>
+std::list<int> foo = ....;
+std::vector a{foo}; //constructs a std:vector<std::list<int>>
 std::vector b(foo); //would construct a std::vector<int>
 \end{colorblock}
 \end{quote}
 
-\subsection{Taggged range constructors}
+\subsection{Tagged range constructors}
 
 To solve the problem described above, it is possible to add a tag
 
@@ -320,12 +319,12 @@ std::vector a{std::from_range, foo}; //constructs a std:vector<int>
 \end{colorblock}
 \end{quote}
 
-This will explored in a separate paper by Tristan Brindle.
-However this approach does not replaces ranges::to, which has the advantages of being a pipe adaptor and works with
+This will be explored in a separate paper by Tristan Brindle.
+However this approach does not replace ranges::to, which has the advantages of being a pipe adaptor and works with
 non-standard containers which do not support such tag constructors.
 
 \tcode{ranges::to} can take advantages of these ranges constructors when available.
-The proposed wording in this aper body assume that tagged constructors will be adopted in addition to the current paper. 
+The proposed wording in this paper body assumes that tagged constructors will be adopted in addition to the current paper. 
 
 
 \section{Existing practices}
@@ -351,7 +350,7 @@ This proposal is based on the \cc{to} (previously (\cc{to_}) function offered by
 
 \subsection{Abseil}
 
-Abseil offer converting constructors with each of their view.
+Abseil offers converting constructors with each of their view.
 As per their documentation:
 
 \begin{quote}
@@ -390,7 +389,7 @@ Add to the synopsis in [ranges.syn]:
 
 namespace std::ranges {
 
-	template <input_range C, input_range R, typename... Args>
+	template <typename C, input_range R, typename... Args>
     requires (!view<C>)
 	constexpr C to(R && r, Args&&...);
 
@@ -414,7 +413,7 @@ The container conversions functions provide functions that efficiently convert r
 The container is constructed from the begin(range)/end(range)iterators pair.
 
 \begin{itemdecl}
-template <input_range C, input_range R, typename... Args>
+template <typename C, input_range R, typename... Args>
 requires (!view<C>)
 constexpr C to(R && r, Args&&... args);
 \end{itemdecl}
@@ -473,7 +472,7 @@ Let \tcode{ITER} be a type meeting the requirements of \tcode{Cpp17InputIterator
     \item \tcode{same_as<\placeholder{ITER}::value_type, ranges::range_value_t<R>>} is \tcode{true},
     \item \tcode{same_as<\placeholder{ITER}::difference_type, ranges::range_difference_t<R>>} is \tcode{true},
     \item \tcode{same_as<\placeholder{ITER}::pointer, ranges::range_value_t<R>*>} is \tcode{true},
-    \item \tcode{same_as<\placeholder{ITER}::reference, ranges::range_reference_t<Rng>>} is \tcode{true}.
+    \item \tcode{same_as<\placeholder{ITER}::reference, ranges::range_reference_t<R>>} is \tcode{true}.
 \end{itemize} 
 
 Then, \tcode{ContainerType} is:
@@ -525,7 +524,7 @@ assert(v1 == v2 && v2 == v3 && v3 == v4);
 \section{Implementation Experience}
 
 Implementations of this proposal are available on in the 1.0 branch of \cite{Range V3} and in \cite{cmcstl2}.
-Another implementation reflecting exavtly this proposal is available on Github \cite{rangesnext}.
+Another implementation reflecting exactly this proposal is available on Github \cite{rangesnext}.
 
 
 \section{Related Paper and future work}

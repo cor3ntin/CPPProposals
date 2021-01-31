@@ -4,7 +4,7 @@
 \documentclass{wg21}
 
 \title{Range constructor for \tcode{std::string\_view} 2: Constrain Harder}
-\docnumber{P1989R0}
+\docnumber{R1989R1}
 \audience{LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -18,6 +18,16 @@
 in Belfast, LWG accepted P1391 partially over concern about the constraints for the range constructor, and as such only the iterator+sentinel
 constructor was accepted. Please refer to P1391 for the design of the proposed changed.
 (P1391 being now accepted, I needed a new paper number for the range constructor.)
+
+
+\section{Revisions}
+
+\subsection{R1}
+\begin{itemize}
+    \item Fix some typos and other issues in section 2.1
+    \item Add a link to a libstdc+ implementation of the proposal
+    \item Wording tweaks
+\end{itemize}
 
 
 \section{Issues found during wording reviews}
@@ -40,7 +50,7 @@ private:
 };
 \end{colorblock}
 
-To make sure this conversion function keeps getting selected, we had the fiollowing constraint
+To make sure this conversion function keeps getting selected, we had the following constraint
 
 \begin{itemize}
 
@@ -49,7 +59,7 @@ To make sure this conversion function keeps getting selected, we had the fiollow
 \end{itemize}
 
 With that constraint, any type that has a conversion operator will use that conversion operator.
-If a \tcode{const} type has a non-const conversion function the program remains ill-form.
+If a \tcode{const} type has a non-const conversion function the program remains ill-formed.
 
 Conversion between \tcode{string_view} types with different \tcode{charT} or different \tcode{type_traits} are ill-formed.
 
@@ -67,26 +77,26 @@ The following overload satisfies the desired set of constraints
 
 template <typename T, typename Traits>
 concept has_compatible_traits = !requires { typename T::traits_type; } 
-|| r::same_as<typename T::traits_type, Traits>;
+|| ranges::same_as<typename T::traits_type, Traits>;
 
 
 template<typename charT, typename traits = std::char_traits<char>>
 struct basic_string_view {
 	//...
-	template <r::contiguous_range R>
-	requires r::sized_range<R>
+	template <ranges::contiguous_range R>
+	requires ranges::sized_range<R>
 	  && (!std::is_convertible_v<R, const charT*>) 
-	  &&   std::is_same_v<std::remove_cvref_t<r::range_reference_t<R>>, charT>
-	  &&   has_compatibe_traits<R, traits>
+	  &&   std::is_same_v<std::remove_cvref_t<ranges::range_reference_t<R>>, charT>
+	  &&   has_compatible_traits<R, traits>
 	  && (!requires (std::remove_cvref_t<R> & d) {
-	      d.operator basic_string_view<char, traits>();
+	      d.operator ::std::basic_string_view<charT, traits>();
 	  })
 	basic_string_view(R&&);
 }
 
 \end{colorblock}
 
-% https://godbolt.org/z/3NBtjM
+This has been implemented in libstdc++ such that it passes the set of tests \href{https://github.com/gcc-mirror/gcc/compare/master...cor3ntin:corentin/P1989?expand=1}{[Github]}
 
 \section{Proposed wording}
 
@@ -116,7 +126,7 @@ public:
 
 @\added{template<class R>}@
 @\added{basic_string_view(R\&\&)}@
-@\added{    -> basic_string_view<remove_reference_t<ranges::range_reference_t<R>>>;}@
+@\added{    -> basic_string_view<ranges::range_value_t<R>>;}@
 
 template<class It, class End>
 basic_string_view(It, End) -> basic_string_view<iter_value_t<It>>;
@@ -144,13 +154,13 @@ constexpr basic_string_view(R&& r);
     \begin{itemize}
         \item \tcode{R} satisfies \tcode{ranges::contiguous_range},
         \item \tcode{R} satisfies \tcode{ranges::sized_range},
-        \item \tcode{is_same_v<remove_reference_t<ranges::range_reference_t<R>>, charT>} is \tcode{true},
+        \item \tcode{is_same_v<ranges::range_value_t<R>, charT>} is \tcode{true},
         \item \tcode{is_convertible_v<R, const charT*>} is \tcode{false},
-        \item \tcode{std::remove_cvref_t<R>} has no \tcode{basic_string_view<charT, traits>} conversion operator, and
-        \item If the qualified-id \tcode{R::traits_type} is valid and denotes a type,\\ \tcode{is_same_v<R::traits\_type, traits>} is \tcode{true}.
+        \item \tcode{r.operator ::std::basic_string_view<charT, traits>()} is not a valid expression, and
+        \item If the qualified-id \tcode{R::traits_type} is valid and denotes a type,\\ \tcode{is_same_v<remove_reference_t<R>::traits\_type, traits>} is \tcode{true}.
     \end{itemize}
  
-	\expects
+	\preconditions
 	 \begin{itemize}
 		\item \tcode{R} models \tcode{ranges::contiguous_range}, and
 		\item \tcode{R} models \tcode{ranges::sized_range}.
@@ -161,7 +171,7 @@ constexpr basic_string_view(R&& r);
 
 
     \throws
-    What and when \tcode{ranges::data(r)} and \tcode{ranges::size(r)} throw.
+    Any exception thrown by \tcode{ranges::data(r)} and \tcode{ranges::size(r)} throw.
 
 
 
@@ -181,7 +191,7 @@ Add to the section [string.view.deduct] the following deduction guides:
 \begin{itemdecl}
 template<class R>
 basic_string_view(R&&)
--> basic_string_view<remove_reference_t<ranges::range_reference_t<R>>>;
+-> basic_string_view<ranges::range_value_t<R>>;
 \end{itemdecl}
 \begin{itemdescr}
 \constraints
@@ -190,6 +200,5 @@ basic_string_view(R&&)
 
 \end{addedblock}
 \end{quote}
-
 
 \end{document}

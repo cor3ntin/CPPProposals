@@ -7,7 +7,7 @@ OUTS:=$(subst .tex,.pdf,$(OUTS))
 
 all: pdfs
 
-pdfs: bib mkoutput $(OUTS)
+pdfs: mkoutput $(OUTS)
 	cd $(OUT) && rm *.log *.aux *.xtr 2>/dev/null; true
 
 mkoutput:

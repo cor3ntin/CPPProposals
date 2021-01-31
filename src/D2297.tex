@@ -1,0 +1,870 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}
+
+\documentclass{wg21}
+
+\usepackage[twitter]{emoji}
+
+\title{Wording improvements for encodings and character sets}
+\docnumber{P2297R0}
+\audience{SG-16, CWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+
+\section{Abstract}
+
+
+\section{Summary of changes}
+
+\subsection{\tcode{wchar_t}}
+
+In the core wording, \tcode{wchar_t} is modified to be allowed to represent code units of variable length and shift state encodings.
+This aligns the standard with standard practices (the execution encoding is UTF-16 on windows).
+
+\subsection{\emoji{1F514}}
+
+The wording mandated that the executions encoding be able to encode "alert, backspace, and carriage return". This requirement is not used
+in the core wording (Tweaks of [5.13.3.3.1] may be needed), nor in the library wording, and therefore does not seem useful, so it was not added in the new wording.
+This will not have any impact on existing implementations.
+
+\section{New terminology}
+
+\subsection{Basic character set}
+
+Formerly \defn{basic source character set}. Represent the set of abstract (non-coded) characters in the graphic subset of the ASCII character set.
+The term "source" has been dropped because the source code encoding is not observable nor relevant past phase 1.
+
+The \defn{basic character set} is used:
+\begin{itemize}
+    \item As a subset of other encodings
+    \item To restric accepted characters in grammar elements
+    \item To restrict values in library
+\end{itemize}
+
+\subsection{\defn{literal character set}, \defn{literal character encoding}, \defn{wide literal character set}, \defn{wide literal character encoding}}
+
+Encodings and associated character sets of narrow and wide character and string literals. Implementation defined, and locale agnostic.
+
+
+
+\subsection{\defn{execution character set}, \defn{execution character encoding}, \defn{wide execution character set}, \defn{wide execution character encoding}}
+
+Encodings and associated character sets of the encoding used by the library. isomorphic or supersets of their literal counterparts.
+Separating literal encodings from libraries encoding allows:
+
+\begin{itemize}
+    \item To make a distinction that exists in practice and which was not previously admitted by the standard previous.
+    \item To keep the core wording locale agnostic.
+\end{itemize}
+
+The definition for these encodings has been moved to [library.intro]
+
+\section{Questions and bikesheding}
+
+\begin{itemize}
+    \item Do the terms of art code unit, code point, abstract character need to be defined?
+    \item Are we happy with \tcode{execution} for library encodings? (alternatives : runtime, system, environment, etc)
+    \item Do we prefer \defn{literal character encoding} or \defn{literal ordinary character encoding} ?
+\end{itemize}
+
+
+
+
+\section{Future works}
+
+\begin{itemize}
+\item Review support for variable-length wide execution encodings in the library
+\item Review usages of the terms character
+\end{itemize}
+
+\section{Wording}
+
+
+
+\rSec1[intro.defs]{Terms and definitions}
+
+[...]
+
+\begin{quoteblock}
+Rationale: The notion of extended characters is removed, as, while the notion of basic character is useful,
+there are only a few places where basic characters should be handled differently from other characters (character meaning code point here).
+
+TODO: Should that definition apply to the UTF-8 (char8_t) encoding?
+\end{quoteblock}
+
+
+\textbf{multibyte character}\\
+\changed{
+sequence of one or more bytes representing a member of the extended
+character set of either the source or the execution environment}
+{Sequence of one or more code units representing a member of the literal or exection character sets.}
+
+\begin{removedblock}
+\begin{note}
+    The extended character set is a superset of the basic character
+    set\iref{lex.charset}.
+\end{note}
+\end{removedblock}
+
+
+[...]
+
+\rSec1[basic.memobj]{Memory and objects}
+
+\rSec2[intro.memory]{Memory model}
+
+\pnum
+\indextext{memory model|(}%
+The fundamental storage unit in the \Cpp{} memory model is the
+\defn{byte}.
+A byte is at least large enough to \changed{contain any member of the basic
+\indextext{character set!basic execution}%
+execution character set\iref{lex.charset}}{represent any code unit of the literal and execution character encodings}
+and the eight-bit code units of the Unicode
+UTF-8 encoding form
+and is composed of a contiguous sequence of
+bits, the number of which is \impldef{bits in a byte}.
+
+\rSec2[basic.fundamental]{Fundamental types}
+
+[...]
+
+
+\begin{quoteblock}
+Rationale: The wording was not clear that it meant the basic source (rather than execution) character set.
+"implementation's basic character set" is also a fuzzy term. Is the basic source character set a coded character set?
+\end{quoteblock}
+
+
+\indextext{type!\idxcode{char}}%
+\indextext{type!character}%
+\indextext{type!ordinary character}%
+\indextext{type!narrow character}%
+\indextext{\idxcode{char}!implementation-defined sign of}%
+\indextext{type!\idxcode{signed char}}%
+\indextext{character!\idxcode{signed}}%
+\indextext{type!\idxcode{unsigned char}}%
+Type \tcode{char} is a distinct type
+that has an \impldef{underlying type of \tcode{char}} choice of
+``\tcode{signed char}'' or ``\tcode{unsigned char}'' as its underlying type.
+The values of type \tcode{char} can represent \changed{distinct codes
+for all members of the implementation's basic character set}{all code units of the literal and execution character encodings}.
+The three types \tcode{char}, \tcode{signed char}, and \tcode{unsigned char}
+are collectively called
+\defnx{ordinary character types}{type!ordinary character}.
+The ordinary character types and \tcode{char8_t}
+are collectively called \defnx{narrow character types}{narrow character type}.
+For narrow character types,
+each possible bit pattern of the object representation represents
+a distinct value.
+\begin{note}
+ This requirement does not hold for other types.
+\end{note}
+\begin{note}
+ A bit-field of narrow character type whose width is larger than
+ the width of that type has padding bits; see \iref{basic.types}.
+\end{note}
+
+\begin{quoteblock}
+Rationale: The wording was implying that UTF-16 could not be used with wchar_t (as it is a multibyte encoding and therefore can not represent all values in a single wchar_t)
+\end{quoteblock}
+
+
+\indextext{\idxcode{wchar_t}|see{type, \tcode{wchar_t}}}%
+\indextext{type!\idxcode{wchar_t}}%
+\indextext{type!underlying!\idxcode{wchar_t}}%
+Type \tcode{wchar_t} is a distinct type that has
+an \impldef{underlying type of \tcode{wchar_t}}
+signed or unsigned integer type as its underlying type.
+The values of type \tcode{wchar_t} can represent
+\changed{distinct codes for all members of the largest extended character set
+specified among the supported locales\iref{locale}}{all code units of the wide literal and wide execution character encodings}.
+
+
+\rSec1[lex.phases]{Phases of translation}%
+
+\begin{quoteblock}
+Translation phase 1 is affected by the removal of the definition of "extended character set", no wording is currently provided
+as a few other papers are redrafting phase 1 such that further modifications should not be necessary.
+\end{quoteblock}
+
+\rSec1[lex.charset]{Character sets}
+
+
+
+\pnum
+\indextext{character set|(}%
+The \defnx{basic \removed{source} character set}{character set!basic source} consists of 96 characters: the space character,
+the control characters representing horizontal tab, vertical tab, form feed, and
+new-line, plus the following 91 graphical characters:
+
+\begin{quoteblock}
+Edit the footnote associated with the above paragraph as follows:
+
+Rationale:
+\begin{itemize}
+\item Abstract character is a more precise terminology to talk about the same characters in different character sets or not in any character set.
+\item The second sentence seems incorrect. While the mapping in phase 1 must be documented, neither the source files nor the internal representation should be observable by the program and as such do not need to be documented. The paragraph further seems to imply that the formerly-source basic character set applies to source files
+\end{itemize}
+
+\begin{quoteblock}
+The glyphs for
+the members of the basic \removed{source} character set are intended to
+identify \added{abstract} characters from the subset of ISO/IEC 10646 which corresponds to the ASCII
+character set. \removed{However, the mapping from source file characters to the source
+    character set (described in translation phase 1) is specified as
+    \impldef{mapping from physical source file characters to basic source character set},
+    and therefore implementations must document how the basic source characters are
+    represented in source files.}
+\end{quoteblock}
+\end{quoteblock}
+
+\begin{codeblock}
+    a b c d e f g h i j k l m n o p q r s t u v w x y z
+    A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+    0 1 2 3 4 5 6 7 8 9
+    _ { } [ ] # ( ) < > % : ; . ? * + - / ^ & | ~ ! = , @\textbackslash@ " '
+\end{codeblock}
+
+\pnum
+The \grammarterm{universal-character-name} construct provides a way to name
+other characters.
+
+\begin{bnf}
+    \nontermdef{hex-quad}\br
+    hexadecimal-digit hexadecimal-digit hexadecimal-digit hexadecimal-digit
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{universal-character-name}\br
+    \terminal{\textbackslash u} hex-quad\br
+    \terminal{\textbackslash U} hex-quad hex-quad
+\end{bnf}
+
+A \grammarterm{universal-character-name}
+designates the character in ISO/IEC 10646 (if any)
+whose code point is the hexadecimal number represented by
+the sequence of \grammarterm{hexadecimal-digit}s
+in the \grammarterm{universal-character-name}.
+The program is ill-formed if that number is not a code point
+or if it is a surrogate code point.
+Noncharacter code points and reserved code points
+are considered to designate separate characters distinct from
+any ISO/IEC 10646 character.
+If a \grammarterm{universal-character-name} outside
+the \grammarterm{c-char-sequence}, \grammarterm{s-char-sequence}, or
+\grammarterm{r-char-sequence} of
+a \grammarterm{character-literal} or \grammarterm{string-literal}
+(in either case, including within a \grammarterm{user-defined-literal})
+corresponds to a control character or
+to a character in the basic
+\removed{source} character set, the program is ill-formed.
+%\begin{footnote}
+    A sequence of characters resembling a \grammarterm{universal-character-name} in an
+    \grammarterm{r-char-sequence}\iref{lex.string} does not form a
+    \grammarterm{universal-character-name}.
+%\end{footnote}
+\begin{note}
+    ISO/IEC 10646 code points are integers in the range $[0, \mathrm{10FFFF}]$ (hexadecimal).
+    A surrogate code point is a value in the range $[\mathrm{D800}, \mathrm{DFFF}]$ (hexadecimal).
+    A control character is a character whose code point is
+    in either of the ranges $[0, \mathrm{1F}]$ or $[\mathrm{7F}, \mathrm{9F}]$ (hexadecimal).
+\end{note}
+
+\pnum
+\begin{removedblock}
+The \defnx{basic execution character set}{character set!basic execution} and the
+\defnx{basic execution wide-character set}{wide-character set!basic execution}
+shall each contain all the members of the
+basic source character set, plus control characters representing alert,
+backspace, and carriage return, plus a \defnx{null character}{character!null}
+(respectively, \defnx{null wide character}{wide-character!null}), whose value is 0.
+For each basic execution character set, the values of the
+members shall be non-negative and distinct from one another. In both the
+source and execution basic character sets, the value of each character
+after \tcode{0} in the above list of decimal digits shall be one greater
+than the value of the previous. The \defnx{execution character set}{character set!execution}
+and the \defnx{execution wide-character set}{wide-character set!execution} are
+\impldef{execution character set and execution wide-character set}
+supersets of the
+basic execution character set and the basic execution wide-character
+set, respectively. The values of the members of the execution character sets
+and the sets of additional members
+are locale-specific.%
+\indextext{character set|)}
+\end{removedblock}
+
+\begin{addedblock}
+
+The \defn{literal character set} and \defn{wide literal character set} are implementation-defined characters set which shall contain all members
+of the \defn{basic character set} plus an implementation-defined set of additional members.
+
+The \defn{literal character encoding} and \defn{wide literal character encoding} are the implementation-defined character encodings of the \defn{literal character set} and \defn{wide literal character set} respectively such that:
+
+\begin{itemize}
+\item Each code unit is represented by a single \tcode{char} or \tcode{wchar_t} respectively
+\item Each code point is represented by one or more code units.
+\item Each member of the \defn{basic character set} is uniquely represented by a single byte whose value is positive
+\item The NULL character (U+0000) is represented as a single code unit whose value, as read via a glvalue of type \tcode{char}, is 0
+\item The code units representing each digit in the basic character set (U+0030 to U+0039) have consecutive values
+\end{itemize}
+
+\end{addedblock}
+
+\begin{quoteblock}
+Do we still need the gvalue bit above? My understanding is that we are trying to say \tcode{char(L'\textbackslash 0') == 0}.
+\end{quoteblock}
+
+[...]
+
+
+
+\rSec1[lex.header]{Header names}
+
+\indextext{header!name|(}%
+\begin{bnf}
+    \nontermdef{header-name}\br
+    \terminal{<} h-char-sequence \terminal{>}\br
+    \terminal{"} q-char-sequence \terminal{"}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{h-char-sequence}\br
+    h-char\br
+    h-char-sequence h-char
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{h-char}\br
+    \textnormal{any member of the \changed{source}{basic} character set except new-line and \terminal{>}}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{q-char-sequence}\br
+    q-char\br
+    q-char-sequence q-char
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{q-char}\br
+    \textnormal{any member of the \changed{source}{basic} character set except new-line and \terminal{"}}
+\end{bnf}
+
+
+\rSec2[lex.ccon]{Character literals}
+
+\begin{quoteblock}
+The grammar below will be further impacted by work to not replace non-basic characters in phase 1
+\end{quoteblock}
+
+\begin{bnf}
+\nontermdef{basic-c-char}\br
+\textnormal{any member of the basic \removed{source} character set except the single-quote \terminal{'}, backslash \terminal{\textbackslash}, or new-line character}
+\end{bnf}
+
+
+\begin{quoteblock}
+I think we want to limit to basic characters here
+\end{quoteblock}
+
+\begin{bnf}
+
+\nontermdef{conditional-escape-sequence-char}\br
+\textnormal{any member of the basic \removed{source} character set that is not an} octal-digit\textnormal{, a} simple-escape-sequence-char\textnormal{, or the characters \terminal{u}, \terminal{U}, or \terminal{x}}
+\end{bnf}
+
+[...]
+
+\pnum
+The kind of a \grammarterm{character-literal},
+its type, and its associated character encoding
+are determined by
+its \grammarterm{encoding-prefix} and its \grammarterm{c-char-sequence}
+as defined by \tref{lex.ccon.literal}.
+The special cases for
+non-encodable character literals and multicharacter literals
+take precedence over their respective base kinds.
+\begin{note}
+    The \changed{associated character encoding for ordinary and wide character literals}{ordinary and wide literal character encodings}
+    determines encodability,
+    but does not determine the value of
+    non-encodable ordinary or wide character literals or
+    ordinary or wide multicharacter literals.
+    The examples in [lex.ccon.literal]
+    for non-encodable ordinary and wide character literals assume that
+    the specified character lacks representation in
+    the \changed{execution}{literal} character set or \changed{execution}{literal} wide-character set, respectively, or
+    that encoding it would require more than one code unit.
+\end{note}
+
+\begin{floattable}{Character literals}{lex.ccon.literal}
+{lllll}
+\topline
+Encoding & Kind & Type & Associated char- & Example \\
+prefix & & & acter encoding & \\
+\capsep
+none &
+\defnx{ordinary character literal}{literal!character!ordinary} &
+\keyword{char} &
+\changed{encoding of}{literal} &
+\tcode{'v'} \\
+&
+non-encodable ordinary character literal &
+\keyword{int} &
+\changed{the execution}{encoding} &
+\tcode{'\textbackslash U0001F525'} \\
+&
+ordinary multicharacter literal &
+\keyword{int} &
+\removed{character set} &
+\tcode{'abcd'} \\ \hline
+\tcode{L} &
+\defnx{wide character literal}{literal!character!wide} &
+\keyword{wchar_t} &
+\changed{encoding of}{wide literal}&
+\tcode{L'w'} \\
+&
+non-encodable wide character literal &
+\keyword{wchar_t} &
+\changed{the execution}{encoding} &
+\tcode{L'\textbackslash U0001F32A'} \\
+&
+wide multicharacter literal &
+\keyword{wchar_t} &
+\removed{wide-character set}&
+\tcode{L'abcd'} \\ \hline
+\tcode{u8} &
+\defnx{UTF-8 character literal}{literal!character!UTF-8} &
+\keyword{char8_t} &
+UTF-8 &
+\tcode{u8'x'} \\ \hline
+\tcode{u} &
+\defnx{UTF-16 character literal}{literal!character!UTF-16} &
+\keyword{char16_t} &
+UTF-16 &
+\tcode{u'y'} \\ \hline
+\tcode{U} &
+\defnx{UTF-32 character literal}{literal!character!UTF-32} &
+\keyword{char32_t} &
+UTF-32 &
+\tcode{U'z'} \\
+\end{floattable}
+
+
+\rSec2[lex.string]{String literals}
+
+
+\begin{quoteblock}
+The grammars below will be further impacted by work to not replace non-basic characters in phase 1
+\end{quoteblock}
+
+\begin{bnf}
+\nontermdef{basic-s-char}\br
+\textnormal{any member of the basic \removed{source} character set except the double-quote \terminal{"}, backslash \terminal{\textbackslash}, or new-line character}
+\end{bnf}
+
+\begin{bnf}
+\nontermdef{d-char}\br
+\textnormal{any member of the basic  \removed{source} character set except:}\br
+\bnfindent\textnormal{space, the left parenthesis \terminal{(}, the right parenthesis \terminal{)}, the backslash \terminal{\textbackslash}, and the control characters}\br
+\bnfindent\textnormal{representing horizontal tab, vertical tab, form feed, and newline.}
+\end{bnf}
+
+[...]
+
+\begin{floattable}{String literals}{lex.string.literal}
+{llp{2.6cm}p{2.3cm}p{4.7cm}}
+\topline
+Encoding & Kind & Type & Associated & Examples \\
+prefix & & & character encoding & \\
+\capsep
+none &
+\defnx{ordinary string literal}{literal!string!ordinary} &
+array of $n$\newline \tcode{\keyword{const} \keyword{char}} &
+\changed{encoding of the execution character set}{literal encoding} &
+\tcode{"ordinary string"}\newline
+\tcode{R"(ordinary raw string)"} \\
+\tcode{L} &
+\defnx{wide string literal}{literal!string!wide} &
+array of $n$\newline \tcode{\keyword{const} \keyword{wchar_t}} &
+\changed{encoding of the execution wide-character set}{wide literal encoding} &
+\tcode{L"wide string"}\newline
+\tcode{LR"w(wide raw string)w"} \\
+\tcode{u8} &
+\defnx{UTF-8 string literal}{literal!string!UTF-8} &
+array of $n$\newline \tcode{\keyword{const} \keyword{char8_t}} &
+UTF-8 &
+\tcode{u8"UTF-8 string"}\newline
+\tcode{u8R"x(UTF-8 raw string)x"} \\
+\tcode{u} &
+\defnx{UTF-16 string literal}{literal!string!UTF-16} &
+array of $n$\newline \tcode{\keyword{const} \keyword{char16_t}} &
+UTF-16 &
+\tcode{u"UTF-16 string"}\newline
+\tcode{uR"y(UTF-16 raw string)y"} \\
+\tcode{U} &
+\defnx{UTF-32 string literal}{literal!string!UTF-32} &
+array of $n$\newline \tcode{\keyword{const} \keyword{char32_t}} &
+UTF-32 &
+\tcode{U"UTF-32 string"}\newline
+\tcode{UR"z(UTF-32 raw string)z"} \\
+\end{floattable}
+
+\pnum
+\indextext{literal!string!raw}%
+A \grammarterm{string-literal} that has an \tcode{R}
+\indextext{prefix!\idxcode{R}}%
+in the prefix is a \defn{raw string literal}. The
+\grammarterm{d-char-sequence} serves as a delimiter. The terminating
+\grammarterm{d-char-sequence} of a \grammarterm{raw-string} is the same sequence of
+characters as the initial \grammarterm{d-char-sequence}. A \grammarterm{d-char-sequence}
+shall consist of at most 16 characters.
+
+\pnum
+\begin{note}
+    The characters \tcode{'('} and \tcode{')'} are permitted in a
+    \grammarterm{raw-string}. Thus, \tcode{R"delimiter((a|b))delimiter"} is equivalent to
+    \tcode{"(a|b)"}.
+\end{note}
+
+\pnum
+\begin{note}
+    A source-file new-line in a raw string literal results in a new-line in the
+    \changed{resulting execution}{evaluated} string literal. Assuming no
+    whitespace at the beginning of lines in the following example, the assert will succeed:
+    \begin{codeblock}
+        const char* p = R"(a\
+        b
+        c)";
+        assert(std::strcmp(p, "a\\\nb\nc") == 0);
+    \end{codeblock}
+\end{note}
+
+[...]
+
+\rSec2[lex.ext]{User-defined literals}
+
+[...]
+
+\pnum
+If \placeholder{L} is a \grammarterm{user-defined-integer-literal}, let \placeholder{n} be the literal
+without its \grammarterm{ud-suffix}. If \placeholder{S} contains a literal operator with
+parameter type \tcode{unsigned long long}, the literal \placeholder{L} is treated as a call of
+the form
+\begin{codeblock}
+    operator "" @\placeholder{X}@(@\placeholder{n}@ULL)
+\end{codeblock}
+Otherwise, \placeholder{S} shall contain a raw literal operator
+or a numeric literal operator template\iref{over.literal} but not both.
+If \placeholder{S} contains a raw literal operator,
+the literal \placeholder{L} is treated as a call of the form
+\begin{codeblock}
+    operator "" @\placeholder{X}@("@\placeholder{n}@")
+\end{codeblock}
+Otherwise (\placeholder{S} contains a numeric literal operator template),
+\placeholder{L} is treated as a call of the form
+\begin{codeblock}
+    operator "" @\placeholder{X}@<'@$c_1$@', '@$c_2$@', ... '@$c_k$@'>()
+\end{codeblock}
+where \placeholder{n} is the source character sequence $c_1c_2...c_k$.
+\begin{note}
+    The sequence
+    $c_1c_2...c_k$ can only contain characters from the basic \removed{source} character set.
+\end{note}
+
+\pnum
+If \placeholder{L} is a \grammarterm{user-defined-floating-point-literal}, let \placeholder{f} be the
+literal without its \grammarterm{ud-suffix}. If \placeholder{S} contains a literal operator
+with parameter type \tcode{long double}, the literal \placeholder{L} is treated as a call of
+the form
+\begin{codeblock}
+    operator "" @\placeholder{X}@(@\placeholder{f}@L)
+\end{codeblock}
+Otherwise, \placeholder{S} shall contain a raw literal operator
+or a numeric literal operator template\iref{over.literal} but not both.
+If \placeholder{S} contains a raw literal operator,
+the \grammarterm{literal} \placeholder{L} is treated as a call of the form
+\begin{codeblock}
+    operator "" @\placeholder{X}@("@\placeholder{f}@")
+\end{codeblock}
+Otherwise (\placeholder{S} contains a numeric literal operator template),
+\placeholder{L} is treated as a call of the form
+\begin{codeblock}
+    operator "" @\placeholder{X}@<'@$c_1$@', '@$c_2$@', ... '@$c_k$@'>()
+\end{codeblock}
+where \placeholder{f} is the source character sequence $c_1c_2...c_k$.
+\begin{note}
+    The sequence
+    $c_1c_2...c_k$ can only contain characters from the basic \removed{source} character set.
+\end{note}
+
+
+\rSec1[library]{Library introduction}
+
+\rSec1[library.c]{ Method of description}
+
+\rSec2[conventions]{Other conventions}
+
+\rSec3[type.descriptions]{Type descriptions}
+
+\rSec3[character.seq]{Character sequences}
+
+
+\begin{addedblock}
+\rSec3[execution encodings]{Execution encodings}
+
+The \defn{execution encoding} is the character encoding of the \defn{execution character set}, such that
+all members of the \defn{literal character set} are represented, with the same value in the \defn{execution character set} and any sequence of characters
+in the \defn{literal character encoding} represent the same sequence of code points when interpreted as being in the \defn{execution encoding}.
+
+The \defn{wide execution encoding} is the character encoding of the \defn{wide execution character set}, such that
+all members of the \defn{wide literal character set} are represented, with the same value in the \defn{wide execution character set} and any sequence of characters
+in the \defn{wide literal character encoding} represent the same sequence of code points when interpreted as being in the \defn{wide execution encoding}.
+
+The \defn{execution encoding} and \defn{wide execution encoding} are implementation-defined and may be be affected by a call to \tcode{setlocale(int, const char*)}, or by a change to a \tcode{locale} object, as described in locales and input.output.
+
+\end{addedblock}
+
+\begin{quoteblock}
+The paragraph below only becomes relevant if we have constexpr text transformation, encodings or classification functions.
+I don't think that's the case yet.
+\end{quoteblock}
+
+\begin{addedblock}
+During constant evaluation, the \defn{execution encoding} and \defn{execution character set} are the \defn{literal character set} and \defn{wide literal character set} respectively and are not affected by locale.
+
+\end{addedblock}
+
+\rSec3[character.seq.general]{General}
+\pnum
+The C standard library makes widespread use
+\indextext{library!C standard}%
+of characters and character sequences that follow a few uniform conventions:
+
+\begin{itemize}
+    \item
+    A \defn{letter} is any of the 26 lowercase or 26
+    \indextext{lowercase}%
+    \indextext{uppercase}%
+    uppercase letters in the \changed{basic execution}{basic} character set.
+    \item
+    The
+    \defnx{decimal-point character}{character!decimal-point}
+    is the
+    (single-byte) character used by functions that convert between a (single-byte)
+    character sequence and a value of one of the floating-point types.
+    It is used
+    in the character sequence to denote the beginning of a fractional part.
+    It is
+    represented in [??] through  [??]
+    and \iref{depr} by a period,
+    \indextext{period}%
+    \tcode{'.'},
+    which is
+    also its value in the \tcode{"C"}
+    locale, but may change during program
+    execution by a call to
+    \tcode{setlocale(int, const char*)},
+    %\begin{footnote}
+    %    declared in
+    %    \libheaderref{clocale}.
+    %    \indexlibraryglobal{setlocale}%
+    % \end{footnote}
+    or by a change to a
+    \tcode{locale}
+    object, as described in \iref{locales} and \iref{input.output}.
+    \item
+    A
+    \defn{character sequence}
+    is an array object\iref{dcl.array} \tcode{\placeholdernc{A}} that
+    can be declared as
+    \tcode{\placeholdernc{T\;A}[\placeholder{N}]},
+    where \tcode{\placeholder{T}} is any of the types
+    \tcode{char},
+    \tcode{unsigned char},
+    or
+    \tcode{signed char}\iref{basic.fundamental}, optionally qualified by any combination of
+    \tcode{const}
+    or
+    \tcode{volatile}.
+    The initial elements of the
+    array have defined contents up to and including an element determined by some
+    predicate.
+    A character sequence can be designated by a pointer value
+    \tcode{\placeholder{S}} that points to its first element.
+\end{itemize}
+
+\rSec3[byte.strings]{Byte strings}
+
+\indextext{string!null-terminated byte|see{\ntbs{}}}%
+\pnum
+A \defnx{null-terminated byte string}{NTBS@\ntbs{}},
+or \ntbs{},
+is a character sequence whose highest-addressed element
+with defined content has the value zero
+(the \defnx{terminating null character}{character!terminating null});
+no other element in the sequence has the value zero.
+
+\pnum
+The \defnx{length of an \ntbs{}}{NTBS@\ntbs{}!length}
+is the number of elements that
+precede the terminating null character.
+An \defnx{empty \ntbs{}}{NTBS@\ntbs{}!empty}
+has a length of zero.
+
+\pnum
+The \defnx{value of an \ntbs{}}{NTBS@\ntbs{}!value}
+is the sequence of values of the
+elements up to and including the terminating null character.
+
+\pnum
+A \defnx{static \ntbs{}}{NTBS@\ntbs{}!static}
+is an \ntbs{} with
+static storage duration.
+
+\rSec3[multibyte.strings]{Multibyte strings}
+
+\indextext{string!null-terminated multibyte|see{\ntmbs{}}}%
+\pnum
+A \defnx{null-terminated multibyte string}{NTMBS@\ntmbs{}},
+or \ntmbs{},
+is an \ntbs{} that constitutes a
+sequence of valid multibyte characters, beginning and ending in the initial
+shift state.
+
+\begin{quoteblock}
+Edit the footnote attached to the above sentence as follow:
+\begin{quoteblock}
+An \ntbs{} that \changed{contains characters only from the
+basic execution character set is also an \ntmbs{}.
+Each multibyte character then consists of a single byte}{only contains characters represented as a single byte is also an \ntmbs}.
+\end{quoteblock}
+\end{quoteblock}
+
+\pnum
+A \defnx{static \ntmbs{}}{NTMBS@\ntmbs{}!static}
+is an \ntmbs{} with static storage duration.
+
+
+\rSec1[locales]{Locales}
+
+\rSec2[locale]{Class \tcode{locale}}
+
+\rSec3[locale.ctype.members]{\tcode{ctype} members}
+
+\indexlibrarymember{ctype}{do_widen}%
+\begin{itemdecl}
+    charT        do_widen(char c) const;
+    const char*  do_widen(const char* low, const char* high, charT* dest) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Applies the simplest reasonable transformation
+from a \tcode{char} value or sequence of \tcode{char} values
+to the corresponding \tcode{charT} value or values.
+The only characters for which unique transformations are required
+are those in the basic \removed{source} character set\iref{lex.charset}.
+
+For any named \tcode{ctype} category with
+a \tcode{ctype<charT>} facet \tcode{ctc} and
+valid \tcode{ctype_base::mask} value \tcode{M},
+\tcode{(ctc.\brk{}is(M, c) || !is(M, do_widen(c)) )} is \tcode{true}.
+
+The second form transforms
+each character \tcode{*p} in the range \range{low}{high},
+placing the result in \tcode{dest[p - low]}.
+
+\pnum
+\returns
+The first form returns the transformed value.
+The second form returns \tcode{high}.
+\end{itemdescr}
+
+\indexlibrarymember{ctype}{do_narrow}%
+\begin{itemdecl}
+char         do_narrow(charT c, char dfault) const;
+const charT* do_narrow(const charT* low, const charT* high, char dfault, char* dest) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Applies the simplest reasonable transformation
+from a \tcode{charT} value or sequence of \tcode{charT} values
+to the corresponding \tcode{char} value or values.
+
+For any character \tcode{c} in the basic \removed{source} character set\iref{lex.charset}
+the transformation is such that
+\begin{codeblock}
+    do_widen(do_narrow(c, 0)) == c
+\end{codeblock}
+\end{itemdescr}
+
+\rSec1[time]{Time library}
+
+\begin{LongTable}{Meaning of \tcode{parse} flags}{time.parse.spec}{lx{.8\hsize}}
+    \\ \topline
+    \lhdr{Flag} & \rhdr{Parsed value} \\ \capsep
+    \endfirsthead
+    \continuedcaption\\
+    \hline
+    \lhdr{Flag} & \rhdr{Parsed value} \\ \capsep
+    \endhead
+    \tcode{\%a} &
+    The locale's full or abbreviated case-insensitive weekday name.
+    \\ \rowsep
+    \tcode{\%Z} &
+    The time zone abbreviation or name.
+    A single word is parsed.
+    This word can only contain characters
+    from the basic \removed{source} character set\iref{lex.charset}
+    that are alphanumeric, or one of
+    \tcode{'_'}, \tcode{'/'}, \tcode{'-'}, or \tcode{'+'}.
+    \\ \rowsep
+    \tcode{\%\%} &
+    A \tcode{\%} character is extracted.
+    \\
+\end{LongTable}
+
+\rSec1[diff.cpp14]{\Cpp{} and ISO \CppXIV{}}
+
+
+\rSec2[diff.cpp14.lex]{lexical conventions}
+
+
+\indextext{trigraph sequence}%
+\change
+Removal of trigraph support as a required feature.
+\rationale
+Prevents accidental uses of trigraphs in non-raw string literals and comments.
+\effect
+Valid \CppXIV{} code that uses trigraphs may not be valid or may have different
+semantics in this revision of \Cpp{}. Implementations may choose to
+translate trigraphs as specified in \CppXIV{} if they appear outside of a raw
+string literal, as part of the \impldef{mapping from physical source file characters
+    to basic character set} mapping from physical source file characters to
+the basic \removed{source} character set.
+
+
+\section{Acknowledgments}
+
+\section{References}
+\renewcommand{\section}[2]{}%
+
+\begin{thebibliography}{9}
+
+\bibitem[N4878]{N4878}
+Richard Smith
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4878}
+
+\end{thebibliography}
+\end{document}

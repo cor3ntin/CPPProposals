@@ -1,0 +1,188 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}
+
+
+\documentclass{wg21}
+
+
+
+\newcommand{\UnicodeLetter}[1]{\textbf{\textcolor{BrickRed}{\Large\tcode{#1}}}}
+
+\title{Reinterpreting pointers of character types}
+\docnumber{P2292R0}
+\audience{LEWG, EWG, SG-16}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+\paperquote{The best way to get the right answer is to write bad wording}
+
+\section{Abstract}
+
+We propose a function \tcode{reinterpret_string_cast} to cast between \tcode{char*} and c\tcode{char8_t*} without UB
+
+\section{Tony tables}
+\begin{center}
+\begin{tabular}{l|l}
+Before & After\\ \hline
+
+\begin{minipage}[t]{0.45\textwidth}
+\begin{colorblock}
+const char* str = "UB";
+auto res = reinterpret_cast<char8_t*>(str);
+\end{colorblock}
+\end{minipage}
+&
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+const char* str = "Well defined";
+auto res = std::reinterpret_string_cast<const char8_t*>(str);
+\end{colorblock}
+\end{minipage}
+\\\\ \hline
+
+\end{tabular}
+\end{center}
+
+
+\section{Motivation}
+
+\tcode{char8_t} introduced in C++20 by \paper{P0482R6} is a character type designed to handle UTF-8 code units.
+An important motivation for \tcode{char8_t} is that it doesn't alias with \tcode{char} and \tcode{char8_t*} are not implicitly convertible to \tcode{char_t}.
+This allows users to make sure they never lose the utf8-ness of their strings and that they can handle both utf-8 and non-utf8 text and data within the same overload set.
+
+There however exists a large number of libraries (iconv, ICU, gtk), and C functions that may use \tcode{char} to represent UTF-8 code units.
+As such, many people have expressed an interest in a way to interpret a range of \tcode{char8_t} to \tcode{char} or inversely for 2 way compatibilities with existing libraries, and system functions.
+
+\section{Design and constraints}
+
+\begin{itemize}
+    \item We don't want to change the design of \tcode{char8_t} (no aliasing or implicit conversion), as this would defeat the purpose of  \tcode{char8_t}
+    \item Because such a cast would only be safe if the preconditions (valid UTF code units sequence) are met, we think the syntax should be explicit.
+\end{itemize}
+
+\subsection{Aliasing}
+
+As to not break the memory model and compilers, the proposed function assumes that after a call to \tcode{reinterpret_string_cast} the range passed as parameter will only be accessed
+through the return pointer, thereby sidesteping aliasing issues.
+
+\section{Open Questions}
+
+\begin{itemize}
+\item Can it be constexpr?
+\item Does it needs to be?
+\item How much do we need to modify the object model and core wording?
+\end{itemize}
+
+
+\section{Alternative design}
+
+It might be possible to add more rules to \tcode{reinterpret_cast}, to achieve similar results, however
+
+\begin{itemize}
+    \item We want this conversion to be as explicit as possible
+    \item \tcode{reinterpret_cast} is not \tcode{constexpr},
+    \item We think the magic function should work for span and string_view
+\end{itemize}
+
+\section{Wording}
+
+The following wording is provided in an attempt to nerd-snipe a willing CWG expert into providing better wording.
+
+\begin{quote}
+\begin{addedblock}
+\begin{codeblock}
+
+// header <new> ?
+namespace std {
+    template <typename To, typename From>
+    constexpr To reinterpret_string_cast(From from, std::size_t n) noexcept;
+}
+
+// header <span>
+namespace std {
+    template <typename To, typename From>
+    constexpr std::span<To> reinterpret_string_cast(std::span<From> from);
+}
+
+// header string_view
+namespace std {
+    template <typename To, typename From>
+    constexpr reinterpret_string_cast(std::basic_string_view<From> from) noexcept;
+}
+
+\end{codeblock}
+
+
+\begin{itemdecl}
+template <typename To, typename From>
+constexpr To string_cast(From from, std::size_t n) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\constraints
+\begin{itemize}
+\item \tcode{From} is a pointer,
+\item \tcode{To} is a pointer,
+\item \tcode{std::remove_const_t<std::remove_pointer_t<From>>} is a character type,
+\item \tcode{std::remove_const_t<std::remove_pointer_t<To>>} is a character type,
+\item \tcode{sizeof(To) == sizeof(From)} is \tcode{true},
+\item \tcode{From} and \tcode{To} have the same alignement.
+\end{itemize}
+\expects
+\begin{itemize}
+\item \range{from}{from + n} denotes a valid range
+\item \range{from}{from + n} denotes a valid sequence of code units \emph{seq} such that
+\begin{itemize}
+    \item if \tcode{same_as<From, char8_t>} || \tcode{same_as<To, char8_t>} is \tcode{true}, \emph{seq} is a valid sequence of UTF-8 code units,
+    \item otherwise if \tcode{same_as<From, char16_t>} || \tcode{same_as<To, char16_t>} is \tcode{true}, \emph{seq} is a valid sequence of UTF-16 code units,
+    \item otherwise if \tcode{same_as<From, char32_t>} || \tcode{same_as<To, char32_t>} is \tcode{true}, \emph{seq} is a valid sequence of UTF-32 code units.
+    \item otherwise the behavior is undefined.
+\end{itemize}
+\end{itemize}
+
+\effects
+This function behaves as if:
+
+\begin{enumerate}
+\item The range \range{from}{from + n} is copied to a temporary buffer \tcode{b} of \tcode{To} elements as if using \tcode{memcpy}
+\item The destructor \tcode{\tilde From()} is called on each element of the range \range{from}{from + n}, ending their lifetime. Any pointer or reference to any address in the range \range{from}{from + n} is invalidated.
+\item A new array \tcode{a} of type \tcode{To} and size \tcode{n} is constructed at address \tcode{p} as if \tcode{new (p) To[n]}
+\item Each element of \tcode{b} is copied in \tcode{a} as if per \tcode{memcpy}
+
+\returns
+A pointer to the first element in \tcode{a}.
+\end{enumerate}
+
+\complexity Constant time
+
+\begin{note}
+After a call to this function accessing any object in the range \range{from}{from + n} by any pointer or reference other than the one returned by the function is undefined.
+\end{note}
+
+\end{itemdescr}
+
+
+\end{addedblock}
+\end{quote}
+
+\section{Acknowledgments}
+
+\section{References}
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+\begin{thebibliography}{9}
+
+    \bibitem[N4861]{N4861}
+    Richard Smith
+    \emph{Working Draft, Standard for Programming Language C++}\newline
+    \url{https://wg21.link/N4861}
+
+\end{thebibliography}
+\end{document}

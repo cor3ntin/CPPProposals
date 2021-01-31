@@ -1,0 +1,213 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}
+
+
+\documentclass{wg21}
+
+
+
+\newcommand{\UnicodeLetter}[1]{\textbf{\textcolor{BrickRed}{\Large\tcode{#1}}}}
+
+\title{Delimited escapes sequences}
+\docnumber{P2290R0}
+\audience{EWG, SG-22}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+    \maketitle
+    
+    \paperquote{}
+    
+    \section{Abstract}
+    
+    We propose an additional, clearly delimited syntax for octal, hexadecimal and universal character name escape sequences.
+    
+    
+    \section{Motivation}
+    
+    \subsection{universal-character-name escape sequences}
+    
+    As their name does not indicate, universal-character-name escape sequences represent Unicode scalar values,
+    using either 4, or 8 hexadecimal digits, which is either 16 or 32 bits.
+    However, the Unicode codespace is limited to 0-0x10FFFF, and all currently assigned codepoints can be written with 5 or less
+    hexadecimal digits (Supplementary Private Use Area-B non-withstanding).
+    As such, the \~50\% of codepoints that needs 5 hexadecimal digits to be expressed are currently a bit awkward to write: \tcode{\textbackslash U0001F1F8}.
+    
+    \subsection{Octal and hexadecimal escape sequences have variable lenght}
+    
+    \tcode {\textbackslash 1}, {\textbackslash 01}, {\textbackslash 001} are all valid escape sequences.
+    \tcode {\textbackslash 17} is equivalent to 0x0F while \tcode {\textbackslash 18} is equivalent to \tcode {"0x01" "8"}
+    
+    While octal escape sequences accept 1 to 3 digits as arguments, hexadecimal sequences accept an arbitrary number of digits
+    applying the maximal much principle.
+    
+    
+    This is how the \href{https://docs.microsoft.com/en-us/cpp/c-language/octal-and-hexadecimal-character-specifications?view=msvc-160}{Microsoft documentation} describes this problem:
+    
+    \begin{quoteblock}
+        
+        Unlike octal escape constants, the number of hexadecimal digits in an escape sequence is unlimited. A hexadecimal escape sequence terminates at the first character that is not a hexadecimal digit. Because hexadecimal digits include the letters a through f, care must be exercised to make sure the escape sequence terminates at the intended digit. To avoid confusion, you can place octal or hexadecimal character definitions in a macro definition:
+        
+        \begin{colorblock}
+            #define Bell '\x07'
+        \end{colorblock}
+        
+        For hexadecimal values, you can break the string to show the correct value clearly:
+        
+        \begin{colorblock}
+            "\xabc"    /* one character  */
+            "\xab" "c" /* two characters */
+        \end{colorblock}
+        
+    \end{quoteblock}
+    
+    While, as this documentation suggests, there are workarounds, to this problem, neither solution is really appealing, nor do
+    they completely solve the maintenance issue. It might, for example not be clear why a string is split in 2, and that split may
+    be refactored away by zealous tooling or contributors.
+    
+    \section{Proposed solution}
+    
+    We propose new syntaxes \tcode{\textbackslash u\{\}, \textbackslash o\{\}, \textbackslash x\{\}} usable in places where
+    \textbackslash u, \textbackslash x, \textbackslash nnn currently are.
+    \textbackslash o\{\} accepts an arbitrary number of octal digits while \textbackslash u\{\} and \textbackslash x\{\} accept
+    an arbitrary number of hexadecimal digit.
+    
+    The values represented by these new syntaxes would of course have the same requirements as existing escape sequences:
+    
+    \textbackslash u\{nnnn\} must represent a valid Unicode scalar value.
+    
+    \textbackslash x\{nnnn\} and \textbackslash o\{nnnn\} must represent a value that can be represented in a single code unit of the encoding of string or character literal they are a part of.
+    
+    Note that \tcode{"\textbackslash x\{4" "2\}"} would not be valid as escape sequences are replaced before string concatenation, which we think is the right design.
+    
+    
+    \subsection{Is it worth it?}
+    
+    It is certainly not an important feature. Low cost, mild benefits.
+    However, it should be relatively simple to write refactoring tools to migrate the old syntax to the new one for codebases interested in the added visibility and safety.
+    
+    
+    \subsection{Should existing forms be deprecated?}
+    
+    No (we are not in the business of breakings everyone's code)!
+    
+    \subsection{Impact on existing implementations}
+    
+    No compiler currently accept \tcode{\textbackslash x\{} or \tcode{\textbackslash u\{} as valid syntax.
+    Furthermore, while \tcode{\textbackslash o} is currently reserved for implementations, no tested implementation (GCC, Clang, MSVC, ICC) makes use of it.
+    
+    
+    \subsection{Impact on C}
+    
+    This proposal does not impact C, however, the C committee could find that proposal interesting.
+    
+    
+    \subsection{Impact on wording}
+    
+    While this does not constitute motivation, this proposal may simplify slightly CWG/SG-16 efforts to separate string concatenation/escape sequences replacement from
+    conversion to execution encoding.
+    
+    \section{Prior arts and alternative considered}
+    
+    \tcode{\textbackslash u\{\}} is a valid syntax in rust and javascript.
+    The syntax is also similar to that of \paper{P2071R0}
+    
+    \tcode{\textbackslash x\{\}} is a bit more novel - It is present in Perl and some regex syntaxes.
+    However, most languages (python, D, Perl, javascript, rust, PHP) specify hexadecimal sequences to be exactly 2 hexadecimal digits long (\tcode{\textbackslash xFF}) which sidestep the issues described in this paper.
+    
+    Most languages surveyed follow in C and C++ footstep for the syntax of octal numbers (no braces, 1-3 digits), so this would novel indeed.
+    
+    As such, for consistency with other C++ proposal and existing art, we have not considered other syntaxes.
+    
+    \section{Wording}
+    
+    \begin{quote}
+        
+        \rSec1[lex.charset]{Character sets}
+        
+        [...]    
+        
+        \pnum
+        The \grammarterm{universal-character-name} construct provides a way to name
+        other characters.
+        
+        \begin{bnf}
+            \nontermdef{hex-quad}\br
+            hexadecimal-digit hexadecimal-digit hexadecimal-digit hexadecimal-digit
+        \end{bnf}
+        
+        \begin{bnf}
+            \nontermdef{universal-character-name}\br
+            \terminal{\textbackslash u} hex-quad\br
+            \terminal{\textbackslash U} hex-quad hex-quad\br
+            \added{\terminal{\textbackslash u\{}hexadecimal-digit...  \terminal{\}}}
+        \end{bnf}
+        
+        
+        A \grammarterm{universal-character-name}
+        designates the character in ISO/IEC 10646 (if any)
+        whose code point is the hexadecimal number represented by
+        the sequence of \grammarterm{hexadecimal-digit}s
+        in the \grammarterm{universal-character-name}.
+        The program is ill-formed if that number is not a code point
+        or if it is a surrogate code point.
+        
+        [...]
+        
+        \rSec2[lex.ccon]{Character literals}
+        
+        [...]
+        
+        \begin{bnf}
+            \nontermdef{numeric-escape-sequence}\br
+            octal-escape-sequence\br
+            hexadecimal-escape-sequence
+        \end{bnf}
+        
+        \begin{bnf}
+            \nontermdef{octal-escape-sequence}\br
+            \terminal{\textbackslash} octal-digit\br
+            \terminal{\textbackslash} octal-digit octal-digit\br
+            \terminal{\textbackslash} octal-digit octal-digit octal-digit\br
+            \added{\terminal{\textbackslash o\{}octal-digit...  \terminal{\}}}
+        \end{bnf}
+        
+        \begin{bnf}
+            \nontermdef{hexadecimal-escape-sequence}\br
+            \terminal{\textbackslash x} hexadecimal-digit\br
+            hexadecimal-escape-sequence hexadecimal-digit\br
+            \added{\terminal{\textbackslash x\{}hexadecimal-digit...  \terminal{\}}}
+        \end{bnf}
+        
+        \begin{bnf}
+            \nontermdef{conditional-escape-sequence}\br
+            \terminal{\textbackslash} conditional-escape-sequence-char
+        \end{bnf}
+        
+    \end{quote}
+    
+    \section{Acknowledgments}
+    
+    \section{References}
+    \renewcommand{\section}[2]{}%
+    \bibliographystyle{plain}
+    \bibliography{wg21}
+    
+    \begin{thebibliography}{9}
+        
+        
+        \bibitem[Unicode]{Unicode}
+        Unicode 13\newline
+        \url{http://www.unicode.org/versions/Unicode13.0.0/}
+        
+        
+        \bibitem[N4861]{N4861}
+        Richard Smith
+        \emph{Working Draft, Standard for Programming Language C++}\newline
+        \url{https://wg21.link/N4861}
+        
+    \end{thebibliography}
+\end{document}

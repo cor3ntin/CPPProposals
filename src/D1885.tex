@@ -4,7 +4,7 @@
 \documentclass{wg21}
 
 \title{Naming Text Encodings to Demystify Them}
-\docnumber{P1885R3}
+\docnumber{P1885R4}
 \audience{SG-16, LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -162,6 +162,14 @@ assert(wtf8 == text_encoding("___wtf8__"));
 
 \section{Revisions}
 
+\subsection*{Revision 4}
+\begin{itemize}
+    \item Change operator==(encoding, mib) for \tcode{id::other}
+    \item Add wording for freestanding
+    \item Improve wording
+    \item Improve alias comparison algorithm to match unicode TR22
+\end{itemize}
+
 \subsection*{Revision 3}
 \begin{itemize}
     \item Add a list of encodings NOT registed by IANA 
@@ -174,7 +182,7 @@ assert(wtf8 == text_encoding("___wtf8__"));
 \begin{itemize}
 	\item Add all the enumerators of rcf 3008
     \item Add a mib constructor to \tcode{text_encoding}
-    \item Add \tcode{system_is} and \tcode{system_wide_is} function templates
+    \item Add \tcode{system_is} and \tcode{wide_system_is} function templates
 \end{itemize}
 
 \subsection*{Revision 1}
@@ -309,8 +317,6 @@ Because there is a rather large number of encodings and because this list may ev
 MIB stands for Management Information Base, which is IANA nomenclature, the name has no particular interest besides a desire not to deviate from the existing standards and practices.
 \end{note}
 
-The enum is purposefully not an \tcode{enum class} so that it can be easily compared to objects from
-third party libraries such as \tcode{QTextCodec}.
 
 The enumerators \tcode{unknown} and \tcode{other} and their value are provided by the very same RFC such as:
 
@@ -352,6 +358,18 @@ Implementations may not extend the \tcode{text_encoding::id} as to guarantee sou
 
 A primary use case is to enable people to write their own conversion functions.
 Unfortunately, most APIs expect NULL-terminated strings, which is why we return a const char*.
+
+\subsection{Freestanding}
+
+In order for this class to be compatible with free standing environments, care has been taken to avoid
+allocation and exceptions.
+As such, we put an upper bound on the name of encoding pass to \tcode{text_encoding} constructor of 63+1 characters.
+Per rfc2978, the primary name must not exceeed 40 characters.
+
+\subsection{Name comparison}
+
+Names and aliases are compared ignoring case and non alpha numeric characters, in a way that follows 
+\href{https://www.unicode.org/reports/tr22/tr22-8.html#Charset_Alias_Matching}{Unicode recommandations}
 
 \section{Implementation}
 
@@ -507,6 +525,8 @@ Add the header \tcode{<text_encoding>} to the "C++ library headers" table in
 \tcode{[headers]}, in a place that respects the table’s current alphabetic
 order.
 
+Add the header \tcode{<text_encoding>} to table \tcode{[headers.cpp.fs]} (freestanding).
+
 Add the macro \tcode{__cpp_lib_text_encoding} to \tcode{[version.syn]}, in a
 place that respects the current alphabetic order:
 
@@ -526,7 +546,10 @@ A \tcode{text\_encoding} describes a text encoding portably across platforms by 
 namespace std {
 
 struct text_encoding{
-    enum class id : unsigned {
+    
+    inline constexpr size_t max_name_lenght = 63;
+    
+    enum class id : int_least32_t {
         other = 1,
         unknown = 2,
         ASCII = 3,
@@ -808,14 +831,14 @@ struct text_encoding{
     
     
     template<text_encoding::id id_>
-    bool text_encoding::system_is();
+    static bool text_encoding::system_is();
     
     template<text_encoding::id id_>
-    bool text_encoding::system_wide_is();
+    static bool text_encoding::wide_system_is();
 
     private:
         id mib_; // \expos
-        char name_[64]; // \expos
+        char name_[max_name_lenght+1]; // \expos
     };
 
 
@@ -835,7 +858,7 @@ template<> struct hash<text_encoding>;
 
 \pnum A \defn{registered-character-set} is a character set registered by the process described in \cite{rfc2978} and which is known of the implementation.
 
-\pnum Let \tcode{bool COMP_NAME(const char* a, const char* b)} be a function that returns \tcode{true} if two ASCII strings are identical, ignoring case and all \tcode{-} and  \tcode{_} characters.
+\pnum Let \tcode{bool COMP_NAME(const char* a, const char* b)} be a function that returns \tcode{true} if two strings encoded in the basic execution character set are identical, ignoring in each string, case and all characters outside of the ranges [a-z], [A-Z], [0-9], as well as \tcode{0} not precedeed by a digit.
 
 \begin{note}
 The enumerators of the \tcode{text_encoding::id} and their value match those specified in \cite{rfc3808} with the "cs" prefixed removed. \tcode{text_encoding::id::UCS2} corresponds to \tcode{csUnicode} in \cite{rfc3808}
@@ -852,13 +875,13 @@ constexpr explicit text_encoding(string_view name);
     If there exists an implementation-defined alias \tcode{a} of \defn{registered-character-set} such that \tcode{COMP_NAME(a, name.c_str())} is \tcode{true}, initialize
     \tcode{mib_} with the \tcode{MIBenum} associated with that \defn{registered-character-set}. Otherwise, initialize \tcode{mib_} with \tcode{text_encoding::id::other}.
 
-    Implementations must return a valid \tcode{text_encoding} object for every \tcode{name} that matches either an alias or a name of a \defn{registered-character-set} listed in \cite{rfc3808}.
+    Implementations shall return a valid \tcode{text_encoding} object for every \tcode{name} that matches either an alias or a name of a \defn{registered-character-set} listed in \cite{rfc3808}.
 
 \begin{note}
 	Freestanding implementations are not required to provide this method
 \end{note}
 
-    \postconditions \tcode{name_ == name}.
+    \postconditions \tcode{string_view(name_) == name}.
 \end{itemdescr}
 
 
@@ -947,7 +970,7 @@ constexpr bool operator==(text_encoding::id i) const noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-\returns \tcode{(mib() != id::other) ? mib() == i : false}.
+\returns \tcode{mib() == i}
 \end{itemdescr}
 
 \begin{itemdecl}
@@ -972,11 +995,9 @@ static text_encoding system();
 
 \begin{itemdescr}
 Return the presumed system narrow encoding.
-On POSIX systems this is the encoding attached to the environment locale (\tcode{""}) at the start of the program.
+On a POSIX system, this is encoding that would be returned by \tcode{l_langinfo_l(CODESET, newlocale(LC_CTYPE, "", (locale_t)0)} at the start of the program.
 
-\begin{note}
-This function should always return the same value during the lifetime of a program and is not affected by calls to \tcode{setlocale}.
-\end{note}
+This function always returns the same value during the lifetime of a program and is not affected by calls to \tcode{setlocale}.
 \end{itemdescr}
 
 \begin{itemdecl}
@@ -988,7 +1009,7 @@ Return the presumed system-wide encoding.
 On POSIX systems this is the encoding attached to the environment locale (\tcode{""}) at the start of the program.
 
 \begin{note}
-This function should always return the same value during the lifetime of a program and is not affected by calls to \tcode{setlocale}.
+This function shall always return the same value during the lifetime of a program and is not affected by calls to \tcode{setlocale}.
 \end{note}
 \end{itemdescr}
 
@@ -1007,7 +1028,7 @@ static bool text_encoding::system_wide_is();
 \end{itemdecl}
 
 \begin{itemdescr}
-\returns Equivalent to \tcode{system_wide() == id_}
+\returns Equivalent to \tcode{wide_system() == id_}
 \end{itemdescr}
 
 
@@ -1406,17 +1427,22 @@ Richard Smith
 \bibitem[rfc3808]{rfc3808}
 I. McDonald
 \emph{IANA Charset MIB}\newline
-\url{https://tools.ietf.org/HTML/rfc3808}
+\url{https://tools.ietf.org/html/rfc3808}
 
 \bibitem[rfc2978]{rfc2978}
 N. Freed
-\emph{IANA Charset MIB}\newline
-\url{https://tools.ietf.org/HTML/rfc2978}
+\emph{IANA Charset Registration Procedures}\newline
+\url{https://tools.ietf.org/html/rfc2978}
 
 \bibitem[Character Sets]{mib}
 IANA
 \emph{Character Sets}\newline
 \url{https://www.iana.org/assignments/character-sets/character-sets.xhtml}
+
+
+
+% https://www.unicode.org/reports/tr22/tr22-8.html#Charset_Alias_Matching
+% TODO : wording for freestanding
 
 
 \bibitem[iconv encodings]{iconv}
