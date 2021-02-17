@@ -6,11 +6,11 @@
 
 \documentclass{wg21}
 
-\usepackage[twitter]{emoji}
+% \usepackage[twitter]{emoji}
 
 \title{Wording improvements for encodings and character sets}
 \docnumber{P2297R0}
-\audience{SG-16, CWG}
+\audience{SG-16}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 \begin{document}
@@ -20,14 +20,10 @@
 \section{Abstract}
 
 
-\section{Summary of changes}
+\section{Summary of behavior changes}
 
-\subsection{\tcode{wchar_t}}
 
-In the core wording, \tcode{wchar_t} is modified to be allowed to represent code units of variable length and shift state encodings.
-This aligns the standard with standard practices (the execution encoding is UTF-16 on windows).
-
-\subsection{\emoji{1F514}}
+\subsection{Alert \& backspace} % \emoji{1F514}
 
 The wording mandated that the executions encoding be able to encode "alert, backspace, and carriage return". This requirement is not used
 in the core wording (Tweaks of [5.13.3.3.1] may be needed), nor in the library wording, and therefore does not seem useful, so it was not added in the new wording.
@@ -49,7 +45,7 @@ The \defn{basic character set} is used:
 
 \subsection{\defn{literal character set}, \defn{literal character encoding}, \defn{wide literal character set}, \defn{wide literal character encoding}}
 
-Encodings and associated character sets of narrow and wide character and string literals. Implementation defined, and locale agnostic.
+Encodings and associated character sets of narrow and wide character and string literals. implementation-defined, and locale agnostic.
 
 
 
@@ -69,18 +65,95 @@ The definition for these encodings has been moved to [library.intro]
 
 \begin{itemize}
     \item Do the terms of art code unit, code point, abstract character need to be defined?
-    \item Are we happy with \tcode{execution} for library encodings? (alternatives : runtime, system, environment, etc)
+    \item Are we happy with \tcode{execution} for library encodings?
     \item Do we prefer \defn{literal character encoding} or \defn{literal ordinary character encoding} ?
 \end{itemize}
 
+\subsection{Codepoints vs scalar values}
 
+Only code points that are scalar can appear in a valid program.
+This is implied by the sentence "mapped to the Unicode character set" (as opposition to codespace) in phase 1.
+As such it doesn't matter which term we use, but we should be consistent.
+
+\section{Differences with P2314}
+
+This paper and P2314 are two separate effort which accidentally occurred at the same time.
+They share many similarities as they are born of the same SG-16 efforts to improve lexing.
+
+There are some differences between the two approaches that we feel are important enough that
+we think it is important for SG-16 to consider and compare bother papers!
+
+Note that unlike \paper{P2194R0} this paper does not try to fix phase 5 \& 6!
+
+\subsection{The character set of C++ source code is Unicode}
+
+We explored this point in great detail in \paper{P2194R0}.
+In particular:
+\begin{itemize}
+    \item If the source character set is Unicode, codepoints can be mapped 1 to 1 (see also P2290R0).
+    Whether a codepoint is assigned or not is irrelevant for the compiler as long as the properties of the codepoint are not observed.
+    In particular identifier validation which looks at XID properties implies codepoints are assigned.
+
+    \item If the source character set is not Unicode then the existence of a mapping to a codepoint implies the mapped-to codepoint is assigned (bare an evil implementation).
+\end{itemize}
+
+Therefore, unlike P2314, this paper does not introduce a different character set to describe the Unicode character set, referring instead
+to the Unicode character set directly, which we think is important as it makes things simpler.
+The fact that we need to look at Unicode properties of codepoints to determine the validity of identifiers further implies that we understand the Unicode character set as being a Coded Character set.
+
+
+\subsection{Encodings assumed at runtime should be described!}
+
+In the current wording, it is implied that there exists an execution encoding that is both the encoding of literals and
+the encoding assumed by C functions affected by locale.
+This is a side effect of the current wording not distinguishing between the compile and runtime environment.
+It is presumably also why the encodings of literals are "locale-specific".
+
+It seems evident that \emph{literal encoding} is a better term to describe the encodings of literals.
+But that renaming is less innocuous than it might first appear:
+\textbf{It admits the encoding of literals may not be the same as the encodings assumed by local specific libraries functions!}
+
+This for sure is a good thing as it matches reality but left us with a question: What is then the encoding assumed by the local specific functions and do they have a relation with the encodings of literals?
+
+Ultimately, I think the question boils down to whether it is sensible for the following assertion to ever fail:
+
+\begin{colorblock}
+assert(std::isalpha('a'));
+\end{colorblock}
+
+A wider question is maybe "Is a program which exposes mojibake well-defined?"
+
+The functions in \tcode{<cctype>}, \tcode{<cstdlib>} expect ""characters"" in the local specific encoding.
+Digging into the C++ standard, it seems to be the intent that \tcode{fputc}
+and all functions that use it (including \tcode{printf}) treat in characters.
+
+The effect of \tcode{setlocale} on the execution encoding is never quite described by neither standard.
+
+Assuming \tcode{putc('a')} should print the character \tcode{'a'}, and assuming \tcode{'a'} is a lower case alphabetic character,
+or assuming simply that \tcode{'a'} is a character than there must exist a relation between the encoding used to encode \tcode{'a'}
+and the encoding used to later interpret it.
+
+Requiring the same encoding, however, would be over constraining.
+For example, if the literal encoding is ASCII the runtime encoding can be UTF-8 as UTF8 is a superset of ASCII.
+The precise requirement to avoid mojibake is that all code units sequences present in literals are valid code units sequences in
+the execution encoding associated with the corresponding character type.
+
+A less precise, but simpler and therefore more useful requirement is that the execution character encoding is a "superset" of the literal character encoding, to the extent encodings can be supersets of one another.
+
+Without this precondition, no function can be expected to behave reasonably in the extreme case where the literal encoding is EBCDIC-derived and the execution encoding is ASCII derived (or vice-versa)
+Starting with \tcode{setlocale}. What does a call to \tcode{setlocale(LC_ALL, "C")} possibly mean if \tcode{"C"} is not the "C" locale?
+Confused yet?
+In fact, any function taking a character or string as a parameter would behave non-sensically if initialized with a literal.
+Without a relationship between the literal and execution encodings, literals can never be used in any function as the literal values would be in a different domain!
+
+This observation is reinforced and aggravated by the fact that it is generally not possible to distinguish literals from other objects at runtime!
 
 
 \section{Future works}
 
 \begin{itemize}
-\item Review support for variable-length wide execution encodings in the library
-\item Review usages of the terms character
+\item Align \tcode{wchar_t} with existing practices.
+\item Review more thoroughly usages of the terms \emph{character}.
 \end{itemize}
 
 \section{Wording}
@@ -91,19 +164,11 @@ The definition for these encodings has been moved to [library.intro]
 
 [...]
 
-\begin{quoteblock}
-Rationale: The notion of extended characters is removed, as, while the notion of basic character is useful,
-there are only a few places where basic characters should be handled differently from other characters (character meaning code point here).
-
-TODO: Should that definition apply to the UTF-8 (char8_t) encoding?
-\end{quoteblock}
-
-
 \textbf{multibyte character}\\
 \changed{
 sequence of one or more bytes representing a member of the extended
 character set of either the source or the execution environment}
-{Sequence of one or more code units representing a member of the literal or exection character sets.}
+{Sequence of one or more code units representing a member of one of the literal or execution character sets.}
 
 \begin{removedblock}
 \begin{note}
@@ -111,6 +176,14 @@ character set of either the source or the execution environment}
     set\iref{lex.charset}.
 \end{note}
 \end{removedblock}
+
+\begin{quoteblock}
+Rationale: The notion of extended characters is removed, as, while the notion of basic character is useful,
+there are only a few places where basic characters should be handled differently from other characters (character meaning code point here).
+
+TODO: Should that definition apply to the UTF-8 (char8_t) encoding?
+\end{quoteblock}
+
 
 
 [...]
@@ -167,8 +240,7 @@ a distinct value.
  This requirement does not hold for other types.
 \end{note}
 \begin{note}
- A bit-field of narrow character type whose width is larger than
- the width of that type has padding bits; see \iref{basic.types}.
+ A bit-field of narrow character type whose width is larger than the width of that type has padding bits; see \iref{basic.types}.
 \end{note}
 
 \begin{quoteblock}
@@ -189,10 +261,65 @@ specified among the supported locales\iref{locale}}{all code units of the wide l
 
 \rSec1[lex.phases]{Phases of translation}%
 
+\begin{enumerate}
+\item
+\indextext{character!source file}%
+\indextext{character set!basic source}
+\changed{Physical source file characters}{Each abstract character in the source file is} mapped, in an implementation-defined mannner,
+to \changed{the basic source character set}{a Unicode scalar value} (introducing new-line characters for end-of-line
+indicators) \removed{if necessary}.
+The set of \removed{physical} source file character\changed{s}{ sets} accepted is \impldef{physical source file characters}.
+
+\removed{Any source file character not in the basic source character
+set \iref{lex.charset} is replaced by the
+\indextext{universal character name}\\ \grammarterm{universal-character-name} that
+designates that character. An implementation may use any internal
+encoding, so long as an actual extended character encountered in the
+source file, and the same extended character expressed in the source
+file as a\\ \grammarterm{universal-character-name} (e.g., using the \tcode{\textbackslash
+    uXXXX} notation), are handled equivalently
+except where this replacement is reverted\iref{lex.pptoken} in a raw string literal.}
+
 \begin{quoteblock}
-Translation phase 1 is affected by the removal of the definition of "extended character set", no wording is currently provided
-as a few other papers are redrafting phase 1 such that further modifications should not be necessary.
+Do we need to mention anything about the encoding of the Unicode character set being implementation-defined given it is not observable?
 \end{quoteblock}
+
+\item
+\indextext{line splicing}%
+Each instance of a backslash character (\textbackslash)
+immediately followed by a new-line character is deleted, splicing
+\removed{physical} source input lines to form logical source lines. Only the last
+backslash on any \removed{physical} source input line shall be eligible for being part
+of such a splice.
+Except for splices reverted in a raw string literal, if a splice results in
+a character sequence that matches the
+syntax of a \grammarterm{universal-character-name}, the behavior is
+undefined. A source file that is not empty and that does not end in a new-line
+character, or that ends in a new-line character immediately preceded by a
+backslash character before any such splicing takes place,
+shall be processed as if an additional new-line character were appended
+to the file.
+
+\item The source file is decomposed into preprocessing
+tokens\iref{lex.pptoken} and sequences of whitespace characters
+(including comments). A source file shall not end in a partial
+preprocessing token or in a partial comment.
+Each comment is replaced by one space character. New-line characters are
+retained. Whether each nonempty sequence of whitespace characters other
+than new-line is retained or replaced by one space character is
+unspecified.
+\begin{addedblock}
+Each universal-character-name outside of a character or string literal is replaced by the Unicode codepoint it represents.
+\end{addedblock}
+
+The process of dividing a source file's
+characters into preprocessing tokens is context-dependent.
+\begin{example}
+    See the handling of \tcode{<} within a \tcode{\#include} preprocessing
+    directive.
+\end{example}
+
+\end{enumerate}
 
 \rSec1[lex.charset]{Character sets}
 
@@ -232,6 +359,10 @@ character set. \removed{However, the mapping from source file characters to the 
     _ { } [ ] # ( ) < > % : ; . ? * + - / ^ & | ~ ! = , @\textbackslash@ " '
 \end{codeblock}
 
+\begin{quoteblock}
+The above paragraph, footnote and table should be replaced by a table of codepoints identified by their Unicode name and values!
+\end{quoteblock}
+
 \pnum
 The \grammarterm{universal-character-name} construct provides a way to name
 other characters.
@@ -254,9 +385,23 @@ the sequence of \grammarterm{hexadecimal-digit}s
 in the \grammarterm{universal-character-name}.
 The program is ill-formed if that number is not a code point
 or if it is a surrogate code point.
-Noncharacter code points and reserved code points
+\removed{Noncharacter code points and reserved code points
 are considered to designate separate characters distinct from
-any ISO/IEC 10646 character.
+any ISO/IEC 10646 character.}
+
+\begin{quoteblock}
+Noncharacters, reserved characters
+are still valid codepoints and valid scalar values.
+
+Consequences of that:
+\begin{itemize}
+\item When they appear in a literal whose associated character set is Unicode, then the codepoint can be preserved in the evaluated string
+\item When they appear in a literal whose associated character set is \textbf{not} Unicode, then the codepoint designates a non-encodable character literal
+\item In identifier they do not designate a code point with the XID_Start or XID_Continue which makes the program ill-formed.
+\end{itemize}
+
+\end{quoteblock}
+
 If a \grammarterm{universal-character-name} outside
 the \grammarterm{c-char-sequence}, \grammarterm{s-char-sequence}, or
 \grammarterm{r-char-sequence} of
@@ -309,17 +454,23 @@ The \defn{literal character encoding} and \defn{wide literal character encoding}
 
 \begin{itemize}
 \item Each code unit is represented by a single \tcode{char} or \tcode{wchar_t} respectively
-\item Each code point is represented by one or more code units.
-\item Each member of the \defn{basic character set} is uniquely represented by a single byte whose value is positive
+\item Each member of the \defn{basic character set} is uniquely represented by a single code unit whose value is positive
 \item The NULL character (U+0000) is represented as a single code unit whose value, as read via a glvalue of type \tcode{char}, is 0
-\item The code units representing each digit in the basic character set (U+0030 to U+0039) have consecutive values
-\end{itemize}
-
-\end{addedblock}
 
 \begin{quoteblock}
 Do we still need the gvalue bit above? My understanding is that we are trying to say \tcode{char(L'\textbackslash 0') == 0}.
 \end{quoteblock}
+
+\item The code units representing each digit in the basic character set (U+0030 to U+0039) have consecutive values
+\end{itemize}
+
+Each member of the \defn{wide literal character set} shall be represented by a single code units in the \defn{wide literal character encoding}.
+\begin{quoteblock}
+This is... an interesting restriction that does not match existing practices but maintains the status-quo brokenness of \tcode{wchar_t}!
+\end{quoteblock}
+Members of the \defn{wide literal character set} are represented in one or more code units in the \defn{wide literal character encoding}.
+
+\end{addedblock}
 
 [...]
 
@@ -342,7 +493,7 @@ Do we still need the gvalue bit above? My understanding is that we are trying to
 
 \begin{bnf}
     \nontermdef{h-char}\br
-    \textnormal{any member of the \changed{source}{basic} character set except new-line and \terminal{>}}
+    \textnormal{any \changed{member of the source basic character set}{Unicode codepoint} except new-line and \terminal{>}}
 \end{bnf}
 
 \begin{bnf}
@@ -353,7 +504,7 @@ Do we still need the gvalue bit above? My understanding is that we are trying to
 
 \begin{bnf}
     \nontermdef{q-char}\br
-    \textnormal{any member of the \changed{source}{basic} character set except new-line and \terminal{"}}
+    \textnormal{any \changed{member of the source basic character set}{Unicode codepoint} except new-line and \terminal{"}}
 \end{bnf}
 
 
@@ -365,19 +516,19 @@ The grammar below will be further impacted by work to not replace non-basic char
 
 \begin{bnf}
 \nontermdef{basic-c-char}\br
-\textnormal{any member of the basic \removed{source} character set except the single-quote \terminal{'}, backslash \terminal{\textbackslash}, or new-line character}
+\textnormal{any \changed{member of the source basic character set}{Unicode codepoint} except the single-quote \terminal{'}, backslash \terminal{\textbackslash}, or new-line character}
 \end{bnf}
 
-
-\begin{quoteblock}
-I think we want to limit to basic characters here
-\end{quoteblock}
 
 \begin{bnf}
 
 \nontermdef{conditional-escape-sequence-char}\br
-\textnormal{any member of the basic \removed{source} character set that is not an} octal-digit\textnormal{, a} simple-escape-sequence-char\textnormal{, or the characters \terminal{u}, \terminal{U}, or \terminal{x}}
+\textnormal{any member of the \removed{source} basic character set} that is not an octal-digit\textnormal{, a} simple-escape-sequence-char\textnormal{, or the characters \terminal{u}, \terminal{U}, or \terminal{x}}
 \end{bnf}
+
+\begin{quoteblock}
+    I think we want to limit to basic characters here
+\end{quoteblock}
 
 [...]
 
@@ -403,12 +554,13 @@ take precedence over their respective base kinds.
     that encoding it would require more than one code unit.
 \end{note}
 
-\begin{floattable}{Character literals}{lex.ccon.literal}
+\begin{tabular}
+    %{Character literals}{lex.ccon.literal}
 {lllll}
-\topline
+%\topline
 Encoding & Kind & Type & Associated char- & Example \\
 prefix & & & acter encoding & \\
-\capsep
+%\capsep
 none &
 \defnx{ordinary character literal}{literal!character!ordinary} &
 \keyword{char} &
@@ -454,7 +606,7 @@ UTF-16 &
 \keyword{char32_t} &
 UTF-32 &
 \tcode{U'z'} \\
-\end{floattable}
+\end{tabular}
 
 
 \rSec2[lex.string]{String literals}
@@ -466,24 +618,50 @@ The grammars below will be further impacted by work to not replace non-basic cha
 
 \begin{bnf}
 \nontermdef{basic-s-char}\br
-\textnormal{any member of the basic \removed{source} character set except the double-quote \terminal{"}, backslash \terminal{\textbackslash}, or new-line character}
+\textnormal{any \changed{member of the source basic character set}{Unicode codepoint} except the double-quote \terminal{"}, backslash \terminal{\textbackslash}, or new-line character}
 \end{bnf}
 
 \begin{bnf}
-\nontermdef{d-char}\br
-\textnormal{any member of the basic  \removed{source} character set except:}\br
-\bnfindent\textnormal{space, the left parenthesis \terminal{(}, the right parenthesis \terminal{)}, the backslash \terminal{\textbackslash}, and the control characters}\br
-\bnfindent\textnormal{representing horizontal tab, vertical tab, form feed, and newline.}
+    \nontermdef{raw-string}\br
+    \terminal{"} \opt{d-char-sequence} \terminal{(} \opt{r-char-sequence} \terminal{)} \opt{d-char-sequence} \terminal{"}
 \end{bnf}
+
+\begin{bnf}
+    \nontermdef{r-char-sequence}\br
+    r-char\br
+    r-char-sequence r-char
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{r-char}\br
+    \textnormal{any \changed{member of the source basic character set}{Unicode codepoint}, except a right parenthesis \terminal{)} followed by}\br
+    \bnfindent\textnormal{the initial \grammarterm{d-char-sequence} (which may be empty) followed by a double quote \terminal{"}.}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{d-char-sequence}\br
+    d-char\br
+    d-char-sequence d-char
+\end{bnf}
+
+
+\begin{bnf}
+    \nontermdef{d-char}\br
+    \textnormal{any \changed{member of the source basic character set}{Unicode codepoint} :}\br
+    \bnfindent\textnormal{space, the left parenthesis \terminal{(}, the right parenthesis \terminal{)}, the backslash \terminal{\textbackslash}, and the control characters}\br
+    \bnfindent\textnormal{representing horizontal tab, vertical tab, form feed, and newline.}
+\end{bnf}
+
 
 [...]
 
-\begin{floattable}{String literals}{lex.string.literal}
+\begin{tabular}
+    % {String literals}{lex.string.literal}
 {llp{2.6cm}p{2.3cm}p{4.7cm}}
-\topline
+%\topline
 Encoding & Kind & Type & Associated & Examples \\
 prefix & & & character encoding & \\
-\capsep
+% \capsep
 none &
 \defnx{ordinary string literal}{literal!string!ordinary} &
 array of $n$\newline \tcode{\keyword{const} \keyword{char}} &
@@ -514,7 +692,7 @@ array of $n$\newline \tcode{\keyword{const} \keyword{char32_t}} &
 UTF-32 &
 \tcode{U"UTF-32 string"}\newline
 \tcode{UR"z(UTF-32 raw string)z"} \\
-\end{floattable}
+\end{tabular}
 
 \pnum
 \indextext{literal!string!raw}%
@@ -572,11 +750,25 @@ Otherwise (\placeholder{S} contains a numeric literal operator template),
 \begin{codeblock}
     operator "" @\placeholder{X}@<'@$c_1$@', '@$c_2$@', ... '@$c_k$@'>()
 \end{codeblock}
-where \placeholder{n} is the source character sequence $c_1c_2...c_k$.
+where \placeholder{n} is the \changed{source character}{codepoint} sequence $c_1c_2...c_k$.
 \begin{note}
     The sequence
     $c_1c_2...c_k$ can only contain characters from the basic \removed{source} character set.
 \end{note}
+
+\begin{quoteblock}
+This note was in the wording original proposal \paper{N2750}.
+It is not clear why this restriction exists.
+With the early replacement of universal-character-name as proposed in this paper, it would be easy to remove that restriction.
+In fact, if we wanted to keep this restriction the note should probably become normative? 
+
+There is little reason to make the following code ill-formed:
+\begin{colorblock}
+long long operator""_µs(unsigned long long);
+\end{colorblock}
+
+There is currently \href{https://godbolt.org/z/sTET3q}{implementation divergence} !
+\end{quoteblock}
 
 \pnum
 If \placeholder{L} is a \grammarterm{user-defined-floating-point-literal}, let \placeholder{f} be the
@@ -598,7 +790,7 @@ Otherwise (\placeholder{S} contains a numeric literal operator template),
 \begin{codeblock}
     operator "" @\placeholder{X}@<'@$c_1$@', '@$c_2$@', ... '@$c_k$@'>()
 \end{codeblock}
-where \placeholder{f} is the source character sequence $c_1c_2...c_k$.
+where \placeholder{f} is the  \changed{source character}{codepoint} sequence $c_1c_2...c_k$.
 \begin{note}
     The sequence
     $c_1c_2...c_k$ can only contain characters from the basic \removed{source} character set.
@@ -853,11 +1045,10 @@ string literal, as part of the \impldef{mapping from physical source file charac
     to basic character set} mapping from physical source file characters to
 the basic \removed{source} character set.
 
-
-\section{Acknowledgments}
-
 \section{References}
 \renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21}
 
 \begin{thebibliography}{9}
 

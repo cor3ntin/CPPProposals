@@ -4,9 +4,10 @@
 \documentclass{wg21}
 
 \title{Naming Text Encodings to Demystify Them}
-\docnumber{P1885R4}
+\docnumber{P1885R5}
 \audience{SG-16, LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Peter Brett}{pbrett@cadence.com}
 
 \begin{document}
 \maketitle
@@ -29,10 +30,10 @@ This model works poorly with modern understanding of text, ie the Unicode model 
 from locales which are purely rules for formatting and text transformations but do not affect
 which characters are represented by a sequence of code units.
 
-Moreover, the standard does not provide a way to query which encodings are expected or used by the system,
+Moreover, the standard does not provide a way to query which encodings are expected or used by the environment,
 leading to guesswork and unavoidable UB.
 
-This paper introduces the notions of literal encoding, system encoding and a way to query them.
+This paper introduces the notions of literal encoding, environment encoding, and a way to query them.
 
 
 \section{Examples}
@@ -57,10 +58,10 @@ int main() {
     print(std::text_encoding::literal());
     std::cout << "Wide Literal Encoding: ";
     print(std::text_encoding::wide_literal());
-    std::cout << "System Encoding: ";
-    print(std::text_encoding::system());
-    std::cout << "Wide system Encoding: ";
-    print(std::text_encoding::wide_system());
+    std::cout << "environment Encoding: ";
+    print(std::text_encoding::environment());
+    std::cout << "Wide environment Encoding: ";
+    print(std::text_encoding::wide_environment());
 }
 \end{colorblock}
 
@@ -72,18 +73,18 @@ Compiled with \tcode{g++ -fwide-exec-charset=EBCDIC-US -fexec-charset=SHIFT_JIS}
         Shift_JIS
         MS_Kanji
         csShiftJIS
-    
+
     Wide Literal Encoding: EBCDIC-US (iana mib: 2078)
     Aliases:
         EBCDIC-US
         csEBCDICUS
-    
-    System Encoding: UTF-8 (iana mib: 106)
+
+    environment Encoding: UTF-8 (iana mib: 106)
     Aliases:
         UTF-8
         csUTF8
-    
-    Wide system Encoding: ISO-10646-UCS-4 (IANA mib: 1001)
+
+    Wide environment Encoding: ISO-10646-UCS-4 (IANA mib: 1001)
     Aliases:
         ISO-10646-UCS-4
         csUCS4
@@ -91,7 +92,7 @@ Compiled with \tcode{g++ -fwide-exec-charset=EBCDIC-US -fexec-charset=SHIFT_JIS}
 
 \subsection{LWG3314}
 
-[time.duration.io] specifies that the unit for microseconds is µ on systems able to display it.
+[time.duration.io] specifies that the unit for microseconds is µ on environments able to display it.
 This is currently difficult to detect and implement properly.
 
 The following allows an implementation to use µ if it is supported by both the execution encoding and the encoding
@@ -102,8 +103,8 @@ attached to the stream.
     template<class traits, class Rep, class Period>
     void print_suffix(basic_ostream<char, traits>& os, const duration<Rep, Period>& d)
     {
-        if constexpr(text_encoding::literal() == text_encoding::utf8) {
-            if (os.getloc().encoding() == text_encoding::utf8) {
+        if constexpr(text_encoding::literal() == text_encoding::UTF8) {
+            if (os.getloc().encoding() == text_encoding::UTF8) {
                 os << d.count() << "\u00B5s"; // µ
                 return;
             }
@@ -117,12 +118,12 @@ A more complex implementation may support more encodings, such as iso-8859-1.
 \subsection{Asserting a specific encoding is set}
 
 On POSIX, matching encodings is done by name, which pulls the entire database.
-To avoid that we propose a method to asserting that the system encoding is as expected.
+To avoid that we propose a method to asserting that the environment encoding is as expected.
 such method mixed to only pull in the strings associated with this encoding:
 
 \begin{colorblock}
 int main() {
-    return text_encoding::system_is<text_encoding::id::UTF8>();
+    return text_encoding::environment_is<text_encoding::id::UTF8>();
 }
 \end{colorblock}
 
@@ -162,9 +163,18 @@ assert(wtf8 == text_encoding("___wtf8__"));
 
 \section{Revisions}
 
+\subsection*{Revision 5}
+\begin{itemize}
+    \item Add motivation for name returning const char*
+    \item Improve wording
+    \item Rename \tcode{system} to \tcode{environment}
+    \item Remove freestanding wording - will be handled separately
+    \item Exclude a couple of legacy encodings that are problematic with the name matching algorithm
+\end{itemize}
+
 \subsection*{Revision 4}
 \begin{itemize}
-    \item Change operator==(encoding, mib) for \tcode{id::other}
+    \item Change \tcode{operator==(encoding, mib)} for \tcode{id::other}
     \item Add wording for freestanding
     \item Improve wording
     \item Improve alias comparison algorithm to match unicode TR22
@@ -172,7 +182,7 @@ assert(wtf8 == text_encoding("___wtf8__"));
 
 \subsection*{Revision 3}
 \begin{itemize}
-    \item Add a list of encodings NOT registed by IANA 
+    \item Add a list of encodings NOT registed by IANA
     \item Add a comparative list of IANA/WHATWG
     \item Address names that do not uniquely identify encodings
     \item Add more examples
@@ -182,7 +192,7 @@ assert(wtf8 == text_encoding("___wtf8__"));
 \begin{itemize}
 	\item Add all the enumerators of rcf 3008
     \item Add a mib constructor to \tcode{text_encoding}
-    \item Add \tcode{system_is} and \tcode{wide_system_is} function templates
+    \item Add \tcode{environment_is} and \tcode{wide_environment_is} function templates
 \end{itemize}
 
 \subsection*{Revision 1}
@@ -201,7 +211,7 @@ The primary use cases are:
 
 \begin{itemize}
     \item Ensuring a specific string encoding at compile time
-    \item Ensuring at runtime that string literals are compatible with the system encoding
+    \item Ensuring at runtime that string literals are compatible with the environment encoding
     \item Custom conversion function
     \item locale-independent text transformation
 \end{itemize}
@@ -212,7 +222,7 @@ This facility aims to help \textbf{identify} text encodings and does not want to
 Future text encoders and decoders may use the proposed facility as a way to identify their source and destination encoding.
 The current facility is \emph{just} a fancy name.
 
-\section{The many text encodings of a C++ system}
+\section{The many text encodings of a C++ environment}
 
 Text in a technical sense is a sequence of bytes to which is virtually attached an encoding.
 Without encoding, a blob of data simply cannot be interpreted as text.
@@ -223,7 +233,7 @@ encoding is therefore presumed with more or less success.
 Generally, it is useful to know the encoding of a string when
 
 \begin{itemize}
-    \item Transferring data as text between systems or processes (I/O)
+    \item Transferring data as text between environments or processes (I/O)
     \item Textual transformation of data
     \item Interpretation of a piece of data
 \end{itemize}
@@ -231,7 +241,7 @@ Generally, it is useful to know the encoding of a string when
 In the purview of the standard, text I/O text originates from
 \begin{itemize}
     \item The source code (literals)
-    \item The iostream library as well as system functions
+    \item The iostream library as well as environment functions
     \item Environment variables and command-line arguments intended to be interpreted as text.
 \end{itemize}
 
@@ -249,7 +259,7 @@ There are therefore 3 sets of encodings of primary interest:
 \tcode{char8_t}, \tcode{char16_t}, \tcode{char32_t} literals are assumed to be respectively UTF-8, UTF-16 and UTF-32 encoded.
 \endnote
 
-\note A program may have to deal with more encoding - for example, on Windows, the encoding of the console attached to \tcode{cout} may be different from the system encoding.
+\note A program may have to deal with more encoding - for example, on Windows, the encoding of the console attached to \tcode{cout} may be different from the environment encoding.
 
 Likewise depending on the platform, paths may or may not have an encoding attached to them, and that encoding may either be a property of the platform or the filesystem itself.
 \endnote
@@ -260,9 +270,9 @@ That implies that the standard assumes that string literals are encoded in a sub
 
 This has to hold notably because it is not generally possible to differentiate runtime strings from compile-time literals at runtime.
 
-This model does, however, present l shortcomings:
+This model does, however, present some shortcomings:
 
-First, in practice, C++ software are often no longer compiled in the same environment as the one on which they are run and the entity providing the program may not have control over the environment on which it is run.
+First, in practice, C++ softwares are often no longer compiled in the same environment as the one on which they are run and the entity providing the program may not have control over the environment on which it is run.
 
 Both POSIX and C++ derives the encoding from the locale. Which is an unfortunate artifact of an era when 255 characters or less ought to be enough for anyone.
 Sadly, the locale can change at runtime, which means the encoding which is used by ctype and conversion functions can change at runtime.
@@ -274,10 +284,10 @@ A C++ program sets the locale to "C" (see \cite{N2346}, 7.11.1.1.4) (which assum
 Many text transformations can be done in a locale-agnostic manner yet require the encoding to be known - as no text transformation can ever be applied without
 prior knowledge of what the encoding of that text is.
 
-More importantly, it is difficult or impossible for a developer to diagnose an incompatibility between the locale-derived, encoding, the system-assumed encoding and
+More importantly, it is difficult or impossible for a developer to diagnose an incompatibility between the locale-derived, encoding, the environment-assumed encoding and
 the encoding of string literals.
 
-Exposing the different encodings would let developers verify that that the system environment is compatible with the implementation-defined encoding of string literals, aka that the encoding and character set used to encode string literals are a strict subset of the encoding of the environment.
+Exposing the different encodings would let developers verify that that the environment is compatible with the implementation-defined encoding of string literals, aka that the encoding and character set used to encode string literals are a strict subset of the encoding of the environment.
 
 \section{Identifying Encodings}
 
@@ -306,7 +316,7 @@ is not available, as well as to make sure we can transition \tcode{std::locale} 
 \subsection{Naming}
 SG-16 is looking at rewording the terminology associated with text and encoding throughout the standard, this paper does not yet reflect that effort.
 
-However "system encoding" and "literal encoding" are descriptive terms. In particular "system" is illustrative of the
+However "environment encoding" and "literal encoding" are descriptive terms. In particular, "environment" is illustrative of the
 fact that a C++ program has, in the general case, no control over the encoding it is expected to produce and consume.
 
 \subsection{MIBEnum}
@@ -318,17 +328,15 @@ MIB stands for Management Information Base, which is IANA nomenclature, the name
 \end{note}
 
 
-The enumerators \tcode{unknown} and \tcode{other} and their value are provided by the very same RFC such as:
+The enumerators \tcode{unknown} and \tcode{other}and their corresponding values, are specified in \cite{rfc3808}:
 
 \begin{itemize}
-	\item \tcode{other} designs an encoding not registered in the IANA Database, such that 2 encodings with the \tcode{other} mib are identical if their names compare equal.
+	\item \tcode{other} designate an encoding not registered in the IANA Database, such that 2 encodings with the \tcode{other} mib are identical if their names compare equal.
 	\item \tcode{unknown} is used when the encoding could not be determined. Under the current proposal,  only default constructing a \tcode{text_encoding} object can produce that value. The encoding associated with the locale or environment is always known.
 \end{itemize}
 
 While \tcode{MIBEnum} was necessary to make that proposal implementable consistently across platforms,
-its main purpose is to remediate to the fact that encoding can have multiple inconsistent names across implementations.
-
-However,
+its main purpose is to remediate the fact that encoding can have multiple inconsistent names across implementations.
 
 \subsection{Name and aliases}
 
@@ -345,11 +353,11 @@ Further differentiation can be made in the application through out-of-band infor
 
 \subsection{Implementation flexibility}
 
-This proposal aims to be implementable on all platforms as such, it supports encoding not registered with IANA, does not impose that
-a freestanding implementation is aware of all registered encodings, and it let implementers provide their own aliases for IANA-registered encoding.
+This proposal aims to be implementable on all platforms as such, it supports encodings not registered with IANA, does not impose that
+a freestanding implementation is aware of all registered encodings, and it lets implementers provide their aliases for IANA-registered encoding.
 Because the process for registering encodings is documented \cite{rfc2978} implementations can (but are not required to) provide
-registered encodings not defined in \cite{rfc3808} - in the case that RFC is updated out of sync of the standard.
-However, \cite{rfc3808} is from 2004 and has not been updated. As the world converges to utf-8, new encodings are less likely to
+registered encodings not defined in \cite{rfc3808} - in the case that RFC is updated out of sync with the standard.
+However, \cite{rfc3808} is from 2004 and has not been updated. As the world converges to UTF-8, new encodings are less likely to
 be registered.
 
 Implementations may not extend the \tcode{text_encoding::id} as to guarantee source compatibility.
@@ -357,30 +365,50 @@ Implementations may not extend the \tcode{text_encoding::id} as to guarantee sou
 \subsection{\tcode{const char*}}
 
 A primary use case is to enable people to write their own conversion functions.
-Unfortunately, most APIs expect NULL-terminated strings, which is why we return a const char*.
+Unfortunately, most APIs expect NULL-terminated strings, which is why we return a \tcode{const char*}.
+This is \href{https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98576#c2}{requested by users} and consistent with \tcode{source_location},
+\tcode{stacktrace}, ...
+We would have consider a null-terminated \tcode{string_view} as proposed in \paper{P1402R0} if such thing was available! 
+
 
 \subsection{Freestanding}
 
-In order for this class to be compatible with free standing environments, care has been taken to avoid
+For this class to be compatible with free-standing environments, care has been taken to avoid
 allocation and exceptions.
-As such, we put an upper bound on the name of encoding pass to \tcode{text_encoding} constructor of 63+1 characters.
-Per rfc2978, the primary name must not exceeed 40 characters.
+As such, we put an upper bound on the length of the name of encodings passed to \tcode{text_encoding} constructor of 63+1 characters.
+Per rfc2978, the names must not exceed 40 characters.
+There is however a name of 45 characters in the database. 
+64 has been arbitrarily chosen being the smallest power of 2 number that would fit all the name with some extra space
+for future-proofing
+
+However, no wording for freestanding is provided as there are currently missing pieces (notably string_view).
+We propose that making this facility freestanding can be bundled with the wider work by Ben Craig.
 
 \subsection{Name comparison}
 
-Names and aliases are compared ignoring case and non alpha numeric characters, in a way that follows 
+Names and aliases are compared ignoring case and non-alphanumeric characters, in a way that follows
 \href{https://www.unicode.org/reports/tr22/tr22-8.html#Charset_Alias_Matching}{Unicode recommandations}
+
+This leads to a couple of ambiguities ("iso-ir-9-1" and "iso-ir-9-2" match "iso-ir-91" and "iso-ir-92", respectively).
+The 2 problematics encodings have been excluded from our proposal entirely.
+They were designed in 1975 for use in newspapers in Norway and are no longer in use. Supporting them would either require a perfect match, even though we know from experience that users will find 20 creative ways to spell UTF-8, or to perform in sequence a perfect match and a loose match; we do not this is a reasonable cost to pay for algorithms that fell into disuse long ago:
+
+
+Reference: \href{https://www.itscj.ipsj.or.jp/iso-ir/009-1.pdf}{iso-ir-9-1} \href{https://www.itscj.ipsj.or.jp/iso-ir/009-2.pdf}{iso-ir-9-2}
+
+Note these are different from ISO646-NO2 which is the long obsoleted Norwegian ancestor to ISO 8859-1
+
 
 \section{Implementation}
 
 The following proposal has been prototyped using a modified version of GCC to expose the encoding information.
 
-On Windows, the run-time encoding can be determined by \tcode{GetACP} - and then map to MIB values, while on POSIX platform it corresponds to value of \tcode{nl_langinfo} when the environment ("") locale is set - before the program's locale is set to \tcode{C}.
+On Windows, the run-time encoding can be determined by \tcode{GetACP} - and then map to MIB values, while on a POSIX platform it corresponds to value of \tcode{nl_langinfo} when the environment ("") locale is set - before the program's locale is set to \tcode{C}.
 
 On OSX \tcode{CFStringGetSystemEncoding} and \tcode{CFStringConvertEncodingToIANACharSetName} can also be used.
 
 
-While exposing the literal encoding is novel, a few libraries do expose the system encoding, including Qt and wxWidget, and use the IANA registry.
+While exposing the literal encoding is novel, a few libraries do expose the environment encoding, including Qt and wxWidget, and use the IANA registry.
 
 Part of this proposal is available on \href{https://compiler-explorer.com/z/7D3Z3x}{Compiler explorer}
 (literal and wide_literal are not supported)
@@ -391,35 +419,35 @@ Part of this proposal is available on \href{https://compiler-explorer.com/z/7D3Z
 \subsection{Qt}
 
 \begin{colorblock}
-// Get a QTextCodec able to convert the system encoding to QString
-auto codec = QTextCodec::codecForMib(std::text_encoding::system().mib());
+// Get a QTextCodec able to convert the environment encoding to QString
+auto codec = QTextCodec::codecForMib(std::text_encoding::environment().mib());
 \end{colorblock}
 
 \subsection{ICU}
 
 \begin{colorblock}
-// Get a UConverter object able to convert to and from the system encoding to
-//ICU's internal encoding.
+// Get a UConverter object able to convert to and from the environment encoding to
+// ICU's internal encoding.
 UErrorCode err;
-UConverter* converter = ucnv_open(std::text_encoding::system().name(), &err);
+UConverter* converter = ucnv_open(std::text_encoding::environment().name(), &err);
 \end{colorblock}
 
 \begin{colorblock}
-// Check whether a UConverter converts to the system encoding
-bool compatibleWithSystemEncoding(UConverter* converter)
+// Check whether a UConverter converts to the environment encoding
+bool compatibleWithenvironmentEncoding(UConverter* converter)
 {
     UErrorCode err;
     const char* name == ucnv_getName(converter, &err);
     assert(U_SUCCESS(err));
-    return std::text_encoding(name) == std::text_encoding::system();
+    return std::text_encoding(name) == std::text_encoding::environment();
 }
 \end{colorblock}
 
 \subsection{ICONV}
 
 \begin{colorblock}
-// Convert from utf-8 to the system encoding, transliterating if necessary
-iconv_t converter 
+// Convert from UTF-8 to the environment encoding, transliterating if necessary
+iconv_t converter
     = iconv_open(std::format("{}//TRANSLIT", std::text_encoding::literal()).c_str(), "utf-8");
 \end{colorblock}
 
@@ -436,23 +464,23 @@ The IANA registry has been picked for several reasons
 \item It is used as a primary source for many tools including ICU and iconv, and many programming languages and libraries.
 \item It has an extensive number of entries which makes it uniquely suitable for the wide portability requirements of C++. Notably, it supports IBM codepages.
 \item It provides stable enum values designed for efficient and portable comparison in programming languages
-\item There is a well-specified support for unregistered encoding
+\item There is a well-specified support for unregistered encodings
 \item There is a well-specified process to register new encodings
 \end{itemize}
 
 We also considered the WHATWG Encoding specification. But this specification is designed specifically for the web
-and has no provision for EBCDIC encodings., provide no numerical values, etc.
+and has no provision for EBCDIC encodings, provides no numerical values, etc.
 
 Annex A provides a comparative list of IANA and WHATWG lists.
 
 Extensive research didn't found any other registry worth considering.
 It would be possible to maintain our own list in the standard, but this would put an undue burden on the committee and
-risks reducing portability with existing tools, libraries and other languages.
+risks reducing portability with existing tools, libraries, and other languages.
 
 \subsection{Why not return a \tcode{text_encoding::id} rather than a \tcode{text_encoding} object?}
 Some implementations may need to return a non-register encoding, in which case they would return \tcode{mib::other} and a custom name.
 
-\tcode{text_encoding::system()} and \tcode{text_encoding::system_mib()} (not proposed) would generate the same code in an optimized build.
+\tcode{text_encoding::environment()} and \tcode{text_encoding::environment_mib()} (not proposed) would generate the same code in an optimized build.
 
 
 \subsection{But handling names is expensive?}
@@ -469,7 +497,7 @@ tools that need mime encoding names.
 
 \subsection{Why can't there be vendor provided MIBs?}
 
-This would be meaningless in portable code. \tcode{mib} is only useful as a mechanism to identify \textbf{portably} encoding and to increase compatibility across third-party libraries.
+This would be meaningless in portable code. \tcode{mib} is only useful as a mechanism to identify encodings \textbf{portably} and to increase compatibility across third-party libraries.
 
 It does not prevent the support of unregistered encodings:
 
@@ -489,11 +517,11 @@ any functionality.
 
 \subsection{I just want to check that my platform is utf-8 without paying for all these other encodings?}
 
-we added \tcode{system_is} to that end.
+we added \tcode{environment_is} to that end.
 
 \begin{colorblock}[style=MY]
     int main() {
-        assert(text_encoding::system_is<text_encoding::id::UTF8>
+        assert(text_encoding::environment_is<text_encoding::id::UTF8>
                   && "Non UTF8 encoding detected, go away");
     }
 \end{colorblock}
@@ -501,20 +529,28 @@ we added \tcode{system_is} to that end.
 
 This can be implemented in a way that only stores in the program the necessary information for that particular encoding (unless \tcode{aliases} is called at runtime).
 
-On Windows and OSX, only calling \tcode{encoding::aliases} would pull any data in the program, even if calling \tcode{system}.
+On Windows and OSX, only calling \tcode{encoding::aliases} would pull any data in the program, even if calling \tcode{environment}.
 
 
 \subsection{What is the cost of calling \tcode{aliases}?}
 
-My crude implementation pulls in 30Ki of data when calling aliases or the name constructor, or \tcode{system()} (on POSIX).
+My crude implementation pulls in 30Ki of data when calling aliases or the name constructor, or \tcode{environment()} (on POSIX).
 \section{Future work}
 
-Exposing the notion of text encoding in the core and library language gives us the tools to solve some
-problems in the standard.
+Exposing the notion of text encoding in the core and library language gives us the tools to solve some problems in the standard.
 
 Notably, it offers a sensible way to do locale-independent, encoding-aware padding in \tcode{std::format} as in described in \cite{P1868}.
 
 While this gives us the tools to handle encoding, it does not fix the core wording.
+
+
+\subsection{Why do \tcode{name()} and \tcode{aliases()} return \tcode{const char*} rather than \tcode{string_view}?}
+
+One of the design goals is to be compatible with widely deployed libraries such as ICU and iconv, which are, on most platforms, the defacto standards for text transformations, classification, and transcoding.
+These are C APIs which expect null-terminated string.
+Returning a null-terminated string_view of which end() is dereferenced would be UB.
+Returning a \tcode{string} and hopping that SBO kicks in would add complexity for little reason, and would preclude the name function to be provided in free standing implementations.
+LEWG previously elected to use const char* in source_location, stacktrace, etc
 
 \newpage
 
@@ -524,8 +560,6 @@ While this gives us the tools to handle encoding, it does not fix the core wordi
 Add the header \tcode{<text_encoding>} to the "C++ library headers" table in
 \tcode{[headers]}, in a place that respects the table’s current alphabetic
 order.
-
-Add the header \tcode{<text_encoding>} to table \tcode{[headers.cpp.fs]} (freestanding).
 
 Add the macro \tcode{__cpp_lib_text_encoding} to \tcode{[version.syn]}, in a
 place that respects the current alphabetic order:
@@ -539,16 +573,19 @@ Add a new header \tcode{<text_encoding>}.
 \begin{quote}
 \begin{addedblock}
 
-A \tcode{text\_encoding} describes a text encoding portably across platforms by exposing data from the Character Sets database described by \cite{rfc2978} and \cite{rfc3808}.
+[text.encoding] describes an interface for accessing the IANA Character Sets database.
+
+
+%describes an interface A \tcode{text\_encoding} is an object which represents a character encoding by %exposing data from the Character Sets database described by \cite{rfc2978} and \cite{rfc3808}.
 
 \begin{codeblock}
 
 namespace std {
 
-struct text_encoding{
-    
-    inline constexpr size_t max_name_lenght = 63;
-    
+struct text_encoding {
+
+    inline constexpr size_t max_name_length = 63;
+
     enum class id : int_least32_t {
         other = 1,
         unknown = 2,
@@ -582,8 +619,6 @@ struct text_encoding{
         ISO2IntlRefVersion = 30,
         NATSSEFI = 31,
         NATSSEFIADD = 32,
-        NATSDANO = 33,
-        NATSDANOADD = 34,
         ISO10Swedish = 35,
         KSC56011987 = 36,
         ISO2022KR = 37,
@@ -812,8 +847,9 @@ struct text_encoding{
         reserved = 3000
     };
 
-    constexpr explicit text_encoding(string_view name);
-    constexpr text_encoding(text_encoding::id mib) noexcept;
+    constexpr text_encoding() = default;
+    constexpr explicit text_encoding(string_view name) noexcept;
+    constexpr text_encoding(id mib) noexcept;
 
     constexpr id mib() const noexcept;
     constexpr const char* name() const noexcept;
@@ -821,24 +857,24 @@ struct text_encoding{
     constexpr auto aliases() const noexcept -> @{\seebelow}@;
 
     constexpr bool operator==(const text_encoding & other) const noexcept;
-    constexpr bool operator==(text_encoding::id mib) const noexcept;
+    constexpr bool operator==(id mib) const noexcept;
 
     static consteval text_encoding literal();
     static consteval text_encoding wide_literal();
 
-    static text_encoding system();
-    static text_encoding wide_system();
-    
-    
-    template<text_encoding::id id_>
-    static bool text_encoding::system_is();
-    
-    template<text_encoding::id id_>
-    static bool text_encoding::wide_system_is();
+    static text_encoding environment() noexcept;
+    static text_encoding wide_environment() noexcept;
+
+
+    template<id id_>
+    static bool text_encoding::environment_is() noexcept;
+
+    template<id id_>
+    static bool text_encoding::wide_environment_is() noexcept;
 
     private:
-        id mib_; // \expos
-        char name_[max_name_lenght+1]; // \expos
+        id mib_ = id::unknown; // \expos
+        char name_[max_name_length+1] = {0}; // \expos
     };
 
 
@@ -856,47 +892,67 @@ template<> struct hash<text_encoding>;
 
 \begin{addedblock}
 
-\pnum A \defn{registered-character-set} is a character set registered by the process described in \cite{rfc2978} and which is known of the implementation.
+\pnum A \defn{registered-character-set} is a character set in the IANA Character Sets database.
 
-\pnum Let \tcode{bool COMP_NAME(const char* a, const char* b)} be a function that returns \tcode{true} if two strings encoded in the basic execution character set are identical, ignoring in each string, case and all characters outside of the ranges [a-z], [A-Z], [0-9], as well as \tcode{0} not precedeed by a digit.
+
+
+The set of known \defn{registered-character-set} contains every \defn{registered-character-set} specified in the IANA Character Sets database except for the following:
+\begin{itemize}
+\item NATS-DANO (33)
+\item NATS-DANO-ADD	(34)
+\end{itemize}
+
+
+Each \defn{registered-character-set} is identified by an enumerator in \tcode{text_encoding::id}, has a unique \defn{preferred-name} and has a set of 0 or more aliases.
+Its name is specified in the IANA Character Sets database.
+Its set of aliases is an implementation-defined superset of the aliases specified in the IANA Character Sets database.
+
+Each alias is associated with exactly one \defn{registered-character-set}.
 
 \begin{note}
-The enumerators of the \tcode{text_encoding::id} and their value match those specified in \cite{rfc3808} with the "cs" prefixed removed. \tcode{text_encoding::id::UCS2} corresponds to \tcode{csUnicode} in \cite{rfc3808}
+The name and value of each enumerator in the \tcode{text_encoding::id} enum is identical to those specified in \cite{rfc3808} except for the following modifications:
+\begin{itemize}
+    \item the "cs" prefix is removed from each name
+    \item \tcode{csUnicode} is renamed \tcode{text_encoding::id::UCS2}
+    \end{itemize}
 \end{note}
 
+
+
+\pnum Let \tcode{bool COMP_NAME(string_view a, string_view b)} be a function that returns \tcode{true} if two strings encoded in the literal character set are equal ignoring: character case;  all characters outside of the ranges [a-z], [A-Z], [0-9]; and \tcode{0} not preceded by [0-9].
+
 \begin{itemdecl}
-constexpr explicit text_encoding(string_view name);
+inline constexpr size_t max_name_length = @\seebelow@;
+\end{itemdecl}
+
+\begin{itemdecl}
+constexpr explicit text_encoding(string_view name) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-    \preconditions \tcode{name.size() < 64} is \tcode{true}.
-    
+    \preconditions \tcode{name.size() <= max_name_length} is \tcode{true}.
+
     \effects
-    If there exists an implementation-defined alias \tcode{a} of \defn{registered-character-set} such that \tcode{COMP_NAME(a, name.c_str())} is \tcode{true}, initialize
-    \tcode{mib_} with the \tcode{MIBenum} associated with that \defn{registered-character-set}. Otherwise, initialize \tcode{mib_} with \tcode{text_encoding::id::other}.
+    If there exists a preferred-name or alias \tcode{a} of \defn{registered-character-set} such that \tcode{COMP_NAME(a, name.c_str())} is \tcode{true}, initializes
+    \tcode{mib_} with the value of the enumerator of \tcode{id} associated with that \defn{registered-character-set}. Otherwise, initialize \tcode{mib_} with \tcode{id::other}.
 
-    Implementations shall return a valid \tcode{text_encoding} object for every \tcode{name} that matches either an alias or a name of a \defn{registered-character-set} listed in \cite{rfc3808}.
+    Initialises \tcode{name_} as if with \tcode{strncpy(name_, name.data(), name.size())}.
 
-\begin{note}
-	Freestanding implementations are not required to provide this method
-\end{note}
-
-    \postconditions \tcode{string_view(name_) == name}.
 \end{itemdescr}
 
 
 \begin{itemdecl}
-constexpr text_encoding(text_encoding::id mib) noexcept;
+constexpr text_encoding(id mib) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-    \preconditions \tcode{mib}  has the value of one of the enumerators of \tcode{text_encoding::id}.
-    
-    \postconditions \tcode{mib_ == mib}.
+    \preconditions \tcode{mib} has the value of one of the enumerators of \tcode{id}.
+
+    Initializes \tcode{mib_} with \tcode{mib}.
+
+    If \tcode{mib} is not one of \tcode{id::unknown}, \tcode{id::other}, initializes \tcode{name_}
+    as if with \tcode{strcpy(name_, *(aliases().begin()))};
 \end{itemdescr}
-
-
-
 
 
 \begin{itemdecl}
@@ -906,24 +962,18 @@ constexpr id mib() const noexcept;
 \begin{itemdescr}
 \returns \tcode{mib\_}.
 
-\begin{note}
-	The enumerator value \tcode{text_encoding::id::unknown} is provided for compatibility with \cite{rfc3808},
-	\tcode{text_encoding::mib()} never returns \tcode{text_encoding::id::unknown}.
-\end{note}
-
 \end{itemdescr}
 
 \begin{itemdecl}
 constexpr const char* name() const noexcept;
 \end{itemdecl}
 \begin{itemdescr}
-\returns 
+\returns \tcode{name_};
 
-\begin{itemize}
-    \item \tcode{name_} if \tcode{strlen(name_) > 0} is \tcode{true},
-    \item Otherwise, if \tcode{id != id::unknown} is \tcode{true}, an implementation defined null-terminated string corresponding to the preferred name of the encoding on that platform.
-    \item Otherwise, \tcode{nullptr}
-\end{itemize}
+\begin{note}
+    \tcode{name_} is a \ntbs.
+\end{note}
+
 \end{itemdescr}
 
 
@@ -932,21 +982,25 @@ constexpr auto aliases() const noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-\returns an implementation-defined object \tcode{r} representing a sequence of aliases such that:
+Let \tcode{AliasRange} denote an implementation-defined type such that:
 \begin{itemize}
-    \item \tcode{ranges::view<decltype(r)>} is true,
-    \item \tcode{ranges::random_access_range<decltype(r)>} is true,
-    \item \tcode{same_as<ranges::range_value_t<decltype(r)>, string_view>} is true,
-    \item \tcode{!ranges::empty(r) || mib() == id::other} is true.
+    \item \tcode{ranges::view<AliasRange>} is true,
+    \item \tcode{ranges::random_access_range<AliasRange>} is true,
+    \item \tcode{same_as<ranges::range_value_t<AliasRange>, string_view>} is true,
 \end{itemize}
 
-\pnum If \tcode{mib()} is equal to the \tcode{MIBEnum} value of one of the \defn{registered-character-sets}, \tcode{r[0]} is the name of the \defn{registered-character-set}.
+Let \tcode{r} denote an instance of \tcode{AliasRange}.
 
-\tcode{r} contains the aliases of the \defn{registered-character-set} as specified by \cite{rfc2978}.
+\pnum If \tcode{*this} represents a \defn{registered-character-set} then:
+\begin{itemize}
+    \item \tcode{r[0]} is the  \defn{preferred-name} of the \defn{registered-character-set},
+    \item \tcode{r} contains the aliases of the \defn{registered-character-set},
+    \item \pnum \tcode{r} does not contain duplicate values when compared with \tcode{COMP_NAME}.
+\end{itemize}
 
-\pnum \tcode{r} may contain implementation-defined values.
+Otherwise, \tcode{r} is an empty range.
 
-\pnum \tcode{r} does not contain duplicated values - the equality of 2 values is determined by \tcode{COMP_NAME}.
+\returns \tcode{r}.
 
 \begin{note}
 The order of elements in \tcode{r} is unspecified.
@@ -960,17 +1014,19 @@ constexpr bool operator==(const text_encoding & other) const noexcept;
 
 \begin{itemdescr}
 \returns
-\tcode{COMP_NAME(name(), other.name())} if \tcode{mib() == id::other \&\& other.mib() == id::other} is true,
-otherwise
-\tcode{mib() == other.mib()}.
+
+If \tcode{mib() == id::other \&\& other.mib() == id::other} is true, then return \tcode{COMP_NAME(name(), other.name())}.
+
+Otherwise, return \tcode{mib() == other.mib()}.
+
 \end{itemdescr}
 
 \begin{itemdecl}
-constexpr bool operator==(text_encoding::id i) const noexcept;
+constexpr bool operator==(id i) const noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-\returns \tcode{mib() == i}
+\returns \tcode{mib() == i}.
 \end{itemdescr}
 
 \begin{itemdecl}
@@ -978,7 +1034,8 @@ static consteval text_encoding literal();
 \end{itemdecl}
 
 \begin{itemdescr}
-    \returns a \tcode{text_encoding} object representing the narrow execution encoding.
+    \returns A \tcode{text_encoding} object representing the encoding of ordinary string literals.
+    The returned value never compares true to \tcode{id::unknown}.
 \end{itemdescr}
 
 \begin{itemdecl}
@@ -986,49 +1043,51 @@ static consteval text_encoding wide_literal();
 \end{itemdecl}
 
 \begin{itemdescr}
-    \returns a \tcode{text_encoding} object representing the wide execution encoding.
+    \returns A \tcode{text_encoding} object representing the encoding of wide string literals.
+    The returned value never compares \tcode{true} to \tcode{id::unknown}.
 \end{itemdescr}
 
 \begin{itemdecl}
-static text_encoding system();
+static text_encoding environment() noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-Return the presumed system narrow encoding.
-On a POSIX system, this is encoding that would be returned by \tcode{l_langinfo_l(CODESET, newlocale(LC_CTYPE, "", (locale_t)0)} at the start of the program.
-
-This function always returns the same value during the lifetime of a program and is not affected by calls to \tcode{setlocale}.
-\end{itemdescr}
-
-\begin{itemdecl}
-static text_encoding wide_system();
-\end{itemdecl}
-
-\begin{itemdescr}
-Return the presumed system-wide encoding.
-On POSIX systems this is the encoding attached to the environment locale (\tcode{""}) at the start of the program.
+Return the implementation-defined \defn{execution character encoding} at the start of the program.
+On a POSIX environment, this is equivalent to \tcode{text_encoding(nl_langinfo_l(CODESET, newlocale(LC_CTYPE_MASK, "", (locale_t)0))}.
 
 \begin{note}
-This function shall always return the same value during the lifetime of a program and is not affected by calls to \tcode{setlocale}.
+This function always returns the same value during the execution of a program and is not affected by calls to \tcode{setlocale}.
 \end{note}
 \end{itemdescr}
 
 \begin{itemdecl}
-template<text_encoding::id id_>
-static bool text_encoding::system_is();
+static text_encoding wide_environment() noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-\returns Equivalent to \tcode{system() == id_}
+Return the implementation-defined \defn{wide execution character encoding} at the start of the program.
+
+\begin{note}
+This function always returns the same value during the execution of a program and is not affected by calls to \tcode{setlocale}.
+\end{note}
 \end{itemdescr}
 
 \begin{itemdecl}
-template<text_encoding::id id_>
-static bool text_encoding::system_wide_is();
+template<id id_>
+static bool text_encoding::environment_is() noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-\returns Equivalent to \tcode{wide_system() == id_}
+\effects Equivalent to \tcode{environment() == id_}
+\end{itemdescr}
+
+\begin{itemdecl}
+template<id id_>
+static bool text_encoding::environment_wide_is() noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\effects Equivalent to \tcode{wide_environment() == id_}
 \end{itemdescr}
 
 
@@ -1078,8 +1137,7 @@ text_encoding encoding() const;
 \end{itemdecl}
 
 \begin{itemdescr}
-  \returns The text encoding for narrow strings associated with the locale
-  \tcode{*this}.
+  \returns The text encoding for narrow strings associated with the locale \tcode{*this}.
 \end{itemdescr}
 
 \begin{itemdecl}
@@ -1087,19 +1145,68 @@ text_encoding wide_encoding() const;
 \end{itemdecl}
 
 \begin{itemdescr}
-  \returns The text encoding for wide strings associated with the locale
-  \tcode{*this}.
+  \returns The text encoding for wide strings associated with the locale \tcode{*this}.
 \end{itemdescr}
 \end{addedblock}
 
+\subsection{Bibliography}
+
+\begin{itemize}
+    \renewcommand{\labelitemi}{---}
+    % ISO documents in numerical order.
+    \item
+    ISO 4217:2015,
+    \doccite{Codes for the representation of currencies}
+    \item
+    ISO/IEC 10967-1:2012,
+    \doccite{Information technology --- Language independent arithmetic ---
+        Part 1: Integer and floating point arithmetic}
+    \item
+    ISO/IEC/IEEE 60559:2011, \doccite{Information technology ---
+        Microprocessor Systems --- Floating-Point arithmetic}
+    % Other international standards.
+    \item
+    %%% Format for the following entry is based on that specified at
+    %%% http://www.iec.ch/standardsdev/resources/draftingpublications/directives/principles/referencing.htm
+    The Unicode Consortium. Unicode Standard Annex, UAX \#29,
+    \doccite{Unicode Text Segmentation} [online].
+    Edited by Mark Davis. Revision 35; issued for Unicode 12.0.0. 2019-02-15 [viewed 2020-02-23].
+    Available from: \url{http://www.unicode.org/reports/tr29/tr29-35.html}
+\begin{addedblock}
+    \item
+    IANA Character Sets Database.\\
+    Available from: \url{https://www.iana.org/assignments/character-sets/}
+\end{addedblock}
+    \item
+    IANA Time Zone Database.
+    Available from: \url{https://www.iana.org/time-zones}
+    % Literature references.
+    \item
+    Bjarne Stroustrup,
+    \doccite{The \Cpp{} Programming Language, second edition}, Chapter R.
+    Addison-Wesley Publishing Company, ISBN 0-201-53992-6, copyright \copyright 1991 AT\&T
+    \item
+    Brian W. Kernighan and Dennis M. Ritchie,
+    \doccite{The C Programming Language}, Appendix A.
+    Prentice-Hall, 1978, ISBN 0-13-110163-3, copyright \copyright 1978 AT\&T
+    \item
+    P.J. Plauger,
+    \doccite{The Draft Standard \Cpp{} Library}.
+    Prentice-Hall, ISBN 0-13-117003-1, copyright \copyright 1995 P.J. Plauger)
+\end{itemize}
+
+The arithmetic specification described in ISO/IEC 10967-1:2012 is
+called \defn{LIA-1} in this document.
+
+
 \section{Acknowledgments}
 
-Many thanks to Victor Zverovich, Thiago Macieira, Jens Maurer, Tom Honermann and others for reviewing this work and providing valuable feedback.
+Many thanks to Victor Zverovich, Thiago Macieira, Jens Maurer, Tom Honermann, and others for reviewing this work and providing valuable feedback.
 
 \section{Annex: Registered encodings}
-\begin{longtable}{| p{.40\textwidth} | p{.40\textwidth} |} 
+\begin{longtable}{| p{.40\textwidth} | p{.40\textwidth} |}
 \hline
-\textbf{IANA} & \textbf{WHATWG} \\ \hline 
+\textbf{IANA} & \textbf{WHATWG} \\ \hline
 \hline
 ANSI_X3.110-1983 & \\ \hline
 ASMO_449 & \\ \hline
@@ -1363,7 +1470,7 @@ windows-874 & windows-874\\ \hline
 \section{Annex B: Known encodings not present in IANA}
 
 Lists of encoding known to some platforms but not registered to IANA.
-These might be incomplete as generating them proved challenging.
+This might be incomplete as generating the list proved challenging.
 These might still be supported through the \tcode{other} mib, but are not
 suitable for interexchange.
 
@@ -1439,10 +1546,6 @@ IANA
 \emph{Character Sets}\newline
 \url{https://www.iana.org/assignments/character-sets/character-sets.xhtml}
 
-
-
-% https://www.unicode.org/reports/tr22/tr22-8.html#Charset_Alias_Matching
-% TODO : wording for freestanding
 
 
 \bibitem[iconv encodings]{iconv}

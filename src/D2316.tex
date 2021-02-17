@@ -1,0 +1,162 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}
+
+
+\documentclass{wg21}
+
+
+\usepackage{luatexja-fontspec}
+
+\setmainjfont{Noto Sans CJK KR}
+
+
+\newcommand{\UnicodeLetter}[1]{\textbf{\textcolor{BrickRed}{\Large\tcode{#1}}}}
+
+\title{	Consistent character literal encoding}
+\docnumber{P2316R0}
+\audience{EWG, SG-16}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+\paperquote{}
+
+\section{Abstract}
+
+Character literals in preprocessor conditional should behave like they do in C++ expression.
+
+This proposal first appeared as part of \paper{P2178R1}.
+
+\section{Motivation}
+
+Consider the following code:
+
+\begin{colorblock}
+#if 'A' == '\x41'
+//...
+#endif
+if ('A' == 0x41){}
+\end{colorblock}
+
+Both conditions are not guaranteed to yield a similar result, as \href{http://eel.is/c++draft/cpp#cond-12}{the value of character literals in preprocessor conditional is not required to be identical to that of character literals in expressions}.
+
+However, a survey of the 1300+ open sources projects available on vcpkg shows that the primary use case for these macros is exactly to detect the
+narrow literal encoding at compile time and all compilers available on compiler explorer treat these literals as if they were in the narrow literal encoding.
+
+Notably, a few libraries use that pattern to detect EBCDIC or ASCII narrow literal encoding.
+Of the ~50 usages of the pattern, all but one were in C libraries.
+
+\begin{quoteblock}
+For example, this code is in \href{https://github.com/sqlite/sqlite/blob/master/src/sqliteInt.h#L739}{sqlite.c}
+
+\begin{colorblock}
+/*
+** Check to see if this machine uses EBCDIC.  (Yes, believe it or
+** not, there are still machines out there that use EBCDIC.)
+*/
+#if 'A' == '\301'
+# define SQLITE_EBCDIC 1
+#else
+# define SQLITE_ASCII 1
+#endif
+\end{colorblock}
+\end{quoteblock}
+
+
+While we think there should be a better way to detect encodings in C++ \cite{P1885R2}, there is no reason to deprecate that feature.
+
+Instead, we recommend adopting the standard practice and user expectation of converting these literals to the narrow literal encoding before evaluating them.
+
+\section{SG16 poll}
+
+\begin{codeblock}
+August 26th, 2020
+Poll: Proposal 11 (of  @\paper{P2178R0}@): We agree that the same character encoding should be used 
+for character literal in translation phase 4 and 7.
+
+Attendees: 10
+No objection to unanimous consent.
+\end{codeblock}
+
+\section{Wording}
+
+
+\rSec1[cpp]{Preprocessing directives}%
+
+\rSec2[cpp.cond]{Conditional inclusion}%
+
+\pnum
+The resulting tokens comprise the controlling constant expression
+which is evaluated according to the rules of [expr.const]
+using arithmetic that has at least the ranges specified
+in [support.limits]. For the purposes of this token conversion and evaluation
+all signed and unsigned integer types
+act as if they have the same representation as, respectively,
+\tcode{intmax_t} or \tcode{uintmax_t}\iref{cstdint}.
+\begin{note}
+    Thus on an
+    implementation where \tcode{std::numeric_limits<int>::max()} is \tcode{0x7FFF}
+    and \tcode{std::numeric_limits<unsigned int>::max()} is \tcode{0xFFFF},
+    the integer literal \tcode{0x8000} is signed and positive within a \tcode{\#if}
+    expression even though it is unsigned in translation phase
+    7\iref{lex.phases}.
+\end{note}
+\begin{removedblock}
+This includes interpreting \grammarterm{character-literal}s which may involve
+converting escape sequences into execution character set members.
+Whether the numeric value for these \grammarterm{character-literal}s
+matches the value obtained when an identical \grammarterm{character-literal}
+occurs in an expression
+(other than within a
+\tcode{\#if}
+or
+\tcode{\#elif}
+directive)
+is \impldef{numeric values of \grammarterm{character-literal}s in \tcode{\#if}
+    directives}.
+\begin{note}
+    Thus, the constant expression in the following
+    \tcode{\#if}
+    directive and
+    \tcode{if} statement\iref{stmt.if}
+    is not guaranteed to evaluate to the same value in these two
+    contexts:
+    \begin{codeblock}
+        #if 'z' - 'a' == 25
+        if ('z' - 'a' == 25)
+    \end{codeblock}
+\end{note}
+Also, whether a single-character \grammarterm{character-literal} may have a negative
+value is \impldef{negative value of \grammarterm{character-literal} in preprocessor}.
+\end{removedblock}
+\begin{addedblock}
+This include interpreting \grammarterm{character-literal} according to the rules in [lex.ccon].
+\begin{note}
+The associated character encodings of literals are the same in \tcode{\#if} and \tcode{\#elif} directives and in any expression.
+\end{note}
+\end{addedblock}
+
+Each subexpression with type
+\tcode{bool}
+is subjected to integral promotion before processing continues.
+
+\section{Acknowledgments}
+
+\section{References}
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+\begin{thebibliography}{9}
+
+\bibitem[N4878]{N4878}
+Richard Smith
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4878}
+
+\end{thebibliography}
+\end{document}

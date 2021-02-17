@@ -13,7 +13,7 @@
 
 \title{Correct UTF-8 handling during phase 1 of translation}
 \docnumber{P2290R0}
-\audience{EWG, SG-22}
+\audience{SG-16, EWG, SG-22}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 \begin{document}
@@ -26,7 +26,7 @@
 While many people, notably many people from SG-16 provided feedbacks on the design presented in this paper,
 the general direction was originally proposed in 2012 by Beman Dawes in \paper{N3463}.
 
-Thanks Mr Dawes!
+Thanks Mr. Dawes!
 
 \section{Abstract}
 
@@ -55,7 +55,7 @@ Most C++ compilers ( GCC, EDG, MSVC, Clang) support utf8 as one of their input f
 \section{Previous works}
 
 Original Proposal: \paper{N3463} (Beman Dawes, 2012).
-More recent discussions about Normalizxation preservation, wghitepaces ansd UTF in \paper{P2178R1} (Points 1, 2, 3 and 8)
+More recent discussions about Normalizxation preservation, whitespaces, and UTF in \paper{P2178R1} (Points 1, 2, 3, and 8)
 
 \section{Design}
 
@@ -72,12 +72,29 @@ Unicode recommends that codepoints with the \tcode{Pattern_White_Space} property
 whitespaces by conforming parsers.
 Some sequences of whitespace characters are further described as line breaks in UAX14.
 
+However, we exclude the following codepoints as they would otherwise affect the direction of text and have no use in code (outside of string and comments)
+
+\begin{codeblock}
+    U+200E LEFT-TO-RIGHT MARK
+    U+200F RIGHT-TO-LEFT MARK
+\end{codeblock}
+
 For compatibility with Unicode, UTF-EBCDIC, and a variety of existing systems, implementations, and text editors,
 we recommend specifying exactly what constitutes a new-line and a whitespace in C++.
-The wording provides the complete list.
 
 New lines affect diagnostics, \tcode{__LINE__} and \tcode{source_location::line()}.
-They also affect line-endings in raw string literals, which is the subject of \paper{CWG1655}, which this paper resolves.
+They also affect line-endings in raw string literals, which is the subject of \paper{CWG1655}.
+
+
+An open question is whether we try to use grammar terms to describes new lines and whitespaces in the wording.
+Some attempts at that proved the task somewhat tedious and the benefits unclear.
+The current paper does the minimum to be able to remove the "(introducing new-line characters for end-of-line indicators)" wording,
+which alas seems necessary to guarantee codepoint preservation; This is why these two otherwise unrelated changes are bundled in the same paper.
+A more through wording change would impact at least \tcode{[lex]}, \tcode{[cpp]}, \tcode{[time.format]}.
+
+It is also unclear what the \tcode{new-line} character is, whether in escape sequences (\tcode{\textbackslash n}), raw line endings, etc.
+In the current core wording, it doesn't seem to matter much, implementers can use any character they want through the implementation-defined
+mapping in phase 5.
 
 \subsection{Invalid code units}
 
@@ -104,7 +121,7 @@ mojibake in string literals, which would lead to runtime bugs.
 Therefore, we think invalid code unit sequences in phase 1 should always be diagnosed.
 Our proposed wording makes invalid code unit sequences ill-formed for the UTF-8 encoding.
 
-However this does not necessarilly constitute a breaking change (see the "Impact on implementations" section)
+However, this does not necessarily constitute a breaking change (see the "Impact on implementations" section)
 
 \subsection{A note on unassigned Unicode codepoints}
 
@@ -179,15 +196,15 @@ main.cpp(1): warning \href{https://docs.microsoft.com/en-us/cpp/error-messages/c
 As such, implementers have two strategies for the implementation of this proposal:
 
 \begin{itemize}
-\item Always diagnose invalid code units sequences when interpreting a UTF-8 input.
-\item Provide a conforming support for UTF-8 inputs, along with an implementation-defined "UTF-8 like" encoding that would behave like UTF-8 but maybe discard
-invalid code units sequences in comments as part of the "implementation-defined mapping" prescribed in phase 1 for non UTF-8 encodings.
+\item Always diagnose invalid code unit sequences when interpreting a UTF-8 input.
+\item Provide conforming support for UTF-8 inputs, along with an implementation-defined "UTF-8 like" encoding that would behave like UTF-8 but maybe discard
+invalid code units sequences in comments as part of the "implementation-defined mapping" prescribed in phase 1 for non-UTF-8 encodings.
 \end{itemize}
 
-And so this proposal guarantees that users can have a way to ensure their source code is properly decoded, while giving implementers
-the ability to offer more leniant options.
+And so this proposal guarantees that users can have a way to ensure their source code is properly decoded while giving implementers
+the ability to offer more lenient options.
 
-For example, for MSVC, the flags \tcode{/source-charset:utf-8 /we4828} are sufficiant to be conforming with the current proposal.
+For example, for MSVC, the flags \tcode{/source-charset:utf-8 /we4828} are sufficient to be conforming with the current proposal.
 
 
 \subsection{UTF-8 source files is existing practice}
@@ -231,7 +248,7 @@ SG-16 was generally in favor of specifying what the whitespace characters are, b
 
 \section{Wording}
 
-\subsection{A note on wording}
+\subsection{Note on wording}
 
 As SG-16 and Core try to improve the terminology and wording used to describe lexing in the standard,
 the proposed wording likely collides with other work happening in parallel.
@@ -256,21 +273,24 @@ following phases.
     \item
 
 \begin{addedblock}
-    A UTF-8 source file is a physical source file encoded as a sequence of UTF-8 code units representing a sequence of Unicode scalar values as defined in ISO/IEC 10646.
+    A UTF-8 source file is a source file encoded as a sequence of UTF-8 code units representing a sequence of Unicode scalar values as defined in ISO/IEC 10646.
 
-    An implementation accepts UTF-8 source files; The set of additional physical source file character sets accepted is implementation-defined.
+    \begin{note}
+        Invalid UTF-8 code unit sequences in a UTF-8 source file are ill-formed.
+    \end{note}
+    An implementation accepts UTF-8 source files; The set of additional source file character sets accepted is implementation-defined.
 
-    A source file shall contain only one physical source file character set; how that character set is determined is implementation-defined.
+    How the character set of a source file is determined is implementation-defined.
 \end{addedblock}
 
-Physical source file characters are mapped, in an
+\changed{Physical s}{S}ource file characters are mapped, in an
 \impldef{mapping physical source file characters to basic source character set} manner,
 to the basic source character set \removed{(introducing new-line characters for end-of-line
 indicators) if necessary}.
 \removed{The set of physical source file characters accepted is \impldef{physical source file characters}}.
 Any source file character not in the basic source character set\iref{lex.charset} is replaced by the \indextext{universal character name}\grammarterm{universal-character-name} that
 designates that character.
-\added{If the physical source file is a UTF-8 source file, the scalar value of each physical source character shall be preserved.}
+\added{If the source file is a UTF-8 source file, the scalar value of each source character shall be preserved.}
 An implementation may use any internal
 encoding, so long as an actual extended character encountered in the
 source file, and the same extended character expressed in the source
@@ -278,90 +298,90 @@ file as a \grammarterm{universal-character-name} (e.g., using the \tcode{\textba
 
 \item
 \indextext{line splicing}%
-\added{If the first character is U+FEFF BYTE ORDER MARK, it is deleted.}
-
+\added{If the first codepoint is U+FEFF BYTE ORDER MARK, it is deleted.}
+%
 Each instance of a backslash character (\textbackslash)
-immediately followed by zero or more \changed{whitespace characters}{\grammarterm{whitespace}s} (other than \changed{new-line character}{\grammarterm{new-line}}) followed by a \changed{new-line character}{\grammarterm{new-line}} is deleted, splicing
+immediately followed by zero or more whitespace characters (other than new-line character) followed by a new-line character is deleted, splicing
 physical source lines to form logical source lines. Only the last
 backslash on any physical source line shall be eligible for being part
 of such a splice.
-Except for splices reverted in a raw string literal, if a splice results in
-a character sequence that matches the
-syntax of a \grammarterm{universal-character-name}, the behavior is
-undefined. A source file that is not empty and that does not end in a \changed{new-line character}{\grammarterm{new-line}}, or that ends in a \changed{new-line character}{\grammarterm{new-line}} immediately preceded by a
-backslash character before any such splicing takes place,
-shall be processed as if an additional \changed{new-line character}{LINE FEED} were appended
-to the file.
-
-\item The source file is decomposed into preprocessing
-tokens\iref{lex.pptoken} and sequences of \changed{whitespace characters
-(including comments)}{\grammarterm{whitespace} and comments}. A source file shall not end in a partial
-preprocessing token or in a partial comment.
-
-Each comment is replaced by one \changed{space}{SPACE} character. \changed{New-line characters}{\grammarterm{new-line}} are
-retained. Whether each nonempty sequence of \changed{whitespace characters other
-than new-line}{\grammarterm{whitespace} other than \grammarterm{new-line}} is retained or replaced by one \changed{space}{SPACE}  character is
-unspecified. The process of dividing a source file's
-characters into preprocessing tokens is context-dependent.
-\begin{example}
-    See the handling of \tcode{<} within a \tcode{\#include} preprocessing
-    directive.
-\end{example}
-
-\item Preprocessing directives are executed, macro invocations are
-expanded, and \tcode{_Pragma} unary operator expressions are executed.
-If a character sequence that matches the syntax of a
-\grammarterm{universal-character-name} is produced by token
-concatenation\iref{cpp.concat}, the behavior is undefined. A
-\tcode{\#include} preprocessing directive causes the named header or
-source file to be processed from phase 1 through phase 4, recursively.
-All preprocessing directives are then deleted.
-
-\item
-Each
-\grammarterm{basic-c-char},
-\grammarterm{basic-s-char}, and
-\grammarterm{r-char}
-in a \grammarterm{character-literal} or a \grammarterm{string-literal},
-as well as each
-\grammarterm{escape-sequence} and \grammarterm{universal-character-name}
-in a \grammarterm{character-literal} or a non-raw string literal,
-is encoded in the literal's associated character encoding as specified in
-\ref{lex.ccon} and \ref{lex.string}.
-
-\item
-Adjacent \grammarterm{string-literal}s are concatenated
-and a null character is appended to the result
-as specified in \ref{lex.string}.
-
-\item \changed{White-space characters}{Sequences of \grammarterm{whitespace}} separating tokens are no longer
-significant. Each preprocessing token is converted into a
-token\iref{lex.token}. The resulting tokens are syntactically and
-semantically analyzed and translated as a translation unit.
-\begin{note}
-    The process of analyzing and translating the tokens can occasionally
-    result in one token being replaced by a sequence of other
-    tokens\iref{temp.names}.
-\end{note}
-It is
-\impldef{whether the sources for
-    module units and header units
-    on which the current translation unit has an interface
-    dependency are required to be available during translation}
-whether the sources for
-module units and header units
-on which the current translation unit has an interface
-dependency (\ref{module.unit}, \ref{module.import})
-are required to be available.
-\begin{note}
-    Source files, translation
-    units and translated translation units need not necessarily be stored as
-    files, nor need there be any one-to-one correspondence between these
-    entities and any external representation. The description is conceptual
-    only, and does not specify any particular implementation.
-\end{note}
+%Except for splices reverted in a raw string literal, if a splice results in
+%a character sequence that matches the
+%syntax of a \grammarterm{universal-character-name}, the behavior is
+%undefined. A source file that is not empty and that does not end in a \changed{new-line character}{\grammarterm{new-line}}, or that ends in a \changed{new-line character}{\grammarterm{new-line}} immediately preceded by a
+%backslash character before any such splicing takes place,
+%shall be processed as if an additional \changed{new-line character}{LINE FEED} were appended
+%to the file.
+%
+%\item The source file is decomposed into preprocessing
+%tokens\iref{lex.pptoken} and sequences of \changed{whitespace characters
+%(including comments)}{\grammarterm{whitespace} and comments}. A source file shall not end in a partial
+%preprocessing token or in a partial comment.
+%
+%Each comment is replaced by one \changed{space}{SPACE} character. \changed{New-line characters}{\grammarterm{new-line}} are
+%retained. Whether each nonempty sequence of \changed{whitespace characters other
+%than new-line}{\grammarterm{whitespace} other than \grammarterm{new-line}} is retained or replaced by one \changed{space}{SPACE}  character is
+%unspecified. The process of dividing a source file's
+%characters into preprocessing tokens is context-dependent.
+%\begin{example}
+%    See the handling of \tcode{<} within a \tcode{\#include} preprocessing
+%    directive.
+%\end{example}
+%
+%\item Preprocessing directives are executed, macro invocations are
+%expanded, and \tcode{_Pragma} unary operator expressions are executed.
+%If a character sequence that matches the syntax of a
+%\grammarterm{universal-character-name} is produced by token
+%concatenation\iref{cpp.concat}, the behavior is undefined. A
+%\tcode{\#include} preprocessing directive causes the named header or
+%source file to be processed from phase 1 through phase 4, recursively.
+%All preprocessing directives are then deleted.
+%
+%\item
+%Each
+%\grammarterm{basic-c-char},
+%\grammarterm{basic-s-char}, and
+%\grammarterm{r-char}
+%in a \grammarterm{character-literal} or a \grammarterm{string-literal},
+%as well as each
+%\grammarterm{escape-sequence} and \grammarterm{universal-character-name}
+%in a \grammarterm{character-literal} or a non-raw string literal,
+%is encoded in the literal's associated character encoding as specified in
+%\ref{lex.ccon} and \ref{lex.string}.
+%
+%\item
+%Adjacent \grammarterm{string-literal}s are concatenated
+%and a null character is appended to the result
+%as specified in \ref{lex.string}.
+%
+%\item \changed{White-space characters}{Sequences of \grammarterm{whitespace}} separating tokens are no longer
+%significant. Each preprocessing token is converted into a
+%token\iref{lex.token}. The resulting tokens are syntactically and
+%semantically analyzed and translated as a translation unit.
+%\begin{note}
+%    The process of analyzing and translating the tokens can occasionally
+%    result in one token being replaced by a sequence of other
+%    tokens\iref{temp.names}.
+%\end{note}
+%It is
+%\impldef{whether the sources for
+%    module units and header units
+%    on which the current translation unit has an interface
+%    dependency are required to be available during translation}
+%whether the sources for
+%module units and header units
+%on which the current translation unit has an interface
+%dependency (\ref{module.unit}, \ref{module.import})
+%are required to be available.
+%\begin{note}
+%    Source files, translation
+%    units and translated translation units need not necessarily be stored as
+%    files, nor need there be any one-to-one correspondence between these
+%    entities and any external representation. The description is conceptual
+%    only, and does not specify any particular implementation.
+%\end{note}
 \end{enumerate}
-
+%
 \rSec1[lex.pptoken]{Preprocessing tokens}
 
 \begin{addedblock}
@@ -381,552 +401,554 @@ are required to be available.
     \nontermdef{whitespace}\br
     new-line\br
     \textnormal{U+0009 HORIZONTAL TAB}\br
-    \textnormal{U+0009 SPACE}\br
-  %  \textnormal{U+200E LEFT-TO-RIGHT MARK}\br
-  %  \textnormal{U+200F RIGHT-TO-LEFT MARK}
+    \textnormal{U+0009 SPACE}
 \end{bnf}
 
 Unless otherwise specified, whitespaces and whitespace characters refer to \grammarterm{whitespace}.
 
 \end{addedblock}
-
-\begin{bnf}
-    \nontermdef{preprocessing-token}\br
-    header-name\br
-    import-keyword\br
-    module-keyword\br
-    export-keyword\br
-    identifier\br
-    pp-number\br
-    character-literal\br
-    user-defined-character-literal\br
-    string-literal\br
-    user-defined-string-literal\br
-    preprocessing-op-or-punc\br
-    \textnormal{each non-whitespace character that cannot be one of the above}
-\end{bnf}
-
-\pnum
-Each preprocessing token that is converted to a token\iref{lex.token}
-shall have the lexical form of a keyword, an identifier, a literal,
-or an operator or punctuator.
-
-\pnum
-A preprocessing token is the minimal lexical element of the language in translation
-phases 3 through 6. The categories of preprocessing token are: header names,
-placeholder tokens produced by preprocessing \tcode{import} and \tcode{module} directives
-(\grammarterm{import-keyword}, \grammarterm{module-keyword}, and \grammarterm{export-keyword}),
-identifiers, preprocessing numbers, character literals (including user-defined character
-literals), string literals (including user-defined string literals), preprocessing
-operators and punctuators, and single non-whitespace characters that do not lexically
-match the other preprocessing token categories. If a \tcode{'} or a \tcode{"} character
-matches the last category, the behavior is undefined. Preprocessing tokens can be
-separated by
-\indextext{whitespace}%
-whitespace;
-\indextext{comment}
-this consists of comments\iref{lex.comment}, or \changed{whitespace characters}{\grammarterm{whitespace}}
-\removed{(space, horizontal tab, new-line, vertical tab, and
-form-feed)}, or both. As described in \ref{cpp}, in certain
-circumstances during translation phase 4, \changed{whitespace}{\grammarterm{whitespace}} (or the absence
-thereof) serves as more than preprocessing token separation. \changed{White space}{\grammarterm{whitespace}}
-can appear within a preprocessing token only as part of a header name or
-between the quotation characters in a character literal or
-string literal.
-
-[..]
-
-\rSec1[lex.comment]{Comments}
-
-\pnum
-\indextext{comment|(}%
-\indextext{comment!\tcode{/*} \tcode{*/}}%
-\indextext{comment!\tcode{//}}%
-The characters \tcode{/*} start a comment, which terminates with the
-characters \tcode{*/}. These comments do not nest.
-\indextext{comment!\tcode{//}}%
-The characters \tcode{//} start a comment, which terminates immediately before the
-next \changed{new-line character}{\grammarterm{new-line}}. \removed{If there is a form-feed or a vertical-tab
-character in such a comment, only whitespace characters shall appear
-between it and the new-line that terminates the comment; no diagnostic
-is required}.
-\begin{note}
-    The comment characters \tcode{//}, \tcode{/*},
-    and \tcode{*/} have no special meaning within a \tcode{//} comment and
-    are treated just like other characters. Similarly, the comment
-    characters \tcode{//} and \tcode{/*} have no special meaning within a
-    \tcode{/*} comment.
-\end{note}
-\indextext{comment|)}
-
-\rSec1[lex.header]{Header names}
-
-\indextext{header!name|(}%
-\begin{bnf}
-    \nontermdef{header-name}\br
-    \terminal{<} h-char-sequence \terminal{>}\br
-    \terminal{"} q-char-sequence \terminal{"}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{h-char-sequence}\br
-    h-char\br
-    h-char-sequence h-char
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{h-char}\br
-    \textnormal{any member of the source character set except \changed{new-line}{\grammarterm{new-line}} and \terminal{>}}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{q-char-sequence}\br
-    q-char\br
-    q-char-sequence q-char
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{q-char}\br
-    \textnormal{any member of the source character set except \changed{new-line}{\grammarterm{new-line}} and \terminal{"}}
-\end{bnf}
-
-
-\rSec2[lex.ccon]{Character literals}
-
-[..]
-
-\begin{bnf}
-    \nontermdef{c-char}\br
-    basic-c-char\br
-    escape-sequence\br
-    universal-character-name
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{basic-c-char}\br
-    \textnormal{any member of the basic source character set except the single-quote \terminal{'}, backslash \terminal{\textbackslash}, or \changed{new-line character}{\grammarterm{new-line}}}
-\end{bnf}
-
-[...]
-
-\begin{floattable}{Simple escape sequences}{lex.ccon.esc}
-    {lll}
-\topline
-\changed{new-line}{LINE FEED}       &   NL(LF)          &   \tcode{\textbackslash n}                \\
-horizontal tab  &   HT              &   \tcode{\textbackslash t}                \\
-vertical tab    &   VT              &   \tcode{\textbackslash v}                \\
-backspace       &   BS              &   \tcode{\textbackslash b}                \\
-carriage return &   CR              &   \tcode{\textbackslash r}                \\
-form feed       &   FF              &   \tcode{\textbackslash f}                \\
-alert           &   BEL             &   \tcode{\textbackslash a}                \\
-backslash       &   \textbackslash  &   \tcode{\textbackslash\textbackslash}    \\
-question mark   &   ?               &   \tcode{\textbackslash ?}                \\
-single quote    &   \tcode{'}       &   \tcode{\textbackslash '}                \\
-double quote    &   \tcode{"}       &   \tcode{\textbackslash "}                \\
-\end{floattable}
-
-\rSec2[lex.string]{String literals}
-
-[...]
-
-\begin{bnf}
-    \nontermdef{s-char}\br
-    basic-s-char\br
-    escape-sequence\br
-    universal-character-name
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{basic-s-char}\br
-    \textnormal{any member of the basic source character set except the double-quote \terminal{"}, backslash \terminal{\textbackslash}, or \changed{new-line character}{\grammarterm{new-line}}}
-\end{bnf}
-
-[..]
-
-A \grammarterm{string-literal} that has an \tcode{R}
-\indextext{prefix!\idxcode{R}}%
-in the prefix is a \defn{raw string literal}. The
-\grammarterm{d-char-sequence} serves as a delimiter. The terminating
-\grammarterm{d-char-sequence} of a \grammarterm{raw-string} is the same sequence of
-characters as the initial \grammarterm{d-char-sequence}. A \grammarterm{d-char-sequence}
-shall consist of at most 16 characters.
-
-\begin{addedblock}
-Each instance of a \grammarterm{new-line} in the \defn{raw string literal} is replaced by a \tcode{LINE FEED (U+000A).}
-\end{addedblock}
-
-\begin{quoteblock}
-Is this the behavior that we want?
-\end{quoteblock}
-
-\pnum
-\begin{note}
-    The characters \tcode{'('} and \tcode{')'} are permitted in a
-    \grammarterm{raw-string}. Thus, \tcode{R"delimiter((a|b))delimiter"} is equivalent to
-    \tcode{"(a|b)"}.
-\end{note}
-
-\pnum
-\begin{note}
-    \begin{removedblock}
-    A source-file new-line in a raw string literal results in a new-line in the
-    resulting execution string literal.
-   \end{removedblock}
- Assuming no
-    whitespace at the beginning of lines in the following example, the assert will succeed:
-    \begin{codeblock}
-        const char* p = R"(a\
-        b
-        c)";
-        assert(std::strcmp(p, "a\\\nb\nc") == 0);
-    \end{codeblock}
-\end{note}
-
-
-\subsection{Preprocessing directives}%
-\indextext{preprocessing directive|(}
-
-\indextext{compiler control line|see{preprocessing directive}}%
-\indextext{control line|see{preprocessing directive}}%
-\indextext{directive, preprocessing|see{preprocessing directive}}
-
-\gramSec[gram.cpp]{Preprocessing directives}
-
-\rSec1[cpp.pre]{Preamble}
-
-\begin{bnf}
-    \nontermdef{preprocessing-file}\br
-    \opt{group}\br
-    module-file
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{module-file}\br
-    \opt{pp-global-module-fragment} pp-module \opt{group} \opt{pp-private-module-fragment}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{pp-global-module-fragment}\br
-    \keyword{module} \terminal{;} new-line \opt{group}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{pp-private-module-fragment}\br
-    \keyword{module} \terminal{:} \keyword{private} \terminal{;} new-line \opt{group}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{group}\br
-    group-part\br
-    group group-part
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{group-part}\br
-    control-line\br
-    if-section\br
-    text-line\br
-    \terminal{\#} conditionally-supported-directive
-\end{bnf}
-
-\begin{bnf}\obeyspaces
-    \nontermdef{control-line}\br
-    \terminal{\# include} pp-tokens new-line\br
-    pp-import\br
-    \terminal{\# define } identifier replacement-list new-line\br
-    \terminal{\# define } identifier lparen \opt{identifier-list} \terminal{)} replacement-list new-line\br
-    \terminal{\# define } identifier lparen \terminal{... )} replacement-list new-line\br
-    \terminal{\# define } identifier lparen identifier-list \terminal{, ... )} replacement-list new-line\br
-    \terminal{\# undef  } identifier new-line\br
-    \terminal{\# line   } pp-tokens new-line\br
-    \terminal{\# error  } \opt{pp-tokens} new-line\br
-    \terminal{\# pragma } \opt{pp-tokens} new-line\br
-    \terminal{\# }new-line
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{if-section}\br
-    if-group \opt{elif-groups} \opt{else-group} endif-line
-\end{bnf}
-
-\begin{bnf}\obeyspaces
-    \nontermdef{if-group}\br
-    \terminal{\# if     } constant-expression new-line \opt{group}\br
-    \terminal{\# ifdef  } identifier new-line \opt{group}\br
-    \terminal{\# ifndef } identifier new-line \opt{group}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{elif-groups}\br
-    elif-group\br
-    elif-groups elif-group
-\end{bnf}
-
-\begin{bnf}\obeyspaces
-    \nontermdef{elif-group}\br
-    \terminal{\# elif   } constant-expression new-line \opt{group}
-\end{bnf}
-
-\begin{bnf}\obeyspaces
-    \nontermdef{else-group}\br
-    \terminal{\# else   } new-line \opt{group}
-\end{bnf}
-
-\begin{bnf}\obeyspaces
-    \nontermdef{endif-line}\br
-    \terminal{\# endif  } new-line
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{text-line}\br
-    \opt{pp-tokens} new-line
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{conditionally-supported-directive}\br
-    pp-tokens new-line
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{lparen}\br
-    \descr{a \terminal{(} character not immediately preceded by whitespace}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{identifier-list}\br
-    identifier\br
-    identifier-list \terminal{,} identifier
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{replacement-list}\br
-    \opt{pp-tokens}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{pp-tokens}\br
-    preprocessing-token\br
-    pp-tokens preprocessing-token
-\end{bnf}
-
-\begin{removedblock}
-\begin{bnf}
-    \nontermdef{new-line}\br
-    \descr{the new-line character}
-\end{bnf}
-\end{removedblock}
-
-\pnum
-A \defn{preprocessing directive} consists of a sequence of preprocessing tokens
-that satisfies the following constraints:
-At the start of translation phase 4,
-the first token in the sequence,
-referred to as a \defnadj{directive-introducing}{token},
-begins with the first character in the source file
-(optionally after whitespace containing no \changed{new-line characters}{\grammarterm{new-line}}) or
-follows whitespace containing at least one \changed{new-line character}{\grammarterm{new-line}},
-and is
-
-\begin{itemize}
-    \item
-    a \tcode{\#} preprocessing token, or
-
-    \item
-    an \keyword{import} preprocessing token
-    immediately followed on the same logical line by a
-    \grammarterm{header-name},
-    \tcode{<},
-    \grammarterm{identifier},
-    \grammarterm{string-literal}, or
-    \tcode{:}
-    preprocessing token, or
-
-    \item
-    a \keyword{module} preprocessing token
-    immediately followed on the same logical line by an
-    \grammarterm{identifier},
-    \tcode{:}, or
-    \tcode{;}
-    preprocessing token, or
-
-    \item
-    an \keyword{export} preprocessing token
-    immediately followed on the same logical line by
-    one of the two preceding forms.
-\end{itemize}
-
-The last token in the sequence is the first token within the sequence that
-is immediately followed by whitespace containing a \changed{new-line character}{\grammarterm{new-line}}.
-\begin{note}
-    A \changed{new-line character}{\grammarterm{new-line}} ends the preprocessing directive even if it occurs
-    within what would otherwise be an invocation of a function-like macro.
-\end{note}
-
-\begin{example}
-    \begin{codeblock}
-        #                       // preprocessing directive
-        module ;                // preprocessing directive
-        export module leftpad;  // preprocessing directive
-        import <string>;        // preprocessing directive
-        export import "squee";  // preprocessing directive
-        import rightpad;        // preprocessing directive
-        import :part;           // preprocessing directive
-
-        module                  // not a preprocessing directive
-        ;                       // not a preprocessing directive
-
-        export                  // not a preprocessing directive
-        import                  // not a preprocessing directive
-        foo;                    // not a preprocessing directive
-
-        export                  // not a preprocessing directive
-        import foo;             // preprocessing directive (ill-formed at phase 7)
-
-        import ::               // not a preprocessing directive
-        import ->               // not a preprocessing directive
-    \end{codeblock}
-\end{example}
-
-\pnum
-A sequence of preprocessing tokens is only a \grammarterm{text-line}
-if it does not begin with a directive-introducing token.
-A sequence of preprocessing tokens is only a \grammarterm{conditionally-supported-directive}
-if it does not begin with any of the directive names
-appearing after a \tcode{\#} in the syntax.
-A \grammarterm{conditionally-supported-directive} is
-conditionally-supported with
-\impldef{additional supported forms of preprocessing directive}
-semantics.
-
-\pnum
-At the start of phase 4 of translation,
-the \grammarterm{group} of a \grammarterm{pp-global-module-fragment} shall
-contain neither a \grammarterm{text-line} nor a \grammarterm{pp-import}.
-
-\pnum
-When in a group that is skipped\iref{cpp.cond}, the directive
-syntax is relaxed to allow any sequence of preprocessing tokens to occur between
-the directive name and the following \changed{new-line character}{\grammarterm{new-line}}.
-
-\pnum
-The only whitespace characters that shall appear
-between preprocessing tokens
-within a preprocessing directive
-(from just after the directive-introducing token
-through just before the terminating \changed{new-line character}{\grammarterm{new-line}})
-are \changed{space}{SPACE} and \changed{horizontal-tab}{HOROZONTAL TAB}
-(including \changed{spaces}{SPACE} that have replaced comments
-or possibly other whitespace characters
-in translation phase 3).
-
-[..]
-
-\pnum
-A preprocessing directive of the form
-\begin{ncsimplebnf}
-    \terminal{\# define} identifier replacement-list new-line
-    \indextext{\idxcode{\#define}}%
-\end{ncsimplebnf}
-defines an
-\defnadj{object-like}{macro} that
-causes each subsequent instance of the macro name
-to be replaced by the replacement list of preprocessing tokens
-that constitute the remainder of the directive.
-The replacement list is then rescanned for more macro names as
-specified below.
-
-\pnum
-\begin{example}
-    The simplest use of this facility is to define a ``manifest constant'',
-    as in
-    \begin{codeblock}
-        #define TABSIZE 100
-        int table[TABSIZE];
-    \end{codeblock}
-\end{example}
-
-\pnum
-A preprocessing directive of the form
-\begin{ncsimplebnf}
-    \terminal{\# define} identifier lparen \opt{identifier-list} \terminal{)} replacement-list new-line\br
-    \terminal{\# define} identifier lparen \terminal{...} \terminal{)} replacement-list new-line\br
-    \terminal{\# define} identifier lparen identifier-list \terminal{, ...} \terminal{)} replacement-list new-line
-\end{ncsimplebnf}
-defines a \defnadj{function-like}{macro}
-with parameters, whose use is
-similar syntactically to a function call.
-The parameters
-\indextext{parameter!macro}%
-are specified by the optional list of identifiers.
-Each subsequent instance of the function-like macro name followed by a
-\tcode{(}
-as the next preprocessing token
-introduces the sequence of preprocessing tokens that is replaced
-by the replacement list in the definition
-(an invocation of the macro).
-\indextext{invocation!macro}%
-The replaced sequence of preprocessing tokens is terminated by the matching
-\tcode{)}
-preprocessing token, skipping intervening matched pairs of left and
-right parenthesis preprocessing tokens.
-Within the sequence of preprocessing tokens making up an invocation
-of a function-like macro, \changed{new-line is considered a normal whitespace character}{\grammarterm{new-line} are considered like other \grammarterm{whitespace}}.
-
-\pnum
-\indextext{macro!function-like!arguments}%
-The sequence of preprocessing tokens
-bounded by the outside-most matching parentheses
-forms the list of arguments for the function-like macro.
-The individual arguments within the list
-are separated by comma preprocessing tokens,
-but comma preprocessing tokens between matching
-inner parentheses do not separate arguments.
-If there are sequences of preprocessing tokens within the list of
-arguments that would otherwise act as preprocessing directives,
-the behavior is undefined.
-
-[...]
-
-\pnum
-The
-\defn{line number}
-of the current source line is one greater than
-the number of \changed{new-line}{\grammarterm{new-line}} characters read or introduced
-in translation phase 1\iref{lex.phases}
-while processing the source file to the current token.
-
-[...]
-
-
-\subsection{Time library}
-
-\rSec1[time.format]{Formatting}
-
-
-\begin{LongTable}{Meaning of conversion specifiers}{time.format.spec}{lx{.8\hsize}}
-    \\ \topline
-    \lhdr{Specifier} & \rhdr{Replacement} \\ \capsep
-    \endfirsthead
-    \continuedcaption\\
-    \hline
-    \lhdr{Specifier} & \rhdr{Replacement} \\ \capsep
-    \endhead
-    \\ \rowsep
-    \tcode{\%M} &
-    The minute as a decimal number.
-    If the result is a single digit, it is prefixed with \tcode{0}.
-    The modified command \tcode{\%OM} produces
-    the locale's alternative representation.
-    \\ \rowsep
-    \tcode{\%n} &
-    A \changed{new-line}{LINE FEED} character.
-    \\ \rowsep
-    \tcode{\%p} &
-    The locale's equivalent of the AM/PM designations associated with a 12-hour clock.
-    \\
-\end{LongTable}
-
-
+%
+%\begin{bnf}
+%    \nontermdef{preprocessing-token}\br
+%    header-name\br
+%    import-keyword\br
+%    module-keyword\br
+%    export-keyword\br
+%    identifier\br
+%    pp-number\br
+%    character-literal\br
+%    user-defined-character-literal\br
+%    string-literal\br
+%    user-defined-string-literal\br
+%    preprocessing-op-or-punc\br
+%    \textnormal{each non-whitespace character that cannot be one of the above}
+%\end{bnf}
+%
+%\pnum
+%Each preprocessing token that is converted to a token\iref{lex.token}
+%shall have the lexical form of a keyword, an identifier, a literal,
+%or an operator or punctuator.
+%
+%\pnum
+%A preprocessing token is the minimal lexical element of the language in translation
+%phases 3 through 6. The categories of preprocessing token are: header names,
+%placeholder tokens produced by preprocessing \tcode{import} and \tcode{module} directives
+%(\grammarterm{import-keyword}, \grammarterm{module-keyword}, and \grammarterm{export-keyword}),
+%identifiers, preprocessing numbers, character literals (including user-defined character
+%literals), string literals (including user-defined string literals), preprocessing
+%operators and punctuators, and single non-whitespace characters that do not lexically
+%match the other preprocessing token categories. If a \tcode{'} or a \tcode{"} character
+%matches the last category, the behavior is undefined. Preprocessing tokens can be
+%separated by
+%\indextext{whitespace}%
+%whitespace;
+%\indextext{comment}
+%this consists of comments\iref{lex.comment}, or \changed{whitespace characters}{\grammarterm{whitespace}}
+%\removed{(space, horizontal tab, new-line, vertical tab, and
+%form-feed)}, or both. As described in \ref{cpp}, in certain
+%circumstances during translation phase 4, \changed{whitespace}{\grammarterm{whitespace}} (or the absence
+%thereof) serves as more than preprocessing token separation. \changed{White space}{\grammarterm{whitespace}}
+%can appear within a preprocessing token only as part of a header name or
+%between the quotation characters in a character literal or
+%string literal.
+%
+%[..]
+%
+%\rSec1[lex.comment]{Comments}
+%
+%\pnum
+%\indextext{comment|(}%
+%\indextext{comment!\tcode{/*} \tcode{*/}}%
+%\indextext{comment!\tcode{//}}%
+%The characters \tcode{/*} start a comment, which terminates with the
+%characters \tcode{*/}. These comments do not nest.
+%\indextext{comment!\tcode{//}}%
+%The characters \tcode{//} start a comment, which terminates immediately before the
+%next \changed{new-line character}{\grammarterm{new-line}}. \removed{If there is a form-feed or a vertical-tab
+%character in such a comment, only whitespace characters shall appear
+%between it and the new-line that terminates the comment; no diagnostic
+%is required}.
+%\begin{note}
+%    The comment characters \tcode{//}, \tcode{/*},
+%    and \tcode{*/} have no special meaning within a \tcode{//} comment and
+%    are treated just like other characters. Similarly, the comment
+%    characters \tcode{//} and \tcode{/*} have no special meaning within a
+%    \tcode{/*} comment.
+%\end{note}
+%\indextext{comment|)}
+%
+%\rSec1[lex.header]{Header names}
+%
+%\indextext{header!name|(}%
+%\begin{bnf}
+%    \nontermdef{header-name}\br
+%    \terminal{<} h-char-sequence \terminal{>}\br
+%    \terminal{"} q-char-sequence \terminal{"}
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{h-char-sequence}\br
+%    h-char\br
+%    h-char-sequence h-char
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{h-char}\br
+%    \textnormal{any member of the source character set except \changed{new-line}{\grammarterm{new-line}} and \terminal{>}}
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{q-char-sequence}\br
+%    q-char\br
+%    q-char-sequence q-char
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{q-char}\br
+%    \textnormal{any member of the source character set except \changed{new-line}{\grammarterm{new-line}} and \terminal{"}}
+%\end{bnf}
+%
+%
+%\rSec2[lex.ccon]{Character literals}
+%
+%[..]
+%
+%\begin{bnf}
+%    \nontermdef{c-char}\br
+%    basic-c-char\br
+%    escape-sequence\br
+%    universal-character-name
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{basic-c-char}\br
+%    \textnormal{any member of the basic source character set except the single-quote \terminal{'}, backslash \terminal{\textbackslash}, or \changed{new-line character}{\grammarterm{new-line}}}
+%\end{bnf}
+%
+%[...]
+%
+%\begin{floattable}{Simple escape sequences}{lex.ccon.esc}
+%    {lll}
+%\topline
+%\changed{new-line}{LINE FEED}       &   NL(LF)          &   \tcode{\textbackslash n}                \\
+%horizontal tab  &   HT              &   \tcode{\textbackslash t}                \\
+%vertical tab    &   VT              &   \tcode{\textbackslash v}                \\
+%backspace       &   BS              &   \tcode{\textbackslash b}                \\
+%carriage return &   CR              &   \tcode{\textbackslash r}                \\
+%form feed       &   FF              &   \tcode{\textbackslash f}                \\
+%alert           &   BEL             &   \tcode{\textbackslash a}                \\
+%backslash       &   \textbackslash  &   \tcode{\textbackslash\textbackslash}    \\
+%question mark   &   ?               &   \tcode{\textbackslash ?}                \\
+%single quote    &   \tcode{'}       &   \tcode{\textbackslash '}                \\
+%double quote    &   \tcode{"}       &   \tcode{\textbackslash "}                \\
+%\end{floattable}
+%
+%\rSec2[lex.string]{String literals}
+%
+%[...]
+%
+%\begin{bnf}
+%    \nontermdef{s-char}\br
+%    basic-s-char\br
+%    escape-sequence\br
+%    universal-character-name
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{basic-s-char}\br
+%    \textnormal{any member of the basic source character set except the double-quote \terminal{"}, backslash \terminal{\textbackslash}, or \changed{new-line character}{\grammarterm{new-line}}}
+%\end{bnf}
+%
+%[..]
+%
+%A \grammarterm{string-literal} that has an \tcode{R}
+%\indextext{prefix!\idxcode{R}}%
+%in the prefix is a \defn{raw string literal}. The
+%\grammarterm{d-char-sequence} serves as a delimiter. The terminating
+%\grammarterm{d-char-sequence} of a \grammarterm{raw-string} is the same sequence of
+%characters as the initial \grammarterm{d-char-sequence}. A \grammarterm{d-char-sequence}
+%shall consist of at most 16 characters.
+%
+%\begin{addedblock}
+%Each instance of a \grammarterm{new-line} in the \defn{raw string literal} is replaced by a \tcode{LINE FEED (U+000A).}
+%\end{addedblock}
+%
+%\begin{quoteblock}
+%Is this the behavior that we want?
+%\end{quoteblock}
+%
+%\pnum
+%\begin{note}
+%    The characters \tcode{'('} and \tcode{')'} are permitted in a
+%    \grammarterm{raw-string}. Thus, \tcode{R"delimiter((a|b))delimiter"} is equivalent to
+%    \tcode{"(a|b)"}.
+%\end{note}
+%
+%\pnum
+%\begin{note}
+%    \begin{removedblock}
+%    A source-file new-line in a raw string literal results in a new-line in the
+%    resulting execution string literal.
+%   \end{removedblock}
+% Assuming no
+%    whitespace at the beginning of lines in the following example, the assert will succeed:
+%    \begin{codeblock}
+%        const char* p = R"(a\
+%        b
+%        c)";
+%        assert(std::strcmp(p, "a\\\nb\nc") == 0);
+%    \end{codeblock}
+%\end{note}
+%
+%
+%\subsection{Preprocessing directives}%
+%\indextext{preprocessing directive|(}
+%
+%\indextext{compiler control line|see{preprocessing directive}}%
+%\indextext{control line|see{preprocessing directive}}%
+%\indextext{directive, preprocessing|see{preprocessing directive}}
+%
+%\gramSec[gram.cpp]{Preprocessing directives}
+%
+%\rSec1[cpp.pre]{Preamble}
+%
+%\begin{bnf}
+%    \nontermdef{preprocessing-file}\br
+%    \opt{group}\br
+%    module-file
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{module-file}\br
+%    \opt{pp-global-module-fragment} pp-module \opt{group} \opt{pp-private-module-fragment}
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{pp-global-module-fragment}\br
+%    \keyword{module} \terminal{;} new-line \opt{group}
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{pp-private-module-fragment}\br
+%    \keyword{module} \terminal{:} \keyword{private} \terminal{;} new-line \opt{group}
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{group}\br
+%    group-part\br
+%    group group-part
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{group-part}\br
+%    control-line\br
+%    if-section\br
+%    text-line\br
+%    \terminal{\#} conditionally-supported-directive
+%\end{bnf}
+%
+%\begin{bnf}\obeyspaces
+%    \nontermdef{control-line}\br
+%    \terminal{\# include} pp-tokens new-line\br
+%    pp-import\br
+%    \terminal{\# define } identifier replacement-list new-line\br
+%    \terminal{\# define } identifier lparen \opt{identifier-list} \terminal{)} replacement-list new-line\br
+%    \terminal{\# define } identifier lparen \terminal{... )} replacement-list new-line\br
+%    \terminal{\# define } identifier lparen identifier-list \terminal{, ... )} replacement-list new-line\br
+%    \terminal{\# undef  } identifier new-line\br
+%    \terminal{\# line   } pp-tokens new-line\br
+%    \terminal{\# error  } \opt{pp-tokens} new-line\br
+%    \terminal{\# pragma } \opt{pp-tokens} new-line\br
+%    \terminal{\# }new-line
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{if-section}\br
+%    if-group \opt{elif-groups} \opt{else-group} endif-line
+%\end{bnf}
+%
+%\begin{bnf}\obeyspaces
+%    \nontermdef{if-group}\br
+%    \terminal{\# if     } constant-expression new-line \opt{group}\br
+%    \terminal{\# ifdef  } identifier new-line \opt{group}\br
+%    \terminal{\# ifndef } identifier new-line \opt{group}
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{elif-groups}\br
+%    elif-group\br
+%    elif-groups elif-group
+%\end{bnf}
+%
+%\begin{bnf}\obeyspaces
+%    \nontermdef{elif-group}\br
+%    \terminal{\# elif   } constant-expression new-line \opt{group}
+%\end{bnf}
+%
+%\begin{bnf}\obeyspaces
+%    \nontermdef{else-group}\br
+%    \terminal{\# else   } new-line \opt{group}
+%\end{bnf}
+%
+%\begin{bnf}\obeyspaces
+%    \nontermdef{endif-line}\br
+%    \terminal{\# endif  } new-line
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{text-line}\br
+%    \opt{pp-tokens} new-line
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{conditionally-supported-directive}\br
+%    pp-tokens new-line
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{lparen}\br
+%    \descr{a \terminal{(} character not immediately preceded by whitespace}
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{identifier-list}\br
+%    identifier\br
+%    identifier-list \terminal{,} identifier
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{replacement-list}\br
+%    \opt{pp-tokens}
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{pp-tokens}\br
+%    preprocessing-token\br
+%    pp-tokens preprocessing-token
+%\end{bnf}
+%
+%\begin{removedblock}
+%\begin{bnf}
+%    \nontermdef{new-line}\br
+%    \descr{the new-line character}
+%\end{bnf}
+%\end{removedblock}
+%
+%\pnum
+%A \defn{preprocessing directive} consists of a sequence of preprocessing tokens
+%that satisfies the following constraints:
+%At the start of translation phase 4,
+%the first token in the sequence,
+%referred to as a \defnadj{directive-introducing}{token},
+%begins with the first character in the source file
+%(optionally after whitespace containing no \changed{new-line characters}{\grammarterm{new-line}}) or
+%follows whitespace containing at least one \changed{new-line character}{\grammarterm{new-line}},
+%and is
+%
+%\begin{itemize}
+%    \item
+%    a \tcode{\#} preprocessing token, or
+%
+%    \item
+%    an \keyword{import} preprocessing token
+%    immediately followed on the same logical line by a
+%    \grammarterm{header-name},
+%    \tcode{<},
+%    \grammarterm{identifier},
+%    \grammarterm{string-literal}, or
+%    \tcode{:}
+%    preprocessing token, or
+%
+%    \item
+%    a \keyword{module} preprocessing token
+%    immediately followed on the same logical line by an
+%    \grammarterm{identifier},
+%    \tcode{:}, or
+%    \tcode{;}
+%    preprocessing token, or
+%
+%    \item
+%    an \keyword{export} preprocessing token
+%    immediately followed on the same logical line by
+%    one of the two preceding forms.
+%\end{itemize}
+%
+%The last token in the sequence is the first token within the sequence that
+%is immediately followed by whitespace containing a \changed{new-line character}{\grammarterm{new-line}}.
+%\begin{note}
+%    A \changed{new-line character}{\grammarterm{new-line}} ends the preprocessing directive even if it occurs
+%    within what would otherwise be an invocation of a function-like macro.
+%\end{note}
+%
+%\begin{example}
+%    \begin{codeblock}
+%        #                       // preprocessing directive
+%        module ;                // preprocessing directive
+%        export module leftpad;  // preprocessing directive
+%        import <string>;        // preprocessing directive
+%        export import "squee";  // preprocessing directive
+%        import rightpad;        // preprocessing directive
+%        import :part;           // preprocessing directive
+%
+%        module                  // not a preprocessing directive
+%        ;                       // not a preprocessing directive
+%
+%        export                  // not a preprocessing directive
+%        import                  // not a preprocessing directive
+%        foo;                    // not a preprocessing directive
+%
+%        export                  // not a preprocessing directive
+%        import foo;             // preprocessing directive (ill-formed at phase 7)
+%
+%        import ::               // not a preprocessing directive
+%        import ->               // not a preprocessing directive
+%    \end{codeblock}
+%\end{example}
+%
+%\pnum
+%A sequence of preprocessing tokens is only a \grammarterm{text-line}
+%if it does not begin with a directive-introducing token.
+%A sequence of preprocessing tokens is only a \grammarterm{conditionally-supported-directive}
+%if it does not begin with any of the directive names
+%appearing after a \tcode{\#} in the syntax.
+%A \grammarterm{conditionally-supported-directive} is
+%conditionally-supported with
+%\impldef{additional supported forms of preprocessing directive}
+%semantics.
+%
+%\pnum
+%At the start of phase 4 of translation,
+%the \grammarterm{group} of a \grammarterm{pp-global-module-fragment} shall
+%contain neither a \grammarterm{text-line} nor a \grammarterm{pp-import}.
+%
+%\pnum
+%When in a group that is skipped\iref{cpp.cond}, the directive
+%syntax is relaxed to allow any sequence of preprocessing tokens to occur between
+%the directive name and the following \changed{new-line character}{\grammarterm{new-line}}.
+%
+%\pnum
+%The only whitespace characters that shall appear
+%between preprocessing tokens
+%within a preprocessing directive
+%(from just after the directive-introducing token
+%through just before the terminating \changed{new-line character}{\grammarterm{new-line}})
+%are \changed{space}{SPACE} and \changed{horizontal-tab}{HOROZONTAL TAB}
+%(including \changed{spaces}{SPACE} that have replaced comments
+%or possibly other whitespace characters
+%in translation phase 3).
+%
+%[..]
+%
+%\pnum
+%A preprocessing directive of the form
+%\begin{ncsimplebnf}
+%    \terminal{\# define} identifier replacement-list new-line
+%    \indextext{\idxcode{\#define}}%
+%\end{ncsimplebnf}
+%defines an
+%\defnadj{object-like}{macro} that
+%causes each subsequent instance of the macro name
+%to be replaced by the replacement list of preprocessing tokens
+%that constitute the remainder of the directive.
+%The replacement list is then rescanned for more macro names as
+%specified below.
+%
+%\pnum
+%\begin{example}
+%    The simplest use of this facility is to define a ``manifest constant'',
+%    as in
+%    \begin{codeblock}
+%        #define TABSIZE 100
+%        int table[TABSIZE];
+%    \end{codeblock}
+%\end{example}
+%
+%\pnum
+%A preprocessing directive of the form
+%\begin{ncsimplebnf}
+%    \terminal{\# define} identifier lparen \opt{identifier-list} \terminal{)} replacement-list new-line\br
+%    \terminal{\# define} identifier lparen \terminal{...} \terminal{)} replacement-list new-line\br
+%    \terminal{\# define} identifier lparen identifier-list \terminal{, ...} \terminal{)} replacement-list new-line
+%\end{ncsimplebnf}
+%defines a \defnadj{function-like}{macro}
+%with parameters, whose use is
+%similar syntactically to a function call.
+%The parameters
+%\indextext{parameter!macro}%
+%are specified by the optional list of identifiers.
+%Each subsequent instance of the function-like macro name followed by a
+%\tcode{(}
+%as the next preprocessing token
+%introduces the sequence of preprocessing tokens that is replaced
+%by the replacement list in the definition
+%(an invocation of the macro).
+%\indextext{invocation!macro}%
+%The replaced sequence of preprocessing tokens is terminated by the matching
+%\tcode{)}
+%preprocessing token, skipping intervening matched pairs of left and
+%right parenthesis preprocessing tokens.
+%Within the sequence of preprocessing tokens making up an invocation
+%of a function-like macro, \changed{new-line is considered a normal whitespace character}{\grammarterm{new-line} are considered like other \grammarterm{whitespace}}.
+%
+%\pnum
+%\indextext{macro!function-like!arguments}%
+%The sequence of preprocessing tokens
+%bounded by the outside-most matching parentheses
+%forms the list of arguments for the function-like macro.
+%The individual arguments within the list
+%are separated by comma preprocessing tokens,
+%but comma preprocessing tokens between matching
+%inner parentheses do not separate arguments.
+%If there are sequences of preprocessing tokens within the list of
+%arguments that would otherwise act as preprocessing directives,
+%the behavior is undefined.
+%
+%[...]
+%
+%\pnum
+%The
+%\defn{line number}
+%of the current source line is one greater than
+%the number of \changed{new-line}{\grammarterm{new-line}} characters read or introduced
+%in translation phase 1\iref{lex.phases}
+%while processing the source file to the current token.
+%
+%[...]
+%
+%
+%\subsection{Time library}
+%
+%\rSec1[time.format]{Formatting}
+%
+%
+%\begin{LongTable}{Meaning of conversion specifiers}{time.format.spec}{lx{.8\hsize}}
+%    \\ \topline
+%    \lhdr{Specifier} & \rhdr{Replacement} \\ \capsep
+%    \endfirsthead
+%    \continuedcaption\\
+%    \hline
+%    \lhdr{Specifier} & \rhdr{Replacement} \\ \capsep
+%    \endhead
+%    \\ \rowsep
+%    \tcode{\%M} &
+%    The minute as a decimal number.
+%    If the result is a single digit, it is prefixed with \tcode{0}.
+%    The modified command \tcode{\%OM} produces
+%    the locale's alternative representation.
+%    \\ \rowsep
+%    \tcode{\%n} &
+%    A \changed{new-line}{LINE FEED} character.
+%    \\ \rowsep
+%    \tcode{\%p} &
+%    The locale's equivalent of the AM/PM designations associated with a 12-hour clock.
+%    \\
+%\end{LongTable}
+%
+
+\section{Acknowledgments}
+
+As usual, many people in SG-16 provided great feedbacks on this paper.
+In particular JeanHeyd Meneide offered the great insight that invalid UTF-8 can be supported by being considered a different encoding than UTF-8.
 
 
 \section{References}

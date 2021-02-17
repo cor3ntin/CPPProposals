@@ -6,8 +6,8 @@
 \documentclass{wg21}
 
 \title{Multidimensional subscript operator}
-\docnumber{P2128R2}
-\audience{EWG, EWGI}
+\docnumber{P2128R3}
+\audience{EWG}
 \author{Mark Hoemmen}{mhoemmen@stellarscience.com}
 \authortwo{Daisy Hollman}{dshollm@sandia.gov}
 \authorthree{Corentin Jabot}{corentin.jabot@gmail.com}
@@ -64,6 +64,13 @@ int main() {
 
 \section{Revisions}
 
+\section{R3}
+
+\begin{itemize}
+\item Add some discussions about interpreting \tcode{t[a][b]} as a syntactic rewrite for a variadic \tcode{operator[]} (wich we are not proposing)
+\end{itemize}
+
+
 \section{R2}
 
 \begin{itemize}
@@ -100,10 +107,6 @@ However, an implementation could keep supporting the current behavior as an exte
 Because we should not make C++ more confusing, we think the standard should not continue to support the old meaning of a comma
 in subscript expressions.
 
-\section{What about [foo][bar]?}
-
-As mentioned in [P1161R3]\cite{P1161R3}, an \tcode{operator[]} can return an object which has itself an \tcode{operator[]}.
-Therefore chaining multiple \tcode{[]} to index a single object isn't a viable proposal.
 
 \section{Should we adopt the same syntax for C arrays?}
 
@@ -118,6 +121,11 @@ Again, we shouldn't change the meaning of existing code in C++23.
 We should only add multidimensional operators to new in C++23 types such as \tcode{mdspan}.
 If there are users of \tcode{valarray} interested in this feature, this can be done in C++26
 
+\section{What about [foo][bar]?}
+
+As mentioned in [P1161R3]\cite{P1161R3}, an \tcode{operator[]} can return an object which has itself an \tcode{operator[]}.
+Therefore chaining multiple \tcode{[]} to index a single object isn't a viable proposal.
+
 \section{Should we interpret \tcode{t[a][b]} as a syntactic rewrite that looks for a variadic operator[]?}
 
 After Richard Smith raised this possibility on the EWG reflector, there was some discussion about this possibility. The rationale behind this suggestion was that current and future generic code that uses multidimensional array semantics (particularly code that may need to work with C-style pointer-to-pointer-like multidimensional arrays) would be syntactically incompatible with types that overload variadic \tcode{operator[]}.  The authors have ultimately decided to reject this direction for a number of reasons.
@@ -127,6 +135,9 @@ First of all, we reject the premise that significant generic code exists or will
 Another important reason to shy away from the \tcode{t[a][b]} rewrite is related to one of the overall motivations for the variadic subscript operator in general: \tcode{t[a]} looks like a valid subexpression, even though it isn't necessarily.  This is a confusing and misleading user experience that we'd like to avoid. 
 
 Finally, we believe the broader issue of generic interoperability with C-style pointer-to-pointer arrays can be addressed with a non-breaking, follow-on proposal in the other direction: if \tcode{t[a, b]} fails overload resolution, the compiler could look for \tcode{(t[a])[b]}. This would make things like \tcode{std::array<std::array<T, 3>, 4>} work out of the box, without any library changes. The authors would welcome such a proposal, but do not believe it should be a part of the initial language change proposed herein. This potential extension also solves the problem that \tcode{t[a][b]} is not a syntax that interacts favorably with parameter packs.
+
+Ultimately, our proposal is one that satisfy the needs of library types without adding complexity to overload resolution.
+It leaves the door to future evolutions if these evolutions prove useful and usable.
 
 \section{Wording}
 
