@@ -9,12 +9,19 @@
 % \usepackage[twitter]{emoji}
 
 \title{Wording improvements for encodings and character sets}
-\docnumber{P2297R0}
+\docnumber{P2297R1}
 \audience{SG-16}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 \begin{document}
 \maketitle
+
+\section{Revisions}
+
+\subsection{R1}
+\begin{itemize}
+\item Remove an incorrect note in the section about UDL
+\end{itemize}
 
 
 \section{Abstract}
@@ -28,6 +35,10 @@
 The wording mandated that the executions encoding be able to encode "alert, backspace, and carriage return". This requirement is not used
 in the core wording (Tweaks of [5.13.3.3.1] may be needed), nor in the library wording, and therefore does not seem useful, so it was not added in the new wording.
 This will not have any impact on existing implementations.
+
+\subsection{Unicode in raw string delimiters}
+
+Falls out of the wording change. should we?
 
 \section{New terminology}
 
@@ -148,6 +159,11 @@ Without a relationship between the literal and execution encodings, literals can
 
 This observation is reinforced and aggravated by the fact that it is generally not possible to distinguish literals from other objects at runtime!
 
+\section{Issues Fixed}
+
+\begin{itemize}
+    \item Phase 1 modification resolves \paper{CWG1403}, \paper{CWG578}, \paper{CWG1335}
+\end{itemize}
 
 \section{Future works}
 
@@ -321,6 +337,30 @@ characters into preprocessing tokens is context-dependent.
 
 \end{enumerate}
 
+\rSec1[lex.pptoken]{Preprocessing tokens}
+
+[...]
+
+\pnum
+If the input stream has been parsed into preprocessing tokens up to a
+given character:
+\begin{itemize}
+    \item
+    \indextext{literal!string!raw}%
+    If the next character begins a sequence of characters that could be the prefix
+    and initial double quote of a raw string literal, such as \tcode{R"}, the next preprocessing
+    token shall be a raw string literal. Between the initial and final
+    double quote characters of the raw string, \changed{any transformations performed in phases
+    1 and 2 (\grammarterm{universal-character-name}{s} and line splicing) are}{line splicing performed in phase 2 is} reverted; this reversion
+    shall apply before any \grammarterm{d-char}, \grammarterm{r-char}, or delimiting
+    parenthesis is identified. The raw string literal is defined as the shortest sequence
+    of characters that matches the raw-string pattern
+\begin{ncbnf}\opt{encoding-prefix} \terminal{R} raw-string\end{ncbnf}
+    
+    \item Otherwise, if the next three characters are \tcode{<::} and the subsequent character
+    is neither \tcode{:} nor \tcode{>}, the \tcode{<} is treated as a preprocessing token by
+    itself and not as the first character of the alternative token \tcode{<:}.
+\end{itemize}
 \rSec1[lex.charset]{Character sets}
 
 
@@ -652,6 +692,10 @@ The grammars below will be further impacted by work to not replace non-basic cha
     \bnfindent\textnormal{representing horizontal tab, vertical tab, form feed, and newline.}
 \end{bnf}
 
+\begin{quoteblock}
+\textbf{Because \tcode{\textbackslash} is not allowed, and threfore universal-character-name, allowing unicode here is a change of behavior.}
+\end{quoteblock}
+
 
 [...]
 
@@ -756,20 +800,6 @@ where \placeholder{n} is the \changed{source character}{codepoint} sequence $c_1
     $c_1c_2...c_k$ can only contain characters from the basic \removed{source} character set.
 \end{note}
 
-\begin{quoteblock}
-This note was in the wording original proposal \paper{N2750}.
-It is not clear why this restriction exists.
-With the early replacement of universal-character-name as proposed in this paper, it would be easy to remove that restriction.
-In fact, if we wanted to keep this restriction the note should probably become normative? 
-
-There is little reason to make the following code ill-formed:
-\begin{colorblock}
-long long operator""_µs(unsigned long long);
-\end{colorblock}
-
-There is currently \href{https://godbolt.org/z/sTET3q}{implementation divergence} !
-\end{quoteblock}
-
 \pnum
 If \placeholder{L} is a \grammarterm{user-defined-floating-point-literal}, let \placeholder{f} be the
 literal without its \grammarterm{ud-suffix}. If \placeholder{S} contains a literal operator
@@ -812,12 +842,12 @@ where \placeholder{f} is the  \changed{source character}{codepoint} sequence $c_
 \rSec3[execution encodings]{Execution encodings}
 
 The \defn{execution encoding} is the character encoding of the \defn{execution character set}, such that
-all members of the \defn{literal character set} are represented, with the same value in the \defn{execution character set} and any sequence of characters
-in the \defn{literal character encoding} represent the same sequence of code points when interpreted as being in the \defn{execution encoding}.
+all members of the \defn{literal character set} are represented, with the same value in the \defn{execution character set} and any character
+in the \defn{literal character encoding} represent the same character when interpreted as being in the \defn{execution encoding}.
 
 The \defn{wide execution encoding} is the character encoding of the \defn{wide execution character set}, such that
-all members of the \defn{wide literal character set} are represented, with the same value in the \defn{wide execution character set} and any sequence of characters
-in the \defn{wide literal character encoding} represent the same sequence of code points when interpreted as being in the \defn{wide execution encoding}.
+all members of the \defn{wide literal character set} are represented, with the same value in the \defn{wide execution character set} and any character
+in the \defn{wide literal character encoding} represent the same character when interpreted as being in the \defn{wide execution encoding}.
 
 The \defn{execution encoding} and \defn{wide execution encoding} are implementation-defined and may be be affected by a call to \tcode{setlocale(int, const char*)}, or by a change to a \tcode{locale} object, as described in locales and input.output.
 
@@ -829,7 +859,7 @@ I don't think that's the case yet.
 \end{quoteblock}
 
 \begin{addedblock}
-During constant evaluation, the \defn{execution encoding} and \defn{execution character set} are the \defn{literal character set} and \defn{wide literal character set} respectively and are not affected by locale.
+During constant evaluation, the \defn{execution encoding} and \defn{wide execution encoding} are the \defn{literal encoding} and \defn{wide literal encoding} respectively and are not affected by locale.
 
 \end{addedblock}
 

@@ -11,7 +11,7 @@
 \newcolumntype{?}{!{\vrule width 1pt}}
 
 \title{\tcode{std::generator}: Synchronous Coroutine Generator for Ranges}
-\docnumber{P2168R1}
+\docnumber{P2168R2}
 \audience{LEWG}
 \author{Lewis Baker}{lewissbaker@gmail.com}
 \authortwo{Corentin Jabot}{corentin.jabot@gmail.com}
@@ -25,6 +25,13 @@
 We propose a standard library type \tcode{std::generator} which implements a coroutine generator compatible with ranges.
 
 \section{Revisions}
+
+\subsection{R2}
+\begin{itemize}
+\item Some wording fixes
+\item Improve the section on allocator support
+\item Updated implementation
+\end{itemize}
 
 \subsection{R1}
 \begin{itemize}
@@ -154,7 +161,7 @@ std::generator<std::string_view, std::string> strings() {
 // conversion to a vector of strings
 // If the value_type was string_view, it would convert to a vector of string_view,
 // which would lead to undefined beavior as the string_views may get invalidated upon iteration!
-auto v = std::to<vector>(strings()); // (@{\paper{P1206R3}}@)
+auto v = std::ranges::to<vector>(strings()); // (@{\paper{P1206R3}}@)
 
 \end{colorblock}
 
@@ -348,7 +355,7 @@ While we think a single \tcode{generator} type is sufficient and offers a better
 \end{itemize}
 
 Symmetric transfer is possible for different generator types as long as the \tcode{reference} type is the same, aka,
-different value type or allocator type does not preclude symmetric transfer.
+different value type or allocator type does not preclude symmetric transfer (see sectiion on allocators).
 
 \subsection{How to store the yielded value in the promise type?}
 
@@ -376,19 +383,17 @@ To avoid that storage cost, a \tcode{generator<const T\&>} can be used.
 In line with the design exploration done in section 2 of \paper{P1681R0}, \tcode{std::generator} can support both stateless and stateful allocators, and strive
 to minimize the interface verbosity for stateless allocators, by templating both the generator itself and the \tcode{promise_type}'s \tcode{new} operator
 on the allocator type. Details for this interface are found in \paper{P1681R0}.
-Allocators passed as parameter to the coroutine function do not need to be default constructible if we mandate their \tcode{value_type} is \tcode{std::byte}
-(such that they do not need to be rebound).
 
 \tcode{coroutine_parameter_preview_t} such as discussed in section 3 of \paper{P1681R0} has not been explored in this paper.
 
 \begin{colorblock}
-    std::generator<int, int, std::allocator<std::byte>> stateless_example() {
+    std::generator<int> stateless_example() {
         co_yield 42;
     }
     
     template <typename Allocator>
-    std::generator<int, int, Allocator> 
-    allocator_example(std::allocator_arg_t, Allocator&& alloc) {
+    std::generator<int> 
+    allocator_example(std::allocator_arg_t, Allocator alloc) {
         co_yield 42;
     }
     
@@ -397,9 +402,6 @@ Allocators passed as parameter to the coroutine function do not need to be defau
     
 \end{colorblock}
 
-Supporting allocators requires storing, in all cases, a function pointer adjacent to the coroutine frame (to track a deallocation function),
-along with the allocator itself in the case of stateful allocators.
-
 The proposed interface requires that, if an allocator is provided, it is the second argument to the coroutine function, 
 immediately preceded by an instance of \tcode{std::allocator_arg_t}.
 This approach is necessary to distinguish the allocator desired to allocate the coroutine frame from allocators whose purpose is to be used in the body of the coroutine function.
@@ -407,6 +409,91 @@ The required argument order might be a limitation if any other argument is requi
 
 We think it is important that all standard and user coroutines types can accommodate similar interfaces for allocator support.
 In fact, the implementation for that allocator support can be shared amongst \tcode{generator}, \tcode{lazy} and other standard types.
+
+
+\textbf{By default \tcode{std::generator} type erases the allocator type, and uses \tcode{std::allocator} unless an allocator is provided to
+the coroutine function}.
+Then:
+
+\textbf{Type erased allocator(default)}
+
+\begin{colorblock}
+template <typename Allocator>
+std::generator<int> f(std::allocator_arg_t, Allocator alloc) {}
+
+f(std::allocator_arg, my_alloc{});
+\end{colorblock}
+
+Returns a generator of type \tcode{std::generator<int, int, void>} where \tcode{void} denotes that the allocator is type erased.
+The allocator is store on the coroutine frame if it is stateful or not default constructible; a pointer is always stored so that the \tcode{deallocate} method of the type erased allocator can be called.
+
+
+\textbf{No allocator}
+
+\begin{colorblock}
+std::generator<int> f() {}
+f();
+\end{colorblock}
+
+Returns a generator of type \tcode{std::generator<int, int, void>} where \tcode{void} denotes that the allocator is type erased.
+A pointer is stored so that the \tcode{deallocate} method of the type erased allocator can be called. The allocator is \tcode{std::allocator} and is not stored on the frame (because it is stateless)
+
+\textbf{Explicit stateless allocator}
+
+\begin{colorblock}
+std::generator<int, int, std::stateless_allocator<int>> f() {}
+f();
+\end{colorblock}
+
+Returns a generator of type \tcode{std::generator<int, int, std::stateless_allocator<int>>}
+No extra storage is used for the allocator because it is stateless.
+
+\textbf{Explicit stateful allocator}
+
+\begin{colorblock}
+std::generator<int, int, some_statefull_allocator<int>> 
+    f(std::allocator_arg_t,  some_statefull_allocator<int> alloc) {}
+f(std::allocator_arg, some_allocator); // must be convertible to some_statefull_allocator
+\end{colorblock}
+
+Returns a generator of type \tcode{std::generator<int, int, some_statefull_allocator<int>>}
+The allocator is copied in the coroutine frame.
+
+
+\subsection{Interaction with symmetric transfer and allocator support}
+
+The allocator must be part of the promise type.
+Or implementation uses a base class so that generators of different allocator types can yield each other.
+This leaves with 2 implementation strategies
+\begin{itemize}
+\item Storing a pointer to the base class in the promise handle
+\item Leave implementers find the best implementation strategy and can bell their own implementation to be well-formed
+\item Modify the wording as follow to allow \tcode{coroutine_handle<promise_base>::from_address(coro.address());} to be well-formed:
+\end{itemize}
+
+To support yielding nested generator of different allocator types we then have 3 options:
+\begin{itemize}
+\item leaving implementers find the most
+\end{itemize}
+
+\begin{quote}
+\indexlibrarymember{from_address}{coroutine_handle}%
+\begin{itemdecl}
+static constexpr coroutine_handle<Promise> coroutine_handle<Promise>::from_address(void* addr);
+\end{itemdecl}
+
+\begin{itemdescr}
+\expects
+\tcode{addr} was obtained via a prior call to \tcode{address}
+on an object of type \cv \changed{\tcode{coroutine_handle<Promise>}}{of type \cv \tcode{coroutine_­handle<T}> where\tcode {T} is any type such that \tcode{is_layout_compatible_v<T, Promise>} is \tcode{true}}.
+\end{itemdescr}
+\end{quote}
+
+
+
+Supporting allocators requires storing, in all cases, a function pointer adjacent to the coroutine frame (to track a deallocation function),
+along with the allocator itself in the case of stateful allocators.
+
 
 \subsection{Can we postpone adding support for allocator later?}
 
@@ -488,28 +575,28 @@ The following wording is meant to illustrate the proposed API.
 
 \begin{addedblock}
 \begin{codeblock}
-    
-template<typename T>
-struct elements_of;
-
-template<std::ranges::input_range R>
-struct elements_of<R> {
-    R&& __range; // \expos
-    
-    explicit constexpr elements_of(R&& r) noexcept : range((R&&)r) {}
-    constexpr elements_of(elements_of&&) noexcept = default;
-    
-    constexpr elements_of(const elements_of&) = delete;
-    constexpr elements_of& operator=(const elements_of&) = delete;
-    constexpr elements_of& operator=(elements_of&&) = delete;
-    
-    constexpr R && get() && noexcept {
-        return std::forward<R>(__range);
-    }  
-};
-template<std::ranges::input_range R>
-elements_of(R&&) -> return elements_of<R>;
-    
+namespace std::ranges {
+        
+    template<typename T>
+    struct elements_of;   
+    template<std::ranges::input_range R>
+    struct elements_of<R> {
+        R&& __range; // \expos
+        
+        explicit constexpr elements_of(R&& r) noexcept : range((R&&)r) {}
+        constexpr elements_of(elements_of&&) noexcept = default;
+        
+        constexpr elements_of(const elements_of&) = delete;
+        constexpr elements_of& operator=(const elements_of&) = delete;
+        constexpr elements_of& operator=(elements_of&&) = delete;
+        
+        constexpr R && get() && noexcept {
+            return std::forward<R>(__range);
+        }  
+    };
+    template<std::ranges::input_range R>
+    elements_of(R&&) -> return elements_of<R>;   
+}
 \end{codeblock}
 
 
@@ -522,11 +609,11 @@ elements_of(R&&) -> return elements_of<R>;
     
 namespace std {
       
-    template<typename Ref, typename Value  = std::remove_cvref_t<Ref>>
+    template<typename Ref, typename Value  = std::remove_cvref_t<Ref>, typename Allocator = void>
     class generator;
     
-    template <typename Ref, typename Value>
-    inline constexpr bool ranges::enable_view<generator<Ref, Value>> = true;
+    template <typename Ref, typename Value, typename Allocator>
+    inline constexpr bool ranges::enable_view<generator<Ref, Value, Allocator>> = true;
 }
     
 \end{codeblock}
@@ -562,7 +649,7 @@ namespace std {
 namespace std {
     
 template <typename Ref, typename Value = std::remove_cvref_t<Y>, 
-          typename Allocator = std::allocator<std::byte>>
+          typename Allocator = void>
 class generator  {
     public:
     class promise_type;
@@ -606,8 +693,7 @@ class generator  {
 \end{codeblock}
 \mandates
 \begin{itemize}
-\item \tcode{Allocator} meets2 the \tcode{Cpp17Allocator} requirements,
-\item \tcode{same\_as<Allocator::value\_type>, std::byte>} is \tcode{true}.
+\item \tcode{Allocator} meets the \tcode{Cpp17Allocator} requirements
 \end{itemize}
 
 \begin{itemdecl}
@@ -736,7 +822,6 @@ auto yield_value(elements_of<generator<Ref, TVal, TAlloc>>&& g) noexcept;
 \mandates
 \begin{itemize}
 \item \tcode{TAlloc} meets the \tcode{Cpp17Allocator} requirements,
-\item \tcode{same\_as<TAlloc::value\_type>, std::byte>} is \tcode{true}.
 \end{itemize}
     
 \effects
@@ -898,7 +983,7 @@ Insert into [version.syn]
     \bibitem[Implementation]{Implementation}
     Lewis Baker, Corentin Jabot
     \emph{\tcode{std::generator} implementation}\newline
-    \url{https://godbolt.org/z/Tb36xj}
+    \url{https://godbolt.org/z/eoPeTY}
     
     \bibitem[N4861]{N4861}
     Richard Smith

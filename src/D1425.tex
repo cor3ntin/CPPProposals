@@ -4,7 +4,7 @@
 \documentclass{wg21}
 
 \title{Iterators pair constructors for stack and queue}
-\docnumber{P1425R3}
+\docnumber{P1425R4}
 \audience{LEWG, LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -43,12 +43,20 @@ std::stack s(v.begin(), v.end());
 
 \section{Revisions}
 
-\subsection{R3}
+\subsection{R4}
 \begin{itemize}
-    \item Add missing deduction guides for the constructors with allocators
+\item Replace the 2 previously suggested feature macro by \tcode{__cpp_lib_adaptor_iterator_pair_constructor}
+\item Reorganize the ordfer of constructructors and put the allocators costructors on the approriate section
+\item use \exposid{iter-value-type} as introduced by \paper{LWG3506}
 \end{itemize}
 
-
+\subsection{R3}
+\begin{itemize}
+    \item Add missing deduction guides for the constructors with allocators.\\
+    \textbf{Since LEWG review, the deduction guides have been fixed to deduce the allocator type of the default container}.
+    
+\end{itemize}
+\textbf{}
 \subsection{R2}
 \begin{itemize}
     \item Remove the \tcode{Container} argument
@@ -92,7 +100,8 @@ This proposal has been \href{https://github.com/cor3ntin/llvm-project/tree/stack
 
 \section{Proposed Wording}
 
-\begin{quote}
+\textbf{Note for LWG \& the editors: this wording uses the exposition only \exposid{iter-value-type} type which
+is introduced by the accepted resolution to issue \paper{LWG3506}}
 
 \rSec2[queue.defn]{Definition}
 	
@@ -119,39 +128,44 @@ namespace std {
 		
 	   	@\added{template<class InputIterator>}@
                 @\added{queue(InputIterator first, InputIterator last);}@
-        
-    	        @\added{template<class InputIterator, class Alloc>}@
-		@\added{queue(InputIterator first, InputIterator last, const Alloc\&);}@
 				
 		template<class Alloc> explicit queue(const Alloc&);
 		template<class Alloc> queue(const Container&, const Alloc&);
 		template<class Alloc> queue(Container&&, const Alloc&);
 		template<class Alloc> queue(const queue&, const Alloc&);
 		template<class Alloc> queue(queue&&, const Alloc&);
+        
+                @\added{template<class InputIterator, class Alloc>}@
+                @\added{queue(InputIterator first, InputIterator last, const Alloc\&);}@
 		
 		//...
 	};
 	
 	template<class Container>
 	queue(Container) -> queue<typename Container::value_type, Container>;
+    
+\end{codeblock}
+\begin{addedblock}  
+\begin{codeblock}
 	
-	@\added{template<class InputIterator>}@
-	@\added{queue(InputIterator, InputIterator)}@
-	@\added{-> queue<typename iterator_traits<InputIterator>::value_type>;}@
-    
-    
-        @\added{template<class InputIterator, class Allocator>}@
-        @\added{queue(InputIterator, InputIterator, Allocator)}@
-        @\added{-> queue<typename iterator_traits<InputIterator>::value_type>;}@
-\end{codeblock}  
+	template<class InputIterator>
+	queue(InputIterator, InputIterator) -> queue<@\exposid{iter-value-type}@<InputIterator>>;
 
-
-\textbf{Note for LWG: Align the deduction guide with the outcome of \paper{P1518R0}} ?
-
+\end{codeblock}
+\end{addedblock}  
 
 \begin{codeblock}
 	template<class Container, class Allocator>
 	queue(Container, Allocator) -> queue<typename Container::value_type, Container>;
+\end{codeblock}
+\begin{addedblock}  
+\begin{codeblock}
+        template<class InputIterator, class Allocator>
+        queue(InputIterator, InputIterator, Allocator)
+        -> queue<@\exposid{iter-value-type}@<InputIterator>, deque<@\exposid{iter-value-type}@<InputIterator>, Allocator>>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
 	
 	template<class T, class Container>
 	void swap(queue<T, Container>& x, queue<T, Container>& y) noexcept(noexcept(x.swap(y)));
@@ -185,19 +199,50 @@ namespace std {
 \begin{addedblock}
 
 \begin{itemdecl}
-template<class InputIterator>
-queue(InputIterator first, InputIterator last);
+    template<class InputIterator>
+    queue(InputIterator first, InputIterator last);
 \end{itemdecl}
 
 \begin{itemdescr}
 \pnum
 \effects
-Initializes \tcode{c} with \tcode{first} as the first argument, and \tcode{last} as the second argument.
+Initializes \tcode{c} with \tcode{first} as the first argument and \tcode{last} as the second argument.
+\end{itemdescr}
+
+\end{addedblock}
+
+\rSec3[queue.cons.alloc]{Constructors with allocators}
+
+[...]
+
+\begin{itemdecl}
+    template<class Alloc> queue(const queue& q, const Alloc& a);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Initializes \tcode{c} with \tcode{q.c} as the first argument and \tcode{a} as the
+    second argument.
 \end{itemdescr}
 
 \begin{itemdecl}
-template<class InputIterator, typename Alloc>
-queue(InputIterator first, InputIterator last, const Alloc & alloc);
+    template<class Alloc> queue(queue&& q, const Alloc& a);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Initializes \tcode{c} with \tcode{std::move(q.c)} as the first argument and \tcode{a}
+    as the second argument.
+\end{itemdescr}
+
+
+\begin{addedblock}
+
+\begin{itemdecl}
+    template<class InputIterator, typename Alloc>
+    queue(InputIterator first, InputIterator last, const Alloc & alloc);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -232,15 +277,16 @@ namespace std {
 		
 		@\added{template<class InputIterator>}@
                 @\added{stack(InputIterator first, InputIterator last);}@
-        
-                @\added{template<class InputIterator, class Alloc>}@
-                @\added{stack(InputIterator first, InputIterator last, const Alloc\&);}@
 		
 		template<class Alloc> explicit stack(const Alloc&);
 		template<class Alloc> stack(const Container&, const Alloc&);
 		template<class Alloc> stack(Container&&, const Alloc&);
 		template<class Alloc> stack(const stack&, const Alloc&);
 		template<class Alloc> stack(stack&&, const Alloc&);
+        
+        
+                @\added{template<class InputIterator, class Alloc>}@
+                @\added{stack(InputIterator first, InputIterator last, const Alloc\&);}@
 		
 		//...
 	};
@@ -250,23 +296,16 @@ namespace std {
 	
 	@\added{template<class InputIterator>}@
 	@\added{stack(InputIterator, InputIterator)}@
-	@\added{-> stack<typename iterator\_traits<InputIterator>::value_type>;}@
+	@\added{-> stack<\exposid{iter-value-type}<InputIterator>>;}@
+        
+	template<class Container, class Allocator>
+	stack(Container, Allocator) -> stack<typename Container::value_type, Container>;
     
         @\added{template<class InputIterator, class Allocator>}@
         @\added{stack(InputIterator, InputIterator, Allocator)}@
-        @\added{-> stack<typename iterator\_traits<InputIterator>::value_type>;}@
-        
-        
-\end{codeblock}  
-
-
-\textbf{Note for LWG: Align the deduction guide with the outcome of \paper{P1518R0}} ?
-
-
-\begin{codeblock}
-	
-	template<class Container, class Allocator>
-	stack(Container, Allocator) -> stack<typename Container::value_type, Container>;
+        @\added{-> stack<\exposid{iter-value-type}<InputIterator>, 
+            deque<\exposid{iter-value-type}<InputIterator>, Allocator>>}@
+    
 	
 	template<class T, class Container, class Alloc>
 	struct uses_allocator<stack<T, Container>, Alloc>
@@ -298,8 +337,8 @@ namespace std {
 \begin{addedblock}
 	
 \begin{itemdecl}
-template<class InputIterator>
-stack(InputIterator first, InputIterator last);
+    template<class InputIterator>
+    stack(InputIterator first, InputIterator last);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -308,9 +347,41 @@ stack(InputIterator first, InputIterator last);
 Initializes \tcode{c} with \tcode{first} as the first argument and \tcode{last} as the second argument.
 \end{itemdescr}
 
+\end{addedblock}
+
+\rSec3[stack.cons.alloc]{Constructors with allocators}
+
+[...]
+
+\indexlibraryctor{stack}%
 \begin{itemdecl}
-template<class InputIterator, typename Alloc>
-stack(InputIterator first, InputIterator last, const Alloc & alloc);
+    template<class Alloc> stack(const stack& s, const Alloc& a);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Initializes \tcode{c} with \tcode{s.c} as the first argument and \tcode{a}
+    as the second argument.
+\end{itemdescr}
+
+\indexlibraryctor{stack}%
+\begin{itemdecl}
+    template<class Alloc> stack(stack&& s, const Alloc& a);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Initializes \tcode{c} with \tcode{std::move(s.c)} as the first argument and \tcode{a}
+    as the second argument.
+\end{itemdescr}
+
+\begin{addedblock}
+
+\begin{itemdecl}
+    template<class InputIterator, typename Alloc>
+    stack(InputIterator first, InputIterator last, const Alloc & alloc);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -328,12 +399,9 @@ Insert into [version.syn]
 
 \begin{addedblock}
 \begin{codeblock}
-#define __cpp_lib_queue_iterators_constructor <DATE OF ADOPTION>
-#define __cpp_lib_stack_iterators_constructor <DATE OF ADOPTION>
+#define __cpp_lib_adaptor_iterator_pair_constructor <DATE OF ADOPTION>
 \end{codeblock}
 \end{addedblock}
-
-\end{quote}
 
 \section{Acknowledgment}
 

@@ -266,8 +266,16 @@
  \renewcommand{\grammarterm}[1]{\textit{##1}}
 }
 
-\lstnewenvironment{colorblock}{\ColorCodeBlockSetup}{}
+\newcommand{\SmallColorCodeBlockSetup}{
+    \lstset{basicstyle=\scriptsize, style=color, escapechar=@, texcl=false}
+    \renewcommand{\tcode}[1]{\textup{\CodeStylex{##1}}}
+    \renewcommand{\techterm}[1]{\textit{\CodeStylex{##1}}}
+    \renewcommand{\term}[1]{\textit{##1}}
+    \renewcommand{\grammarterm}[1]{\textit{##1}}
+}
 
+\lstnewenvironment{colorblock}{\ColorCodeBlockSetup}{}
+\lstnewenvironment{smallcolorblock}{\SmallColorCodeBlockSetup}{}
 
 \lstdefinestyle{ASM}{
     basicstyle=\tiny\ttfamily,
