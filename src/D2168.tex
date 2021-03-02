@@ -87,7 +87,7 @@ destruction requirement:
 
 \begin{colorblock}
     
-    template <typename T>
+    template <class T>
     std::generator<T> all (vector<T> vec) {
         for(auto & e : vec)  {
             co_yield e;
@@ -391,7 +391,7 @@ on the allocator type. Details for this interface are found in \paper{P1681R0}.
         co_yield 42;
     }
     
-    template <typename Allocator>
+    template <class Allocator>
     std::generator<int> 
     allocator_example(std::allocator_arg_t, Allocator alloc) {
         co_yield 42;
@@ -418,7 +418,7 @@ Then:
 \textbf{Type erased allocator(default)}
 
 \begin{colorblock}
-template <typename Allocator>
+template <class Allocator>
 std::generator<int> f(std::allocator_arg_t, Allocator alloc) {}
 
 f(std::allocator_arg, my_alloc{});
@@ -577,22 +577,20 @@ The following wording is meant to illustrate the proposed API.
 \begin{codeblock}
 namespace std::ranges {
         
-    template<typename T>
+    template<class T>
     struct elements_of;   
     template<std::ranges::input_range R>
     struct elements_of<R> {
         R&& __range; // \expos
         
-        explicit constexpr elements_of(R&& r) noexcept : range((R&&)r) {}
-        constexpr elements_of(elements_of&&) noexcept = default;
+        explicit constexpr elements_of(R&& r) noexcept;
+        constexpr elements_of(elements_of&&) = default;
         
         constexpr elements_of(const elements_of&) = delete;
         constexpr elements_of& operator=(const elements_of&) = delete;
         constexpr elements_of& operator=(elements_of&&) = delete;
         
-        constexpr R && get() && noexcept {
-            return std::forward<R>(__range);
-        }  
+        constexpr R && get() && noexcept;
     };
     template<std::ranges::input_range R>
     elements_of(R&&) -> return elements_of<R>;   
@@ -609,28 +607,48 @@ namespace std::ranges {
     
 namespace std {
       
-    template<typename Ref, typename Value  = std::remove_cvref_t<Ref>, typename Allocator = void>
+    template<class Ref, std::common_reference_with<Ref> Value  = std::remove_cvref_t<Ref>, class Allocator = void>
     class generator;
     
-    template <typename Ref, typename Value, typename Allocator>
+    template <class Ref, class Value, class Allocator>
     inline constexpr bool ranges::enable_view<generator<Ref, Value, Allocator>> = true;
 }
     
 \end{codeblock}
 
+\rSec3[range.utility.elementsof]{elements_of}
+
+\tcode{elements_of} is a type that encapsulates a range and act as a tag in overload sets to disambiguate when a range should be treated as a sequence rather than a single value in genetric contexts.
+
+\begin{example}
+\begin{codeblock}
+generator<any> f(input_range auto rng) {
+    co_yield rng; // yield rng as a single value
+    co_yield elements_of(rng); // yield each element of rng
+}
+\end{codeblock}
+\end{example}
 
 \rSec2[coroutine.generator]{Generator View}
 
 \rSec3[coroutine.generator.overview]{Overview}
 
 
-\tcode{generator} produces an \tcode{input_view} over a synchronous coroutine function yielding values.
+\tcode{generator} generates a sequence of elements by repeatedly resuming the coroutine it was returned from.
+When the coroutine is resumed, it is executed until it reaches either a co_yield expression or the end of the coroutine.
+
+Elements of the sequence are produced by the coroutine each time a \tcode{co_yield} expression is evaluated.
+
+When the \tcode{co_yield} expression is of the form \tcode{co_yield elements_of(rng)}, each element of the range \tcode{rng} is successively produced.
+
+\tcode{generator} models \tcode{view} and \tcode{input_view}
+
 
 \begin{example}
     \begin{codeblock}
         generator<int> iota(int start = 0) {
             while(true)
-            co_yield start++;
+                co_yield start++;
         }
         
         void f() {
@@ -648,44 +666,31 @@ namespace std {
     
 namespace std {
     
-template <typename Ref, typename Value = std::remove_cvref_t<Y>, 
-          typename Allocator = void>
+template <class Ref, class Value = std::remove_cvref_t<Y>, 
+          class Allocator = void>
 class generator  {
-    public:
-    class promise_type;
-    class iterator;
-    class sentinel {};
+    class promise_type_; // \expos
+public:
+    using promise_type = promise_type_;
     
-    private:
-    std::coroutine_handle<promise_type> coroutine_ = nullptr; // \expos
-    
-    explicit generator(std::coroutine_handle<promise_type> coroutine) noexcept // \expos
-    : coroutine_(coroutine) {}
-    
-    public:
+    class iterator; // \expos
+    class sentinel; // \expos
+   
     generator() noexcept;
     generator(const generator &other) = delete;
-    generator(generator && other) noexcept
-    : coroutine_(exchange(other.coroutine_, nullptr)){}
+    generator(generator && other) noexcept;
     
-    ~generator() {
-        if (coroutine_) {
-            coroutine_.destroy();
-        }
-    }
+    ~generator();
     
-    generator &operator=(generator && other) noexcept {
-        swap(other);
-        return *this;
-    }
+    generator &operator=(generator && other) noexcept;
     
     iterator begin();
-    sentinel end() noexcept
-    { return {};  }
+    sentinel end() const noexcept;
     
-    void swap(generator & other) noexcept {
-        std::swap(coroutine_, other.coroutine_);
-    }
+private:
+    std::coroutine_handle<promise_type> coroutine_ = nullptr; // \expos
+    
+    explicit generator(std::coroutine_handle<promise_type> coroutine) noexcept; // \expos
     
 };
 }
@@ -708,7 +713,7 @@ suspended at its initial suspend-point.
 Equivalent to:
 \begin{codeblock}
     if(coroutine_)
-    coroutine_.resume();
+        coroutine_.resume();
     return iterator{coroutine_};
 \end{codeblock}
 
@@ -722,7 +727,7 @@ Equivalent to:
 
 \begin{codeblock}
     
-template <typename Ref, typename Value, typename Allocator>
+template <class Ref, class Value, class Allocator>
 class generator<Ref, Value, Allocator>::promise_type {
     
     friend generator;
@@ -746,11 +751,11 @@ public:
     std::suspend_always yield_value(reference && value) n
         noexcept(std::is_nothrow_copy_constructible_v<reference, T>));
     
-    template <typename T>
+    template <class T>
     requires(!std::is_reference_v<Ref>) && std::is_convertible_v<T, Ref> 
     std::suspend_always yield_value(T &&x) noexcept(std::is_nothrow_constructible_v<Ref, T>);
     
-    template <typename TVal, typename TAlloc> 
+    template <class TVal, class TAlloc> 
     @\unspec@ yield_value(elements_of<generator<Ref, TVal, TAlloc>>&& g) noexcept; // \seebelownc
     
     template<std::ranges::input_range R>
@@ -765,9 +770,9 @@ public:
     
     static void* operator new(std::size_t size);
     
-    template<typeame Alloc, typename... Args>
+    template<typeame Alloc, class... Args>
     static void* operator new(std::size_t size, std::allocator_arg_t, Alloc&& alloc, Args&...);
-    template<typename This, typeame Alloc, typename... Args>
+    template<class This, typeame Alloc, class... Args>
     static void* operator new(std::size_t size, This&, std::allocator_arg_t, Alloc&& alloc, Args&...);
     
     static void operator delete(void *pointer, size_t size) noexcept;
@@ -793,7 +798,7 @@ std::suspend_always yield_value(reference && value)
     noexcept(std::is_nothrow_copy_constructible_v<reference, T>));
 \end{itemdecl}
 \begin{itemdecl}
-template <typename T>
+template <class T>
 requires(!std::is_reference_v<Ref>) && std::is_convertible_v<T, Ref> 
 std::suspend_always yield_value(T &&x) 
     noexcept(std::is_nothrow_constructible_v<Ref, T>);
@@ -813,7 +818,7 @@ Generators can transfer control recursively, \tcode{value} returns the value set
 
 
 \begin{itemdecl}
-template <typename TVal, typename TAlloc> 
+template <class TVal, class TAlloc> 
 auto yield_value(elements_of<generator<Ref, TVal, TAlloc>>&& g) noexcept;
 \end{itemdecl}
 
@@ -859,7 +864,7 @@ Calls \tcode{co_yield elem} for each element \tcode {elem} of the range \tcode {
 
 \begin{codeblock}
     
-template <typename Ref, typename Value, typename Allocator>
+template <class Ref, class Value, class Allocator>
 class generator::iterator {
     private:
     std::coroutine_handle<promise_type> coroutine_ = nullptr;
