@@ -720,7 +720,7 @@ as an element of the generator.
     
 namespace std {
     
-template <class Ref, common_reference_with<Ref> Value = remove_cvref_t<Y>, 
+template <class Ref, common_reference_with<Ref> Value = remove_cvref_t<Ref>, 
           class Allocator = void>
 class generator  {
     class promise_type_; // \expos
@@ -729,7 +729,6 @@ public:
     using promise_type = promise_type_;
     
     class iterator; // \expos
-    class sentinel {}; // \expos
    
     generator() noexcept = default;
     generator(const generator &other) = delete;
@@ -824,7 +823,7 @@ Equivalent to:
         started_ = true;
         coroutine_.resume();
     }
-    return iterator{coroutine_};
+    return iterator(coroutine_);
 \end{codeblock}
 
 \begin{note}
@@ -834,11 +833,11 @@ Equivalent to:
 
 
 \begin{itemdecl}
-sentinel end();
+default_sentinel_t end() const noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-\returns \tcode{sentinel\{\}}.
+\returns \tcode{default_sentinel_t\{\}}.
 \end{itemdescr}
 
 
@@ -970,7 +969,7 @@ Generators can transfer control recursively.
 \begin{itemdecl}
 template<std::ranges::input_range R>
   requires convertible_to<ranges::range_reference_t<R>, Ref>
-std::suspend_always yield_value(elements_of<R> rng);
+auto yield_value(elements_of<R> rng);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -1075,7 +1074,7 @@ public:
     
     explicit iterator(std::coroutine_handle<promise_type> coroutine) noexcept; // \expos
     
-    bool operator==(sentinel) const noexcept;
+    bool operator==(default_sentinel_t) const noexcept;
     
     iterator& operator++();
     void operator++(int);
@@ -1116,7 +1115,7 @@ Initializes \tcode{coroutine_} with \tcode{coroutine}.
 
 
 \begin{itemdecl}
-bool operator==(sentinel) const noexcept
+bool operator==(default_sentinel_t) const noexcept
 \end{itemdecl}
 
 \begin{itemdescr}
