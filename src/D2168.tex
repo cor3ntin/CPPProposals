@@ -859,9 +859,9 @@ public:
     
     generator<Ref, Value, Allocator> get_return_object() noexcept;
     
-    suspend_always initial_suspend();
+    suspend_always initial_suspend() noexcept;
     
-    auto final_suspend() const;
+    auto final_suspend() noexcept;
     
     suspend_always yield_value(Ref && value)
         noexcept(is_nothrow_move_constructible_v<Ref>);
@@ -875,7 +875,7 @@ public:
     
     template<ranges::input_range R>
       requires convertible_to<ranges::range_reference_t<R>, Ref>
-    @\unspec@ yield_value(elements_of<R> rng) noexcept; // \seebelownc
+    @\unspec@ yield_value(elements_of<R> rng); // \seebelownc
     
     void await_transform() = delete;
     
@@ -888,6 +888,7 @@ public:
     
     template<typeame Alloc, class... Args>
     static void* operator new(size_t size, allocator_arg_t, Alloc& alloc, Args&...);
+
     template<class This, typeame Alloc, class... Args>
     static void* operator new(size_t size, This&, allocator_arg_t, Alloc& alloc, Args&...);
     
@@ -911,7 +912,7 @@ generator<Ref, Value, Allocator> get_return_object() noexcept;
 \end{itemdescr}
 
 \begin{itemdecl}
-suspend_always initial_suspend() noexcept const;
+suspend_always initial_suspend() noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -920,8 +921,8 @@ suspend_always initial_suspend() noexcept const;
 
 
 \begin{itemdecl}
-suspend_always yield_value(Ref && value) 
-    noexcept(is_nothrow_copy_constructible_v<reference>));
+suspend_always yield_value(Ref&& x) 
+    noexcept(is_nothrow_move_constructible_v<Ref>);
 \end{itemdecl}
 \begin{itemdecl}
 template <class T>
@@ -932,7 +933,8 @@ suspend_always yield_value(T&& x)
 
 \begin{itemdescr}
 \effects
-Direct initialise \tcode{value_} from \tcode{x};
+Initialises \tcode{value_} from \tcode{static_cast<decltype(x)>(x)};
+\returns \tcode{suspend_always\{\}}.
 \end{itemdescr}
 
 
@@ -951,7 +953,7 @@ auto yield_value(elements_of<generator<Ref, TVal, TAlloc>> g) noexcept;
 \effects
 This function returns an implementation defined \tcode{awaitable} type which takes ownership of the generator \tcode{g}.
 
-Execution is transferred to the coroutine represented by  \tcode{g.coroutine_} until its completion. 
+Execution is transferred to the coroutine represented by \tcode{g.coroutine_} until its completion. 
 After \tcode{g.coroutine_} completes, the current coroutine is resumed.
 If \tcode{g.coroutine_} completes with an exception, the exception is rethrown from the `co_yield` expression.
 
@@ -960,7 +962,7 @@ before variables with automatic storage duration in the scope of the coroutine d
 
 \begin{note}
 Generators can transfer control recursively.
-\end{note} 
+\end{note}
     
 \end{itemdescr}
 
@@ -968,11 +970,22 @@ Generators can transfer control recursively.
 \begin{itemdecl}
 template<std::ranges::input_range R>
   requires convertible_to<ranges::range_reference_t<R>, Ref>
-std::suspend_always yield_value(elements_of<R> rng) noexcept;
+std::suspend_always yield_value(elements_of<R> rng);
 \end{itemdecl}
 
 \begin{itemdescr}
 \effects
+Equivalent to:
+\begin{codeblock}
+{
+    auto it = std::ranges::begin(rng.get());
+    auto itEnd = std::ranges::end(rng.get());
+    while (it != itEnd) {
+        co_yield *it;
+        ++it;
+    }
+}
+\end{codeblock}
 Calls \tcode{co_yield elem} for each element \tcode{elem} of the range \tcode{rng.get()}. 
 
 \returns A implementation-defined \tcode{awaitable} 
@@ -1042,7 +1055,7 @@ Deallocate the coroutine state with an instance of the allocator equivalent to t
 \begin{codeblock}
     
 template <class Ref, class Value, class Allocator>
-class generator::iterator {
+class generator<Ref, Value, Allocator>::iterator {
 private:
     std::coroutine_handle<promise_type> coroutine_; // \expos
     
@@ -1053,28 +1066,28 @@ public:
     using reference = promise_type::reference;
     
     iterator() noexcept = default;
-    iterator(const iterator &) = delete;
+
+    iterator(const iterator&) = delete;
     
+    iterator(iterator&& other) noexcept;
     
-    iterator(iterator && other) noexcept;
-    
-    iterator &operator=(iterator &&other) noexcept;
+    iterator& operator=(iterator&& other) noexcept;
     
     explicit iterator(std::coroutine_handle<promise_type> coroutine) noexcept; // \expos
     
     bool operator==(sentinel) const noexcept;
     
-    iterator &operator++();
+    iterator& operator++();
     void operator++(int);
     
-    reference operator*() const noexcept(noexcept(std::is_nothrow_copy_constructible_v<reference>));
+    reference operator*() const noexcept(std::is_nothrow_copy_constructible_v<reference>);
     
 }; 
     
 \end{codeblock}
 
 \begin{itemdecl}
- iterator(iterator && other) noexcept;
+ iterator(iterator&& other) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -1084,7 +1097,7 @@ Initializes \tcode{coroutine_} with \tcode{exchange(other.coroutine_, \{\})}.
 
 
 \begin{itemdecl}
-iterator &operator=(iterator &&other) noexcept;
+iterator& operator=(iterator&& other) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -1111,7 +1124,7 @@ bool operator==(sentinel) const noexcept
 \end{itemdescr}
 
 \begin{itemdecl}
-iterator &operator++();
+iterator& operator++();
 \end{itemdecl}
 
 \begin{itemdescr}
