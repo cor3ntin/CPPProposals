@@ -4,7 +4,7 @@
 \documentclass{wg21}
 
 \title{Range constructor for \tcode{std::string\_view} 2: Constrain Harder}
-\docnumber{R1989R1}
+\docnumber{P1989R2}
 \audience{LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -22,10 +22,16 @@ constructor was accepted. Please refer to P1391 for the design of the proposed c
 
 \section{Revisions}
 
+\subsection{R2}
+\begin{itemize}
+    \item Wording fixes (LWG review).
+\end{itemize}
+
+
 \subsection{R1}
 \begin{itemize}
     \item Fix some typos and other issues in section 2.1
-    \item Add a link to a libstdc+ implementation of the proposal
+    \item Add a link to a libstdc++ implementation of the proposal
     \item Wording tweaks
 \end{itemize}
 
@@ -65,6 +71,13 @@ Conversion between \tcode{string_view} types with different \tcode{charT} or dif
 
 If a type otherwise satisfying the constraints has a conversion operator to a different \tcode{basic_string_view},
 notably \tcode{basic_string_view<charT, some-other-traits-type>}, while not itself defining \tcode{using type_traits =  some-other-traits-type}, a program that was previously ill-formed will call the new range overload. 
+
+\section{Limitations}
+
+\tcode{string_view} can be constructed from a type with a deleted conversion operator to \tcode{string_view} after this proposal.
+I think this was briefly discussed (in Kona?) and we decided it wasn't an issue.
+We noted durin the LWG review (March 2021) that we could add a \tcode{std::constructible_from_string_view} type trait, defaulted to
+true, to support this use case, should we want to.
 
 
 \subsection{Implementability}
@@ -150,28 +163,24 @@ constexpr basic_string_view(R&& r);
 \end{itemdecl}
 
 \begin{itemdescr}
+    Let \tcode{d} be an lvalue of type \tcode{remove_cvref_t<R>}.
+    
     \constraints
     \begin{itemize}
-        \item \tcode{R} satisfies \tcode{ranges::contiguous_range},
-        \item \tcode{R} satisfies \tcode{ranges::sized_range},
+        \item \tcode{R} models \tcode{ranges::contiguous_range} and \tcode{ranges::sized_range},
         \item \tcode{is_same_v<ranges::range_value_t<R>, charT>} is \tcode{true},
         \item \tcode{is_convertible_v<R, const charT*>} is \tcode{false},
-        \item \tcode{r.operator ::std::basic_string_view<charT, traits>()} is not a valid expression, and
-        \item If the qualified-id \tcode{R::traits_type} is valid and denotes a type,\\ \tcode{is_same_v<remove_reference_t<R>::traits\_type, traits>} is \tcode{true}.
+        \item \tcode{d.operator ::std::basic_string_view<charT, traits>()} is not a valid expression, and
+        \item if the \emph{qualified-id} \tcode{R::traits_type} is valid and denotes a type,\\ \tcode{is_same_v<remove_reference_t<R>::traits\_type, traits>} is \tcode{true}.
     \end{itemize}
- 
-	\preconditions
-	 \begin{itemize}
-		\item \tcode{R} models \tcode{ranges::contiguous_range}, and
-		\item \tcode{R} models \tcode{ranges::sized_range}.
-	\end{itemize}
+
 
     \effects
     Initializes \tcode{data\_} with \tcode{ranges::data(r)} and \tcode{size\_} with \tcode{ranges::size(r)}.
 
 
     \throws
-    Any exception thrown by \tcode{ranges::data(r)} and \tcode{ranges::size(r)} throw.
+    Any exception thrown by \tcode{ranges::data(r)} and \tcode{ranges::size(r)}.
 
 
 
@@ -183,6 +192,7 @@ constexpr basic_string_view(R&& r);
 
 Add to the section [string.view.deduct] the following deduction guides:
 
+\textbf{Note to the editors: Rename the title of the [string.view.deduct] section from "Deduction guide" to "Deduction guides".}
 
 
 \begin{quote}
