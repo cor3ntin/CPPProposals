@@ -12,7 +12,7 @@
 \newcommand{\UnicodeLetter}[1]{\textbf{\textcolor{BrickRed}{\Large\tcode{#1}}}}
 
 \title{Correct UTF-8 handling during phase 1 of translation}
-\docnumber{P2295R0}
+\docnumber{P2295R1}
 \audience{SG-16, EWG, SG-22}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -31,6 +31,13 @@ Thanks Mr. Dawes!
 \section{Abstract}
 
 We propose that UTF-8 source files should be supported by all C++ compilers.
+
+\section{Revisions}
+
+\subsection{R1}
+\begin{itemize}
+    \item Remove the section about whitespaces and associated wording
+\end{itemize}
 
 \section{Motivation}
 
@@ -65,36 +72,6 @@ An important reason to mandate support for UTF-8 support is that it allows us to
 The compiler should not try to normalize utf encoded strings, remove characters, and so forth so that users can expect the content
 of strings to be preserved through translation.
 (This does not negate that neither the source encoding nor the encoding used internally by the compiler are unobservable by the program).
-
-\subsection{Whitespaces}
-
-Unicode recommends that codepoints with the \tcode{Pattern_White_Space} property are recognized by
-whitespaces by conforming parsers.
-Some sequences of whitespace characters are further described as line breaks in UAX14.
-
-However, we exclude the following codepoints as they would otherwise affect the direction of text and have no use in code (outside of string and comments)
-
-\begin{codeblock}
-    U+200E LEFT-TO-RIGHT MARK
-    U+200F RIGHT-TO-LEFT MARK
-\end{codeblock}
-
-For compatibility with Unicode, UTF-EBCDIC, and a variety of existing systems, implementations, and text editors,
-we recommend specifying exactly what constitutes a new-line and a whitespace in C++.
-
-New lines affect diagnostics, \tcode{__LINE__} and \tcode{source_location::line()}.
-They also affect line-endings in raw string literals, which is the subject of \paper{CWG1655}.
-
-
-An open question is whether we try to use grammar terms to describes new lines and whitespaces in the wording.
-Some attempts at that proved the task somewhat tedious and the benefits unclear.
-The current paper does the minimum to be able to remove the "(introducing new-line characters for end-of-line indicators)" wording,
-which alas seems necessary to guarantee codepoint preservation; This is why these two otherwise unrelated changes are bundled in the same paper.
-A more through wording change would impact at least \tcode{[lex]}, \tcode{[cpp]}, \tcode{[time.format]}.
-
-It is also unclear what the \tcode{new-line} character is, whether in escape sequences (\tcode{\textbackslash n}), raw line endings, etc.
-In the current core wording, it doesn't seem to matter much, implementers can use any character they want through the implementation-defined
-mapping in phase 5.
 
 \subsection{Invalid code units}
 
@@ -273,20 +250,20 @@ following phases.
     \item
 
 \begin{addedblock}
-    A UTF-8 source file is a source file encoded as a sequence of UTF-8 code units representing a sequence of Unicode scalar values as defined in ISO/IEC 10646.
+    A UTF-8 source file is a source file encoded as a sequence of UTF-8 code units representing a sequence of UCS scalar values as defined in ISO/IEC 10646.
 
     \begin{note}
         Invalid UTF-8 code unit sequences in a UTF-8 source file are ill-formed.
     \end{note}
-    An implementation accepts UTF-8 source files; The set of additional source file character sets accepted is implementation-defined.
+    An implementation accepts UTF-8 source files; The set of additional source file character encodings accepted is implementation-defined.
 
-    How the character set of a source file is determined is implementation-defined.
+    How the character encoding of a source file is determined is implementation-defined.
 \end{addedblock}
 
 \changed{Physical s}{S}ource file characters are mapped, in an
 \impldef{mapping physical source file characters to basic source character set} manner,
-to the basic source character set \removed{(introducing new-line characters for end-of-line
-indicators) if necessary}.
+to the basic source character set (introducing new-line characters for end-of-line
+indicators) \removed{if necessary}.
 \removed{The set of physical source file characters accepted is \impldef{physical source file characters}}.
 Any source file character not in the basic source character set\iref{lex.charset} is replaced by the \indextext{universal character name}\grammarterm{universal-character-name} that
 designates that character.
@@ -382,31 +359,32 @@ of such a splice.
 %\end{note}
 \end{enumerate}
 %
-\rSec1[lex.pptoken]{Preprocessing tokens}
+%\rSec1[lex.pptoken]{Preprocessing tokens}
 
-\begin{addedblock}
-\begin{bnf}
-\nontermdef{new-line}\br
-    \textnormal{U+000A LINE FEED}\br
-    \textnormal{U+000B VERTICAL TAB}\br
-    \textnormal{U+000C FORM FEED}\br
-    \textnormal{U+000D CARRIAGE RETURN}\br
-    \textnormal{U+0085 NEXT LINE}\br
-    \textnormal{U+2028 LINE SEPARATOR}\br
-    \textnormal{U+2029 PARAGRAPH SEPARATOR}\br
-    \textnormal{U+000D U+000A}
-\end{bnf}
+%\begin{addedblock}
+%\begin{bnf}
+%\nontermdef{new-line}\br
+%    \textnormal{U+000A LINE FEED}\br
+%    \textnormal{U+000B VERTICAL TAB}\br
+%    \textnormal{U+000C FORM FEED}\br
+%    \textnormal{U+000D CARRIAGE RETURN}\br
+%    \textnormal{U+0085 NEXT LINE}\br
+%    \textnormal{U+2028 LINE SEPARATOR}\br
+%    \textnormal{U+2029 PARAGRAPH SEPARATOR}\br
+%    \textnormal{U+000D U+000A}
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{whitespace}\br
+%    new-line\br
+%    \textnormal{U+0009 HORIZONTAL TAB}\br
+%    \textnormal{U+0009 SPACE}
+%\end{bnf}
 
-\begin{bnf}
-    \nontermdef{whitespace}\br
-    new-line\br
-    \textnormal{U+0009 HORIZONTAL TAB}\br
-    \textnormal{U+0009 SPACE}
-\end{bnf}
+% Unless otherwise specified, whitespaces and whitespace characters refer to \grammarterm{whitespace}.
 
-Unless otherwise specified, whitespaces and whitespace characters refer to \grammarterm{whitespace}.
 
-\end{addedblock}
+%\end{addedblock}
 %
 %\begin{bnf}
 %    \nontermdef{preprocessing-token}\br
