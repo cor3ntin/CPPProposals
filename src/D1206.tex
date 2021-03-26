@@ -7,8 +7,8 @@
 \documentclass{wg21}
 
 
-\title{\tcode{ranges::to}: A function to convert any range to a container}
-\docnumber{P1206R3}
+\title{Conversions from ranges to containers}
+\docnumber{P1206R}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Eric Niebler}{eric.niebler@gmail.com}
@@ -22,6 +22,12 @@
 We propose a function to copy or materialize any range (containers and views alike) to a container.
 
 \section{Revisions}
+
+\subsection*{Revision 4}
+\begin{itemize}
+    \item Add range_t support everywhere
+    \item improve wording
+\end{itemize}
 
 \subsection*{Revision 3}
 \begin{itemize}
@@ -42,9 +48,11 @@ We propose a function to copy or materialize any range (containers and views ali
 	\item Split out the proposed constructors for string view and span into separate papers (\cite{P1391} and \cite{P1394} respectively)
 	\item Use a function based approach rather than adding a constructor to standard containers, as it proved unworkable.
 \end{itemize}
-\newpage
+
+
 \section{Quick Overview}
-We propose all the following syntaxes to be valid constructs
+We propose all the following syntaxes to be valid constructs.
+The examples are meant to be illustrative of the capabilities of the interface, but the primary usecase for it is to materialize views rather than other containers!
 
 \begin{colorblock}
 std::list<int>  l;
@@ -82,7 +90,7 @@ auto vec2 = ranges::to<std::vector<std::deque<double>>>(lst);
 
 \end{colorblock}
 
-\pagebreak
+
 \section{Tony tables}
 \begin{center}
 \begin{tabular}{l|l}
@@ -119,7 +127,7 @@ ranges::copy(view, std::back_inserter(vec));
 &
 \begin{minipage}[t]{0.5\textwidth}
 \begin{colorblock}
-auto vec = ranges::iota(42)
+auto vec = ranges::iota(0, 42)
 	| ranges::to<std::vector>();
 \end{colorblock}
 \end{minipage}
@@ -164,16 +172,19 @@ Most containers of the standard library provide a constructors taking a pair of 
 While, this feature is very useful, as converting from one container type to another is a frequent
 use-case, it can be greatly improved by taking full advantage of the notions and tools offered by ranges.
 
-Indeed, given all containers are ranges (ie: an iterator-sentinel pair) the above example can be rewritten, without semantic as:
+Indeed, given all containers are ranges (ie: an iterator-sentinel pair) the above example can be rewritten as:
 
 \begin{colorblock}
     std::list<int> lst;
     std::vector<int> vec = lst | ranges::to<std::vector>();
 \end{colorblock}
 
-
-The above example is a common pattern as it is frequently preferable to copy the content of a \cc{std::list} to
-a \cc{std::vector} before feeding it an algorithm and then copying it back to a \cc{std::vector}.\\
+Moreover, existing iterators constructors do not support all ranges namely:
+\begin{itemize}
+    \item ranges whose iterator type do not satisfy \tcode{Cpp17InputIterator}
+    \item Includeing move-only iterators
+    \item ranges which do not satisfy \tcode{common_range}
+\end{itemize}
 
 As all containers and views are ranges, it is logical they can themselves be easily built out of ranges.
 
@@ -214,29 +225,10 @@ This proposal allows rewriting the above snippet as:
 Perhaps the most important aspect of view materialization is that it allows simple code such as:
 
 \begin{colorblock}
-    namespace std {
-        split_view<std::string_view> split(std:std::string_view);
-    }
-    auto res = std::split("Splitting strings made easy")
-    	       | std::ranges::to<std::vector>();
+auto res = "Splitting strings made easy"sv
+    | views::split(' ')
+    | ranges::to<std::vector>();
 \end{colorblock}
-
-Indeed, a function such as \cc{split} is notoriously hard to standardize (\cite{P0540},  \cite{N3593}), because without lazy views and \cc{std::string_view}, it has to allocate or expose an expert-friendly interface.
-The view materialization pattern further let the \emph{caller} choose the best container and allocation strategy for their use case (or to never materialize the view should it not be necessary).
-And while it would not make sense for a standard-library function to split a string into a vector it would allocate, it's totally reasonable for most applications to do so.\\
-
-This paper does not propose to standardize such \cc{split} function - a \cc{split_view} exist in \cite{P0896R3}, however, view materialization is something the SG-16 working group is interested in.
-Indeed, they have considered APIs that could rely heavily on this idiom, as it has proven a natural way to handle the numerous ways to iterate over Unicode text.
-Similar ideas have been presented in \cite{P1004}.
-
-\begin{colorblock}
-    auto sentences =
-        text(blob)
-        normalize<text::nfc> |
-        graphemes_view |
-        split<sentences> | ranges::to<std::vector<std::u8string>>();
-\end{colorblock}
-
 
 \section{Design}
 
@@ -247,58 +239,28 @@ Conceptually, \tcode{to} is a function template with multiple overloads:
     \item One that offers a pipe adaptor object over both these overloads
 \end{itemize}
 
-Care was taken to support move only iterators, ranges of ranges, non const views, associative containers (in either direction)
+This proposal handles move only iterators, ranges of ranges, non const views, and associative containers (in either direction).
 
 
-\subsection{Should ranges::to be able to call \cc{reserve}/\cc{assigned} ?}
-
-For performance reasons, \tcode{ranges::to} should be able to reserve memory in the container before assigning the range whenever possible.
-This cannot be done in the constructor of individual ranges because a range meeting the requirements of \tcode{SizedRange} 
-doesn't imply that the distance between each of the iterator forming the range can be computed efficiently, if at all. 
-
-Both cmcstl2 and ranges-v3 determine whether or not a container can be reserved and assigned by means of a \tcode{ReserveAndAssignable} concept that is not part of the user facing API, similar to the following
-
-
-\begin{colorblock}
-template <typename T, typename I >
-concept ReserveAndAssignable = 
-	InputIterator<I> && requires (C &c, C const &cc, range_size_t<C> s, I i) {
-		c.reserve(s);
-		cc.capacity();
-		{ cc.capacity() } -> range_size_t<C>;
-		c.assign(i, i);
-};
-\end{colorblock}
-
-LWG made the case that there should be a customization point for this behavior and that the set of requirements should be specified.
-
+\subsection{Performance considerations}
 \begin{itemize}
-\item Do we want implementation to be able to reserve the container memory before assigning the range (this was always the intent) ? Do we want to allow it for arbitrary (non standard) containers ?
+\item Following discussion in a previous meeting, when the elements are inserted
+after the container is constructed, we detect whether a container is reservable,
+by the mean of an exposition only concept that checks that \tcode{reserve()} and \tcode{capacity()} exists and that reserve can be called with the size of the range to construct from.
 
+\item We have not been able to convince ourselves it is always safe to move elements from an rvalue range that is not a \tcode{view} (it might be?), so the elements are always copied.
+That could be improved later without changing the interface.
+A more generic solution would be to introduce a moving view (in the same vein as move_iterator) so that users can explicitely 
+buy into that optimization.
 
-\item Do we want to document the set of requirements of reservable container as a Named requirements, exposition only concept, concept in the std namespace ?
-\item Do we want a customization point (similar to \tcode{disable_sized_range})? (The authors believe the answer to that should be no - the risk of ambiguity is extremely low, we don't have an opt out for Container - in fact we don't have a Container concept at all), and I don't think that all concepts should have an opt-out.
 \end{itemize}
-
-For the purpose of \tcode{ranges::to} we further require that the container be constructible 
-from the extra arguments passed to \tcode{ranges::to}.
-
-
-A conservative approach would be to leave the design unchanged for now (implementers can do reserve + assign for standard types only), and revisit the question for non-standard containers at a later date.
-
-The wording in this revision of this paper reflects that conservative approach.
-
 
 
 \section{Alternative designs}
 
-While we believe the range constructor based approach is the cleanest way to solve this problem,
-LEWG was interested in an alternative design based on free functions
-
 \subsection{Range constructors}
 
-The original version of that paper proposed to add range constructors to all constructors.
-This proved to be unworkable because of std::initializer_list:
+The original version of that paper proposed to add range constructors to all constructors. This proved to be unworkable because of std::initializer_list:
 
 \begin{quote}
 \begin{colorblock}
@@ -320,12 +282,11 @@ std::vector a{std::from_range, foo}; //constructs a std:vector<int>
 \end{quote}
 
 This will be explored in a separate paper by Tristan Brindle.
-However this approach does not replace ranges::to, which has the advantages of being a pipe adaptor and works with
+However this approach does not replace \tcode{ranges::to}, which has the advantages of being a pipe adaptor and works with
 non-standard containers which do not support such tag constructors.
 
 \tcode{ranges::to} can take advantages of these ranges constructors when available.
-The proposed wording in this paper body assumes that tagged constructors will be adopted in addition to the current paper. 
-
+Adding support for these future ranges constructor to \tcode{ranges::to} is easy, and a previous version of the paper did that. However we ultimately decided not to tie the two features together so this paper can make progress in LEWG.
 
 \section{Existing practices}
 
@@ -353,12 +314,12 @@ This proposal is based on the \cc{to} (previously (\cc{to_}) function offered by
 Abseil offers converting constructors with each of their view.
 As per their documentation:
 
-\begin{quote}
+\begin{quoteblock}
     One of the more useful features of the StrSplit() API is its ability to adapt its result set to the desired return type.
     StrSplit() returned collections may contain std::string, absl::string_view, or any object that can be explicitly created from an absl::string_view.
     This pattern works for all standard STL containers including std::vector,
     std::list, std::deque, std::set, std::multiset, std::map, and std::multimap, and even std::pair, which is not actually a container.
-\end{quote}
+\end{quoteblock}
 
 Because they can not modify existing containers, view materialization in Abseil is done by the mean of a conversion operator:
 
@@ -385,69 +346,3896 @@ Add to the synopsis in [ranges.syn]:
 
 \begin{quote}
 \begin{addedblock}
-\begin{colorblock}
+\begin{codeblock}
 
 namespace std::ranges {
 
-	template <typename C, input_range R, typename... Args>
-    requires (!view<C>)
+	template <class C, input_range R, class... Args>
+        requires (!view<C>)
 	constexpr C to(R && r, Args&&...);
 
-	template <template <typename...> typename C, input_range R, typename... Args>
+	template <template <class...> class C, input_range R, class... Args>
 	constexpr auto to(R && r, Args&&...) -> @\seebelow@;
 
 }
 
-\end{colorblock}
+\end{codeblock}
 
 \end{addedblock}
 \end{quote}
 
+\rSec1[sequences]{Sequence containers}
+
+\rSec2[sequence.reqmts]{Sequence containers}
+
+
+
+In Tables~\ref{tab:container.seq.req}
+and \ref{tab:container.seq.opt},
+\begin{itemize}
+    \item
+    \tcode{X} denotes a sequence container class,
+    \item
+    \tcode{a} denotes a value of type \tcode{X} containing elements of type \tcode{T},
+    \item
+    \tcode{u} denotes the name of a variable being declared,
+    \item
+    \tcode{A} denotes \tcode{X::allocator_type} if
+    the \grammarterm{qualified-id} \tcode{X::allocator_type} is valid and denotes a
+    type\iref{temp.deduct} and
+    \tcode{allocator<T>} if it doesn't,
+    \item
+    \tcode{i} and \tcode{j}
+    denote iterators that meet the \oldconcept{InputIterator} requirements
+    and refer to elements implicitly convertible to \tcode{value_type},
+    \item
+    \tcode{[i, j)} denotes a valid range,
+    \begin{addedblock}
+        \item\tcode{range} denotes a value of type \tcode{R} such that
+        \begin{itemize}
+            \item \tcode{R} models \tcode{ranges::input_range},
+            \item \tcode{is_constructible<T, ranges::range_reference_t<R>} is \tcode{true}
+        \end{itemize}
+    \end{addedblock}
+    \item
+    \tcode{il} designates an object of type \tcode{initializer_list<value_type>},
+    \item
+    \tcode{n} denotes a value of type \tcode{X::size_type},
+    \item
+    \tcode{p} denotes a valid constant iterator to \tcode{a},
+    \item
+    \tcode{q} denotes a valid dereferenceable constant iterator to \tcode{a},
+    \item
+    \tcode{[q1, q2)} denotes a valid range of constant iterators in \tcode{a},
+    \item
+    \tcode{t} denotes an lvalue or a const rvalue of \tcode{X::value_type}, and
+    \item
+    \tcode{rv} denotes a non-const rvalue of \tcode{X::value_type}.
+    \item
+    \tcode{Args} denotes a template parameter pack;
+    \item
+    \tcode{args} denotes a function parameter pack with the pattern \tcode{Args\&\&}.
+\end{itemize}
+
+\pnum
+The complexities of the expressions are sequence dependent.
+
+\begin{libreqtab3}
+    {Sequence container requirements (in addition to container)}
+    {container.seq.req}
+    \\ \topline
+    \lhdr{Expression}       &   \chdr{Return type}  &   \rhdr{Assertion/note}       \\
+    &                       &   \rhdr{pre-/post-condition}   \\ \capsep
+    \endfirsthead
+    \continuedcaption\\
+    \hline
+    \lhdr{Expression}       &   \chdr{Return type}  &   \rhdr{Assertion/note}       \\
+    &                       &   \rhdr{pre-/post-condition}   \\ \capsep
+    \endhead
+    \tcode{X(n, t)}\br
+    \tcode{X u(n, t);}   &
+    &
+    \expects \tcode{T} is
+    \oldconcept{CopyInsertable} into \tcode{X}.\br
+    \ensures \tcode{distance(begin(), end()) == n}\br
+    \effects Constructs a sequence container with \tcode{n} copies of \tcode{t}  \\ \rowsep
+    
+    \tcode{X(i, j)}\br
+    \tcode{X u(i, j);}   &
+    &
+    \expects \tcode{T} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{*i}.
+    For \tcode{vector}, if the iterator does
+    not meet the \oldconcept{\-Forward\-Iterator} requirements\iref{forward.iterators}, \tcode{T}
+    is also
+    \oldconcept{MoveInsertable} into \tcode{X}.\br
+    \ensures \tcode{distance(begin(), end()) ==}
+    \tcode{distance(i, j)}\br
+    \effects Constructs a sequence container equal to the range \tcode{[i, j)}.
+    Each iterator in the range \range{i}{j} is dereferenced exactly once. \\ \rowsep
+   
+    \tcode{\added{X(from_range, range)}}    & 
+    &
+    \begin{addedblock}
+    \expects For \tcode{vector}, if \tcode{range_iterator_t<R>}  does not model \tcode{forward_iterator}, \tcode{T}
+    is \oldconcept{MoveInsertable} into \tcode{X}.
+    \tcode{distance(begin(), end()) ==}
+    \tcode{ranges::distance(r)}\br
+    \effects Constructs a sequence container equal to the range \tcode{range}.
+    Each iterator in the range \tcode{range} is dereferenced exactly once.
+    \end{addedblock}  \\ \rowsep
+    
+    \tcode{X(il)}      &
+    &
+    Equivalent to \tcode{X(il.begin(), il.end())} \\ \rowsep
+    
+    \tcode{a = il}     &
+    \tcode{X\&}               &
+    \expects \tcode{T} is
+    \oldconcept{CopyInsertable} into \tcode{X}
+    and \oldconcept{CopyAssignable}.\br
+    \effects Assigns the range \range{il.begin()}{il.end()} into \tcode{a}. All existing
+    elements of \tcode{a} are either assigned to or destroyed.\br
+    \returns\ \tcode{*this}.
+    \\ \rowsep
+    
+    \tcode{a.emplace(p, args)}  &
+    \tcode{iterator}            &
+    \expects \tcode{T} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{args}. For \tcode{vector} and \tcode{deque},
+    \tcode{T} is also
+    \oldconcept{MoveInsertable} into \tcode{X} and \oldconcept{MoveAssignable}.\br
+    \effects Inserts an object of type \tcode{T} constructed with
+    \tcode{std::forward<\brk{}Args\brk{}>(\brk{}args)...} before \tcode{p}.
+    \\ \rowsep
+    
+    \tcode{a.insert(p,t)}   &
+    \tcode{iterator}       &
+    \expects \tcode{T} is
+    \oldconcept{CopyInsertable} into \tcode{X}. For \tcode{vector} and \tcode{deque},
+    \tcode{T} is also \oldconcept{CopyAssignable}.\br
+    \effects\ Inserts a copy of \tcode{t} before \tcode{p}. \\ \rowsep
+    
+    \tcode{a.insert(p,rv)}   &
+    \tcode{iterator}       &
+    \expects \tcode{T} is
+    \oldconcept{MoveInsertable} into \tcode{X}. For \tcode{vector} and \tcode{deque},
+    \tcode{T} is also \oldconcept{MoveAssignable}.\br
+    \effects\ Inserts a copy of \tcode{rv} before \tcode{p}. \\ \rowsep
+    
+    \tcode{a.insert(p,n,t)}     &
+    \tcode{iterator}               &
+    \expects \tcode{T} is
+    \oldconcept{CopyInsertable} into \tcode{X}
+    and \oldconcept{CopyAssignable}.\br
+    \effects Inserts \tcode{n} copies of \tcode{t} before \tcode{p}. \\ \rowsep
+    
+    \tcode{a.insert(p,i,j)}    &
+    \tcode{iterator}           &
+    \expects \tcode{T} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{*i}.
+    For \tcode{vector} and \tcode{deque}, \tcode{T} is also
+    \oldconcept{MoveInsertable} into \tcode{X}, \oldconcept{MoveConstructible}, \oldconcept{MoveAssignable},
+    and swappable\iref{swappable.requirements}.
+    Neither \tcode{i} nor \tcode{j} are iterators into \tcode{a}.\br
+    \effects Inserts copies of elements in \tcode{[i, j)} before \tcode{p}.
+    Each iterator in the range \range{i}{j} shall be dereferenced exactly once.  \\ \rowsep
+    
+    \tcode{\added{a.insert(from_range, p, range)}}    & 
+    \added{\tcode{iterator}} &
+    \begin{addedblock}
+        \expects For \tcode{vector} and \tcode{deque}, \tcode{T} is
+        \oldconcept{MoveInsertable} into \tcode{X}, \oldconcept{MoveConstructible}, \oldconcept{MoveAssignable},
+        and swappable\iref{swappable.requirements}.
+        \tcode{range} and \tcode{*this} do not overlap.\br
+        \effects Inserts copies of elements in \tcode{range} before \tcode{p}.
+        Each iterator in the range \tcode{range} shall be dereferenced exactly once.
+    \end{addedblock}  \\ \rowsep
+    
+    \tcode{X(il)}      &
+    &
+    Equivalent to \tcode{X(il.begin(), il.end())} \\ \rowsep
+    
+    \tcode{a.insert(p, il)}  &
+    \tcode{iterator}            &
+    \tcode{a.insert(p, il.begin(), il.end())}.  \\ \rowsep
+    
+    \tcode{a.erase(q)}  &
+    \tcode{iterator}   &
+    \expects For \tcode{vector} and \tcode{deque},
+    \tcode{T} is \oldconcept{MoveAssignable}.\br
+    \effects\ Erases the element pointed to by \tcode{q}. \\ \rowsep
+    
+    \tcode{a.erase(q1,q2)}  &
+    \tcode{iterator}   &
+    \expects For \tcode{vector} and \tcode{deque},
+    \tcode{T} is \oldconcept{MoveAssignable}.\br
+    \effects\ Erases the elements in the range \tcode{[q1, q2)}.  \\ \rowsep
+    
+    \tcode{a.clear()}   &
+    \tcode{void}       &
+    \effects Destroys all elements in \tcode{a}. Invalidates all references, pointers, and
+    iterators referring to the elements of \tcode{a} and may invalidate the past-the-end iterator.\br
+    \ensures \tcode{a.empty()} is \tcode{true}.\br
+    \complexity Linear.      \\ \rowsep
+    
+    \tcode{a.assign(i,j)}   &
+    \tcode{void}           &
+    \expects \tcode{T} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{*i}
+    and assignable from \tcode{*i}. For \tcode{vector}, if the iterator does not
+    meet the forward iterator requirements\iref{forward.iterators}, \tcode{T}
+    is also
+    \oldconcept{MoveInsertable} into \tcode{X}.
+    Neither \tcode{i} nor \tcode{j} are iterators into \tcode{a}.\br
+    \effects
+    Replaces elements in \tcode{a} with a copy of \tcode{[i, j)}.
+    Invalidates all references, pointers and iterators
+    referring to the elements of \tcode{a}.
+    For \tcode{vector} and \tcode{deque},
+    also invalidates the past-the-end iterator.
+    Each iterator in the range \range{i}{j} shall be dereferenced exactly once.  \\ \rowsep
+    
+    \tcode{\added{a.assign(from_range, p, range)}}    & 
+    \added{\tcode{void}} &
+    \begin{addedblock}
+        \expects For \tcode{vector}, if \tcode{range_iterator_t<R>}  does not model \tcode{forward_iterator}, \tcode{T}
+        is \oldconcept{MoveInsertable} into \tcode{X}. \tcode{range} and \tcode{*this} do not overlap.\br
+         \effects
+        Replaces elements in \tcode{a} with a copy of each element in \tcode{range}.
+        Invalidates all references, pointers and iterators
+        referring to the elements of \tcode{a}.
+        For \tcode{vector} and \tcode{deque},
+        also invalidates the past-the-end iterator.
+        Each iterator in the range \tcode{range} shall be dereferenced exactly once.
+    \end{addedblock}  \\ \rowsep
+    
+    
+    
+    \tcode{a.assign(il)}    &
+    \tcode{void}          &
+    \tcode{a.assign(il.begin(), il.end())}. \\ \rowsep
+    
+    \tcode{a.assign(n,t)}   &
+    \tcode{void}           &
+    \expects \tcode{T} is
+    \oldconcept{CopyInsertable} into \tcode{X}
+    and \oldconcept{CopyAssignable}.
+    \tcode{t} is not a reference into \tcode{a}.\br
+    \effects Replaces elements in \tcode{a} with \tcode{n} copies of \tcode{t}.
+    Invalidates all references, pointers and iterators
+    referring to the elements of \tcode{a}.
+    For \tcode{vector} and \tcode{deque},
+    also invalidates the past-the-end iterator.  \\
+\end{libreqtab3}
+
+\rSec2[sequences.general]{In general}
+
+
+\pnum
+The following exposition-only alias template may appear in deduction guides for sequence containers:
+
+\begin{codeblock}
+    template<class InputIterator>
+    using @\placeholdernc{iter-value-type}@ = typename iterator_traits<InputIterator>::value_type;  // \expos
+\end{codeblock}
+
 \begin{addedblock}
+The following exposition-only concept is used in the definition of sequence containers
 
-In [range.utility] Insert after section [range.dangling]
+\begin{codeblock}
+template<class T, class R>
+concept @\placeholdernc{compatible_range} = \\
+    ranges::input_range<R> \&\& \\
+    constructible_from<T, ranges::range_reference_t<R>>; // \expos
+\end{codeblock}
+\end{addedblock}
 
-\rSec2[range.utility.container]{Container conversions}
 
-The container conversions functions provide functions that efficiently convert ranges to containers.
-The container is constructed from the begin(range)/end(range)iterators pair.
+\rSec2[deque]{Class template \tcode{deque}}
 
+\rSec3[deque.overview]{Overview}
+\begin{codeblock}
+namespace std {
+    template<class T, class Allocator = allocator<T>>
+    class deque {
+        public:
+        
+        // \ref{deque.cons}, construct/copy/destroy
+        deque() : deque(Allocator()) { }
+        explicit deque(const Allocator&);
+        explicit deque(size_type n, const Allocator& = Allocator());
+        deque(size_type n, const T& value, const Allocator& = Allocator());
+        template<class InputIterator>
+        deque(InputIterator first, InputIterator last, const Allocator& = Allocator());
+        @\added{template<\placeholder{compatible_range<T>} R>}@
+        @\added{deque(from_range_t, R\&\& range, const Allocator\& = Allocator());}@
+        deque(const deque& x);
+        deque(deque&&);
+        deque(const deque&, const Allocator&);
+        deque(deque&&, const Allocator&);
+        deque(initializer_list<T>, const Allocator& = Allocator());
+        
+        ~deque();
+        deque& operator=(const deque& x);
+        deque& operator=(deque&& x)
+        noexcept(allocator_traits<Allocator>::is_always_equal::value);
+        deque& operator=(initializer_list<T>);
+        template<class InputIterator>
+        void assign(InputIterator first, InputIterator last);
+        @\added{template<\placeholder{compatible_range<T>} R>}@
+        @\added{void assign(from_range_t, R\&\& range);}@
+        void assign(size_type n, const T& t);
+        void assign(initializer_list<T>);
+        allocator_type get_allocator() const noexcept;
+        //...
+        iterator insert(const_iterator position, const T& x);
+        iterator insert(const_iterator position, T&& x);
+        iterator insert(const_iterator position, size_type n, const T& x);
+        template<class InputIterator>
+        iterator insert(const_iterator position, InputIterator first, InputIterator last);
+        @\added{template<\placeholder{compatible_range<T>} R>}@
+        @\added{iterator insert(from_range_t, const_iterator position, R\&\& range);}@
+        iterator insert(const_iterator position, initializer_list<T>);
+        
+        //...
+    };
+    
+    template<class InputIterator, class Allocator = allocator<@\placeholder{iter-value-type}@<InputIterator>>>
+    deque(InputIterator, InputIterator, Allocator = Allocator())
+    -> deque<@\placeholder{iter-value-type}@<InputIterator>, Allocator>;
+    
+    @\added{template<ranges::input_range R, class Allocator = allocator<ranges::range_value_t<R>>>}@
+    @\added{deque(R, Allocator = Allocator())}@
+    @\added{-> deque<ranges::range_value_t<R>, Allocator>;}@
+}
+\end{codeblock}
+
+\rSec3[deque.cons]{Constructors, copy, and assignment}
+
+
+
+\indexlibraryctor{deque}%
 \begin{itemdecl}
-template <typename C, input_range R, typename... Args>
-requires (!view<C>)
-constexpr C to(R && r, Args&&... args);
+    template<class InputIterator>
+    deque(InputIterator first, InputIterator last, const Allocator& = Allocator());
 \end{itemdecl}
 
 \begin{itemdescr}
-Construct a container \tcode{C} with the elements of \tcode{r} in the following manner:
+    \pnum
+    \effects
+    Constructs a
+    \tcode{deque}
+    equal to the range
+    \range{first}{last},
+    using the specified allocator.
+    
+    \pnum
+    \complexity
+    Linear in \tcode{distance(first, last)}.
+\end{itemdescr}
+
+\begin{addedblock}
+\indexlibraryctor{deque}%
+\begin{itemdecl}
+template<@\placeholder{compatible_range<T>}@ R>
+deque(from_range_t, R&& range, const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs a
+    \tcode{deque}
+    with the elements of the range \tcode{range},
+    using the specified allocator.
+    
+    \pnum
+    \complexity
+    Linear in \tcode{ranges::distance(r)}.
+\end{itemdescr}
+\end{addedblock}
+
+\rSec3[deque.modifiers]{Modifiers}
+
+\indexlibrarymember{insert}{deque}%
+\indexlibrarymember{push_front}{deque}%
+\indexlibrarymember{push_back}{deque}%
+\indexlibrarymember{emplace}{deque}%
+\begin{itemdecl}
+    iterator insert(const_iterator position, const T& x);
+    iterator insert(const_iterator position, T&& x);
+    iterator insert(const_iterator position, size_type n, const T& x);
+    template<class InputIterator>
+    iterator insert(const_iterator position, InputIterator first, InputIterator last);
+    @\added{template<\placeholder{compatible_range<T>} R>}@
+    @\added{iterator insert(from_range_t, const_iterator position, R\&\& range);}@
+    iterator insert(const_iterator position, initializer_list<T>);
+    template<class... Args> reference emplace_front(Args&&... args);
+    template<class... Args> reference emplace_back(Args&&... args);
+    template<class... Args> iterator emplace(const_iterator position, Args&&... args);
+    void push_front(const T& x);
+    void push_front(T&& x);
+    void push_back(const T& x);
+    void push_back(T&& x);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    An insertion in the middle of the deque invalidates all the iterators and
+    references to elements of the deque.
+    An insertion at either end of the
+    deque invalidates all the iterators to the deque, but has no effect on
+    the validity of references to elements of the deque.
+    
+    \pnum
+    \complexity
+    The complexity is linear in the number of elements inserted plus the lesser
+    of the distances to the beginning and end of the deque.
+    Inserting a single element at either the beginning or end of a deque always takes constant time
+    and causes a single call to a constructor of
+    \tcode{T}.
+    
+    \pnum
+    \remarks
+    If an exception is thrown other than by the
+    copy constructor, move constructor,
+    assignment operator, or move assignment operator of
+    \tcode{T}
+    there are no effects.
+    If an exception is thrown while inserting a single element at either end,
+    there are no effects.
+    Otherwise, if an exception is thrown by the move constructor of a
+    non-\oldconcept{CopyInsertable}
+    \tcode{T}, the effects are unspecified.
+\end{itemdescr}
+
+\rSec2[forwardlist]{Class template \tcode{forward_list}}
+
+\rSec3[forwardlist.overview]{Overview}
+
+\begin{codeblock}
+namespace std {
+    template<class T, class Allocator = allocator<T>>
+    class forward_list {
+        public:
+        
+        // \ref{forwardlist.cons}, construct/copy/destroy
+        forward_list() : forward_list(Allocator()) { }
+        explicit forward_list(const Allocator&);
+        explicit forward_list(size_type n, const Allocator& = Allocator());
+        forward_list(size_type n, const T& value, const Allocator& = Allocator());
+        template<class InputIterator>
+        forward_list(InputIterator first, InputIterator last, const Allocator& = Allocator());
+        @\added{template<\placeholder{compatible_range<T>} R>}@
+        @\added{forward_list(from_range_t, R\&\& range, const Allocator\& = Allocator());}@
+        forward_list(const forward_list& x);
+        forward_list(forward_list&& x);
+        forward_list(const forward_list& x, const Allocator&);
+        forward_list(forward_list&& x, const Allocator&);
+        forward_list(initializer_list<T>, const Allocator& = Allocator());
+        ~forward_list();
+        forward_list& operator=(const forward_list& x);
+        forward_list& operator=(forward_list&& x)
+        noexcept(allocator_traits<Allocator>::is_always_equal::value);
+        forward_list& operator=(initializer_list<T>);
+        template<class InputIterator>
+        void assign(InputIterator first, InputIterator last);
+        @\added{template<\placeholder{compatible_range<T>} R>}@
+        @\added{void assign(from_range_t, R\&\& range);}@
+        void assign(size_type n, const T& t);
+        void assign(initializer_list<T>);
+        allocator_type get_allocator() const noexcept;
+        
+        //...
+        
+        template<class... Args> iterator emplace_after(const_iterator position, Args&&... args);
+        iterator insert_after(const_iterator position, const T& x);
+        iterator insert_after(const_iterator position, T&& x);
+        
+        iterator insert_after(const_iterator position, size_type n, const T& x);
+        template<class InputIterator>
+        iterator insert_after(const_iterator position, InputIterator first, InputIterator last);
+        @\added{template<\placeholder{compatible_range<T>} R>}@
+        @\added{iterator insert_after(from_range_t, const_iterator position, R\&\& range);}@
+        iterator insert_after(const_iterator position, initializer_list<T> il);
+        
+    };
+    
+    template<class InputIterator, class Allocator = allocator<@\placeholder{iter-value-type}@<InputIterator>>>
+    forward_list(InputIterator, InputIterator, Allocator = Allocator())
+    -> forward_list<@\placeholder{iter-value-type}@<InputIterator>, Allocator>;
+    
+    @\added{template<ranges::input_range R, class Allocator = allocator<ranges::range_value_t<R>>>}@
+    @\added{forward_list(R, Allocator = Allocator())}@
+    @\added{-> forward_list<ranges::range_value_t<R>, Allocator>;}@
+}
+\end{codeblock}
+
+\rSec3[forwardlist.cons]{Constructors, copy, and assignment}
+
+\indexlibraryctor{forward_list}%
+\begin{itemdecl}
+    template<class InputIterator>
+    forward_list(InputIterator first, InputIterator last, const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs a \tcode{forward_list} object equal to the range \range{first}{last}.
+    
+    \pnum
+    \complexity
+    Linear in \tcode{distance(first, last)}.
+\end{itemdescr}
+
+
+\begin{addedblock}
+\begin{itemdecl}
+template<@\placeholder{compatible_range<T>}@ R>}
+forward_list(from_range_t, R&& range, const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Constructs a \tcode{forward_list} object with the elements of the range \tcode{range}.
+
+\pnum
+\complexity
+Linear in \tcode{ranges::distance(r)}.
+\end{itemdescr}
+
+\end{addedblock}
+
+\begin{itemdecl}
+    template<class InputIterator>
+    iterator insert_after(const_iterator position, InputIterator first, InputIterator last);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \expects
+    \tcode{position} is \tcode{before_begin()} or is a dereferenceable
+    iterator in the range \range{begin()}{end()}.
+    Neither \tcode{first} nor \tcode{last} are iterators in \tcode{*this}.
+    
+    \pnum
+    \effects
+    Inserts copies of elements in \range{first}{last} after \tcode{position}.
+    
+    \pnum
+    \returns
+    An iterator pointing to the last inserted element or \tcode{position} if \tcode{first == last}.
+\end{itemdescr}
+
+\begin{addedblock}
+\begin{itemdecl}
+template<@\placeholder{compatible_range<T>}@ R>}
+iterator insert_after(from_range_t, const_iterator position, R&& range);}
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \expects
+    \tcode{position} is \tcode{before_begin()} or is a dereferenceable
+    iterator in the range \range{begin()}{end()}.
+    \tcode{ranges::begin(first)} is not an iterator in \tcode{*this}.
+    
+    \pnum
+    \effects
+    Inserts copies of elements in the range \range{r} after \tcode{position}.
+    
+    \pnum
+    \returns
+    An iterator pointing to the last inserted element or \tcode{position} if \tcode{ranges::emty(r)} is \tcode{true}.
+\end{itemdescr}
+\end{addedblock}
+
+\indexlibrarymember{insert_after}{forward_list}%
+\begin{itemdecl}
+    iterator insert_after(const_iterator position, initializer_list<T> il);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    \tcode{insert_after(p, il.begin(), il.end())}.
+    
+    \pnum
+    \returns
+    An iterator pointing to the last inserted element or \tcode{position} if \tcode{il} is empty.
+\end{itemdescr}
+
+\rSec2[list]{Class template \tcode{list}}
+
+\rSec3[list.overview]{Overview}
+
+\begin{codeblock}
+namespace std {
+    template<class T, class Allocator = allocator<T>>
+    class list {
+        public:
+        
+        // \ref{list.cons}, construct/copy/destroy
+        list() : list(Allocator()) { }
+        explicit list(const Allocator&);
+        explicit list(size_type n, const Allocator& = Allocator());
+        list(size_type n, const T& value, const Allocator& = Allocator());
+        template<class InputIterator>
+        list(InputIterator first, InputIterator last, const Allocator& = Allocator());
+        @\added{template<\placeholder{compatible_range<T>} R>}@
+        @\added{list(from_range_t, R\&\& range, const Allocator\& = Allocator());}@
+        list(const list& x);
+        list(list&& x);
+        list(const list&, const Allocator&);
+        list(list&&, const Allocator&);
+        list(initializer_list<T>, const Allocator& = Allocator());
+        ~list();
+        list& operator=(const list& x);
+        list& operator=(list&& x)
+        noexcept(allocator_traits<Allocator>::is_always_equal::value);
+        list& operator=(initializer_list<T>);
+        template<class InputIterator>
+        void assign(InputIterator first, InputIterator last);
+        @\added{template<\placeholder{compatible_range<T>} R>}@
+        @\added{void assign(from_range_t, R\&\& range);}@
+        void assign(size_type n, const T& t);
+        void assign(initializer_list<T>);
+        allocator_type get_allocator() const noexcept;
+        
+        //...
+        
+        template<class... Args> iterator emplace(const_iterator position, Args&&... args);
+        iterator insert(const_iterator position, const T& x);
+        iterator insert(const_iterator position, T&& x);
+        iterator insert(const_iterator position, size_type n, const T& x);
+        template<class InputIterator>
+        iterator insert(const_iterator position, InputIterator first, InputIterator last);
+        @\added{template<\placeholder{compatible_range<T>} R>}@
+        @\added{iterator insert(from_range_t, const_iterator position, R\&\& range);}@
+        iterator insert(const_iterator position, initializer_list<T> il);
+        
+        //...
+    };
+    
+    template<class InputIterator, class Allocator = allocator<@\placeholder{iter-value-type}@<InputIterator>>>
+    list(InputIterator, InputIterator, Allocator = Allocator())
+    -> list<@\placeholder{iter-value-type}@<InputIterator>, Allocator>;
+    
+    @\added{template<ranges::input_range R, class Allocator = allocator<ranges::range_value_t<R>>>}@
+    @\added{list(R, Allocator = Allocator())}@
+    @\added{-> list<ranges::range_value_t<R>, Allocator>;}@
+}
+\end{codeblock}
+
+
+\indexlibraryctor{list}%
+\begin{itemdecl}
+    template<class InputIterator>
+    list(InputIterator first, InputIterator last, const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs a
+    \tcode{list}
+    equal to the range
+    \range{first}{last}.
+    
+    \pnum
+    \complexity
+    Linear in
+    \tcode{distance(first, last)}.
+\end{itemdescr}
+
+\begin{addedblock}
+\begin{itemdecl}
+template<@\placeholder{compatible_range<T>}@ R>}
+list(from_range_t, R&& range, const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs a \tcode{list} object with the elements of the range \tcode{range}.
+    
+    \pnum
+    \complexity
+    Linear in \tcode{ranges::distance(r)}.
+\end{itemdescr}
+\end{addedblock}
+
+\rSec3[list.modifiers]{Modifiers}
+
+\indexlibrarymember{insert}{list}%
+\begin{itemdecl}
+    iterator insert(const_iterator position, const T& x);
+    iterator insert(const_iterator position, T&& x);
+    iterator insert(const_iterator position, size_type n, const T& x);
+    template<class InputIterator>
+    iterator insert(const_iterator position, InputIterator first,
+    InputIterator last);
+    iterator insert(const_iterator position, initializer_list<T>);
+    @\added{template<\placeholder{compatible_range<T>} R>}@
+    @\added{iterator insert(from_range_t, const_iterator position, R\&\& range);}@
+    
+    template<class... Args> reference emplace_front(Args&&... args);
+    template<class... Args> reference emplace_back(Args&&... args);
+    template<class... Args> iterator emplace(const_iterator position, Args&&... args);
+    void push_front(const T& x);
+    void push_front(T&& x);
+    void push_back(const T& x);
+    void push_back(T&& x);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \complexity
+    Insertion of a single element into a list takes constant time and
+    exactly one call to a constructor of
+    \tcode{T}. Insertion of multiple elements into a list is linear in the
+    number of elements inserted, and the number of calls to the copy
+    constructor or move constructor of \tcode{T} is exactly equal
+    to the number of elements inserted.
+    
+    \pnum
+    \remarks
+    Does not affect the validity of iterators and references.
+    If an exception is thrown there are no effects.
+\end{itemdescr}
+
+\rSec2[vector]{Class template \tcode{vector}}
+
+\rSec3[vector.overview]{Overview}
+
+\begin{codeblock}
+namespace std {
+    template<class T, class Allocator = allocator<T>>
+    class vector {
+        public:
+        // \ref{vector.cons}, construct/copy/destroy
+        constexpr vector() noexcept(noexcept(Allocator())) : vector(Allocator()) { }
+        constexpr explicit vector(const Allocator&) noexcept;
+        constexpr explicit vector(size_type n, const Allocator& = Allocator());
+        constexpr vector(size_type n, const T& value, const Allocator& = Allocator());
+        template<class InputIterator>
+        constexpr vector(InputIterator first, InputIterator last, const Allocator& = Allocator());
+        @\added{template<\placeholder{compatible_range<T>} R>}@
+        @\added{constexpr vector(from_range_t, R\&\& range, const Allocator\& = Allocator());}@
+        constexpr vector(const vector& x);
+        constexpr vector(vector&&) noexcept;
+        constexpr vector(const vector&, const Allocator&);
+        constexpr vector(vector&&, const Allocator&);
+        constexpr vector(initializer_list<T>, const Allocator& = Allocator());
+        constexpr ~vector();
+        constexpr vector& operator=(const vector& x);
+        constexpr vector& operator=(vector&& x)
+        noexcept(allocator_traits<Allocator>::propagate_on_container_move_assignment::value ||
+        allocator_traits<Allocator>::is_always_equal::value);
+        constexpr vector& operator=(initializer_list<T>);
+        template<class InputIterator>
+        constexpr void assign(InputIterator first, InputIterator last);
+        @\added{template<\placeholder{compatible_range<T>} R>}@
+        @\added{constexpr void assign(from_range_t, R\&\& range);}@
+        constexpr void assign(size_type n, const T& u);
+        constexpr void assign(initializer_list<T>);
+        constexpr allocator_type get_allocator() const noexcept;
+        
+        //...
+        
+        template<class... Args> constexpr iterator emplace(const_iterator position, Args&&... args);
+        constexpr iterator insert(const_iterator position, const T& x);
+        constexpr iterator insert(const_iterator position, T&& x);
+        constexpr iterator insert(const_iterator position, size_type n, const T& x);
+        template<class InputIterator>
+        constexpr iterator insert(const_iterator position, InputIterator first, InputIterator last);
+        @\added{template<\placeholder{compatible_range<T>} R>}@
+        @\added{constexpr iterator insert(from_range_t, const_iterator position, R\&\& range);}@
+        constexpr iterator insert(const_iterator position, initializer_list<T> il);
+        constexpr iterator erase(const_iterator position);
+        constexpr iterator erase(const_iterator first, const_iterator last);
+        constexpr void     swap(vector&)
+        noexcept(allocator_traits<Allocator>::propagate_on_container_swap::value ||
+        allocator_traits<Allocator>::is_always_equal::value);
+        constexpr void     clear() noexcept;
+    };
+    
+    template<class InputIterator, class Allocator = allocator<@\placeholder{iter-value-type}@<InputIterator>>>
+    vector(InputIterator, InputIterator, Allocator = Allocator())
+    -> vector<@\placeholder{iter-value-type}@<InputIterator>, Allocator>;
+    
+    @\added{template<ranges::input_range R, class Allocator = allocator<ranges::range_value_t<R>>>}@
+    @\added{vector(R, Allocator = Allocator())}@
+    @\added{-> vector<ranges::range_value_t<R>, Allocator>;}@
+}
+\end{codeblock}%
+\rSec3[vector.cons]{Constructors}
+
+
+\indexlibraryctor{vector}
+\begin{itemdecl}
+    template<class InputIterator>
+    constexpr vector(InputIterator first, InputIterator last,
+    const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+    
+    \pnum
+    \effects
+    Constructs a \tcode{vector} equal to the
+    range \range{first}{last}, using the specified allocator.
+    
+    \pnum
+    \complexity
+    Makes only $N$
+    calls to the copy constructor of
+    \tcode{T}
+    (where $N$
+    is the distance between
+    \tcode{first}
+    and
+    \tcode{last})
+    and no reallocations if iterators \tcode{first} and \tcode{last} are of forward, bidirectional, or random access categories.
+    It makes order
+    \tcode{N}
+    calls to the copy constructor of
+    \tcode{T}
+    and order
+    $\log N$
+    reallocations if they are just input iterators.
+\end{itemdescr}
+
+\begin{addedblock}
+\begin{itemdecl}
+template<@\placeholder{compatible_range<T>}@ R>}
+vector(from_range_t, R&& range, const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs a \tcode{vector} object with the elements of the range \tcode{range}, using the specified allocator.
+    
+    \pnum
+   \complexity
+   Makes only $N$ calls to the constructor of \tcode{T} (where $N$ is \tcode{ranges::distance(range)}
+   and no reallocations if \tcode{range} models \tcode{ranges::forward_range} or \tcode{ranges::sized_range}.
+   Otherwise, It makes order \tcode{N} calls to the constructor of \tcode{T} and order $\log N$ reallocations.
+\end{itemdescr}
+\end{addedblock}
+
+\rSec3[vector.modifiers]{Modifiers}
+
+\indexlibrarymember{insert}{vector}%
+\begin{itemdecl}
+    constexpr iterator insert(const_iterator position, const T& x);
+    constexpr iterator insert(const_iterator position, T&& x);
+    constexpr iterator insert(const_iterator position, size_type n, const T& x);
+    template<class InputIterator>
+    constexpr iterator insert(const_iterator position, InputIterator first, InputIterator last);
+    @\added{template<\placeholder{compatible_range<T>} R>}@
+    @\added{iterator insert(from_range_t, const_iterator position, R\&\& range);}@
+    constexpr iterator insert(const_iterator position, initializer_list<T>);
+    template<class... Args> constexpr reference emplace_back(Args&&... args);
+    template<class... Args> constexpr iterator emplace(const_iterator position, Args&&... args);
+    constexpr void push_back(const T& x);
+    constexpr void push_back(T&& x);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \complexity
+    If reallocation happens,
+    linear in the number of elements of the resulting vector;
+    otherwise,
+    linear in the number of elements inserted plus the distance
+    to the end of the vector.
+    
+    \pnum
+    \remarks
+    Causes reallocation if the new size is greater than the old capacity.
+    Reallocation invalidates all the references, pointers, and iterators
+    referring to the elements in the sequence, as well as the past-the-end iterator.
+    If no reallocation happens, then
+    references, pointers, and iterators
+    before the insertion point remain valid
+    but those at or after the insertion point,
+    including the past-the-end iterator,
+    are invalidated.
+    If an exception is thrown other than by
+    the copy constructor, move constructor,
+    assignment operator, or move assignment operator of
+    \tcode{T} or by any \tcode{InputIterator} operation
+    there are no effects.
+    If an exception is thrown while inserting a single element at the end and
+    \tcode{T} is \oldconcept{CopyInsertable} or \tcode{is_nothrow_move_constructible_v<T>}
+    is \tcode{true}, there are no effects.
+    Otherwise, if an exception is thrown by the move constructor of a non-\oldconcept{CopyInsertable}
+    \tcode{T}, the effects are unspecified.
+\end{itemdescr}
+
+\rSec2[vector.bool]{Class \tcode{vector<bool>}}
+
+\pnum
+\indexlibraryglobal{vector<bool>}%
+
+\begin{codeblock}
+namespace std {
+    template<class Allocator>
+    class vector<bool, Allocator> {
+        public:
+        //...
+        // construct/copy/destroy
+        constexpr vector() : vector(Allocator()) { }
+        constexpr explicit vector(const Allocator&);
+        constexpr explicit vector(size_type n, const Allocator& = Allocator());
+        constexpr vector(size_type n, const bool& value, const Allocator& = Allocator());
+        template<class InputIterator>
+        constexpr vector(InputIterator first, InputIterator last, const Allocator& = Allocator());
+        @\added{template<\placeholder{compatible_range<bool>} R>}@
+        @\added{constexpr vector(from_range_t, R\&\& range, const Allocator\& = Allocator());}@
+        constexpr vector(const vector& x);
+        constexpr vector(vector&& x);
+        constexpr vector(const vector&, const Allocator&);
+        constexpr vector(vector&&, const Allocator&);
+        constexpr vector(initializer_list<bool>, const Allocator& = Allocator());
+        constexpr ~vector();
+        constexpr vector& operator=(const vector& x);
+        constexpr vector& operator=(vector&& x);
+        constexpr vector& operator=(initializer_list<bool>);
+        template<class InputIterator>
+        constexpr void assign(InputIterator first, InputIterator last);
+        @\added{template<\placeholder{compatible_range<bool>} R>}@
+        @\added{constexpr void assign(from_range_t, R\&\& range);}@
+        constexpr void assign(size_type n, const bool& t);
+        constexpr void assign(initializer_list<bool>);
+        constexpr allocator_type get_allocator() const noexcept;
+        //...
+        
+        // modifiers
+        template<class... Args> constexpr reference emplace_back(Args&&... args);
+        constexpr void push_back(const bool& x);
+        constexpr void pop_back();
+        template<class... Args> constexpr iterator emplace(const_iterator position, Args&&... args);
+        constexpr iterator insert(const_iterator position, const bool& x);
+        constexpr iterator insert(const_iterator position, size_type n, const bool& x);
+        template<class InputIterator>
+        constexpr iterator insert(const_iterator position, InputIterator first, InputIterator last);
+        @\added{template<\placeholder{compatible_range<bool>} R>}@
+        @\added{constexpr iterator insert(from_range_t, const_iterator position, R\&\& range);}@
+        constexpr iterator insert(const_iterator position, initializer_list<bool> il);
+    };
+}
+\end{codeblock}%
+
+
+\rSec1[associative]{Associative containers}
+
+\rSec2[map]{Class template \tcode{map}}
+
+\rSec3[map.overview]{Overview}
+
+\indexlibrarymember{comp}{map::value_compare}%
+\indexlibrarymember{operator()}{map::value_compare}%
+\begin{codeblock}
+namespace std {
+template<class Key, class T, class Compare = less<Key>,
+class Allocator = allocator<pair<const Key, T>>>
+class map {
+    public:
+    
+    // \ref{map.cons}, construct/copy/destroy
+    map() : map(Compare()) { }
+    explicit map(const Compare& comp, const Allocator& = Allocator());
+    template<class InputIterator>
+    map(InputIterator first, InputIterator last, 
+            const Compare& comp = Compare(), const Allocator& = Allocator());
+    
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{map(from_range_t, R\&\& range, const Compare\& comp = Compare(), const Allocator\& = Allocator());}@
+    
+    map(const map& x);
+    map(map&& x);
+    explicit map(const Allocator&);
+    map(const map&, const Allocator&);
+    map(map&&, const Allocator&);
+    map(initializer_list<value_type>,
+    const Compare& = Compare(),
+    const Allocator& = Allocator());
+    template<class InputIterator>
+    map(InputIterator first, InputIterator last, const Allocator& a)
+    : map(first, last, Compare(), a) { }
+    
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{map(from_range_t, R\&\& range, const Allocator\& a))}@
+    @\added{: map(from_range, std::forward<R>(range), Compare(), a)\{\}}@
+    
+    map(initializer_list<value_type> il, const Allocator& a)
+    : map(il, Compare(), a) { }
+ 
+    pair<iterator, bool> insert(const value_type& x);
+    pair<iterator, bool> insert(value_type&& x);
+    template<class P> pair<iterator, bool> insert(P&& x);
+    iterator insert(const_iterator position, const value_type& x);
+    iterator insert(const_iterator position, value_type&& x);
+    template<class P>
+    iterator insert(const_iterator position, P&&);
+    template<class InputIterator>
+    void insert(InputIterator first, InputIterator last); 
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{void insert(from_range_t, R\&\& range);}@
+    
+    void insert(initializer_list<value_type>);
+    
+   //...
+};
+
+template<class InputIterator, class Compare = less<@\placeholder{iter-key-type}@<InputIterator>>,
+class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<InputIterator>>>
+map(InputIterator, InputIterator, Compare = Compare(), Allocator = Allocator())
+-> map<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>, Compare, Allocator>;
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range R, 
+    class Compare = less<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>, 
+    class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<ranges::iterator_t<R>>>
+map(from_range_t, R, Compare = Compare(), Allocator = Allocator())
+    -> map<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,  
+           @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>, 
+           Compare, Allocator>;
+\end{codeblock}
+\end{addedblock}
+
+\begin{codeblock}
+
+template<class Key, class T, class Compare = less<Key>,
+class Allocator = allocator<pair<const Key, T>>>
+map(initializer_list<pair<Key, T>>, Compare = Compare(), Allocator = Allocator())
+-> map<Key, T, Compare, Allocator>;
+
+template<class InputIterator, class Allocator>
+map(InputIterator, InputIterator, Allocator)
+-> map<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+less<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range R, class Allocator>
+map(from_range_t, R, Allocator)
+-> map<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,  
+    @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>, 
+    less<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>, Allocator>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+template<class Key, class T, class Allocator>
+map(initializer_list<pair<Key, T>>, Allocator) -> map<Key, T, less<Key>, Allocator>;
+}
+\end{codeblock}
+
+
+\rSec3[map.cons]{Constructors, copy, and assignment}%
+
+\indexlibraryctor{map}%
+\begin{itemdecl}
+    template<class InputIterator>
+    map(InputIterator first, InputIterator last,
+    const Compare& comp = Compare(), const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Constructs an empty
+\tcode{map}
+using the specified comparison object and allocator,
+and inserts elements from the range
+\range{first}{last}.
+
+\pnum
+\complexity
+Linear in $N$ if the range
+\range{first}{last}
+is already sorted using \tcode{comp}
+and otherwise $N \log N$, where $N$
+is \tcode{last - first}.
+\end{itemdescr}
+
+\begin{addedblock}
+\begin{itemdecl}
+template<@\placeholder{compatible_range<value_type>}@ R>}
+map(from_range_t, R&& range, const Compare& comp = Compare(), const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs an empty
+    \tcode{map}
+    using the specified comparison object and allocator,
+    and inserts elements from the range
+    \tcode{range}.
+    
+    \pnum
+    \complexity
+    Linear in $N$ if \tcode{range} is already sorted using \tcode{comp}
+    and otherwise $N \log N$, where $N$
+    is \tcode{ranges::distance(first, last)}.
+\end{itemdescr}.
+\end{addedblock}
+
+\rSec2[multimap]{Class template \tcode{multimap}}
+
+\rSec3[multimap.overview]{Overview}
+
+
+\indexlibrarymember{comp}{multimap::value_compare}%
+\indexlibrarymember{operator()}{multimap::value_compare}%
+\begin{codeblock}
+namespace std {
+template<class Key, class T, class Compare = less<Key>,
+class Allocator = allocator<pair<const Key, T>>>
+class multimap {
+    
+    // \ref{multimap.cons}, construct/copy/destroy
+    multimap() : multimap(Compare()) { }
+    explicit multimap(const Compare& comp, const Allocator& = Allocator());
+    template<class InputIterator>
+    multimap(InputIterator first, InputIterator last, const Compare& comp = Compare(), const Allocator& = Allocator());
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{multimap(from_range_t, R\&\& range, const Compare\& comp = Compare(), const Allocator\& = Allocator());}@
+    multimap(const multimap& x);
+    multimap(multimap&& x);
+    explicit multimap(const Allocator&);
+    multimap(const multimap&, const Allocator&);
+    multimap(multimap&&, const Allocator&);
+    multimap(initializer_list<value_type>,
+    const Compare& = Compare(),
+    const Allocator& = Allocator());
+    template<class InputIterator>
+    multimap(InputIterator first, InputIterator last, const Allocator& a)
+    : multimap(first, last, Compare(), a) { }
+    
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{multimap(from_range_t, R\&\& range, const Allocator\& a))}@
+    @\added{: multimap(from_range, std::forward<R>(range), Compare(), a)\{\}}@
+    
+    multimap(initializer_list<value_type> il, const Allocator& a)
+    : multimap(il, Compare(), a) { }
+    ~multimap();
+    
+    // \ref{multimap.modifiers}, modifiers
+    template<class... Args> iterator emplace(Args&&... args);
+    template<class... Args> iterator emplace_hint(const_iterator position, Args&&... args);
+    iterator insert(const value_type& x);
+    iterator insert(value_type&& x);
+    template<class P> iterator insert(P&& x);
+    iterator insert(const_iterator position, const value_type& x);
+    iterator insert(const_iterator position, value_type&& x);
+    template<class P> iterator insert(const_iterator position, P&& x);
+    template<class InputIterator>
+    void insert(InputIterator first, InputIterator last);
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{void insert(from_range_t, R\&\& range);}@
+    void insert(initializer_list<value_type>);
+};
+
+template<class InputIterator, class Compare = less<@\placeholder{iter-key-type}@<InputIterator>>,
+class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<InputIterator>>>
+multimap(InputIterator, InputIterator, Compare = Compare(), Allocator = Allocator())
+-> multimap<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+Compare, Allocator>;
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range R, 
+    class Compare = less<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>, 
+    class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<ranges::iterator_t<R>>>
+multimap(from_range_t, R, Compare = Compare(), Allocator = Allocator())
+-> multimap<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,  
+    @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>, 
+    Compare, Allocator>;
+\end{codeblock}
+\end{addedblock}
+
+\begin{codeblock}
+
+template<class Key, class T, class Compare = less<Key>,
+class Allocator = allocator<pair<const Key, T>>>
+multimap(initializer_list<pair<Key, T>>, Compare = Compare(), Allocator = Allocator())
+-> multimap<Key, T, Compare, Allocator>;
+
+template<class InputIterator, class Allocator>
+multimap(InputIterator, InputIterator, Allocator)
+-> multimap<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+less<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range R, class Allocator>
+multimap(from_range_t, R, Allocator = Allocator())
+-> multimap<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,  
+    @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>, 
+    less<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>, Allocator>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+template<class Key, class T, class Allocator>
+multimap(initializer_list<pair<Key, T>>, Allocator)
+-> multimap<Key, T, less<Key>, Allocator>;
+}
+\end{codeblock}%
+\indexlibrarymember{multimap}{operator==}%
+\indexlibrarymember{multimap}{operator<}
+
+\rSec3[multimap.cons]{Constructors}
+
+\indexlibraryctor{multimap}%
+\begin{itemdecl}
+    template<class InputIterator>
+    multimap(InputIterator first, InputIterator last,
+    const Compare& comp = Compare(),
+    const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs an empty
+    \tcode{multimap}
+    using the specified comparison object and allocator,
+    and inserts elements from the range
+    \range{first}{last}.
+    
+    \pnum
+    \complexity
+    Linear in $N$ if the range
+    \range{first}{last}
+    is already sorted using \tcode{comp}
+    and otherwise $N \log N$,
+    where $N$ is
+    \tcode{last - first}.
+\end{itemdescr}
+
+\begin{addedblock}
+\begin{itemdecl}
+template<@\placeholder{compatible_range<value_type>}@ R>}
+multimap(from_range_t, R&& range, const Compare& comp = Compare(), const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs an empty
+    \tcode{multimap}
+    using the specified comparison object and allocator,
+    and inserts elements from the range
+    \tcode{range}.
+    
+    \pnum
+    \complexity
+    Linear in $N$ if \tcode{range} is already sorted using \tcode{comp}
+    and otherwise $N \log N$, where $N$
+    is \tcode{ranges::distance(first, last)}.
+\end{itemdescr}.
+\end{addedblock}
+
+\rSec2[set]{Class template \tcode{set}}
+
+\rSec3[set.overview]{Overview}
+
+\begin{codeblock}
+namespace std {
+    template<class Key, class Compare = less<Key>,
+    class Allocator = allocator<Key>>
+    class set {
+        public:
+        // \ref{set.cons}, construct/copy/destroy
+        set() : set(Compare()) { }
+        explicit set(const Compare& comp, const Allocator& = Allocator());
+        template<class InputIterator>
+        set(InputIterator first, InputIterator last, const Compare& comp = Compare(), const Allocator& = Allocator());
+        @\added{template<\placeholder{compatible_range<value_type>} R>}@
+        @\added{set(from_range_t, R\&\& range, const Compare\& comp = Compare(), const Allocator\& = Allocator());}@
+        
+        set(const set& x);
+        set(set&& x);
+        explicit set(const Allocator&);
+        set(const set&, const Allocator&);
+        set(set&&, const Allocator&);
+        set(initializer_list<value_type>, const Compare& = Compare(),
+        const Allocator& = Allocator());
+        template<class InputIterator>
+        set(InputIterator first, InputIterator last, const Allocator& a)
+        : set(first, last, Compare(), a) { }
+        @\added{template<\placeholder{compatible_range<value_type>} R>}@
+        @\added{set(from_range_t, R\&\& range, const Allocator\& a))}@
+        @\added{: set(from_range, std::forward<R>(range), Compare(), a)\{\}}@
+        
+        
+        set(initializer_list<value_type> il, const Allocator& a)
+        : set(il, Compare(), a) { }
+        ~set();
+        //...
+        pair<iterator,bool> insert(const value_type& x);
+        pair<iterator,bool> insert(value_type&& x);
+        iterator insert(const_iterator position, const value_type& x);
+        iterator insert(const_iterator position, value_type&& x);
+        template<class InputIterator>
+        void insert(InputIterator first, InputIterator last);
+        
+        @\added{template<\placeholder{compatible_range<value_type>} R>}@
+        @\added{void insert(from_range_t, R\&\& range);}@
+        
+        void insert(initializer_list<value_type>);
+        
+    };
+    
+    template<class InputIterator,
+    class Compare = less<@\placeholder{iter-value-type}@<InputIterator>>,
+    class Allocator = allocator<@\placeholder{iter-value-type}@<InputIterator>>>
+    set(InputIterator, InputIterator,
+    Compare = Compare(), Allocator = Allocator())
+    -> set<@\placeholder{iter-value-type}@<InputIterator>, Compare, Allocator>;
+    
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+    template<ranges::input_range R, class Compare = less<ranges::range_value_t<R>>, 
+        class Allocator = allocator<ranges::range_value_t<R>>>
+    set(from_range_t, R, Compare = Compare(), Allocator = Allocator())
+    -> set<ranges::range_value_t<R>,  Compare, Allocator>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+        
+    template<class Key, class Compare = less<Key>, class Allocator = allocator<Key>>
+    set(initializer_list<Key>, Compare = Compare(), Allocator = Allocator())
+    -> set<Key, Compare, Allocator>;
+    
+    template<class InputIterator, class Allocator>
+    set(InputIterator, InputIterator, Allocator)
+    -> set<@\placeholder{iter-value-type}@<InputIterator>,
+    less<@\placeholder{iter-value-type}@<InputIterator>>, Allocator>;
+       
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+    template<ranges::input_range R,  class Allocator>
+    set(from_range_t, R, Allocator)
+    -> set<ranges::range_value_t<R>,  less<ranges::range_value_t<R>>, Allocator>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+    template<class Key, class Allocator>
+    set(initializer_list<Key>, Allocator) -> set<Key, less<Key>, Allocator>;
+}
+\end{codeblock}%
+\indexlibrarymember{set}{operator==}%
+\indexlibrarymember{set}{operator<}
+
+\rSec3[set.cons]{Constructors, copy, and assignment}
+
+\indexlibraryctor{set}%
+\begin{itemdecl}
+    template<class InputIterator>
+    set(InputIterator first, InputIterator last,
+    const Compare& comp = Compare(), const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs an empty
+    \tcode{set}
+    using the specified comparison object and allocator,
+    and inserts elements from the range
+    \range{first}{last}.
+    
+    \pnum
+    \complexity
+    Linear in $N$ if the range
+    \range{first}{last}
+    is already sorted using \tcode{comp}
+    and otherwise $N \log N$,
+    where $N$ is
+    \tcode{last - first}.
+\end{itemdescr}
+
+\begin{addedblock}
+\begin{itemdecl}
+template<@\placeholder{compatible_range<value_type>}@ R>}
+set(from_range_t, R&& range, const Compare& comp = Compare(), const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Constructs an empty
+\tcode{set}
+using the specified comparison object and allocator,
+and inserts elements from the range
+\tcode{range}.
+
+\pnum
+\complexity
+Linear in $N$ if \tcode{range} is already sorted using \tcode{comp}
+and otherwise $N \log N$, where $N$
+is \tcode{ranges::distance(first, last)}.
+\end{itemdescr}.
+\end{addedblock}
+
+\rSec2[multiset]{Class template \tcode{multiset}}
+
+\rSec3[multiset.overview]{Overview}
+
+\begin{codeblock}
+namespace std {
+template<class Key, class Compare = less<Key>,
+class Allocator = allocator<Key>>
+class multiset {
+    public:
+    // \ref{multiset.cons}, construct/copy/destroy
+    multiset() : multiset(Compare()) { }
+    explicit multiset(const Compare& comp, const Allocator& = Allocator());
+    template<class InputIterator>
+    multiset(InputIterator first, InputIterator last, const Compare& comp = Compare(), 
+             const Allocator& = Allocator());
+    
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{multiset(from_range_t, R\&\& range, const Compare\& comp = Compare(), const Allocator\& = Allocator());}@
+    
+    multiset(const multiset& x);
+    multiset(multiset&& x);
+    explicit multiset(const Allocator&);
+    multiset(const multiset&, const Allocator&);
+    multiset(multiset&&, const Allocator&);
+    multiset(initializer_list<value_type>, const Compare& = Compare(),
+    const Allocator& = Allocator());
+    template<class InputIterator>
+    multiset(InputIterator first, InputIterator last, const Allocator& a)
+    : multiset(first, last, Compare(), a) { }
+   
+   @\added{template<\placeholder{compatible_range<value_type>} R>}@
+   @\added{multiset(from_range_t, R\&\& range, const Allocator\& a))}@
+   @\added{: multiset(from_range, std::forward<R>(range), Compare(), a)\{\}}@
+   
+    multiset(initializer_list<value_type> il, const Allocator& a)
+    : multiset(il, Compare(), a) { }
+    ~multiset();
+
+    iterator insert(const value_type& x);
+    iterator insert(value_type&& x);
+    iterator insert(const_iterator position, const value_type& x);
+    iterator insert(const_iterator position, value_type&& x);
+    template<class InputIterator>
+    void insert(InputIterator first, InputIterator last);
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{void insert(from_range_t, R\&\& range);}@
+    
+    void insert(initializer_list<value_type>);
+    
+};
+
+template<class InputIterator,
+class Compare = less<@\placeholder{iter-value-type}@<InputIterator>>,
+class Allocator = allocator<@\placeholder{iter-value-type}@<InputIterator>>>
+multiset(InputIterator, InputIterator,
+Compare = Compare(), Allocator = Allocator())
+-> multiset<@\placeholder{iter-value-type}@<InputIterator>, Compare, Allocator>;
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range R, class Compare = less<ranges::range_value_t<R>>, 
+    class Allocator = allocator<ranges::range_value_t<R>>>
+multiset(from_range_t, R, Compare = Compare(), Allocator = Allocator())
+-> multiset<ranges::range_value_t<R>,  Compare, Allocator>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+template<class Key, class Compare = less<Key>, class Allocator = allocator<Key>>
+multiset(initializer_list<Key>, Compare = Compare(), Allocator = Allocator())
+-> multiset<Key, Compare, Allocator>;
+
+template<class InputIterator, class Allocator>
+multiset(InputIterator, InputIterator, Allocator)
+-> multiset<@\placeholder{iter-value-type}@<InputIterator>,
+    less<@\placeholder{iter-value-type}@<InputIterator>>, Allocator>;
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range R,  class Allocator>
+multiset(from_range_t, R, Allocator)
+-> multiset<ranges::range_value_t<R>,  less<ranges::range_value_t<R>>, Allocator>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+template<class Key, class Allocator>
+multiset(initializer_list<Key>, Allocator) -> multiset<Key, less<Key>, Allocator>;
+}
+\end{codeblock}%
+
+\rSec3[multiset.cons]{Constructors}
+
+\indexlibraryctor{multiset}%
+\begin{itemdecl}
+    template<class InputIterator>
+    multiset(InputIterator first, InputIterator last,
+    const Compare& comp = Compare(), const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs an empty
+    \tcode{multiset}
+    using the specified comparison object and allocator,
+    and inserts elements from the range
+    \range{first}{last}.
+    
+    \pnum
+    \complexity
+    Linear in $N$
+    if the range
+    \range{first}{last}
+    is already sorted using \tcode{comp} and otherwise $N \log N$,
+    where $N$ is
+    \tcode{last - first}.
+\end{itemdescr}
+
+\begin{addedblock}
+\begin{itemdecl}
+template<@\placeholder{compatible_range<value_type>}@ R>}
+set(from_range_t, R&& range, const Compare& comp = Compare(), const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Constructs an empty
+\tcode{multiset}
+using the specified comparison object and allocator,
+and inserts elements from the range
+\tcode{range}.
+
+\pnum
+\complexity
+Linear in $N$ if \tcode{range} is already sorted using \tcode{comp}
+and otherwise $N \log N$, where $N$
+is \tcode{ranges::distance(first, last)}.
+\end{itemdescr}.
+\end{addedblock}
+
+\rSec1[unord]{Unordered associative containers}
+
+\rSec2[unord.map]{Class template \tcode{unordered_map}}%
+\indexlibraryglobal{unordered_map}
+
+\rSec3[unord.map.overview]{Overview}
+
+\indexlibraryglobal{unordered_map}%
+\begin{codeblock}
+namespace std {
+template<class Key,
+class T,
+class Hash = hash<Key>,
+class Pred = equal_to<Key>,
+class Allocator = allocator<pair<const Key, T>>>
+class unordered_map {
+    // \ref{unord.map.cnstr}, construct/copy/destroy
+    unordered_map();
+    explicit unordered_map(size_type n, const hasher& hf = hasher(), 
+        const key_equal& eql = key_equal(), const allocator_type& a = allocator_type());
+    template<class InputIterator>
+    unordered_map(InputIterator f, InputIterator l, size_type n = @\seebelow@, 
+        const hasher& hf = hasher(), const key_equal& eql = key_equal(),
+        const allocator_type& a = allocator_type());
+    
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{unordered_map(from_range_t, R\&\& range, size_type n = \seebelow,}@
+    @\added{    const hasher\& hf = hasher(), const key_equal\& eql = key_equal(),}@
+    @\added{    const allocator_type\& a = allocator_type();}@
+    
+    unordered_map(const unordered_map&);
+    unordered_map(unordered_map&&);
+    explicit unordered_map(const Allocator&);
+    unordered_map(const unordered_map&, const Allocator&);
+    unordered_map(unordered_map&&, const Allocator&);
+    unordered_map(initializer_list<value_type> il, size_type n = @\seebelow@,
+        const hasher& hf = hasher(),
+        const key_equal& eql = key_equal(),
+        const allocator_type& a = allocator_type());
+    unordered_map(size_type n, const allocator_type& a)
+    : unordered_map(n, hasher(), key_equal(), a) { }
+    unordered_map(size_type n, const hasher& hf, const allocator_type& a)
+    : unordered_map(n, hf, key_equal(), a) { }
+    
+    template<class InputIterator>
+    unordered_map(InputIterator f, InputIterator l, size_type n, const allocator_type& a)
+    : unordered_map(f, l, n, hasher(), key_equal(), a) { }
+    template<class InputIterator>
+    unordered_map(InputIterator f, InputIterator l, size_type n, const hasher& hf,
+    const allocator_type& a)
+    : unordered_map(f, l, n, hf, key_equal(), a) { }
+    
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{unordered_map(from_range_t, R\&\& range, size_type n, const allocator_type\& a)}@
+    @\added{: unordered_map(from_range, forward<R>(range), n, hasher(), key_equal(), a) \{\}}@
+    
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{unordered_map(from_range_t, R\&\& range, size_type n, const hasher\& hf, const allocator_type\& a)}@
+    @\added{: unordered_map(from_range, forward<R>(range), n, hf, key_equal(), a) \{\}}@
+    
+    
+    
+    unordered_map(initializer_list<value_type> il, size_type n, const allocator_type& a)
+    : unordered_map(il, n, hasher(), key_equal(), a) { }
+    unordered_map(initializer_list<value_type> il, size_type n, const hasher& hf,
+    const allocator_type& a)
+    : unordered_map(il, n, hf, key_equal(), a) { }
+    ~unordered_map();
+    
+    // \ref{unord.map.modifiers}, modifiers
+    template<class... Args> pair<iterator, bool> emplace(Args&&... args);
+    template<class... Args> iterator emplace_hint(const_iterator position, Args&&... args);
+    pair<iterator, bool> insert(const value_type& obj);
+    pair<iterator, bool> insert(value_type&& obj);
+    template<class P> pair<iterator, bool> insert(P&& obj);
+    iterator       insert(const_iterator hint, const value_type& obj);
+    iterator       insert(const_iterator hint, value_type&& obj);
+    template<class P> iterator insert(const_iterator hint, P&& obj);
+    template<class InputIterator> void insert(InputIterator first, InputIterator last);
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{void insert(from_range_t, R\&\& range);}@
+    void insert(initializer_list<value_type>);
+    
+};
+
+template<class InputIterator,
+class Hash = hash<@\placeholder{iter-key-type}@<InputIterator>>,
+class Pred = equal_to<@\placeholder{iter-key-type}@<InputIterator>>,
+class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<InputIterator>>>
+unordered_map(InputIterator, InputIterator, typename @\seebelow@::size_type = @\seebelow@,
+Hash = Hash(), Pred = Pred(), Allocator = Allocator())
+-> unordered_map<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>, Hash, Pred,
+Allocator>;
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range R, 
+    class Hash = hash<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>>,
+    class Pred = equal_to<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>>,
+    class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<ranges::range_iterator_t<R>>>>
+    >
+unordered_map(from_range_t, R, typename @\seebelow@::size_type = @\seebelow@,
+    Hash = Hash(), Pred = Pred(), Allocator = Allocator())
+-> unordered_map<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>, @\placeholder{iter-mapped-type}@<ranges::range_iterator_t<R>>, 
+    Hash, Pred, Allocator>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+template<class Key, class T, class Hash = hash<Key>,
+class Pred = equal_to<Key>, class Allocator = allocator<pair<const Key, T>>>
+unordered_map(initializer_list<pair<Key, T>>,
+typename @\seebelow@::size_type = @\seebelow@, Hash = Hash(),
+Pred = Pred(), Allocator = Allocator())
+-> unordered_map<Key, T, Hash, Pred, Allocator>;
+
+template<class InputIterator, class Allocator>
+unordered_map(InputIterator, InputIterator, typename @\seebelow@::size_type, Allocator)
+-> unordered_map<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+hash<@\placeholder{iter-key-type}@<InputIterator>>,
+equal_to<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+
+template<class InputIterator, class Allocator>
+unordered_map(InputIterator, InputIterator, Allocator)
+-> unordered_map<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+hash<@\placeholder{iter-key-type}@<InputIterator>>,
+equal_to<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+
+template<class InputIterator, class Hash, class Allocator>
+unordered_map(InputIterator, InputIterator, typename @\seebelow@::size_type, Hash, Allocator)
+-> unordered_map<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>, Hash,
+equal_to<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range R, class Allocator>
+unordered_map(from_range_t, R, typename @\seebelow@::size_type, Allocator)
+-> unordered_map<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>, 
+        @\placeholder{iter-mapped-type}@<ranges::range_iterator_t<R>>, 
+        hash<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>>,
+        equal_to<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>>, Allocator>;
+template<ranges::input_range R, class Allocator>
+
+unordered_map(from_range_t, R, Allocator)
+-> unordered_map<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>, 
+    @\placeholder{iter-mapped-type}@<ranges::range_iterator_t<R>>, 
+    hash<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>>,
+    equal_to<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>>, Allocator>;
+template<ranges::input_range R, class Hash, class Allocator>
+
+unordered_map(from_range_t, R, typename @\seebelow@::size_type, Hash, Allocator)
+-> unordered_map<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>, 
+    @\placeholder{iter-mapped-type}@<ranges::range_iterator_t<R>>, 
+    Hash,
+    equal_to<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>>, Allocator>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+template<class Key, class T, class Allocator>
+unordered_map(initializer_list<pair<Key, T>>, typename @\seebelow@::size_type,
+Allocator)
+-> unordered_map<Key, T, hash<Key>, equal_to<Key>, Allocator>;
+
+template<class Key, class T, class Allocator>
+unordered_map(initializer_list<pair<Key, T>>, Allocator)
+-> unordered_map<Key, T, hash<Key>, equal_to<Key>, Allocator>;
+
+template<class Key, class T, class Hash, class Allocator>
+unordered_map(initializer_list<pair<Key, T>>, typename @\seebelow@::size_type, Hash,
+Allocator)
+-> unordered_map<Key, T, Hash, equal_to<Key>, Allocator>;
+}
+\end{codeblock}
+
+\rSec3[unord.map.cnstr]{Constructors}
+
+\indexlibraryctor{unordered_map}%
+\begin{itemdecl}
+template<class InputIterator>
+unordered_map(InputIterator f, InputIterator l,
+    size_type n = @\seebelow@,
+    const hasher& hf = hasher(),
+    const key_equal& eql = key_equal(),
+    const allocator_type& a = allocator_type());
+@\added{template<\placeholder{compatible_range<value_type>} R>}@
+@\added{unordered_map(from_range_t, R\&\& range, size_type n = \seebelow,}@
+    @\added{const hasher\& hf = hasher(), const key_equal\& eql = key_equal(),}@
+    @\added{const allocator_type\& a = allocator_type();}@
+unordered_map(initializer_list<value_type> il,
+    size_type n = @\seebelow@,
+    const hasher& hf = hasher(),
+    const key_equal& eql = key_equal(),
+    const allocator_type& a = allocator_type());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs an empty \tcode{unordered_map} using the
+    specified hash function, key equality predicate, and allocator, and
+    using at least \tcode{n} buckets. If \tcode{n} is not
+    provided, the number of buckets is \impldef{default number of buckets in
+        \tcode{unordered_map}}. Then
+    inserts elements from the range \range{f}{l}
+for the first form, \added{or from the range \tcode{range} from the second form}, or from the range
+\range{il.begin()}{il.end()} for the \changed{second}{third} form.
+    \tcode{max_load_factor()} returns \tcode{1.0}.
+    
+    \pnum
+    \complexity
+    Average case linear, worst case quadratic.
+\end{itemdescr}
+
+\rSec2[unord.multimap]{Class template \tcode{unordered_multimap}}%
+\indexlibraryglobal{unordered_multimap}
+
+\rSec3[unord.multimap.overview]{Overview}
+
+\indexlibraryglobal{unordered_multimap}%
+\begin{codeblock}
+namespace std {
+template<class Key,
+class T,
+class Hash = hash<Key>,
+class Pred = equal_to<Key>,
+class Allocator = allocator<pair<const Key, T>>>
+class unordered_multimap {
+    public:
+    // \ref{unord.multimap.cnstr}, construct/copy/destroy
+    unordered_multimap();
+    explicit unordered_multimap(size_type n,
+    const hasher& hf = hasher(),
+    const key_equal& eql = key_equal(),
+    const allocator_type& a = allocator_type());
+    template<class InputIterator>
+    unordered_multimap(InputIterator f, InputIterator l,
+        size_type n = @\seebelow@,
+        const hasher& hf = hasher(),
+        const key_equal& eql = key_equal(),
+        const allocator_type& a = allocator_type());
+    
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{unordered_multimap(from_range_t, R\&\& range, size_type n = \seebelow,}@
+    @\added{    const hasher\& hf = hasher(), const key_equal\& eql = key_equal(),}@
+    @\added{    const allocator_type\& a = allocator_type();}@
+        
+    unordered_multimap(const unordered_multimap&);
+    unordered_multimap(unordered_multimap&&);
+    explicit unordered_multimap(const Allocator&);
+    unordered_multimap(const unordered_multimap&, const Allocator&);
+    unordered_multimap(unordered_multimap&&, const Allocator&);
+    unordered_multimap(initializer_list<value_type> il,
+    size_type n = @\seebelow@,
+    const hasher& hf = hasher(),
+    const key_equal& eql = key_equal(),
+    const allocator_type& a = allocator_type());
+    unordered_multimap(size_type n, const allocator_type& a)
+    : unordered_multimap(n, hasher(), key_equal(), a) { }
+    unordered_multimap(size_type n, const hasher& hf, const allocator_type& a)
+    : unordered_multimap(n, hf, key_equal(), a) { }
+    template<class InputIterator>
+    unordered_multimap(InputIterator f, InputIterator l, size_type n, const allocator_type& a)
+    : unordered_multimap(f, l, n, hasher(), key_equal(), a) { }
+    template<class InputIterator>
+    unordered_multimap(InputIterator f, InputIterator l, size_type n, const hasher& hf,
+    const allocator_type& a)
+    : unordered_multimap(f, l, n, hf, key_equal(), a) { }
+    
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{unordered_multimap(from_range_t, R\&\& range, size_type n, const allocator_type\& a)}@
+    @\added{: unordered_multimap(from_range, forward<R>(range), n, hasher(), key_equal(), a) \{\}}@
+    
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{unordered_multimap(from_range_t, R\&\& range, size_type n, const hasher\& hf, const allocator_type\& a)}@
+    @\added{: unordered_multimap(from_range, forward<R>(range), n, hf, key_equal(), a) \{\}}@
+    
+    unordered_multimap(initializer_list<value_type> il, size_type n, const allocator_type& a)
+    : unordered_multimap(il, n, hasher(), key_equal(), a) { }
+    unordered_multimap(initializer_list<value_type> il, size_type n, const hasher& hf,
+    const allocator_type& a)
+    : unordered_multimap(il, n, hf, key_equal(), a) { }
+   
+    
+    // \ref{unord.multimap.modifiers}, modifiers
+    template<class... Args> iterator emplace(Args&&... args);
+    template<class... Args> iterator emplace_hint(const_iterator position, Args&&... args);
+    iterator insert(const value_type& obj);
+    iterator insert(value_type&& obj);
+    template<class P> iterator insert(P&& obj);
+    iterator insert(const_iterator hint, const value_type& obj);
+    iterator insert(const_iterator hint, value_type&& obj);
+    template<class P> iterator insert(const_iterator hint, P&& obj);
+    template<class InputIterator> void insert(InputIterator first, InputIterator last);
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{void insert(from_range_t, R\&\& range);}@
+    void insert(initializer_list<value_type>);
+   
+};
+
+template<class InputIterator,
+class Hash = hash<@\placeholder{iter-key-type}@<InputIterator>>,
+class Pred = equal_to<@\placeholder{iter-key-type}@<InputIterator>>,
+class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<InputIterator>>>
+unordered_multimap(InputIterator, InputIterator,
+typename @\seebelow@::size_type = @\seebelow@,
+Hash = Hash(), Pred = Pred(), Allocator = Allocator())
+-> unordered_multimap<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+Hash, Pred, Allocator>;
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range R, 
+    class Hash = hash<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>>,
+    class Pred = equal_to<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>>,
+    class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<ranges::range_iterator_t<R>>>>
+    >
+unordered_multimap(from_range_t, R, typename @\seebelow@::size_type = @\seebelow@,
+Hash = Hash(), Pred = Pred(), Allocator = Allocator())
+-> unordered_multimap<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>, 
+    @\placeholder{iter-mapped-type}@<ranges::range_iterator_t<R>>, 
+    Hash, Pred, Allocator>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+template<class Key, class T, class Hash = hash<Key>,
+class Pred = equal_to<Key>, class Allocator = allocator<pair<const Key, T>>>
+unordered_multimap(initializer_list<pair<Key, T>>,
+typename @\seebelow@::size_type = @\seebelow@,
+Hash = Hash(), Pred = Pred(), Allocator = Allocator())
+-> unordered_multimap<Key, T, Hash, Pred, Allocator>;
+
+template<class InputIterator, class Allocator>
+unordered_multimap(InputIterator, InputIterator, typename @\seebelow@::size_type, Allocator)
+-> unordered_multimap<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+hash<@\placeholder{iter-key-type}@<InputIterator>>,
+equal_to<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+
+template<class InputIterator, class Allocator>
+unordered_multimap(InputIterator, InputIterator, Allocator)
+-> unordered_multimap<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+hash<@\placeholder{iter-key-type}@<InputIterator>>,
+equal_to<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+
+template<class InputIterator, class Hash, class Allocator>
+unordered_multimap(InputIterator, InputIterator, typename @\seebelow@::size_type, Hash,
+Allocator)
+-> unordered_multimap<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>, Hash,
+equal_to<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range R, class Allocator>
+unordered_multimap(from_range_t, R, typename @\seebelow@::size_type, Allocator)
+-> unordered_multimap<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>, 
+    @\placeholder{iter-mapped-type}@<ranges::range_iterator_t<R>>, 
+    hash<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>>,
+    equal_to<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>>, Allocator>;
+    template<ranges::input_range R, class Allocator>
+
+template<ranges::input_range R, class Allocator>
+unordered_multimap(from_range_t, R, Allocator)
+-> unordered_multimap<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>, 
+    @\placeholder{iter-mapped-type}@<ranges::range_iterator_t<R>>, 
+    hash<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>>,
+    equal_to<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>>, Allocator>;
+    template<ranges::input_range R, class Hash, class Allocator>
+
+template<ranges::input_range R, class Hash, class Allocator>
+unordered_multimap(from_range_t, R, typename @\seebelow@::size_type, Hash, Allocator)
+-> unordered_multimap<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>, 
+    @\placeholder{iter-mapped-type}@<ranges::range_iterator_t<R>>, 
+    Hash,
+    equal_to<@\placeholder{iter-key-type}@<ranges::range_iterator_t<R>>>, Allocator>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+template<class Key, class T, class Allocator>
+unordered_multimap(initializer_list<pair<Key, T>>, typename @\seebelow@::size_type,
+Allocator)
+-> unordered_multimap<Key, T, hash<Key>, equal_to<Key>, Allocator>;
+
+template<class Key, class T, class Allocator>
+unordered_multimap(initializer_list<pair<Key, T>>, Allocator)
+-> unordered_multimap<Key, T, hash<Key>, equal_to<Key>, Allocator>;
+
+template<class Key, class T, class Hash, class Allocator>
+unordered_multimap(initializer_list<pair<Key, T>>, typename @\seebelow@::size_type,
+Hash, Allocator)
+-> unordered_multimap<Key, T, Hash, equal_to<Key>, Allocator>;
+}
+\end{codeblock}
+
+\pnum
+A \tcode{size_type} parameter type in an \tcode{unordered_multimap} deduction guide
+refers to the \tcode{size_type} member type of the type deduced by the deduction guide.
+
+\rSec3[unord.multimap.cnstr]{Constructors}
+
+\indexlibraryctor{unordered_multimap}%
+\begin{itemdecl}
+template<class InputIterator>
+unordered_multimap(InputIterator f, InputIterator l,
+    size_type n = @\seebelow@,
+    const hasher& hf = hasher(),
+    const key_equal& eql = key_equal(),
+    const allocator_type& a = allocator_type());
+@\added{template<\placeholder{compatible_range<value_type>} R>}@
+@\added{unordered_multimap(from_range_t, R\&\& range, size_type n = \seebelow,}@
+    @\added{const hasher\& hf = hasher(), const key_equal\& eql = key_equal(),}@
+    @\added{const allocator_type\& a = allocator_type();}@
+unordered_multimap(initializer_list<value_type> il,
+    size_type n = @\seebelow@,
+    const hasher& hf = hasher(),
+    const key_equal& eql = key_equal(),
+    const allocator_type& a = allocator_type());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs an empty \tcode{unordered_multimap} using the
+    specified hash function, key equality predicate, and allocator, and
+    using at least \tcode{n} buckets. If \tcode{n} is not
+    provided, the number of buckets is \impldef{default number of buckets in
+        \tcode{unordered_multimap}}. Then
+    inserts elements from the range \range{f}{l}
+for the first form, \added{or from the range \tcode{range} from the second form}, or from the range
+\range{il.begin()}{il.end()} for the \changed{second}{third} form.
+    \tcode{max_load_factor()} returns \tcode{1.0}.
+    
+    \pnum
+    \complexity
+    Average case linear, worst case quadratic.
+\end{itemdescr}
+
+
+\rSec2[unord.set]{Class template \tcode{unordered_set}}%
+\indexlibraryglobal{unordered_set}
+
+\rSec3[unord.set.overview]{Overview}
+
+\indexlibraryglobal{unordered_set}%
+\begin{codeblock}
+namespace std {
+template<class Key,
+class Hash = hash<Key>,
+class Pred = equal_to<Key>,
+class Allocator = allocator<Key>>
+class unordered_set {
+    public:
+    
+    // \ref{unord.set.cnstr}, construct/copy/destroy
+    unordered_set();
+    explicit unordered_set(size_type n,
+    const hasher& hf = hasher(),
+    const key_equal& eql = key_equal(),
+    const allocator_type& a = allocator_type());
+    template<class InputIterator>
+    unordered_set(InputIterator f, InputIterator l,
+        size_type n = @\seebelow@,
+        const hasher& hf = hasher(),
+        const key_equal& eql = key_equal(),
+        const allocator_type& a = allocator_type());
+    
+    @\added{template<\placeholder{compatible_range<T>} R>}@
+    @\added{unordered_set(from_range_t, R\&\& range, size_type n = \seebelow,}@
+    @\added{    const hasher\& hf = hasher(), const key_equal\& eql = key_equal(),}@
+    @\added{    const allocator_type\& a = allocator_type();}@
+    
+    unordered_set(const unordered_set&);
+    unordered_set(unordered_set&&);
+    explicit unordered_set(const Allocator&);
+    unordered_set(const unordered_set&, const Allocator&);
+    unordered_set(unordered_set&&, const Allocator&);
+    unordered_set(initializer_list<value_type> il,
+        size_type n = @\seebelow@,
+        const hasher& hf = hasher(),
+        const key_equal& eql = key_equal(),
+        const allocator_type& a = allocator_type());
+    unordered_set(size_type n, const allocator_type& a)
+    : unordered_set(n, hasher(), key_equal(), a) { }
+    unordered_set(size_type n, const hasher& hf, const allocator_type& a)
+    : unordered_set(n, hf, key_equal(), a) { }
+    template<class InputIterator>
+    unordered_set(InputIterator f, InputIterator l, size_type n, const allocator_type& a)
+    : unordered_set(f, l, n, hasher(), key_equal(), a) { }
+    template<class InputIterator>
+    unordered_set(InputIterator f, InputIterator l, size_type n, const hasher& hf,
+        const allocator_type& a)
+    : unordered_set(f, l, n, hf, key_equal(), a) { }
+    
+    @\added{template<\placeholder{compatible_range<T>} R>}@
+    @\added{unordered_set(from_range_t, R\&\& range, size_type n, const allocator_type\& a)}@
+    @\added{: unordered_set(from_range, forward<R>(range), n, hasher(), key_equal(), a) \{\}}@
+    
+    @\added{template<\placeholder{compatible_range<T>} R>}@
+    @\added{unordered_set(from_range_t, R\&\& range, size_type n, const hasher\& hf, const allocator_type\& a)}@
+    @\added{: unordered_set(from_range, forward<R>(range), n, hf, key_equal(), a) \{\}}@
+    
+    unordered_set(initializer_list<value_type> il, size_type n, const allocator_type& a)
+    : unordered_set(il, n, hasher(), key_equal(), a) { }
+    unordered_set(initializer_list<value_type> il, size_type n, const hasher& hf,
+    const allocator_type& a)
+    : unordered_set(il, n, hf, key_equal(), a) { }
+    
+    // modifiers
+    template<class... Args> pair<iterator, bool> emplace(Args&&... args);
+    template<class... Args> iterator emplace_hint(const_iterator position, Args&&... args);
+    pair<iterator, bool> insert(const value_type& obj);
+    pair<iterator, bool> insert(value_type&& obj);
+    iterator insert(const_iterator hint, const value_type& obj);
+    iterator insert(const_iterator hint, value_type&& obj);
+    template<class InputIterator> void insert(InputIterator first, InputIterator last);
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{void insert(from_range_t, R\&\& range);}@
+    void insert(initializer_list<value_type>);
+    
+};
+
+template<class InputIterator,
+    class Hash = hash<@\placeholder{iter-value-type}@<InputIterator>>,
+    class Pred = equal_to<@\placeholder{iter-value-type}@<InputIterator>>,
+    class Allocator = allocator<@\placeholder{iter-value-type}@<InputIterator>>>
+unordered_set(InputIterator, InputIterator, typename @\seebelow@::size_type = @\seebelow@,
+    Hash = Hash(), Pred = Pred(), Allocator = Allocator())
+-> unordered_set<@\placeholder{iter-value-type}@<InputIterator>,
+    Hash, Pred, Allocator>;
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range R, 
+    class Hash = hash<ranges::range_value_t<R>>,
+    class Pred = equal_to<ranges::range_value_t<R>>,
+    class Allocator = allocator<ranges::range_value_t<R>>>
+unordered_set(from_range_t, R, typename @\seebelow@::size_type = @\seebelow@,
+    Hash = Hash(), Pred = Pred(), Allocator = Allocator())
+-> unordered_set<ranges::range_value_t<R>>, Hash, Pred, Allocator>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+template<class T, class Hash = hash<T>,
+class Pred = equal_to<T>, class Allocator = allocator<T>>
+unordered_set(initializer_list<T>, typename @\seebelow@::size_type = @\seebelow@,
+Hash = Hash(), Pred = Pred(), Allocator = Allocator())
+-> unordered_set<T, Hash, Pred, Allocator>;
+
+template<class InputIterator, class Allocator>
+unordered_set(InputIterator, InputIterator, typename @\seebelow@::size_type, Allocator)
+-> unordered_set<@\placeholder{iter-value-type}@<InputIterator>,
+hash<@\placeholder{iter-value-type}@<InputIterator>>,
+equal_to<@\placeholder{iter-value-type}@<InputIterator>>,
+Allocator>;
+
+template<class InputIterator, class Hash, class Allocator>
+unordered_set(InputIterator, InputIterator, typename @\seebelow@::size_type,
+Hash, Allocator)
+-> unordered_set<@\placeholder{iter-value-type}@<InputIterator>, Hash,
+equal_to<@\placeholder{iter-value-type}@<InputIterator>>,
+Allocator>;
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range R, class Allocator>
+unordered_set(from_range_t, R, typename @\seebelow@::size_type, Allocator)
+-> unordered_set<ranges::range_value_t<R>, 
+    hash<ranges::range_value_t<R>>,
+    equal_to<ranges::range_value_t<R>>, Allocator>;
+    template<ranges::input_range R, class Allocator>
+
+template<ranges::input_range R, class Allocator>
+unordered_set(from_range_t, R, Allocator)
+-> unordered_set<ranges::range_value_t<R>, 
+    hash<ranges::range_value_t<R>>,
+    equal_to<ranges::range_value_t<R>>, Allocator>;
+    template<ranges::input_range R, class Hash, class Allocator>
+
+template<ranges::input_range R, class Hash, class Allocator>
+unordered_set(from_range_t, R, typename @\seebelow@::size_type, Hash, Allocator)
+-> unordered_set<ranges::range_value_t<R>, 
+    Hash,
+    equal_to<ranges::range_value_t<R>>, Allocator>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+template<class T, class Allocator>
+unordered_set(initializer_list<T>, typename @\seebelow@::size_type, Allocator)
+-> unordered_set<T, hash<T>, equal_to<T>, Allocator>;
+
+template<class T, class Hash, class Allocator>
+unordered_set(initializer_list<T>, typename @\seebelow@::size_type, Hash, Allocator)
+-> unordered_set<T, Hash, equal_to<T>, Allocator>;
+}
+\end{codeblock}
+
+\indexlibraryctor{unordered_set}%
+\begin{itemdecl}
+template<class InputIterator>
+unordered_set(InputIterator f, InputIterator l,
+    size_type n = @\seebelow@,
+    const hasher& hf = hasher(),
+    const key_equal& eql = key_equal(),
+    const allocator_type& a = allocator_type());
+@\added{template<\placeholder{compatible_range<T>} R>}@
+@\added{unordered_multiset(from_range_t, R\&\& range, size_type n = \seebelow,}@
+    @\added{const hasher\& hf = hasher(), const key_equal\& eql = key_equal(),}@
+    @\added{const allocator_type\& a = allocator_type();}@
+unordered_set(initializer_list<value_type> il,
+    size_type n = @\seebelow@,
+    const hasher& hf = hasher(),
+    const key_equal& eql = key_equal(),
+    const allocator_type& a = allocator_type());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs an empty \tcode{unordered_set} using the
+    specified hash function, key equality predicate, and allocator, and
+    using at least \tcode{n} buckets. If \tcode{n} is not
+    provided, the number of buckets is \impldef{default number of buckets in
+        \tcode{unordered_set}}. Then
+    inserts elements from the range \range{f}{l}
+    for the first form, \added{or from the range \tcode{range} from the second form}, or from the range
+    \range{il.begin()}{il.end()} for the \changed{second}{third} form.
+    \tcode{max_load_factor()} returns \tcode{1.0}.
+    
+    \pnum
+    \complexity
+    Average case linear, worst case quadratic.
+\end{itemdescr}
+
+\rSec2[unord.multiset]{Class template \tcode{unordered_multiset}}%
+\indexlibraryglobal{unordered_multiset}
+
+\rSec3[unord.multiset.overview]{Overview}
+
+\indexlibraryglobal{unordered_multiset}%
+\begin{codeblock}
+namespace std {
+template<class Key,
+class Hash = hash<Key>,
+class Pred = equal_to<Key>,
+class Allocator = allocator<Key>>
+class unordered_multiset {
+    public:
+    // types
+    
+    // \ref{unord.multiset.cnstr}, construct/copy/destroy
+    unordered_multiset();
+    explicit unordered_multiset(size_type n,
+    const hasher& hf = hasher(),
+    const key_equal& eql = key_equal(),
+    const allocator_type& a = allocator_type());
+    template<class InputIterator>
+    unordered_multiset(InputIterator f, InputIterator l,
+        size_type n = @\seebelow@,
+        const hasher& hf = hasher(),
+        const key_equal& eql = key_equal(),
+        const allocator_type& a = allocator_type());
+    
+    @\added{template<\placeholder{compatible_range<T>} R>}@
+    @\added{unordered_multiset(from_range_t, R\&\& range, size_type n = \seebelow,}@
+    @\added{    const hasher\& hf = hasher(), const key_equal\& eql = key_equal(),}@
+    @\added{    const allocator_type\& a = allocator_type();}@
+    
+    unordered_multiset(const unordered_multiset&);
+    unordered_multiset(unordered_multiset&&);
+    explicit unordered_multiset(const Allocator&);
+    unordered_multiset(const unordered_multiset&, const Allocator&);
+    unordered_multiset(unordered_multiset&&, const Allocator&);
+    unordered_multiset(initializer_list<value_type> il,
+        size_type n = @\seebelow@,
+        const hasher& hf = hasher(),
+        const key_equal& eql = key_equal(),
+        const allocator_type& a = allocator_type());
+    unordered_multiset(size_type n, const allocator_type& a)
+    : unordered_multiset(n, hasher(), key_equal(), a) { }
+    unordered_multiset(size_type n, const hasher& hf, const allocator_type& a)
+    : unordered_multiset(n, hf, key_equal(), a) { }
+    template<class InputIterator>
+    unordered_multiset(InputIterator f, InputIterator l, size_type n, const allocator_type& a)
+    : unordered_multiset(f, l, n, hasher(), key_equal(), a) { }
+    template<class InputIterator>
+    unordered_multiset(InputIterator f, InputIterator l, size_type n, const hasher& hf,
+    const allocator_type& a)
+    : unordered_multiset(f, l, n, hf, key_equal(), a) { }
+    
+    @\added{template<\placeholder{compatible_range<T>} R>}@
+    @\added{unordered_multiset(from_range_t, R\&\& range, size_type n, const allocator_type\& a)}@
+    @\added{: unordered_multiset(from_range, forward<R>(range), n, hasher(), key_equal(), a) \{\}}@
+    
+    @\added{template<\placeholder{compatible_range<T>} R>}@
+    @\added{unordered_multiset(from_range_t, R\&\& range, size_type n, const hasher\& hf, const allocator_type\& a)}@
+    @\added{: unordered_multiset(from_range, forward<R>(range), n, hf, key_equal(), a) \{\}}@
+    
+    unordered_multiset(initializer_list<value_type> il, size_type n, const allocator_type& a)
+    : unordered_multiset(il, n, hasher(), key_equal(), a) { }
+    unordered_multiset(initializer_list<value_type> il, size_type n, const hasher& hf,
+    const allocator_type& a)
+    : unordered_multiset(il, n, hf, key_equal(), a) { }
+    ~unordered_multiset();
+   
+    iterator insert(const value_type& obj);
+    iterator insert(value_type&& obj);
+    iterator insert(const_iterator hint, const value_type& obj);
+    iterator insert(const_iterator hint, value_type&& obj);
+    template<class InputIterator> void insert(InputIterator first, InputIterator last);
+    @\added{template<\placeholder{compatible_range<value_type>} R>}@
+    @\added{void insert(from_range_t, R\&\& range);}@
+    void insert(initializer_list<value_type>);
+    
+};
+
+template<class InputIterator,
+class Hash = hash<@\placeholder{iter-value-type}@<InputIterator>>,
+class Pred = equal_to<@\placeholder{iter-value-type}@<InputIterator>>,
+class Allocator = allocator<@\placeholder{iter-value-type}@<InputIterator>>>
+unordered_multiset(InputIterator, InputIterator, @\seebelow@::size_type = @\seebelow@,
+Hash = Hash(), Pred = Pred(), Allocator = Allocator())
+-> unordered_multiset<@\placeholder{iter-value-type}@<InputIterator>,
+Hash, Pred, Allocator>;
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range R, 
+    class Hash = hash<ranges::range_value_t<R>>,
+    class Pred = equal_to<ranges::range_value_t<R>>,
+    class Allocator = allocator<ranges::range_value_t<R>>>
+unordered_multiset(from_range_t, R, typename @\seebelow@::size_type = @\seebelow@,
+    Hash = Hash(), Pred = Pred(), Allocator = Allocator())
+-> unordered_multiset<ranges::range_value_t<R>>, Hash, Pred, Allocator>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+template<class T, class Hash = hash<T>,
+class Pred = equal_to<T>, class Allocator = allocator<T>>
+unordered_multiset(initializer_list<T>, typename @\seebelow@::size_type = @\seebelow@,
+Hash = Hash(), Pred = Pred(), Allocator = Allocator())
+-> unordered_multiset<T, Hash, Pred, Allocator>;
+
+template<class InputIterator, class Allocator>
+unordered_multiset(InputIterator, InputIterator, typename @\seebelow@::size_type, Allocator)
+-> unordered_multiset<@\placeholder{iter-value-type}@<InputIterator>,
+hash<@\placeholder{iter-value-type}@<InputIterator>>,
+equal_to<@\placeholder{iter-value-type}@<InputIterator>>,
+Allocator>;
+
+template<class InputIterator, class Hash, class Allocator>
+unordered_multiset(InputIterator, InputIterator, typename @\seebelow@::size_type,
+Hash, Allocator)
+-> unordered_multiset<@\placeholder{iter-value-type}@<InputIterator>, Hash,
+equal_to<@\placeholder{iter-value-type}@<InputIterator>>,
+Allocator>;
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range R, class Allocator>
+unordered_multiset(from_range_t, R, typename @\seebelow@::size_type, Allocator)
+-> unordered_multiset<ranges::range_value_t<R>, 
+    hash<ranges::range_value_t<R>>,
+    equal_to<ranges::range_value_t<R>>, Allocator>;
+    template<ranges::input_range R, class Allocator>
+
+template<ranges::input_range R, class Allocator>
+unordered_multiset(from_range_t, R, Allocator)
+-> unordered_multiset<ranges::range_value_t<R>, 
+    hash<ranges::range_value_t<R>>,
+    equal_to<ranges::range_value_t<R>>, Allocator>;
+    template<ranges::input_range R, class Hash, class Allocator>
+
+template<ranges::input_range R, class Hash, class Allocator>
+unordered_multiset(from_range_t, R, typename @\seebelow@::size_type, Hash, Allocator)
+-> unordered_multiset<ranges::range_value_t<R>, 
+    Hash,
+    equal_to<ranges::range_value_t<R>>, Allocator>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+template<class T, class Allocator>
+unordered_multiset(initializer_list<T>, typename @\seebelow@::size_type, Allocator)
+-> unordered_multiset<T, hash<T>, equal_to<T>, Allocator>;
+
+template<class T, class Hash, class Allocator>
+unordered_multiset(initializer_list<T>, typename @\seebelow@::size_type, Hash, Allocator)
+-> unordered_multiset<T, Hash, equal_to<T>, Allocator>;
+}
+\end{codeblock}
+
+\rSec3[unord.multiset.cnstr]{Constructors}
+
+
+\indexlibraryctor{unordered_multiset}%
+\begin{itemdecl}
+template<class InputIterator>
+unordered_multiset(InputIterator f, InputIterator l,
+    size_type n = @\seebelow@,
+    const hasher& hf = hasher(),
+    const key_equal& eql = key_equal(),
+    const allocator_type& a = allocator_type());
+@\added{template<\placeholder{compatible_range<T>} R>}@
+@\added{unordered_multiset(from_range_t, R\&\& range, size_type n = \seebelow,}@
+    @\added{const hasher\& hf = hasher(), const key_equal\& eql = key_equal(),}@
+    @\added{const allocator_type\& a = allocator_type();}@
+unordered_multiset(initializer_list<value_type> il,
+    size_type n = @\seebelow@,
+    const hasher& hf = hasher(),
+    const key_equal& eql = key_equal(),
+    const allocator_type& a = allocator_type());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs an empty \tcode{unordered_multiset} using the
+    specified hash function, key equality predicate, and allocator, and
+    using at least \tcode{n} buckets. If \tcode{n} is not
+    provided, the number of buckets is \impldef{default number of buckets in
+        \tcode{unordered_multiset}}. Then
+    inserts elements from the range \range{f}{l}
+    for the first form, \added{or from the range \tcode{range} from the second form} or from the range
+    \range{il.begin()}{il.end()} for the \changed{second}{third} form.
+    \tcode{max_load_factor()} returns \tcode{1.0}.
+    
+    \pnum
+    \complexity
+    Average case linear, worst case quadratic.
+\end{itemdescr}
+
+%\rSec1[container.adaptors]{Container adaptors}
+%
+%\rSec2[container.adaptors.general]{In general}
+%
+%\pnum
+%The headers <queue> and <stack> define the container adaptors
+%\tcode{queue}, \tcode{priority_queue}, and \tcode{stack}.
+%
+%\pnum
+%The container adaptors each take a \tcode{Container} template parameter, and each constructor takes
+%a \tcode{Container} reference argument. This container is copied into the \tcode{Container} member
+%of each adaptor. If the container takes an allocator, then a compatible allocator may be passed in
+%to the adaptor's constructor. Otherwise, normal copy or move construction is used for the container
+%argument.
+%The first template parameter \tcode{T} of the container adaptors
+%shall denote the same type as \tcode{Container::value_type}.
+%
+%\pnum
+%For container adaptors, no \tcode{swap} function throws an exception unless that
+%exception is thrown by the swap of the adaptor's \tcode{Container} or
+%\tcode{Compare} object (if any).
+%
+%\pnum
+%A deduction guide for a container adaptor shall not participate in overload resolution if any of the following are true:
+%\begin{itemize}
+%    \item It has an \tcode{InputIterator} template parameter and a type that does not qualify as an input iterator is deduced for that parameter.
+%    \item It has a \tcode{Compare} template parameter and a type that qualifies as an allocator is deduced for that parameter.
+%    \item It has a \tcode{Container} template parameter and a type that qualifies as an allocator is deduced for that parameter.
+%    \item It has an \tcode{Allocator} template parameter and a type that does not qualify as an allocator is deduced for that parameter.
+%    \item It has both \tcode{Container} and \tcode{Allocator} template parameters, and \tcode{uses_allocator_v<Container, Allocator>} is \tcode{false}.
+%\end{itemize}
+%
+%\rSec2[queue.syn]{Header \tcode{<queue>} synopsis}
+%
+%\begin{codeblock}
+%    #include <compare>              // see \ref{compare.syn}
+%    #include <initializer_list>     // see \ref{initializer.list.syn}
+%    
+%    namespace std {
+%        template<class T, class Container = deque<T>> class queue;
+%        
+%        template<class T, class Container>
+%        bool operator==(const queue<T, Container>& x, const queue<T, Container>& y);
+%        template<class T, class Container>
+%        bool operator!=(const queue<T, Container>& x, const queue<T, Container>& y);
+%        template<class T, class Container>
+%        bool operator< (const queue<T, Container>& x, const queue<T, Container>& y);
+%        template<class T, class Container>
+%        bool operator> (const queue<T, Container>& x, const queue<T, Container>& y);
+%        template<class T, class Container>
+%        bool operator<=(const queue<T, Container>& x, const queue<T, Container>& y);
+%        template<class T, class Container>
+%        bool operator>=(const queue<T, Container>& x, const queue<T, Container>& y);
+%        template<class T, @\libconcept{three_way_comparable}@ Container>
+%        compare_three_way_result_t<Container>
+%        operator<=>(const queue<T, Container>& x, const queue<T, Container>& y);
+%        
+%        template<class T, class Container>
+%        void swap(queue<T, Container>& x, queue<T, Container>& y) noexcept(noexcept(x.swap(y)));
+%        template<class T, class Container, class Alloc>
+%        struct uses_allocator<queue<T, Container>, Alloc>;
+%        
+%        template<class T, class Container = vector<T>,
+%        class Compare = less<typename Container::value_type>>
+%        class priority_queue;
+%        
+%        template<class T, class Container, class Compare>
+%        void swap(priority_queue<T, Container, Compare>& x,
+%        priority_queue<T, Container, Compare>& y) noexcept(noexcept(x.swap(y)));
+%        template<class T, class Container, class Compare, class Alloc>
+%        struct uses_allocator<priority_queue<T, Container, Compare>, Alloc>;
+%    }
+%\end{codeblock}
+%
+%\rSec2[stack.syn]{Header \tcode{<stack>} synopsis}
+%
+%\begin{codeblock}
+%    #include <compare>              // see \ref{compare.syn}
+%    #include <initializer_list>     // see \ref{initializer.list.syn}
+%    
+%    namespace std {
+%        template<class T, class Container = deque<T>> class stack;
+%        
+%        template<class T, class Container>
+%        bool operator==(const stack<T, Container>& x, const stack<T, Container>& y);
+%        template<class T, class Container>
+%        bool operator!=(const stack<T, Container>& x, const stack<T, Container>& y);
+%        template<class T, class Container>
+%        bool operator< (const stack<T, Container>& x, const stack<T, Container>& y);
+%        template<class T, class Container>
+%        bool operator> (const stack<T, Container>& x, const stack<T, Container>& y);
+%        template<class T, class Container>
+%        bool operator<=(const stack<T, Container>& x, const stack<T, Container>& y);
+%        template<class T, class Container>
+%        bool operator>=(const stack<T, Container>& x, const stack<T, Container>& y);
+%        template<class T, @\libconcept{three_way_comparable}@ Container>
+%        compare_three_way_result_t<Container>
+%        operator<=>(const stack<T, Container>& x, const stack<T, Container>& y);
+%        
+%        template<class T, class Container>
+%        void swap(stack<T, Container>& x, stack<T, Container>& y) noexcept(noexcept(x.swap(y)));
+%        template<class T, class Container, class Alloc>
+%        struct uses_allocator<stack<T, Container>, Alloc>;
+%    }
+%\end{codeblock}
+%
+%\rSec2[queue]{Class template \tcode{queue}}
+%
+%\rSec3[queue.defn]{Definition}
+%
+%\pnum
+%\indexlibraryglobal{queue}%
+%Any sequence container supporting operations
+%\tcode{front()},
+%\tcode{back()},
+%\tcode{push_back()}
+%and
+%\tcode{pop_front()}
+%can be used to instantiate
+%\tcode{queue}.
+%In particular,
+%\tcode{list}\iref{list}
+%and
+%\tcode{deque}\iref{deque}
+%can be used.
+%
+%\begin{codeblock}
+%    namespace std {
+%        template<class T, class Container = deque<T>>
+%        class queue {
+%            public:
+%            using value_type      = typename Container::value_type;
+%            using reference       = typename Container::reference;
+%            using const_reference = typename Container::const_reference;
+%            using size_type       = typename Container::size_type;
+%            using container_type  =          Container;
+%            
+%            protected:
+%            Container c;
+%            
+%            public:
+%            queue() : queue(Container()) {}
+%            explicit queue(const Container&);
+%            explicit queue(Container&&);
+%            template<class Alloc> explicit queue(const Alloc&);
+%            template<class Alloc> queue(const Container&, const Alloc&);
+%            template<class Alloc> queue(Container&&, const Alloc&);
+%            template<class Alloc> queue(const queue&, const Alloc&);
+%            template<class Alloc> queue(queue&&, const Alloc&);
+%            
+%            [[nodiscard]] bool empty() const    { return c.empty(); }
+%            size_type         size()  const     { return c.size(); }
+%            reference         front()           { return c.front(); }
+%            const_reference   front() const     { return c.front(); }
+%            reference         back()            { return c.back(); }
+%            const_reference   back() const      { return c.back(); }
+%            void push(const value_type& x)      { c.push_back(x); }
+%            void push(value_type&& x)           { c.push_back(std::move(x)); }
+%            template<class... Args>
+%            decltype(auto) emplace(Args&&... args)
+%            { return c.emplace_back(std::forward<Args>(args)...); }
+%            void pop()                          { c.pop_front(); }
+%            void swap(queue& q) noexcept(is_nothrow_swappable_v<Container>)
+%            { using std::swap; swap(c, q.c); }
+%        };
+%        
+%        template<class Container>
+%        queue(Container) -> queue<typename Container::value_type, Container>;
+%        
+%        template<class Container, class Allocator>
+%        queue(Container, Allocator) -> queue<typename Container::value_type, Container>;
+%        
+%        template<class T, class Container, class Alloc>
+%        struct uses_allocator<queue<T, Container>, Alloc>
+%        : uses_allocator<Container, Alloc>::type { };
+%    }
+%\end{codeblock}
+%
+%\rSec3[queue.cons]{Constructors}
+%
+%\begin{itemdecl}
+%    explicit queue(const Container& cont);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{cont}.
+%\end{itemdescr}
+%
+%\begin{itemdecl}
+%    explicit queue(Container&& cont);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{std::move(cont)}.
+%\end{itemdescr}
+%
+%\rSec3[queue.cons.alloc]{Constructors with allocators}
+%
+%\pnum
+%If \tcode{uses_allocator_v<container_type, Alloc>} is \tcode{false}
+%the constructors in this subclause shall not participate in overload resolution.
+%
+%\begin{itemdecl}
+%    template<class Alloc> explicit queue(const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{a}.
+%\end{itemdescr}
+%
+%\begin{itemdecl}
+%    template<class Alloc> queue(const container_type& cont, const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{cont} as the first argument and \tcode{a}
+%    as the second argument.
+%\end{itemdescr}
+%
+%\begin{itemdecl}
+%    template<class Alloc> queue(container_type&& cont, const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{std::move(cont)} as the first argument and \tcode{a}
+%    as the second argument.
+%\end{itemdescr}
+%
+%\begin{itemdecl}
+%    template<class Alloc> queue(const queue& q, const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{q.c} as the first argument and \tcode{a} as the
+%    second argument.
+%\end{itemdescr}
+%
+%\begin{itemdecl}
+%    template<class Alloc> queue(queue&& q, const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{std::move(q.c)} as the first argument and \tcode{a}
+%    as the second argument.
+%\end{itemdescr}
+%
+%\rSec3[queue.ops]{Operators}
+%
+%\indexlibrarymember{operator==}{queue}%
+%\begin{itemdecl}
+%    template<class T, class Container>
+%    bool operator==(const queue<T, Container>& x, const queue<T, Container>& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \returns
+%    \tcode{x.c == y.c}.
+%\end{itemdescr}
+%
+%\indexlibrary{\idxcode{operator"!=}!\idxcode{queue}}%
+%\begin{itemdecl}
+%    template<class T, class Container>
+%    bool operator!=(const queue<T, Container>& x,  const queue<T, Container>& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \returns
+%    \tcode{x.c != y.c}.
+%\end{itemdescr}
+%
+%\indexlibrarymember{operator<}{queue}%
+%\begin{itemdecl}
+%    template<class T, class Container>
+%    bool operator< (const queue<T, Container>& x, const queue<T, Container>& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \returns
+%    \tcode{x.c < y.c}.
+%\end{itemdescr}
+%
+%\indexlibrarymember{operator>}{queue}%
+%\begin{itemdecl}
+%    template<class T, class Container>
+%    bool operator> (const queue<T, Container>& x, const queue<T, Container>& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \returns
+%    \tcode{x.c > y.c}.
+%\end{itemdescr}
+%
+%\indexlibrarymember{operator<=}{queue}%
+%\begin{itemdecl}
+%    template<class T, class Container>
+%    bool operator<=(const queue<T, Container>& x, const queue<T, Container>& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \returns
+%    \tcode{x.c <= y.c}.
+%\end{itemdescr}
+%
+%\indexlibrarymember{operator>=}{queue}%
+%\begin{itemdecl}
+%    template<class T, class Container>
+%    bool operator>=(const queue<T, Container>& x,
+%    const queue<T, Container>& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \returns
+%    \tcode{x.c >= y.c}.
+%\end{itemdescr}
+%
+%\indexlibrarymember{operator<=>}{queue}%
+%\begin{itemdecl}
+%    template<class T, @\libconcept{three_way_comparable}@ Container>
+%    compare_three_way_result_t<Container>
+%    operator<=>(const queue<T, Container>& x, const queue<T, Container>& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \returns
+%    \tcode{x.c <=> y.c}.
+%\end{itemdescr}
+%
+%\rSec3[queue.special]{Specialized algorithms}
+%
+%\indexlibrarymember{swap}{queue}%
+%\begin{itemdecl}
+%    template<class T, class Container>
+%    void swap(queue<T, Container>& x, queue<T, Container>& y) noexcept(noexcept(x.swap(y)));
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \constraints
+%    \tcode{is_swappable_v<Container>} is \tcode{true}.
+%    
+%    \pnum
+%    \effects
+%    As if by \tcode{x.swap(y)}.
+%\end{itemdescr}
+%
+%\rSec2[priority.queue]{Class template \tcode{priority_queue}}
+%
+%\rSec3[priqueue.overview]{Overview}
+%
+%\pnum
+%\indexlibraryglobal{priority_queue}%
+%Any sequence container with random access iterator and supporting operations
+%\tcode{front()},
+%\tcode{push_back()}
+%and
+%\tcode{pop_back()}
+%can be used to instantiate
+%\tcode{priority_queue}.
+%In particular,
+%\tcode{vector}\iref{vector}
+%and
+%\tcode{deque}\iref{deque}
+%can be used.
+%Instantiating
+%\tcode{priority_queue}
+%also involves supplying a function or function object for making
+%priority comparisons; the library assumes that the function or function
+%object defines a strict weak ordering\iref{alg.sorting}.
+%
+%\begin{codeblock}
+%    namespace std {
+%        template<class T, class Container = vector<T>,
+%        class Compare = less<typename Container::value_type>>
+%        class priority_queue {
+%            public:
+%            using value_type      = typename Container::value_type;
+%            using reference       = typename Container::reference;
+%            using const_reference = typename Container::const_reference;
+%            using size_type       = typename Container::size_type;
+%            using container_type  = Container;
+%            using value_compare   = Compare;
+%            
+%            protected:
+%            Container c;
+%            Compare comp;
+%            
+%            public:
+%            priority_queue() : priority_queue(Compare()) {}
+%            explicit priority_queue(const Compare& x) : priority_queue(x, Container()) {}
+%            priority_queue(const Compare& x, const Container&);
+%            priority_queue(const Compare& x, Container&&);
+%            template<class InputIterator>
+%            priority_queue(InputIterator first, InputIterator last, const Compare& x,
+%            const Container&);
+%            template<class InputIterator>
+%            priority_queue(InputIterator first, InputIterator last,
+%            const Compare& x = Compare(), Container&& = Container());
+%            template<class Alloc> explicit priority_queue(const Alloc&);
+%            template<class Alloc> priority_queue(const Compare&, const Alloc&);
+%            template<class Alloc> priority_queue(const Compare&, const Container&, const Alloc&);
+%            template<class Alloc> priority_queue(const Compare&, Container&&, const Alloc&);
+%            template<class Alloc> priority_queue(const priority_queue&, const Alloc&);
+%            template<class Alloc> priority_queue(priority_queue&&, const Alloc&);
+%            
+%            [[nodiscard]] bool empty() const { return c.empty(); }
+%            size_type size()  const          { return c.size(); }
+%            const_reference   top() const    { return c.front(); }
+%            void push(const value_type& x);
+%            void push(value_type&& x);
+%            template<class... Args> void emplace(Args&&... args);
+%            void pop();
+%            void swap(priority_queue& q) noexcept(is_nothrow_swappable_v<Container> &&
+%            is_nothrow_swappable_v<Compare>)
+%            { using std::swap; swap(c, q.c); swap(comp, q.comp); }
+%        };
+%        
+%        template<class Compare, class Container>
+%        priority_queue(Compare, Container)
+%        -> priority_queue<typename Container::value_type, Container, Compare>;
+%        
+%        template<class InputIterator,
+%        class Compare = less<typename iterator_traits<InputIterator>::value_type>,
+%        class Container = vector<typename iterator_traits<InputIterator>::value_type>>
+%        priority_queue(InputIterator, InputIterator, Compare = Compare(), Container = Container())
+%        -> priority_queue<typename iterator_traits<InputIterator>::value_type, Container, Compare>;
+%        
+%        template<class Compare, class Container, class Allocator>
+%        priority_queue(Compare, Container, Allocator)
+%        -> priority_queue<typename Container::value_type, Container, Compare>;
+%        
+%        // no equality is provided
+%        
+%        template<class T, class Container, class Compare, class Alloc>
+%        struct uses_allocator<priority_queue<T, Container, Compare>, Alloc>
+%        : uses_allocator<Container, Alloc>::type { };
+%    }
+%\end{codeblock}
+%
+%\rSec3[priqueue.cons]{Constructors}
+%
+%\indexlibraryctor{priority_queue}%
+%\begin{itemdecl}
+%    priority_queue(const Compare& x, const Container& y);
+%    priority_queue(const Compare& x, Container&& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \expects
+%    \tcode{x} defines a strict weak ordering\iref{alg.sorting}.
+%    
+%    \pnum
+%    \effects
+%    Initializes
+%    \tcode{comp} with
+%    \tcode{x} and
+%    \tcode{c} with
+%    \tcode{y} (copy constructing or move constructing as appropriate);
+%    calls
+%    \tcode{make_heap(c.begin(), c.end(), comp)}.
+%\end{itemdescr}
+%
+%\indexlibraryctor{priority_queue}%
+%\begin{itemdecl}
+%    template<class InputIterator>
+%    priority_queue(InputIterator first, InputIterator last, const Compare& x, const Container& y);
+%    template<class InputIterator>
+%    priority_queue(InputIterator first, InputIterator last, const Compare& x = Compare(),
+%    Container&& y = Container());
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \expects
+%    \tcode{x} defines a strict weak ordering\iref{alg.sorting}.
+%    
+%    \pnum
+%    \effects
+%    Initializes
+%    \tcode{comp} with
+%    \tcode{x} and
+%    \tcode{c} with
+%    \tcode{y} (copy constructing or move constructing as appropriate);
+%    calls
+%    \tcode{c.insert(c.end(), first, last)};
+%    and finally calls
+%    \tcode{make_heap(c.begin(), c.end(), comp)}.
+%\end{itemdescr}
+%
+%\rSec3[priqueue.cons.alloc]{Constructors with allocators}
+%
+%\pnum
+%If \tcode{uses_allocator_v<container_type, Alloc>} is \tcode{false}
+%the constructors in this subclause shall not participate in overload resolution.
+%
+%\indexlibraryctor{priority_queue}%
+%\begin{itemdecl}
+%    template<class Alloc> explicit priority_queue(const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{a} and value-initializes \tcode{comp}.
+%\end{itemdescr}
+%
+%\indexlibraryctor{priority_queue}%
+%\begin{itemdecl}
+%    template<class Alloc> priority_queue(const Compare& compare, const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{a} and initializes \tcode{comp} with \tcode{compare}.
+%\end{itemdescr}
+%
+%\indexlibraryctor{priority_queue}%
+%\begin{itemdecl}
+%    template<class Alloc>
+%    priority_queue(const Compare& compare, const Container& cont, const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{cont} as the first argument and \tcode{a} as the second
+%    argument, and initializes \tcode{comp} with \tcode{compare};
+%    calls \tcode{make_heap(c.begin(), c.end(), comp)}.
+%\end{itemdescr}
+%
+%\indexlibraryctor{priority_queue}%
+%\begin{itemdecl}
+%    template<class Alloc>
+%    priority_queue(const Compare& compare, Container&& cont, const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{std::move(cont)} as the first argument and \tcode{a}
+%    as the second argument, and initializes \tcode{comp} with \tcode{compare};
+%    calls \tcode{make_heap(c.begin(), c.end(), comp)}.
+%\end{itemdescr}
+%
+%\indexlibraryctor{priority_queue}%
+%\begin{itemdecl}
+%    template<class Alloc> priority_queue(const priority_queue& q, const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{q.c} as the first argument and \tcode{a} as
+%    the second argument, and initializes \tcode{comp} with \tcode{q.comp}.
+%\end{itemdescr}
+%
+%\indexlibraryctor{priority_queue}%
+%\begin{itemdecl}
+%    template<class Alloc> priority_queue(priority_queue&& q, const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{std::move(q.c)} as the first argument and \tcode{a}
+%    as the second argument, and initializes \tcode{comp} with \tcode{std::move(q.comp)}.
+%\end{itemdescr}
+%
+%\rSec3[priqueue.members]{Members}
+%
+%\indexlibrarymember{push}{priority_queue}%
+%\begin{itemdecl}
+%    void push(const value_type& x);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    As if by:
+%    \begin{codeblock}
+%        c.push_back(x);
+%        push_heap(c.begin(), c.end(), comp);
+%    \end{codeblock}
+%\end{itemdescr}
+%
+%\indexlibrarymember{push}{priority_queue}%
+%\begin{itemdecl}
+%    void push(value_type&& x);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    As if by:
+%    \begin{codeblock}
+%        c.push_back(std::move(x));
+%        push_heap(c.begin(), c.end(), comp);
+%    \end{codeblock}
+%\end{itemdescr}
+%
+%\indexlibrarymember{emplace}{priority_queue}%
+%\begin{itemdecl}
+%    template<class... Args> void emplace(Args&&... args);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    As if by:
+%    \begin{codeblock}
+%        c.emplace_back(std::forward<Args>(args)...);
+%        push_heap(c.begin(), c.end(), comp);
+%    \end{codeblock}
+%\end{itemdescr}
+%
+%
+%\indexlibrarymember{pop}{priority_queue}%
+%\begin{itemdecl}
+%    void pop();
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    As if by:
+%    \begin{codeblock}
+%        pop_heap(c.begin(), c.end(), comp);
+%        c.pop_back();
+%    \end{codeblock}
+%\end{itemdescr}
+%
+%\rSec3[priqueue.special]{Specialized algorithms}
+%
+%\indexlibrarymember{swap}{priority_queue}%
+%\begin{itemdecl}
+%    template<class T, class Container, class Compare>
+%    void swap(priority_queue<T, Container, Compare>& x,
+%    priority_queue<T, Container, Compare>& y) noexcept(noexcept(x.swap(y)));
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \constraints
+%    \tcode{is_swappable_v<Container>} is \tcode{true} and
+%    \tcode{is_swappable_v<Compare>} is \tcode{true}.
+%    
+%    \pnum
+%    \effects
+%    As if by \tcode{x.swap(y)}.
+%\end{itemdescr}
+%
+%\rSec2[stack]{Class template \tcode{stack}}
+%
+%\rSec3[stack.general]{General}
+%
+%\pnum
+%\indexlibraryglobal{stack}%
+%Any sequence container supporting operations
+%\tcode{back()},
+%\tcode{push_back()}
+%and
+%\tcode{pop_back()}
+%can be used to instantiate
+%\tcode{stack}.
+%In particular,
+%\tcode{vector}\iref{vector},
+%\tcode{list}\iref{list}
+%and
+%\tcode{deque}\iref{deque}
+%can be used.
+%
+%\rSec3[stack.defn]{Definition}
+%
+%\begin{codeblock}
+%    namespace std {
+%        template<class T, class Container = deque<T>>
+%        class stack {
+%            public:
+%            using value_type      = typename Container::value_type;
+%            using reference       = typename Container::reference;
+%            using const_reference = typename Container::const_reference;
+%            using size_type       = typename Container::size_type;
+%            using container_type  = Container;
+%            
+%            protected:
+%            Container c;
+%            
+%            public:
+%            stack() : stack(Container()) {}
+%            explicit stack(const Container&);
+%            explicit stack(Container&&);
+%            template<class Alloc> explicit stack(const Alloc&);
+%            template<class Alloc> stack(const Container&, const Alloc&);
+%            template<class Alloc> stack(Container&&, const Alloc&);
+%            template<class Alloc> stack(const stack&, const Alloc&);
+%            template<class Alloc> stack(stack&&, const Alloc&);
+%            
+%            [[nodiscard]] bool empty() const    { return c.empty(); }
+%            size_type size()  const             { return c.size(); }
+%            reference         top()             { return c.back(); }
+%            const_reference   top() const       { return c.back(); }
+%            void push(const value_type& x)      { c.push_back(x); }
+%            void push(value_type&& x)           { c.push_back(std::move(x)); }
+%            template<class... Args>
+%            decltype(auto) emplace(Args&&... args)
+%            { return c.emplace_back(std::forward<Args>(args)...); }
+%            void pop()                          { c.pop_back(); }
+%            void swap(stack& s) noexcept(is_nothrow_swappable_v<Container>)
+%            { using std::swap; swap(c, s.c); }
+%        };
+%        
+%        template<class Container>
+%        stack(Container) -> stack<typename Container::value_type, Container>;
+%        
+%        template<class Container, class Allocator>
+%        stack(Container, Allocator) -> stack<typename Container::value_type, Container>;
+%        
+%        template<class T, class Container, class Alloc>
+%        struct uses_allocator<stack<T, Container>, Alloc>
+%        : uses_allocator<Container, Alloc>::type { };
+%    }
+%\end{codeblock}
+%
+%\rSec3[stack.cons]{Constructors}
+%
+%\indexlibraryctor{stack}%
+%\begin{itemdecl}
+%    explicit stack(const Container& cont);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{cont}.
+%\end{itemdescr}
+%
+%\indexlibraryctor{stack}%
+%\begin{itemdecl}
+%    explicit stack(Container&& cont);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{std::move(cont)}.
+%\end{itemdescr}
+%
+%\rSec3[stack.cons.alloc]{Constructors with allocators}
+%
+%\pnum
+%If \tcode{uses_allocator_v<container_type, Alloc>} is \tcode{false}
+%the constructors in this subclause shall not participate in overload resolution.
+%
+%\indexlibraryctor{stack}%
+%\begin{itemdecl}
+%    template<class Alloc> explicit stack(const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{a}.
+%\end{itemdescr}
+%
+%\indexlibraryctor{stack}%
+%\begin{itemdecl}
+%    template<class Alloc> stack(const container_type& cont, const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{cont} as the first argument and \tcode{a} as the
+%    second argument.
+%\end{itemdescr}
+%
+%\indexlibraryctor{stack}%
+%\begin{itemdecl}
+%    template<class Alloc> stack(container_type&& cont, const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{std::move(cont)} as the first argument and \tcode{a}
+%    as the second argument.
+%\end{itemdescr}
+%
+%\indexlibraryctor{stack}%
+%\begin{itemdecl}
+%    template<class Alloc> stack(const stack& s, const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{s.c} as the first argument and \tcode{a}
+%    as the second argument.
+%\end{itemdescr}
+%
+%\indexlibraryctor{stack}%
+%\begin{itemdecl}
+%    template<class Alloc> stack(stack&& s, const Alloc& a);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \effects
+%    Initializes \tcode{c} with \tcode{std::move(s.c)} as the first argument and \tcode{a}
+%    as the second argument.
+%\end{itemdescr}
+%
+%\rSec3[stack.ops]{Operators}
+%
+%\indexlibrarymember{operator==}{stack}%
+%\begin{itemdecl}
+%    template<class T, class Container>
+%    bool operator==(const stack<T, Container>& x, const stack<T, Container>& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \returns
+%    \tcode{x.c == y.c}.
+%\end{itemdescr}
+%
+%\indexlibrary{\idxcode{operator"!=}!\idxcode{stack}}%
+%\begin{itemdecl}
+%    template<class T, class Container>
+%    bool operator!=(const stack<T, Container>& x, const stack<T, Container>& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \returns
+%    \tcode{x.c != y.c}.
+%\end{itemdescr}
+%
+%\indexlibrarymember{operator<}{stack}%
+%\begin{itemdecl}
+%    template<class T, class Container>
+%    bool operator< (const stack<T, Container>& x, const stack<T, Container>& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \returns
+%    \tcode{x.c < y.c}.
+%\end{itemdescr}
+%
+%\indexlibrarymember{operator>}{stack}%
+%\begin{itemdecl}
+%    template<class T, class Container>
+%    bool operator> (const stack<T, Container>& x, const stack<T, Container>& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \returns
+%    \tcode{x.c > y.c}.
+%\end{itemdescr}
+%
+%\indexlibrarymember{operator<=}{stack}%
+%\begin{itemdecl}
+%    template<class T, class Container>
+%    bool operator<=(const stack<T, Container>& x, const stack<T, Container>& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \returns
+%    \tcode{x.c <= y.c}.
+%\end{itemdescr}
+%
+%\indexlibrarymember{operator>=}{stack}%
+%\begin{itemdecl}
+%    template<class T, class Container>
+%    bool operator>=(const stack<T, Container>& x, const stack<T, Container>& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \returns
+%    \tcode{x.c >= y.c}.
+%\end{itemdescr}
+%
+%\indexlibrarymember{operator<=>}{stack}%
+%\begin{itemdecl}
+%    template<class T, @\libconcept{three_way_comparable}@ Container>
+%    compare_three_way_result_t<Container>
+%    operator<=>(const stack<T, Container>& x, const stack<T, Container>& y);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \returns
+%    \tcode{x.c <=> y.c}.
+%\end{itemdescr}
+%
+%\rSec3[stack.special]{Specialized algorithms}
+%
+%\indexlibrarymember{swap}{stack}%
+%\begin{itemdecl}
+%    template<class T, class Container>
+%    void swap(stack<T, Container>& x, stack<T, Container>& y) noexcept(noexcept(x.swap(y)));
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \constraints
+%    \tcode{is_swappable_v<Container>} is \tcode{true}.
+%    
+%    \pnum
+%    \effects
+%    As if by \tcode{x.swap(y)}.
+%\end{itemdescr}
+
+\section{Associative containers : TODO}
+
+\section{Container Adapers : TODO}
+
+\rSec2[basic.string]{Class template \tcode{basic_string}}
+
+\begin{codeblock}
+namespace std {
+    template<class charT, class traits = char_traits<charT>, class Allocator = allocator<charT>>
+    class basic_string {
+        public:
+        
+        // \ref{string.cons}, construct/copy/destroy
+        constexpr basic_string() noexcept(noexcept(Allocator())) : basic_string(Allocator()) { }
+        constexpr explicit basic_string(const Allocator& a) noexcept;
+        constexpr basic_string(const basic_string& str);
+        constexpr basic_string(basic_string&& str) noexcept;
+        constexpr basic_string(const basic_string& str, size_type pos,
+        const Allocator& a = Allocator());
+        constexpr basic_string(const basic_string& str, size_type pos, size_type n,
+        const Allocator& a = Allocator());
+        template<class T>
+        constexpr basic_string(const T& t, size_type pos, size_type n,
+        const Allocator& a = Allocator());
+        template<class T>
+        constexpr explicit basic_string(const T& t, const Allocator& a = Allocator());
+        constexpr basic_string(const charT* s, size_type n, const Allocator& a = Allocator());
+        constexpr basic_string(const charT* s, const Allocator& a = Allocator());
+        constexpr basic_string(size_type n, charT c, const Allocator& a = Allocator());
+        template<class InputIterator>
+        constexpr basic_string(InputIterator begin, InputIterator end, const Allocator& a = Allocator());
+        
+        @\added{template<ranges::input_range R>}@
+        @\added{requires std::constructible_from<charT, ranges::range_reference_t<R>}@
+        @\added{constexpr basic_string(from_range_t, R\&\& range, const Allocator\& a = Allocator());}@
+        
+        constexpr basic_string(initializer_list<charT>, const Allocator& = Allocator());
+        constexpr basic_string(const basic_string&, const Allocator&);
+        constexpr basic_string(basic_string&&, const Allocator&);
+        constexpr ~basic_string();
+        
+        // \ref{string.modifiers}, modifiers
+        constexpr basic_string& operator+=(const basic_string& str);
+        template<class T>
+        constexpr basic_string& operator+=(const T& t);
+        constexpr basic_string& operator+=(const charT* s);
+        constexpr basic_string& operator+=(charT c);
+        constexpr basic_string& operator+=(initializer_list<charT>);
+        constexpr basic_string& append(const basic_string& str);
+        constexpr basic_string& append(const basic_string& str, size_type pos, size_type n = npos);
+        template<class T>
+        constexpr basic_string& append(const T& t);
+        template<class T>
+        constexpr basic_string& append(const T& t, size_type pos, size_type n = npos);
+        constexpr basic_string& append(const charT* s, size_type n);
+        constexpr basic_string& append(const charT* s);
+        constexpr basic_string& append(size_type n, charT c);
+        template<class InputIterator>
+        constexpr basic_string& append(InputIterator first, InputIterator last);
+        
+        @\added{template<ranges::input_range R>}@
+        @\added{requires std::constructible_from<charT, ranges::range_reference_t<R>}@
+        @\added{constexpr basic_string\& append(from_range_t, R\&\& range);}@
+        
+        constexpr basic_string& append(initializer_list<charT>);
+        
+        constexpr void push_back(charT c);
+        
+        constexpr basic_string& assign(const basic_string& str);
+        constexpr basic_string& assign(basic_string&& str)
+        noexcept(allocator_traits<Allocator>::propagate_on_container_move_assignment::value ||
+        allocator_traits<Allocator>::is_always_equal::value);
+        constexpr basic_string& assign(const basic_string& str, size_type pos, size_type n = npos);
+        template<class T>
+        constexpr basic_string& assign(const T& t);
+        template<class T>
+        constexpr basic_string& assign(const T& t, size_type pos, size_type n = npos);
+        constexpr basic_string& assign(const charT* s, size_type n);
+        constexpr basic_string& assign(const charT* s);
+        constexpr basic_string& assign(size_type n, charT c);
+        template<class InputIterator>
+        constexpr basic_string& assign(InputIterator first, InputIterator last);
+        
+        @\added{template<ranges::input_range R>}@
+        @\added{requires std::constructible_from<charT, ranges::range_reference_t<R>}@
+        @\added{constexpr basic_string\& assign(from_range_t, R\&\& range);}@
+        
+        constexpr basic_string& assign(initializer_list<charT>);
+        
+        constexpr basic_string& insert(size_type pos, const basic_string& str);
+        constexpr basic_string& insert(size_type pos1, const basic_string& str,
+        size_type pos2, size_type n = npos);
+        template<class T>
+        constexpr basic_string& insert(size_type pos, const T& t);
+        template<class T>
+        constexpr basic_string& insert(size_type pos1, const T& t,
+        size_type pos2, size_type n = npos);
+        constexpr basic_string& insert(size_type pos, const charT* s, size_type n);
+        constexpr basic_string& insert(size_type pos, const charT* s);
+        constexpr basic_string& insert(size_type pos, size_type n, charT c);
+        constexpr iterator insert(const_iterator p, charT c);
+        constexpr iterator insert(const_iterator p, size_type n, charT c);
+        template<class InputIterator>
+        constexpr iterator insert(const_iterator p, InputIterator first, InputIterator last);
+        
+        @\added{template<ranges::input_range R>}@
+        @\added{requires std::constructible_from<charT, ranges::range_reference_t<R>}@
+        @\added{constexpr iterator insert(from_range_t, const_iterator p, R\&\& range);}@
+        
+        constexpr iterator insert(const_iterator p, initializer_list<charT>);
+        
+        //...
+        
+        constexpr basic_string& replace(size_type pos1, size_type n1, const basic_string& str);
+        constexpr basic_string& replace(size_type pos1, size_type n1, const basic_string& str,
+        size_type pos2, size_type n2 = npos);
+        template<class T>
+        constexpr basic_string& replace(size_type pos1, size_type n1, const T& t);
+        template<class T>
+        constexpr basic_string& replace(size_type pos1, size_type n1, const T& t,
+        size_type pos2, size_type n2 = npos);
+        constexpr basic_string& replace(size_type pos, size_type n1, const charT* s, size_type n2);
+        constexpr basic_string& replace(size_type pos, size_type n1, const charT* s);
+        constexpr basic_string& replace(size_type pos, size_type n1, size_type n2, charT c);
+        constexpr basic_string& replace(const_iterator i1, const_iterator i2,
+        const basic_string& str);
+        template<class T>
+        constexpr basic_string& replace(const_iterator i1, const_iterator i2, const T& t);
+        constexpr basic_string& replace(const_iterator i1, const_iterator i2, const charT* s,
+        size_type n);
+        constexpr basic_string& replace(const_iterator i1, const_iterator i2, const charT* s);
+        constexpr basic_string& replace(const_iterator i1, const_iterator i2, size_type n, charT c);
+        template<class InputIterator>
+        constexpr basic_string& replace(const_iterator i1, const_iterator i2, 
+            InputIterator j1, InputIterator j2);
+        
+        @\added{template<ranges::input_range R>}@
+        @\added{requires std::constructible_from<charT, ranges::range_reference_t<R>}@
+        @\added{constexpr  basic_string\& replace(from_range_t,\\ const_iterator i1, const_iterator i2, R\&\& range);}@
+        
+        constexpr basic_string& replace(const_iterator, const_iterator, initializer_list<charT>);
+        
+        //....
+    };
+    
+    template<class InputIterator,
+    class Allocator = allocator<typename iterator_traits<InputIterator>::value_type>>
+    basic_string(InputIterator, InputIterator, Allocator = Allocator())
+    -> basic_string<typename iterator_traits<InputIterator>::value_type,
+    char_traits<typename iterator_traits<InputIterator>::value_type>,
+    Allocator>;
+    
+    
+    @\added{template<ranges::input_range R, class Allocator = allocator<ranges::range_value_t<R>>>}@
+    @\added{basic_string(R, Allocator = Allocator())}@
+    @\added{-> basic_string<ranges::range_value_t<R>, char_traits<ranges::range_value_t<R>>, Allocator>;}@
+    
+    template<class charT,
+    class traits,
+    class Allocator = allocator<charT>>
+    explicit basic_string(basic_string_view<charT, traits>, const Allocator& = Allocator())
+    -> basic_string<charT, traits, Allocator>;
+    
+    template<class charT,
+    class traits,
+    class Allocator = allocator<charT>>
+    basic_string(basic_string_view<charT, traits>,
+    typename @\seebelow@::size_type, typename @\seebelow@::size_type,
+    const Allocator& = Allocator())
+    -> basic_string<charT, traits, Allocator>;
+}
+\end{codeblock}
+
+\rSec3[string.cons]{Constructors and assignment operators}
+
+\indexlibraryctor{basic_string}%
+\begin{itemdecl}
+    template<class InputIterator>
+    constexpr basic_string(InputIterator begin, InputIterator end, const Allocator& a = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \tcode{InputIterator} is a type that qualifies as an input
+    iterator\iref{container.requirements.general}.
+    
+    \pnum
+    \effects
+    Constructs a string from the values in the range \range{begin}{end},
+    as indicated in \tref{container.seq.req}.
+\end{itemdescr}
+
+\begin{addedblock}
+    \begin{itemdecl}
+template<ranges::input_range R>
+requires std::constructible_from<charT, ranges::range_reference_t<R>
+basic_string(from_range_t, R&& range, const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+ \pnum
+\effects
+Constructs a string from the values in the range \tcode{range} as indicated in [container.seq.req].
+\end{itemdescr}
+\end{addedblock}
+
+\rSec3[string.modifiers]{Modifiers}
+
+\rSec3[string.op.append]{\tcode{basic_string::operator+=}}
+
+\indexlibrarymember{append}{basic_string}%
+\begin{itemdecl}
+    template<class InputIterator>
+    constexpr basic_string& append(InputIterator first, InputIterator last);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \tcode{InputIterator} is a type that qualifies as an input
+    iterator\iref{container.requirements.general}.
+    
+    \pnum
+    \effects
+    Equivalent to: \tcode{return append(basic_string(first, last, get_allocator()));}
+\end{itemdescr}
+
+\begin{addedblock}
+\begin{itemdecl}
+template<ranges::input_range R>
+requires std::constructible_from<charT, ranges::range_reference_t<R>
+constexpr basic_string& append(from_range_t, R&& range);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Equivalent to: \tcode{return append(basic_string(from_range, forward<R>(range), get_allocator()));}
+\end{itemdescr}
+\end{addedblock}
+
+
+\rSec3[string.assign]{\tcode{basic_string::assign}}
+
+\indexlibrarymember{assign}{basic_string}%
+\begin{itemdecl}
+    template<class InputIterator>
+    constexpr basic_string& assign(InputIterator first, InputIterator last);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \tcode{InputIterator} is a type that qualifies as an input
+    iterator\iref{container.requirements.general}.
+    
+    \pnum
+    \effects
+    Equivalent to: \tcode{return assign(basic_string(first, last, get_allocator()));}
+\end{itemdescr}
+
+\begin{addedblock}
+\begin{itemdecl}
+    template<ranges::input_range R>
+    requires std::constructible_from<charT, ranges::range_reference_t<R>
+    constexpr basic_string& assign(from_range_t, R&& range);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Equivalent to: \tcode{return assign(basic_string(from_range, forward<R>(range), get_allocator()));}
+\end{itemdescr}
+\end{addedblock}
+
+\rSec3[string.insert]{\tcode{basic_string::insert}}
+
+\indexlibrarymember{insert}{basic_string}%
+\begin{itemdecl}
+    template<class InputIterator>
+    constexpr iterator insert(const_iterator p, InputIterator first, InputIterator last);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \tcode{InputIterator} is a type that qualifies as an input
+    iterator\iref{container.requirements.general}.
+    
+    \pnum
+    \expects
+    \tcode{p} is a valid iterator on
+    \tcode{*this}.
+    
+    \pnum
+    \effects
+    Equivalent to
+    \tcode{insert(p - begin(), basic_string(first, last, get_allocator()))}.
+    
+    \pnum
+    \returns
+    An iterator which refers to the first inserted character, or
+    \tcode{p} if \tcode{first == last}.
+\end{itemdescr}
+
+\begin{addedblock}
+\begin{itemdecl}
+    template<ranges::input_range R>
+    requires std::constructible_from<charT, ranges::range_reference_t<R>
+    constexpr iterator insert(from_range_t, const_iterator p, R&& range);
+\end{itemdecl}
+
+\begin{itemdescr}
+     \pnum
+    \expects
+    \tcode{p} is a valid iterator on \tcode{*this}.
+    
+    \pnum
+    \effects
+    Equivalent to
+    \tcode{insert(p - begin(), basic_string(from_range, forward<R>(range), get_allocator()))}.
+    
+    \pnum
+    \returns
+    An iterator which refers to the first inserted character, or
+    \tcode{p} if \tcode{ranges::empty(range)}.
+\end{itemdescr}
+\end{addedblock}
+
+\indexlibrarymember{insert}{basic_string}%
+\begin{itemdecl}
+    constexpr iterator insert(const_iterator p, initializer_list<charT> il);
+\end{itemdecl}
+\begin{itemdescr}
+    \pnum
+    \effects Equivalent to: \tcode{return insert(p, il.begin(), il.end());}
+\end{itemdescr}
+
+\rSec3[string.replace]{\tcode{basic_string::replace}}
+
+\indexlibrarymember{replace}{basic_string}%
+\begin{itemdecl}
+    template<class InputIterator>
+    constexpr basic_string& replace(const_iterator i1, const_iterator i2,
+    InputIterator j1, InputIterator j2);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \tcode{InputIterator} is a type that qualifies as an input
+    iterator\iref{container.requirements.general}.
+    
+    \pnum
+    \effects
+    Equivalent to: \tcode{return replace(i1, i2, basic_string(j1, j2, get_allocator()));}
+\end{itemdescr}
+
+\begin{addedblock}
+\begin{itemdecl}
+    template<ranges::input_range R>
+    requires std::constructible_from<charT, ranges::range_reference_t<R>
+    constexpr basic_string& replace(from_range_t, const_iterator i1, const_iterator i2, R&& range);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Equivalent to: \tcode{return replace(i1, i2, basic_string(from_range, forward<R>(range), get_allocator()));}
+\end{itemdescr}
+\end{addedblock}
+
+\indexlibrarymember{replace}{basic_string}%
+\begin{itemdecl}
+    constexpr basic_string& replace(const_iterator i1, const_iterator i2, initializer_list<charT> il);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Equivalent to: \tcode{return replace(i1, i2, il.begin(), il.size());}
+\end{itemdescr}
+
+    
+\rSec1[ranges.syn]{Header \tcode{<ranges>} synopsis}
+%
+\begin{codeblock}
+#include <compare>              // see \ref{compare.syn}
+#include <initializer_list>     // see \ref{initializer.list.syn}
+#include <iterator>             // see \ref{iterator.synopsis}
+
+namespace std::ranges {
+    template<class R>
+    using keys_view = elements_view<views::all_t<R>, 0>;
+    template<class R>
+    using values_view = elements_view<views::all_t<R>, 1>;
+    
+    namespace views {
+        template<size_t N>
+        inline constexpr @\unspec@ elements = @\unspec@ ;
+        inline constexpr auto keys = elements<0>;
+        inline constexpr auto values = elements<1>;
+    }
+
+    @\added{template <class C, input_range R, class... Args>}@
+    @\added{requires (!view<C>)}@
+    @\added{constexpr C to(R\&\& r, Args\&\&... args);}@
+    
+    @\added{template <template <class...> class C, input_range R, class... Args>}@
+    @\added{constexpr auto to(R \&\& r, Args\&\&... args) -> \seebelow;}@
+}
+namespace std {
+    namespace views = ranges::views;
+    
+    template<class I, class S, ranges::subrange_kind K>
+    struct tuple_size<ranges::subrange<I, S, K>>
+    : integral_constant<size_t, 2> {};
+    template<class I, class S, ranges::subrange_kind K>
+    struct tuple_element<0, ranges::subrange<I, S, K>> {
+        using type = I;
+    };
+    template<class I, class S, ranges::subrange_kind K>
+    struct tuple_element<1, ranges::subrange<I, S, K>> {
+        using type = S;
+    };
+    template<class I, class S, ranges::subrange_kind K>
+    struct tuple_element<0, const ranges::subrange<I, S, K>> {
+        using type = I;
+    };
+    template<class I, class S, ranges::subrange_kind K>
+    struct tuple_element<1, const ranges::subrange<I, S, K>> {
+        using type = S;
+    };
+
+    @\added{struct from_range_t;}@
+    @\added{inline constexpr from_range_t from_range{};}@
+}
+
+\end{codeblock}
+
+In [range.utility] Insert after section [range.dangling]
+
+\begin{addedblock}
+
+\rSec2[range.utility.conversions]{Range conversions}
+
+\rSec3[range.utility.conversions.tag]{Range argument tag}
+
+\begin{itemdecl}
+namespace std {
+    struct from_range_t { explicit from_range_t() = default; };
+    inline constexpr from_range_t from_range{};
+}
+\end{itemdecl}
+
+\pnum
+The \tcode{from_range_t} struct is an empty class type used as a unique type to
+disambiguate constructor and function overloading. Specifically, several types, notably containers have constructors with \tcode{from_range_t} as the first argument>
+
+The range conversions functions efficiently construct an instance of type from a range.
+\tcode{ranges::to<C>(r, args)} returns an instance \tcode{c} of \tcode{C} constructed by the first valid method among the following:
+\begin{itemize}
+\item Construct \tcode{c} from r 
+\item Construct \tcode{c} from the pair of iterators \tcode{ranges::begin(r), ranges::end(r)}
+\item Construct \tcode{c}, then insert each element of \tcode{r} at the end of \tcode{c}.
+\item If \tcode{C} is a \tcode{range} whose value type is itself a \tcode{range} (and is not a \tcode{view}), and \tcode{r}'s value type is also a \tcode{range}, the application of \tcode{to<range_value_t<C>>} for each element of \tcode{r} is inserted 
+at the end of c.
+\end{itemize}
+
+When the instance \tcode{c} of \tcode{C} in constructed, the parameter pack \tcode{args} is forwarded as the trailing parameters of the selected
+constructor of \tcode{C}. This allows passing an allocator to the selected constructor.
+
+\begin{codeblock}
+template <class Container, class Rng>
+concept @\placeholder{reservable-container}@ =  // \expos
+    sized_range<Rng> && requires(Container &c, Rng &&rng) {
+    { c.capacity(); } -> same_as<range_size_t<C>>;
+    { c.reserve(range_size_t<Rng>(0)); };
+};
+\end{codeblock}
+
+
+\begin{itemdecl}
+template <class C, input_range R, class... Args>
+requires (!view<C>)
+constexpr C to(R&& r, Args&&... args);
+\end{itemdecl}
+
+\begin{itemdescr}
+    
+Returns an instance of \tcode{C} constructed from the elements of \tcode{r} in the following manner:
 
 \begin{itemize}
-\item If \tcode{std::constructible_from<C, R, Args...>} is true, equivalent to \tcode{C(std::forward<R>(r), std::forward<Args>(args)...)}.
+\item If \tcode{std::constructible_from<C, R, Args...>} is true, equivalent to \tcode{C(forward<R>(r), forward<Args>(args)...)}.
 
-\item Otherwise, if \tcode{std::constructible_from<C, from_range_t, R, Args...>} is \tcode{true}, equivalent to \tcode{C(from_range, std::forward<R>(r), std::forward<Args>(args)...)}.
+\item Otherwise, if \tcode{std::constructible_from<C, from_range_t, R, Args...>} is \tcode{true}, equivalent to \tcode{C(from_range, forward<R>(r), forward<Args>(args)...)}.
 
-\item Otherwise, if  \tcode{std::constructible_from<C, Args...>} is \tcode{true} and \tcode{std::indirectly_copyable<ranges::range_iterator_t<R>, ranges::range_iterator_t<C>>} is \tcode{true}, equivalent to:
+\item Otherwise, if  
+\begin{itemize}
+\item \tcode{constructible_from<C, Args...>} is \tcode{true},
+\item \tcode{indirectly_copyable<ranges::range_iterator_t<R>, ranges::range_iterator_t<C>>} is \tcode{true}, and
+\item \tcode{inserter(c, ranges::end(c))} is a valid expression
+\end{itemize}
+
+equivalent to:
 \begin{codeblock}
-    C c(std::forward<Args...>(args)...);
-    ranges::copy(std::forward<R>(r), std::inserter(c, std::end(c)));
+    C c(forward<Args...>(args)...);
+    if constexpr(@\placeholder{reservable-container}@<C, R>) {
+        c.reserve(ranges::size(r));
+    }
+    ranges::copy(r, inserter(c, ranges::end(c)));
 \end{codeblock}
 
 \item Otherwise, if:
 \begin{itemize}
-    \item \tcode{ranges::input_range<ranges::range_value_t<C>>} is \tcode{true} and
-    \item \tcode{ranges::input_range<ranges::range_value_t<R>>} is \tcode{true} and
-    \item \tcode{ranges::view<ranges::range_value_t<C>>} is \tcode{false} and
-    \item \tcode{std::indirectly_copyable<\\ranges::range_iterator_t<ranges::range_value_t<R>>,\\ ranges::range_iterator_t<ranges::range_value_t<C>>\\>} is \tcode{true}
+    \item \tcode{ranges::input_range<ranges::range_value_t<C>>} is \tcode{true},
+    \item \tcode{ranges::input_range<ranges::range_value_t<R>>} is \tcode{true},
+    \item \tcode{ranges::view<ranges::range_value_t<C>>} is \tcode{false},
+    \item \tcode{std::indirectly_copyable<\\    ranges::range_iterator_t<ranges::range_reference_t<R>>,\\    ranges::range_iterator_t<ranges::range_value_t<C>>\\>} is \tcode{true}, and
+    \item \tcode{inserter(c, ranges::end(c))} is a valid expression
 \end{itemize}
 
 equivalent to:
 
 \begin{codeblock}
-    C c(std::forward<Args...>(args)...);
-    auto v = r | transform ([](auto && elem) {
+    C c(forward<Args...>(args)...);
+    if constexpr(@\placeholder{reservable-container}@<C, R>) {
+        c.reserve(ranges::size(r));
+    }
+    auto v = r | views::transform ([](auto && elem) {
         return to<range_value_t<C>>(elem);  
     });
-    ranges::copy(v, std::inserter(c, std::end(c)));
+    ranges::copy(v, inserter(c, ranges::end(c)));
 \end{codeblock}
 
 \item Otherwise \tcode{ranges::to<C>(r, args)} is ill-formed.
@@ -459,43 +4247,48 @@ equivalent to:
 \end{itemdescr}
 
 \begin{itemdecl}
-template <template <typename...> typename C, input_range R, typename... Args>
-constexpr auto to(R && r, Args&&... args) -> @\placeholder{ContainerType}@;
+template <template <class...> class C, input_range R, class... Args>
+constexpr auto to(R && r, Args&&... args) -> @\placeholder{DEDUCE_TYPE(R)}@;
 \end{itemdecl}
 \begin{itemdescr}
 
-Equivalent to \tcode{ranges::to<\placeholder{ContainerType}>(std::forward<R>(r), std::forward<Args>(args)...)} where \placeholder{ContainerType} is determined using CTAD as follow:
-
 Let \tcode{ITER} be a type meeting the requirements of \tcode{Cpp17InputIterator} such that
 \begin{itemize}
-    \item \tcode{same_as<\placeholder{ITER}::iterator_category, input_iterator_tag>} is \tcode{true},
-    \item \tcode{same_as<\placeholder{ITER}::value_type, ranges::range_value_t<R>>} is \tcode{true},
-    \item \tcode{same_as<\placeholder{ITER}::difference_type, ranges::range_difference_t<R>>} is \tcode{true},
-    \item \tcode{same_as<\placeholder{ITER}::pointer, ranges::range_value_t<R>*>} is \tcode{true},
-    \item \tcode{same_as<\placeholder{ITER}::reference, ranges::range_reference_t<R>>} is \tcode{true}.
+\item \tcode{\placeholder{ITER}::iterator_category} is \tcode{input_iterator_tag} ,
+\item \tcode{\placeholder{ITER}::value_type} is \tcode{ranges::range_value_t<R>},
+\item \tcode{\placeholder{ITER}::difference_type} is \tcode{ranges::range_difference_t<R>},
+\item \tcode{\placeholder{ITER}::pointer} is \tcode{add_pointer_t<range_reference_t<R>>},
+\item \tcode{\placeholder{ITER}::reference} is \tcode{ranges::range_reference_t<R>}.
 \end{itemize} 
 
-Then, \tcode{ContainerType} is:
-
+Let \tcode{DEDUCE_TYPE(D)} be defined as follows:
 \begin{itemize}
-    \item \tcode{decltype(C(std::declval<R>(), std::declval<Args>()...))} if that is a valid expression,
-    \item Otherwise, 
-    \tcode{decltype(C(from_range, std::declval<R>(), std::declval<Args>()...))} if that is a valid expression,
-    \item Otherwise, \\
-    \tcode{decltype(C(std::declval<\placeholder{ITER}>(), std::declval<\placeholder{ITER}>(), std::declval<Args>()...))} if that is a valid expression,
-    \item Otherwise \tcode{ranges::to<C>(r, args)} is ill-formed.
+\item \tcode{decltype(C(declval<D>(), declval<Args>()...))} if that is a valid expression,
+\item Otherwise, \tcode{decltype(C(from_range, declval<D>(), declval<Args>()...))} if that is a valid expression,
+\item Otherwise, \tcode{decltype(C(std::declval<\placeholder{ITER}>(), std::declval<\placeholder{ITER}>(), declval<Args>()...))} if that is a valid expression
+\item Otherwise, \tcode{\placeholder{DEDUCE_TYPE}(D)} is undefined.
+
+\end{itemize}
+
+\mandates
+\begin{itemize}
+\item \tcode{\placeholder{DEDUCE_TYPE}(R)} denotes a type.
+\end{itemize}
+\effects
+\begin{itemize}
+\item Expression-equivalent to \tcode{ranges::to<\placeholder{DEDUCE_TYPE}(R)>(r, args...)}.
 \end{itemize}
 
 \end{itemdescr}
 
 
-\rSec3[range.utility.container.adapters]{\tcode{ranges::to} adaptors}
+\rSec3[range.utility.conversions.adapters]{\tcode{ranges::to} adaptors}
 
 
 \pnum
-In addition to the functions described above, \tcode{ranges::to} also defines a closure object that accepts a \tcode{viewable_range} argument and returns a \exposconcept{Container} such that the expressions \tcode{r | ranges::to<Container>(args...)} and \tcode{ranges::to<Container>(r, args...)} have equivalent semantics.
+In addition to the functions described above, \tcode{ranges::to} also defines a closure object that accepts a \tcode{viewable_range} argument and returns an instance of a type \tcode{T} such that the expressions \tcode{r | ranges::to<T>(args...)} and \tcode{ranges::to<T>(r, args...)} have equivalent semantics.
 \begin{note}
-Container denotes either a class or a class template
+T denotes either a class or a class template
 \end{note}.
 
 \pnum
