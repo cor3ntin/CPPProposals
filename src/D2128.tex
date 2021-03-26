@@ -6,7 +6,7 @@
 \documentclass{wg21}
 
 \title{Multidimensional subscript operator}
-\docnumber{P2128R3}
+\docnumber{P2128R4}
 \audience{EWG}
 \author{Mark Hoemmen}{mhoemmen@stellarscience.com}
 \authortwo{Daisy Hollman}{dshollm@sandia.gov}
@@ -64,14 +64,28 @@ int main() {
 
 \section{Revisions}
 
-\section{R3}
+\subsection{R5}
+
+\begin{itemize}
+\item Add more motivation
+\item Add a feature test macro
+\end{itemize}
+
+\subsection{R4}
+
+\begin{itemize}
+\item Wording fixes
+\end{itemize}
+
+
+\subsection{R3}
 
 \begin{itemize}
 \item Add some discussions about interpreting \tcode{t[a][b]} as a syntactic rewrite for a variadic \tcode{operator[]} (wich we are not proposing)
 \end{itemize}
 
 
-\section{R2}
+\subsection{R2}
 
 \begin{itemize}
     \item Add explanation about not adapting this proposal to C arrays
@@ -86,6 +100,52 @@ geometric spaces, etc, need to index multiple dimensions.
 
 In the absence of a more suitable solution, these classes overload the call operator.
 While this is functionally equivalent to the proposed multidimensional subscript operator, it does not carry the same semantic, making the code harder to read and reason about. It also encourages non-semantical operator overloading.
+
+\subsection{\tcode{invocable} concept}
+
+\begin{colorblock}
+struct picture {
+    pixel operator()(int, int) const;
+};
+\end{colorblock}
+
+Instance of this type satisfy the \tcode{invocable<int, int>} concept, which is not intended.
+Such instances could be passed to algorithms expecting binary operations, which lead to worst diagnostics or
+bogus program.
+By having a separate syntax for indexing, types would not accidentally model \tcode{invocable}.
+
+\subsection{\tcode{span} and \tcode{mdspan} consistency}
+
+\tcode{span} uses \tcode{operator[]} for indexing.
+\tcode{mdspan} being a generalization of \tcode{span} to n dimensions, it would make sense that they would use the same syntaxe for indexing.
+
+This generalize to third party types.
+
+For example, \tcode{boost::multi_array} uses diferent syntaxes for 1 dimensions and N-dimensions case because they have no better option.
+
+\begin{colorblock}
+template <typename IndexList> 
+element&			operator()(const IndexList& indices);
+template <typename IndexList>
+const element&		operator()(const IndexList& indices) const;
+reference			operator[](index i);
+const_reference		operator[](index i) const;
+array_view<Dims>::type	operator[](const indices_tuple& r);
+const_array_view<Dims>::type	operator[](const indices_tuple& r) const;
+\end{colorblock}
+
+
+\subsection{Reference semantics}
+
+Because it can be used in many different context, \tcode{operator()} does not imply a specific semantic for its return type.
+However, in the general case \tcode{operator[]} strongly suggests reference semantics.
+
+More concretely, the authors have found that \tcode{A(1,2) = 42;} is surprising for many users, notably in the scientific community and is harder to explain than
+\tcode{A[1,2] = 42;}
+
+\subsection{Scientific community expectations}
+
+TODO DAISY AND MARK
 
 \section{Proposal}
 We propose that the \tcode{operator[]} should be able to accept 0 or more arguments, including variadic arguments.
@@ -106,7 +166,6 @@ However, an implementation could keep supporting the current behavior as an exte
 
 Because we should not make C++ more confusing, we think the standard should not continue to support the old meaning of a comma
 in subscript expressions.
-
 
 \section{Should we adopt the same syntax for C arrays?}
 
@@ -136,30 +195,60 @@ Another important reason to shy away from the \tcode{t[a][b]} rewrite is related
 
 Finally, we believe the broader issue of generic interoperability with C-style pointer-to-pointer arrays can be addressed with a non-breaking, follow-on proposal in the other direction: if \tcode{t[a, b]} fails overload resolution, the compiler could look for \tcode{(t[a])[b]}. This would make things like \tcode{std::array<std::array<T, 3>, 4>} work out of the box, without any library changes. The authors would welcome such a proposal, but do not believe it should be a part of the initial language change proposed herein. This potential extension also solves the problem that \tcode{t[a][b]} is not a syntax that interacts favorably with parameter packs.
 
+% 
+
 Ultimately, our proposal is one that satisfy the needs of library types without adding complexity to overload resolution.
 It leaves the door to future evolutions if these evolutions prove useful and usable.
+
+TODO REQUIEREMENTS CHECKING DAISY AND MARK
+
+TODO MENTION INLINING
+
+\subsection{Non-member operator[]}
+
+We think non-member \tcode{operator[]} is out of scope of this paper and could be added later.
+We do not see such hypotetical non-member \tcode{operator[]} as being useful as a migration strategy towards adoption of the \tcode{[]} syntax.
+Indeed, adding non-members operators that do not depend on users defined types is prone to future breakage as the author of the class can add
+a member operator later, which would create an ambiguous overload set (and therefore an ill-formed program).
+That being said there might be motivating use cases.
+
+on the masiling list,
+it was suggested that such facility could be useful to simd
+
+\begin{colorblock}
+template <typename T>
+struct simd
+{
+    friend operator[](ranges::contiguous_range auto & range, stdx::simd<int> idx)
+    {
+        for (size_t i = 0; i < idx.size(); ++i)
+            ++range[idx[i]];
+    }
+};
+
+\end{colorblock}
+
+More research should be encouraged in a separate paper!
 
 \section{Wording}
 
 \rSec1[expr]{Expressions}
 \rSec2[expr.post]{Postfix expressions}%
 
-\begin{quote}
 \pnum
 Postfix expressions group left-to-right.
 
 \begin{bnf}
-\nontermdef{postfix-expression}
-primary-expression
-\removed{postfix-expression \terminal{[} expr-or-braced-init-list \terminal{]}}
-\added{postfix-expression \terminal{[}  expression-list \terminal{]}}
-\added{postfix-expression \terminal{[} braced-init-list \terminal{]}}
-postfix-expression \terminal{(} \opt{expression-list} \terminal{)}
-simple-type-specifier \terminal{(} \opt{expression-list} \terminal{)}
-typename-specifier \terminal{(} \opt{expression-list} \terminal{)}
-simple-type-specifier braced-init-list
+\nontermdef{postfix-expression}\\
+primary-expression\\
+\removed{postfix-expression \terminal{[} expr-or-braced-init-list \terminal{]}}\\
+\added{postfix-expression \terminal{[}  expression-list \terminal{]}}\\
+\added{postfix-expression \terminal{[} braced-init-list \terminal{]}}\\
+postfix-expression \terminal{(} \opt{expression-list} \terminal{)}\\
+simple-type-specifier \terminal{(} \opt{expression-list} \terminal{)}\\
+typename-specifier \terminal{(} \opt{expression-list} \terminal{)}\\
+simple-type-specifier braced-init-list\\
 \end{bnf}
-\end{quote}
 
 
 \rSec3[expr.sub]{Subscripting}
@@ -201,7 +290,7 @@ The expression \tcode{E1} is sequenced before the expression \tcode{E2}.
 \end{note}
 
 \pnum
-\changed{A \grammarterm{braced-init-list} shall not be used w}{W}ith the built-in subscript operator\changed{.}{ a \grammarterm{braced-init-list} shall not be used and a \grammarterm{expression-list} shall be a single expression.}
+\changed{A \grammarterm{braced-init-list} shall not be used w}{W}ith the built-in subscript operator\changed{.}{ a \grammarterm{braced-init-list} shall not be used and an \grammarterm{expression-list} shall be a single expression.}
 
 \end{quote}
 
@@ -227,17 +316,13 @@ For an expression of the form\added{s}
 
 \begin{addedblock}
 \begin{ncsimplebnf}
-    postfix-expression \terminal{[}  expr-or-braced-init-list \terminal{]}
-
     postfix-expression \terminal{[}  expression-list \terminal{]}
+    
+    postfix-expression \terminal{[}  brace-init-list  \terminal{]}
 \end{ncsimplebnf}
 \end{addedblock}
 
 the operator function is selected by overload resolution ([over.match.oper]).
-If a member function is selected, the expression is interpreted as
-
-the operator function
-is selected by overload resolution (xref).
 If a member function is selected, the expression is
 interpreted\added{, respectively,} as
 
@@ -278,7 +363,7 @@ interpreted\added{, respectively,} as
 In contexts where comma is given a special meaning,
 \begin{example}
     in
-    lists of arguments to functions ([expr.call])\added{, subscript expressions} and lists of
+    lists of arguments to functions ([expr.call])\added{, subscript expressions,} and lists of
     initializers ([decl.init])
 \end{example}
 the comma operator as
@@ -343,6 +428,16 @@ of a subscripting expression\iref{expr.sub} is deprecated.
 \end{codeblock}
 \end{example}
 \end{removedblock}
+
+\subsection{Feature test macros}
+
+Insert an entry in the table into [tab:cpp.predefined.ft]
+
+\begin{addedblock}
+\begin{codeblock}
+__cpp_multidimensional_subscript | <DATE OF ADOPTION>
+\end{codeblock}
+\end{addedblock}
 
 \section{Implementation}
 
