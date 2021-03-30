@@ -64,33 +64,27 @@ int main() {
 
 \section{Revisions}
 
-\subsection{R5}
-
-\begin{itemize}
-\item Add more motivation
-\item Add a feature test macro
-\end{itemize}
-
 \subsection{R4}
 
 \begin{itemize}
+\item Expand motivation
+\item Expand discussion of alternatives
+\item Add a feature test macro
 \item Wording fixes
 \end{itemize}
-
 
 \subsection{R3}
 
 \begin{itemize}
-\item Add some discussions about interpreting \tcode{t[a][b]} as a syntactic rewrite for a variadic \tcode{operator[]} (wich we are not proposing)
+\item Add some discussions about interpreting \tcode{t[a][b]} as a syntactic rewrite for a variadic \tcode{operator[]} (which we are not proposing)
 \end{itemize}
-
 
 \subsection{R2}
 
 \begin{itemize}
     \item Add explanation about not adapting this proposal to C arrays
     \item Remove the restriction to require at least one parameter
-    \item Add a paragraph about valarray
+    \item Add a paragraph about \tcode{valarray}
 \end{itemize}
 
 \section{Motivation}
@@ -102,7 +96,7 @@ int main() {
   They carry the wrong semantic implications,
   make compile-time error detection and reporting more difficult,
   and/or hinder inlining.
-\item Therefore, we should allow \tcode{operator[]} to take multiple arguments.
+\item Therefore, we should let \tcode{operator[]} take multiple arguments.
 \end{itemize}
 
 \subsection{What are multidimensional arrays?}
@@ -180,94 +174,208 @@ Microsoft AMP's \tcode{array} type has an \tcode{operator[]} with a single param
 
 The array access operator carries the right meaning for array types in C++, no matter how many dimensions they have.  C++ developers see it and immediately know that it maps an index to a reference or reference-like type.  For instance, the function call operator is too generic, while a chain of single-argument array accesses is too specific to arrays-of-arrays.  While the notation \tcode{a[\{x, y, z\}]} at least uses the array access operator, the extra level of punctuation is unprecedented, and has potential performance issues.  Forcing different punctuation for single-dimensional and multi-dimensional array access is a mistake that other languages do not make, regardless of what symbol they use.  In C++, \tcode{a[x, y, z]} is the right notation for multidimensional array access.
 
-TODO BELOW HERE
+%\subsection{Scientific community expectations}
 
-\subsection{Scientific community expectations}
-
-TODO DAISY AND MARK
+%TODO DAISY AND MARK
 
 \section{Proposal}
-We propose that the \tcode{operator[]} should be able to accept 0 or more arguments, including variadic arguments.
+We propose that the \tcode{operator[]} should be able to accept zero or more arguments, including variadic arguments.
 Both its use and definition would match that of \tcode{operator()}.
 
-We make the expressions deprecated in 20 ill-formed while allowing multi-dimensional subscripts expressions in \textbf{new} standard types
-and user types. We do not propose modifications to C arrays as to leave a cycle before giving new meaning to syntax that was still valid in C++20.
+We make the expressions deprecated in C++20 ill-formed while allowing multi-dimensional subscripts expressions in \textbf{new} standard types
+and user types. We do not propose modifications to C arrays, so as to leave a cycle before giving new meaning to syntax that was still valid in C++20.
 
-\section{What about comma expressions?}
+\section{Frequently asked questions}
+
+\subsection{What about comma expressions?}
 
 In C++20 we deprecated the use of comma expressions in subscript expressions [P1161R3]\cite{P1161R3}.
 This proposal would make these ill-formed and give a new meaning to commas in subscript expressions.
 While the timeline is aggressive, we think it is important that this feature be available for the benefit of \tcode{mdspan} and \tcode{mdarray}.
 At the time of writing [P1161R3], \cite{P1161R3} has been implemented by at least GCC, clang, and MSVC.
-[P1161R3]\cite{P1161R3} further denotes that the cases where comma expressions appear in subscript are vanishingly rare.
+[P1161R3]\cite{P1161R3} further shows that the cases where comma expressions appear inside the array access operator are vanishingly rare.
 
-However, an implementation could keep supporting the current behavior as an extension, for example, they could fall-back to a comma expression if no overload is found for an expression list, or always assume a comma expression in the presence of a C-array.
+Implementations could also continue to support the current behavior as an extension.  For example, they could fall back to a comma expression if no overload is found for an expression list, or always assume a comma expression in the presence of a C array.
 
-Because we should not make C++ more confusing, we think the standard should not continue to support the old meaning of a comma
-in subscript expressions.
+\subsection{Should we adopt the same syntax for C arrays?}
 
-\section{Should we adopt the same syntax for C arrays?}
-
-Code that is deprecated in 20, should be ill-formed in 23 rather than a potentially silent change.
-As such we do not propose the proposed syntax to apply to C arrays.
+Code that is deprecated in C++20, should become ill formed in the next version of the C++ Standard (presumably C++23),
+rather than silently changing meaning.
+As a result, we do not propose applying the proposed syntax to C arrays.
 The usefulness of this should be discussed in the C++26 time frame.
-However C arrays are not widely used by C++, spending time on them might therefore not be useful.
 
-\section{Should we add a multidimentional operator to \tcode{valarray}?}
+\subsection{Should we add a multidimensional operator to \tcode{valarray}?}
 
 Again, we shouldn't change the meaning of existing code in C++23.
-We should only add multidimensional operators to new in C++23 types such as \tcode{mdspan}.
-If there are users of \tcode{valarray} interested in this feature, this can be done in C++26
+We should only add multidimensional operators to types that will hopefully be new in C++23, such as \tcode{mdspan}.
+If there are users of \tcode{valarray} interested in this feature, this can be done in C++26.
 
-\section{What about [foo][bar]?}
+\subsection{What about \tcode{[foo][bar]}?}
 
 As mentioned in [P1161R3]\cite{P1161R3}, an \tcode{operator[]} can return an object which has itself an \tcode{operator[]}.
 Therefore chaining multiple \tcode{[]} to index a single object isn't a viable proposal.
 
-\section{Should we interpret \tcode{t[a][b]} as a syntactic rewrite that looks for a variadic operator[]?}
+\section{Expression rewriting?}
 
-After Richard Smith raised this possibility on the EWG reflector, there was some discussion about this possibility. The rationale behind this suggestion was that current and future generic code that uses multidimensional array semantics (particularly code that may need to work with C-style pointer-to-pointer-like multidimensional arrays) would be syntactically incompatible with types that overload variadic \tcode{operator[]}.  The authors have ultimately decided to reject this direction for a number of reasons.
+Participants in an e-mail discussion on the EWG reflector suggested different ways that the compiler could rewrite multidimensional array access expressions.  All suggestions aimed to simplify writing generic code over many different array types, and to smooth the transition path from old to new code.  Three separate suggestions in particular came up:
 
-First of all, we reject the premise that significant generic code exists or will ever exist that needs to be instantiated with types like \tcode{double***}. As experts in scientific computing (expected to be the primary consumer of multidimensional arrays and thus of this proposal), we have seen very little of this sort of generic code. The vast majority of such generic code in production today uses overloads of \tcode{operator()}. No suggestion has been made to have \tcode{operator()} look for \tcode{operator[]} when a sufficient \tcode{operator()} overload cannot be found, so such a proposal will not be discussed here (though we find it equally unsatisfying).
+\begin{enumerate}
+\item rewrite \tcode{a(x)} as \tcode{a[x]} if \tcode{a} is pointer-to-object, and \tcode{a(x,y,z)} as \tcode{a[x][y][z]} if \tcode{a} is a pointer-to-array;
+\item rewrite \tcode{a[x][y][z]} as \tcode{a.operator[](x,y,z)}, if the latter is variable; or
+\item rewrite \tcode{a[x,y,z]} as \tcode{((a[x])[y])[z]}, only if no multiple-parameter \tcode{operator[]} overload is viable.
+\end{enumerate}
 
-Another important reason to shy away from the \tcode{t[a][b]} rewrite is related to one of the overall motivations for the variadic subscript operator in general: \tcode{t[a]} looks like a valid subexpression, even though it isn't necessarily.  This is a confusing and misleading user experience that we'd like to avoid. 
+\subsection{Suggestion 1: Pointer to object or pointer to array}
 
-Finally, we believe the broader issue of generic interoperability with C-style pointer-to-pointer arrays can be addressed with a non-breaking, follow-on proposal in the other direction: if \tcode{t[a, b]} fails overload resolution, the compiler could look for \tcode{(t[a])[b]}. This would make things like \tcode{std::array<std::array<T, 3>, 4>} work out of the box, without any library changes. The authors would welcome such a proposal, but do not believe it should be a part of the initial language change proposed herein. This potential extension also solves the problem that \tcode{t[a][b]} is not a syntax that interacts favorably with parameter packs.
+One e-mail discussion participant suggested having the compiler rewrite \tcode{a(x)} as \tcode{a[x]} if \tcode{a} is pointer-to-object, and \tcode{a(x,y,z)} as \tcode{a[x][y][z]} if \tcode{a} is a pointer-to-array.  That is, it would make parentheses a unified syntax for function calls or array access.  This option would make C++ more like Scala, which uses parentheses for both array indexing and map lookup.
 
-% 
-
-Ultimately, our proposal is one that satisfy the needs of library types without adding complexity to overload resolution.
-It leaves the door to future evolutions if these evolutions prove useful and usable.
-
-TODO REQUIEREMENTS CHECKING DAISY AND MARK
-
-TODO MENTION INLINING
-
-\subsection{Non-member operator[]}
-
-We think non-member \tcode{operator[]} is out of scope of this paper and could be added later.
-We do not see such hypotetical non-member \tcode{operator[]} as being useful as a migration strategy towards adoption of the \tcode{[]} syntax.
-Indeed, adding non-members operators that do not depend on users defined types is prone to future breakage as the author of the class can add
-a member operator later, which would create an ambiguous overload set (and therefore an ill-formed program).
-That being said there might be motivating use cases.
-
-on the mailing list,
-it was suggested that such facility could be useful to simd
+The main issue with this approach, is that it would make some currently ill-formed code compile, but have incorrect behavior.  Here is an example:
 
 \begin{colorblock}
-template <typename T>
-struct simd
-{
-    friend operator[](ranges::contiguous_range auto & range, stdx::simd<int> idx)
-    {
-        for (size_t i = 0; i < idx.size(); ++i)
-            ++range[idx[i]];
-    }
-};
-
+void call(std::function<void(int)>* fp) {
+    fp(4);
+}
+std::function<void(int)> f = [] () {
+    std::cout << "Hi!" << std::endl;
+    return;
+}
+call(&f);
 \end{colorblock}
 
-More research should be encouraged in a separate paper!
+We also do not favor using the function call operator (parentheses) as a unified syntax for array access and function calls, as we discussed above.
+
+\subsection{Rewrite \tcode{a[x][y]][z]} as \tcode{a.operator[](x,y,z)}?}
+
+Richard Smith suggested that the compiler interpret an expression with a chain of single-argument \tcode{operator[]} as a call to any viable multiple-parameter \tcode{operator[]}.  For example, in the expression \tcode{a[x][y][z]}, if \tcode{a} has a viable three-parameter \tcode{operator[]}, then the compiler would rewrite \tcode{a[x][y][z]} as \tcode{a.operator[](x,y,z)}.  Otherwise, the compiler would interpret \tcode{a[x][y][z]} as it does currently.  
+
+This approach would make a chain of single-parameter \tcode{operator[]} a unified syntax for many different array types, including
+
+\begin{itemize}
+\item \tcode{mdspan} (P0009) or \tcode{mdarray} (P1684);
+\item \tcode{array<array<T, N>, M>} or \tcode{vector<...<vector<T>>...>};
+\item \tcode{boost::multi_array}; or even
+\item \tcode{T[M][N]}.
+\end{itemize}
+
+(Note that \tcode{p[x][y]} already works for \tcode{shared_ptr<T[M][N]>}.)  
+
+There are a number of issues with this approach.  First, this would radically expand the scope of proposed language changes, from a rarely used and deprecated syntax \tcode{a[x,y]}, to a commonly used syntax \tcode{a[x][y]}.  Our proposal would only change the meaning of syntax that is already deprecated.
+
+Second, \tcode{a[x]} in the expression \tcode{a[x][y]} \emph{looks} like a valid subexpression.  In current C++, it \emph{is} a valid subexpression.  With this rewrite suggestion, it might not be, depending on the type of \tcode{a}.  This is a confusing and misleading user experience that we would like to avoid.  More generally, \tcode{a[x][y]} might not evaluate the same as \tcode{(a[x])[y]}.  Subsequent discussion on the EWG reflector called this ``user-hostile.''  As we discussed above, one of the motivations for \tcode{operator[]} taking multiple parameters is to make clear that array access is a single operation.
+
+Third, this suggestion would prevent or complicate use of a chain of multiple \tcode{operator[]}, where each \tcode{operator[]} takes multiple parameters.  Consider the expression \tcode{ini_files["home", username, ".foo.ini"]["section", "key"]}.  The arguments of the leftmost \tcode{operator[]} would be the components of a \tcode{filesystem::path}, and the result of \tcode{ini_files["home", username, ".foo.ini"]} would be a reference to a \tcode{map}-like object representing the contents of an INI file.  The arguments of the rightmost \tcode{operator[]} would then form a key to a value in that INI file.  If the compiler were to rewrite this as \tcode{ini_files["home", username, ".foo.ini", "section", "key"]}, then the file path would be wrong, \emph{and} the expression would have the wrong type.  One way to resolve this would be a special opt-out syntax for user-defined \tcode{operator[]}.  However, this would complicate the language even more.  In contrast, our proposal simplifies C++ by making \tcode{operator[]} more consistent with \tcode{operator()}, and removing the rarely-intended comma operator interpretation of \tcode{a[x,y]}.
+
+Fourth, it would raise overload resolution and ambiguity questions.  Would \tcode{operator[](T, T)} requiring user-defined conversions match better than a chain of two \tcode{operator[](U)} with exact matches?  What if the class has both a single-parameter and a multiple-parameter \tcode{operator[]}?  Fallback interpretations might introduce even more ambiguity: e.g., would we rewrite \tcode{a[x][y][z]} as \tcode{a[x,y][z]}?  
+
+Finally, we do not think that significant generic code exists or will ever exist that needs to be instantiated with types like \tcode{double***}.  As experts in scientific computing (a major consumer of multidimensional arrays), we have seen very little of this sort of generic code.  The vast majority of such generic code in production today uses multiple-argument \tcode{operator()} for multidimensional arrays.  Code that uses types like \tcode{double***} tends to exploit particular features of pointers, such as
+\begin{itemize}
+\item indirection, where \tcode{double***} is a pointer to a \tcode{double**} output argument, or
+\item ``ragged'' arrays, that is, an array of arrays (of arrays\ldots), where the inner arrays have different sizes.
+\end{itemize}
+Code that needs contiguous or strided multidimensional arrays either uses an appropriate class (such as \tcode{mdspan}), or represents arrays as a pointer (e.g., \tcode{double*}) with attached integer dimensions and stride(s).  No suggestion has been made to have \tcode{operator()} look for \tcode{operator[]} when a sufficient \tcode{operator()} overload cannot be found, so such a proposal will not be discussed here (though we find it equally unsatisfying).
+
+\subsection{Rewrite \tcode{a[x,y,z]} as \tcode{a[x][y][z]}?}
+
+A suggestion in the opposite direction would be for the compiler to rewrite multiple-argument \tcode{operator[]} expressions as a chain of single-argument \tcode{operator[]} expressions, but only if no viable multiple-parameter \tcode{operator[]} exists.  For instance, if \tcode{a} has a viable three-parameter \tcode{operator[]}, then \tcode{a[x,y,z]} would just be \tcode{a.operator[](x,y,z)}.  However, if \tcode{a} does not -- for instance, if \tcode{a} is \tcode{vector<vector<vector<int>>>} -- then the compiler would rewrite \tcode{a[x,y,z]} as \tcode{a[x][y][z]}.
+
+We do not propose this, but it has some advantages.  First, it would enable writing generic code for C++ array-of array types like \tcode{array<array<T, N>, M>} or \tcode{vector<...<vector<T>>...>}, C arrays-of-arrays, and multidimensional arrays like \tcode{mdspan}.  Users would use the array access operator -- the most appropriate syntax for multidimensional array access, in our view -- for all these types.  Second, the syntax avoids conveying the false impression that subexpressions like \tcode{a[x]} in \tcode{a[x][y][z]} must be valid objects or that they get constructed.  Third, it would work with parameter packs, without further language changes.
+
+This approach would have analogous overload resolution and ambiguity questions as the previous rewrite suggestion.  However, if those questions could be resolved, then we would welcome it as a nonbreaking, follow-on proposal to ours.  We think our proposal satisfies the needs of library types and leaves the door open to future evolution, while making the language easier to understand.
+
+\section{Rewriting schemes aren't needed for a unified array access syntax}
+
+One argument for the above rewriting schemes would be to provide a unified array access syntax, that would work for \tcode{mdspan}, nested C++ types like \tcode{vector<vector<T>>} and \tcode{array<array<T>>}, and C arrays of arrays.  However, one can get much of this effect just by letting \tcode{operator[]} take multiple parameters.  The following example subclasses \tcode{array<T>}, so that if \tcode{T} has an \tcode{operator[]}, then it gets any extra arguments passed to the (outer) \tcode{operator[]}.  This works recursively, for \tcode{array<array<T>>}, \tcode{array<array<array<T>>>}, etc.  We are not proposing this for the C++ Standard, but it illustrates how much one can accomplish with just the small change to the language that this paper proposes.
+
+\begin{colorblock}
+    #include <array>
+    #include <span>
+    
+    template <class From, class To>
+    concept convertible_to =
+      std::is_convertible_v<From, To> &&
+      requires(std::add_rvalue_reference_t<From> (&f)()) {
+        static_cast<To>(f());
+    };
+    
+    template <typename T, std::size_t S>
+    struct array;
+    
+    template <typename T, auto N = 0> 
+    constexpr inline bool _is_array = false;
+    template <typename T, auto N> 
+    constexpr inline bool _is_array<array<T,N>> = true;
+    
+    template <typename T, std::size_t S>
+    struct array : std::array<T, S> 
+    {
+        static constexpr inline std::size_t extent = [] () -> std::size_t {
+            if constexpr(_is_array<T>) {
+                return 1 + T::extent;
+            }
+            return 1;
+        }();
+    
+        constexpr decltype(auto) operator[](std::size_t idx) {
+            return  *(this->data() + idx);
+        }
+    
+        constexpr decltype(auto) operator[](std::size_t idx, convertible_to<std::size_t> auto&&... args)
+        requires (sizeof...(args) < extent) && (sizeof...(args) >= 1)
+        {
+            typename std::array<T, S>::reference v = *(this->data() + idx);
+            return v.operator[](args...);
+        }
+    
+        constexpr decltype(auto) operator[](std::size_t idx) const{
+            return  *(this->data() + idx);
+        }
+    
+        constexpr decltype(auto) operator[](std::size_t idx, convertible_to<std::size_t> auto&&... args) const
+        requires (sizeof...(args) < extent) && (sizeof...(args) >= 1)
+        {
+            typename std::array<T, S>::reference v = *(this->data() + idx);
+            return v.operator[](args...);
+        }
+    };
+\end{colorblock}
+
+This \tcode{array} subclass enables code like the following:
+
+\begin{colorblock}
+    // 2 x 3 array of arrays
+    array aa {array{1, 2, 3}, array{4, 5, 6}};
+    static_assert(decltype(aa)::extent == 2);
+
+    assert( (aa[0,1] == 2) ); // extra parens for macro reasons
+    assert( (aa[1,2] == 6) );
+
+    array bb {array{7, 8, 9}, array{10, 11, 12}};
+    array cc {array{13, 14, 15}, array{16, 17, 18}};
+    array dd {array{19, 20, 21}, array{22, 23, 24}};
+
+    // 4 x 2 x 3 array of arrays of arrays
+    array aaa{ aa, bb, cc, dd };
+    static_assert(decltype(aaa)::extent == 3);
+    assert( (aaa[1, 1, 1] == 11) );
+\end{colorblock}
+
+\section{Nonmember \tcode{operator[]}?}
+
+After our presentation of P2128R3 to EWG, further e-mail list discussion brought up nonmember \tcode{operator[]}.  Permitting this would let users use our proposed \tcode{a[x,y,z]} syntax with existing types that do not use multiple-parameter \tcode{operator[]}, without modifying those types.  This would enable a migration strategy towards adoption of our proposed syntax.  Others suggested that it could be useful for SIMD indexed array access operations.
+
+We think nonmember \tcode{operator[]} is out of scope of this paper, though we would not object to it being considered by a separate follow-on paper.  As a migration strategy, it has the issue that a nonmember \tcode{operator[]} could break in the future, if the class' author later adds a member \tcode{operator[]}.  This would create an ambiguous overload set, and therefore, an ill-formed program.  Nevertheless, there might be motivating use cases.
+
+%\begin{colorblock}
+%template <typename T>
+%struct simd
+%{
+%    friend operator[](ranges::contiguous_range auto & range, stdx::simd<int> idx)
+%    {
+%        for (size_t i = 0; i < idx.size(); ++i)
+%            ++range[idx[i]];
+%    }
+%};
+%\end{colorblock}
 
 \section{Wording}
 
