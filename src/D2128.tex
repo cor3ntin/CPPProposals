@@ -136,7 +136,7 @@ We will go through each in turn, and argue that their disadvantages call out for
 
 \subsection{Function call operator}
 
-One syntax for multidimensional array access is the function call operator taking multiple indices, like this: \tcode{a(x, y, z)}.  In this example, \tcode{a} is a three-dimensional array \tcode{a}, and \tcode{x}, \tcode{y}, and \tcode{z} are the three indices.  Programming languages such as Fortran, Matlab, and Scala use this syntax, as do many C++ libraries (Armadillo, Boost.uBLAS, Eigen, Kokkos) and C++ Standard Library proposals (\tcode{mdspan} (\paper{P0009R10}) and \tcode{mdarray} (\paper{P1684R)}).  \paper{P0009R10} in particular, passed LEWG review in 2018 with this syntax.
+One syntax for multidimensional array access is the function call operator taking multiple indices, like this: \tcode{a(x, y, z)}.  In this example, \tcode{a} is a three-dimensional array \tcode{a}, and \tcode{x}, \tcode{y}, and \tcode{z} are the three indices.  Programming languages such as Fortran, Matlab, and Scala use this syntax, as do many C++ libraries (Armadillo, Boost.uBLAS, Eigen, Kokkos) and C++ Standard Library proposals (\tcode{mdspan} (\paper{P0009R10}) and \tcode{mdarray} (\paper{P1684R)}).  \paper{P0009R10} in particular, passed LEWG review in 2018 with this syntax.  In addition, \href{https://isocpp.org/wiki/faq/operator-overloading#matrix-subscript-op}{the ISO C++ Wiki} recommends this approach over the array-of-array syntax \tcode{a[x][y][z]}.
 
 Use of \tcode{operator()} overloads the same syntax for both array access and calling a function or invocable object.  It's true that array access is a special kind of function, mapping indices to a reference.  However, using the same syntax for both causes several problems.
 
@@ -144,10 +144,7 @@ First, it's not consistent with use of \tcode{operator[]} for one-dimensional ar
 
 Second, function calls in C++ carry no particular semantics, while array access generally implies mapping from indices to a reference (or proxy reference).
 
-Third, interfaces that take both invocables and multidimensional arrays need to distinguish between them easily at compile time, in order to catch errors at compile time and produce more user-friendly error messages.  Suppose that \tcode{combine(f, A, B, C)} applies the binary function \tcode{f} elementwise to the two-dimensional arrays \tcode{A} and \tcode{B}, assigning the results to the elements of \tcode{C}.  In our preferred syntax, the ``inner loop'' would look like this: \tcode{C[i,j] = f(A[i,j], B[i,j])}.  Using the same syntax for array access and function calls might mean that mixing up the order of \tcode{f} and \tcode{A} makes the call to \tcode{combine} compile (resulting in run-time errors), or at least fail with more mysterious build errors.
-In particular, a type with a call operator used for indexing might incorrectly satisfy the requierement of the \tcode{invocable} concept.
-
-The proliferation of asynchronous interfaces that take callbacks makes it even more important to catch errors at compile time. 
+Third, interfaces that take both invocables and multidimensional arrays need to distinguish between them easily at compile time, in order to catch errors at compile time and produce more user-friendly error messages.  A type with a call operator used for indexing might incorrectly satisfy the requirements of the \tcode{invocable} concept.  The proliferation of asynchronous interfaces that take callbacks makes it even more important to catch errors at compile time.  Suppose that \tcode{combine(f, A, B, C)} applies the binary function \tcode{f} elementwise to the two-dimensional arrays \tcode{A} and \tcode{B}, assigning the results to the elements of \tcode{C}.  In our preferred syntax, the ``inner loop'' would look like this: \tcode{C[i,j] = f(A[i,j], B[i,j])}.  Using the same syntax for array access and function calls might mean that mixing up the order of \tcode{f} and \tcode{A} makes the call to \tcode{combine} compile (resulting in run-time errors), or at least fail with more mysterious build errors.
 
 Fourth, many of the C++ libraries that use \tcode{operator()} for array access also provide \tcode{operator[]} for one-dimensional arrays.  This includes Armadillo, Boost.uBLAS, \tcode{boost::multi_array}, Eigen, and Kokkos.  Users of these libraries prefer \tcode{operator[]} or at least want to be able to write generic code that works for C++'s other one-dimensional array types.  In Kokkos' case at least, the library's authors consider \tcode{operator()} merely a work-around for \tcode{operator[]} not taking multiple arguments.
 
@@ -169,22 +166,23 @@ Third, \tcode{a[x][y]} strongly suggests an array of arrays, perhaps even a C ar
 
 Fourth, the notations \tcode{a(x,y,z)} or \tcode{a[x,y,z]} are more friendly to pack expansion than \tcode{a[x][y][z]}.  It might be possible to extend pack expansion to support a chain of 1-argument \tcode{operator[]}, but that would require a more substantial change to C++ than what we propose.
 
+The \href{https://isocpp.org/wiki/faq/operator-overloading#matrix-array-of-array}{ISO C++ Wiki} argues insistently against this syntax.  Most C++ libraries that provide multidimensional arrays have also chosen against it.
+
 \subsection{Array access operator taking a struct of indices}
 
-Microsoft AMP's \tcode{array} type has an \tcode{operator[]} with a single parameter of type \tcode{index<Rank>}.  This is a \tcode{tuple}-like type, where \tcode{Rank} is the array's number of dimensions.  Users who do not want to construct \tcode{index<Rank>} on each array access can use the syntax \tcode{a[\{x, y, z\}]} (for example), where \tcode{a} is a three-dimensional array \tcode{a}, and \tcode{x}, \tcode{y}, and \tcode{z} are the three indices.  One advantage to this approach is that users can reason about a multidimensional index as a unit.  However, this syntax has greater inlining requirements per array expression: the \tcode{index<Rank>} object must be constructed, and then unpacked to get the indices.  Also, there is no precedent for this \tcode{a[\{x, y, z\}]} syntax in other languages. And as with \tcode{operator()}, the syntax for multidimentional subscript remains inconsistent with one-dimentional ones (\tcode{array[x]}) vs \tcode{array[\{x,y\}]}).
+Microsoft AMP's \tcode{array} type has an \tcode{operator[]} with a single parameter of type \tcode{index<Rank>}.  This is a \tcode{tuple}-like type, where \tcode{Rank} is the array's number of dimensions.  Users who do not want to construct \tcode{index<Rank>} on each array access can use the syntax \tcode{a[\{x, y, z\}]} (for example), where \tcode{a} is a three-dimensional array \tcode{a}, and \tcode{x}, \tcode{y}, and \tcode{z} are the three indices.  One advantage to this approach is that users can reason about a multidimensional index as a unit.  However, this syntax has greater inlining requirements per array expression: the \tcode{index<Rank>} object must be constructed, and then unpacked to get the indices.  Also, there is no precedent for this \tcode{a[\{x, y, z\}]} syntax in other languages. Furthermore, as with \tcode{operator()}, the syntax for multidimensional array access remains inconsistent with that for one-dimensional array access (\tcode{a[{x,y,z}]}) vs.\ \tcode{a[x]}).
 
 \subsection{General interest and existing practices}
 
-The problem this paper solves comes frequently enough that it is the object of a dedicated question on \href{https://isocpp.org/wiki/faq/operator-overloading#matrix-subscript-op}{isocpp.org},
-and is the object of \href{https://stackoverflow.com/questions/7032743/can-cs-operator-take-more-than-one-argument}{multiple} Stackoverflow \href{https://stackoverflow.com/questions/1936399/c-array-operator-with-multiple-arguments/1936410}{questions}.
+The problem this paper solves arises often enough that it is the object of a dedicated question on \href{https://isocpp.org/wiki/faq/operator-overloading#matrix-subscript-op}{the ISO C++ Wiki}.  It is also the object of \href{https://stackoverflow.com/questions/7032743/can-cs-operator-take-more-than-one-argument}{multiple} Stack Overflow \href{https://stackoverflow.com/questions/1936399/c-array-operator-with-multiple-arguments/1936410}{questions}.
 
-Multiple languages offer a multidimensional indexing syntax identical to the one we propose, notably Python, D, Swift, Julia, C\#, R, Ruby,Raku.
+Multiple languages offer a multidimensional indexing syntax identical to the one we propose, notably C\#, D, Julia, Python, R, Raku, Ruby, and Swift.
 
 Mathematica use a slightly different syntax: \tcode{array[[1, 2]]}.
 
 \subsection{Summary}
 
-The array access operator carries the right meaning for array types in C++, no matter how many dimensions they have.  C++ developers see it and immediately know that it maps an index to a reference or reference-like type.  For instance, the function call operator is too generic, while a chain of single-argument array accesses is too specific to arrays-of-arrays.  While the notation \tcode{a[\{x, y, z\}]} at least uses the array access operator, the extra level of punctuation is unprecedented, and has potential performance issues.  Forcing different punctuation for single-dimensional and multi-dimensional array access is a mistake that other languages do not make, regardless of what symbol they use.  In C++, \tcode{a[x, y, z]} is the right notation for multidimensional array access.
+The array access operator carries the right meaning for array types in C++, no matter how many dimensions they have.  C++ developers see it and immediately know that it maps an index to a reference or reference-like type.  Other notations have the wrong semantics.  For instance, the function call operator is too generic, while a chain of single-argument array accesses is too specific to arrays-of-arrays.  While the notation \tcode{a[\{x, y, z\}]} at least uses the array access operator, the extra level of punctuation is unprecedented, and has potential performance issues.  Forcing different punctuation for single-dimensional and multi-dimensional array access is a mistake that other languages do not make, regardless of what symbol they use.  In C++, \tcode{a[x, y, z]} is the right notation for multidimensional array access.
 
 %\subsection{Scientific community expectations}
 
@@ -225,7 +223,7 @@ If there are users of \tcode{valarray} interested in this feature, this can be d
 
 \subsection{What about \tcode{[foo][bar]}?}
 
-As mentioned in \paper{P1161R3}, an \tcode{operator[]} can return an object which has itself an \tcode{operator[]}.
+As mentioned in \paper{P1161R3}, an \tcode{operator[]} can return an object which itself has an \tcode{operator[]}.
 Therefore chaining multiple \tcode{[]} to index a single object isn't a viable proposal on its own.
 However, in the section below we explore whether a compiler could rewrite \tcode{a[x][y][z]} as \tcode{a.operator[](x, y, z))}
 and the challenges with that approach.
@@ -250,10 +248,11 @@ The main issue with this approach, is that it would make some currently ill-form
 void call(std::function<void(int)>* fp) {
     fp(4);
 }
+/* ... */
 std::function<void(int)> f = [] () {
     std::cout << "Hi!" << std::endl;
     return;
-}
+};
 call(&f);
 \end{colorblock}
 
@@ -614,7 +613,7 @@ Github: \url{https://github.com/cor3ntin/llvm-project/tree/subscript}
 
 Thanks to Jens Maurer for his patient help with the wording, and to the many people who provided valuable feedback.
 Thanks to Matt Godbolt for hosting an experimental compiler with the implementation
-of this proposal on compiler explorer.
+of this proposal on Compiler Explorer.
 
 \section{References}
 \renewcommand{\section}[2]{}%
