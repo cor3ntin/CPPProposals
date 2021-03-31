@@ -39,14 +39,6 @@
                 allcolors=blue,
                 plainpages=false
                ]{hyperref}
-\RequirePackage[active,
-                header=false,
-                handles=false,
-                copydocumentclass=false,
-                generate=std-gram.ext,
-                extract-cmdline={gramSec},
-                extract-env={bnftab,simplebnf,bnf,bnfkeywordtab}
-               ]{extract} % Grammar extraction
 \RequirePackage[dvipsnames]{xcolor}
 \RequirePackage{soul}
 \usepackage{ulem}
@@ -63,7 +55,7 @@
 \RequirePackage{url}
 \usepackage{csquotes}
 \RequirePackage{luatex85}
-\usepackage{footnote}
+%\usepackage{footnote}
 \usepackage{enumitem}
 \usepackage{makecell}
 \usepackage{longtable}
@@ -217,10 +209,6 @@
 
 \makeatletter
 \newcommand{\FlushAndPrintGrammar}{%
-\immediate\closeout\XTR@out%
-\immediate\openout\XTR@out=std-gram-dummy.tmp%
-\def\gramSec[##1]##2{\rSec1[##1]{##2}}%
-\input{std-gram.ext}%
 }
 \renewcommand{\@seccntformat}[1]{}
 \makeatother
@@ -369,7 +357,7 @@
 
 
 \newcommand{\indexdefn}[1]{\indextext{#1}}
-\newcommand{\indexgrammar}[1]{\indextext{#1}\indexgram{#1}}
+\newcommand{\indexgrammar}[1]{}
 \newcommand{\impldef}[1]{\indeximpldef{#1}implementation-defined}
 
 
@@ -453,7 +441,9 @@
 %% Notes and examples
 \newcommand{\noteintro}[1]{[\,\textit{#1:}\space}
 \newcommand{\noteoutro}[1]{\textit{\,---\,end #1}\,]}
+\renewenvironment{footnote}[1][Footnote]{\noteintro{#1}}{\noteoutro{wgfootnote}\xspace}
 \newenvironment{note}[1][Note]{\noteintro{#1}}{\noteoutro{note}\xspace}
+
 \newenvironment{example}[1][Example]{\noteintro{#1}}{\noteoutro{example}\xspace}
 
 %% Library function descriptions
@@ -569,7 +559,7 @@
 \newcommand{\cv}{\cvqual{cv}}
 \renewcommand{\emph}[1]{\textit{#1}\xspace}
 \newcommand{\numconst}[1]{\textsl{#1}\xspace}
-\newcommand{\logop}[1]{{\footnotesize #1}\xspace}
+%\newcommand{\logop}[1]{{\footnotesize #1}\xspace}
 
 %%--------------------------------------------------
 %% Environments for code listings.
