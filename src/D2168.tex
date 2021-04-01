@@ -775,7 +775,6 @@ public:
 
     class iterator; // \expos
 
-    generator() noexcept = default;
     generator(const generator &other) = delete;
     generator(generator && other) noexcept;
 
@@ -828,12 +827,10 @@ Initializes \tcode{coroutine_} with \tcode{exchange(other.coroutine_, \{\})}, \\
 \begin{itemdescr}
     \effects equivalent to:
     \begin{codeblock}
-    if (coroutine_) {
-        if (started_ && !coroutine_.done()) {
-            coroutine_.promise().destruct_value_();
-        }
-        coroutine_.destroy();
+    if (started_ && !coroutine_.done()) {
+        coroutine_.promise().destruct_value_();
     }
+    coroutine_.destroy();
     \end{codeblock}
 \end{itemdescr}
 
@@ -859,7 +856,7 @@ iterator begin();
 \begin{itemdescr}
 \preconditions
 \begin{itemize}
-\item \tcode{!coroutine_} is \tcode{true} or \tcode{coroutine_} refers to a coroutine
+\item \tcode{coroutine_} refers to a coroutine
 suspended at its initial suspend-point,
 \item \tcode{started_} is false.
 \end{itemize}
@@ -867,10 +864,8 @@ suspended at its initial suspend-point,
 \effects
 Equivalent to:
 \begin{codeblock}
-    if(coroutine_) {
-        started_ = true;
-        coroutine_.resume();
-    }
+    started_ = true;
+    coroutine_.resume();
     return iterator(coroutine_);
 \end{codeblock}
 
@@ -1124,15 +1119,13 @@ public:
     using value_type = promise_type::value_type;
     using reference = promise_type::reference;
 
-    iterator() noexcept = default;
-
     iterator(const iterator&) = delete;
 
     iterator(iterator&& other) noexcept;
 
     iterator& operator=(iterator&& other) noexcept;
 
-    explicit iterator(std::coroutine_handle<promise_type> coroutine) noexcept; // \expos
+
 
     bool operator==(default_sentinel_t) const noexcept;
 
@@ -1140,7 +1133,10 @@ public:
     void operator++(int);
 
     reference operator*() const noexcept(std::is_nothrow_copy_constructible_v<reference>);
-
+ 
+private:
+    friend class generator<Ref, Value, Allocator>;
+    explicit iterator(std::coroutine_handle<promise_type> coroutine) noexcept; // \expos
 };
 
 \end{codeblock}
@@ -1179,7 +1175,7 @@ bool operator==(default_sentinel_t) const noexcept
 \end{itemdecl}
 
 \begin{itemdescr}
-\returns \tcode{!coroutine_ || coroutine_.done()}.
+\returns \tcode{coroutine_.done()}.
 \end{itemdescr}
 
 \begin{itemdecl}
@@ -1187,7 +1183,7 @@ iterator& operator++();
 \end{itemdecl}
 
 \begin{itemdescr}
-\precondition \tcode{coroutine_ \&\& !coroutine_.done()} is \tcode{true}.
+\precondition \tcode{!coroutine_.done()} is \tcode{true}.
 
 \effects
 Equivalent to:
@@ -1204,7 +1200,7 @@ void operator++(int);
 \end{itemdecl}
 
 \begin{itemdescr}
-\precondition \tcode{coroutine_ \&\& !coroutine_.done()} is \tcode{true}.
+\precondition \tcode{!coroutine_.done()} is \tcode{true}.
 
 \effects
 Equivalent to:
@@ -1220,7 +1216,7 @@ noexcept (noexcept(std::is_nothrow_copy_constructible_v<reference>));
 \end{itemdecl}
 
 \begin{itemdescr}
-\precondition \tcode{coroutine_ \&\& !coroutine_.done()} is \tcode{true}.
+\precondition \tcode{!coroutine_.done()} is \tcode{true}.
 
 \effects
 Equivalent to:
