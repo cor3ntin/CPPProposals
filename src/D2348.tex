@@ -18,7 +18,7 @@
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 \newcommand{\cwhitespace}[1]{\removed{#1} \added{\grammarterm{whitespace}}}
-\newcommand{\cwhitespaces}[1]{\removed{#1} \added{\grammarterm{whitespace}{s}}}
+\newcommand{\cwhitespaces}[1]{\removed{#1} \added{\grammarterm{whitespace}}}
 \newcommand{\chwhitespace}[1]{\removed{#1} \added{\grammarterm{horizontal-whitespace}}}
 \newcommand{\chwhitespaces}[1]{\removed{#1} \added{\grammarterm{horizontal-whitespace}{s}}}
 \newcommand{\clb}[1]{\removed{#1} \added{\grammarterm{line-break}}}
@@ -27,10 +27,9 @@
 
 \maketitle
 
-section{Abstract}
+\section{Abstract}
 
-This paper clarifies what constitutes a whitespace and a line break for the purpose of lexing and
-separate the notion of new-line in strings from line breaks in grammars.
+This paper clarifies what constitutes a whitespace and a line break for the purpose of lexing and separates the notion of new-line in strings from line breaks in grammars.
 
 \section{Design}
 
@@ -41,18 +40,21 @@ No breaking behavior change is intended.
 
 For clarity, this paper introduces a grammar for whitespaces, including comments, and then refers to whitespace as grammar terms.
 This also makes it easier to later extend the list of whitespaces.
+However, the questions of extending the list of Unicode characters
+treated as whitespace is not explored in this paper.
+Non-Unicode source encoding would continue to map their set of whitespaces and new-line to what is currently designated in the standard: CR, FF, LF, VT, SPACE, TAB.
 
-\subsection{comments}
+\subsection{Comments}
 
-The proposed wording change make vertical tabs end // comments, rather than make them ill-formed no diagnostic requiered.
-This is consistent with Unicode whicch consider vertical tab and form feed to be line breaks.
-An alternative would be to make vertical tabs in comments ill-formed. But this would not be consistent with unicode guidelines.
+The proposed wording change makes vertical tabs end // comments, rather than make them ill-formed no diagnostic required.
+This is consistent with Unicode which considers vertical tab and form feed to be line breaks.
+An alternative would be to make vertical tabs in comments ill-formed. But this would not be consistent with Unicode guidelines.
 
 \subsection{Replace the term \grammarterm{new-line} by \grammarterm{line-break}}
 
 \tcode{new-line} in the wording refers to both an unspecified character to which all source line terminator map to and
 a specific, implementation-defined character in the literal character set.
-Using different terminology makes it clearer which is which. 
+Using different terminology makes it clearer which is which.
 
 \subsection{Do not perform whitespace replacement}
 
@@ -62,13 +64,13 @@ This fixes \paper{CWG2002}. The list is sufficient to address the needs of \pape
 
 \subsection{The set of character is not expended}
 
-We do not propose new characters as whitespaces. 
+We do not propose new characters as whitespaces.
 However, following Unicode guidelines, we clarify that CRLF is to be considered a single line break.
 
 \subsection{Raw-string literals}
 
-For clarity, that line-break are mapped to a new-line in raw-string-literal is made normative.
-We intend that this paper addresses \paper{1655}.
+For clarity, that line-breaks are mapped to a new-line in raw-string-literal is made normative.
+We intend that this paper addresses \paper{CWG1655}.
 
 \subsection{Line splicing}
 
@@ -100,7 +102,7 @@ following phases.
     file as a \grammarterm{universal-character-name} (e.g., using the \tcode{\textbackslash
         uXXXX} notation), are handled equivalently
     except where this replacement is reverted\iref{lex.pptoken} in a raw string literal.
-    
+
     \item
     \indextext{line splicing}%
     Each instance of a backslash character (\textbackslash)
@@ -116,12 +118,12 @@ following phases.
     backslash character before any such splicing takes place,
     shall be processed as if an additional \clb{new-line character} were appended
     to the file.
-    
+
     \item The source file is decomposed into preprocessing
     tokens\iref{lex.pptoken} and \cwhitespaces{sequences of whitespace characters
     (including comments)}. A source file shall not end in a partial
     preprocessing token or in a partial comment.
-    \removed{Each comment is replaced by one space character}. \clb{New-line characters} are
+    \removed{Each comment is replaced by one space character}. \changed{New-line characters are}{Each \grammarterm{line-break} is}
     retained. \removed{Whether each nonempty sequence of whitespace characters other
     than new-line is retained or replaced by one space character is
     unspecified.} The process of dividing a source file's
@@ -130,7 +132,7 @@ following phases.
         See the handling of \tcode{<} within a \tcode{\#include} preprocessing
         directive.
     \end{example}
-    
+
     \item Preprocessing directives are executed, macro invocations are
     expanded, and \tcode{_Pragma} unary operator expressions are executed.
     If a character sequence that matches the syntax of a
@@ -139,7 +141,7 @@ following phases.
     \tcode{\#include} preprocessing directive causes the named header or
     source file to be processed from phase 1 through phase 4, recursively.
     All preprocessing directives are then deleted.
-    
+
     \item
     Each
     \grammarterm{basic-c-char},
@@ -151,12 +153,12 @@ following phases.
     in a \grammarterm{character-literal} or a non-raw string literal,
     is encoded in the literal's associated character encoding as specified in
     \ref{lex.ccon} and \ref{lex.string}.
-    
+
     \item
     Adjacent \grammarterm{string-literal}s are concatenated
     and a null character is appended to the result
     as specified in \ref{lex.string}.
-    
+
     \item \cwhitespaces{Whitespace characters} separating tokens are no longer
     significant. Each preprocessing token is converted into a
     token\iref{lex.token}. The resulting tokens are syntactically and
@@ -278,8 +280,8 @@ as they serve to separate tokens.
 
 \begin{bnf}
     \nontermdef{comment}\br
-    \textnormal{// any character except} line-break\br
-    \textnormal{/* any character */}\br
+    \textnormal{// any member of the basic source character set except} line-break\br
+    \textnormal{/* any member of the basic source character set */}\br
 \end{bnf}
 
 \begin{bnf}
@@ -293,7 +295,7 @@ as they serve to separate tokens.
 
 \begin{bnf}
     \nontermdef{horizontal-whitespace-character}\br
-    \textnormal{U+0009 HORIZONTAL TAB}\br 
+    \textnormal{U+0009 HORIZONTAL TAB}\br
     \textnormal{U+0020 SPACE}\br
 \end{bnf}
 
@@ -728,7 +730,7 @@ and is
 \begin{itemize}
     \item
     a \tcode{\#} preprocessing token, or
-    
+
     \item
     an \keyword{import} preprocessing token
     immediately followed on the same logical line by a
@@ -738,7 +740,7 @@ and is
     \grammarterm{string-literal}, or
     \tcode{:}
     preprocessing token, or
-    
+
     \item
     a \keyword{module} preprocessing token
     immediately followed on the same logical line by an
@@ -746,7 +748,7 @@ and is
     \tcode{:}, or
     \tcode{;}
     preprocessing token, or
-    
+
     \item
     an \keyword{export} preprocessing token
     immediately followed on the same logical line by
@@ -777,17 +779,17 @@ is immediately followed by \cwhitespace{whitespace} containing a \clb{new-line c
         export import "squee";  // preprocessing directive
         import rightpad;        // preprocessing directive
         import :part;           // preprocessing directive
-        
+
         module                  // not a preprocessing directive
         ;                       // not a preprocessing directive
-        
+
         export                  // not a preprocessing directive
         import                  // not a preprocessing directive
         foo;                    // not a preprocessing directive
-        
+
         export                  // not a preprocessing directive
         import foo;             // preprocessing directive (ill-formed at phase 7)
-        
+
         import ::               // not a preprocessing directive
         import ->               // not a preprocessing directive
     \end{codeblock}
@@ -1154,7 +1156,7 @@ are skipped.%
 \begin{example}
     This demonstrates a way to include a library \tcode{optional} facility
     only if it is available:
-    
+
     \begin{codeblock}
         #if __has_include(<optional>)
         #  include <optional>
@@ -1313,14 +1315,14 @@ is instead replaced by an \tcode{import} directive\iref{cpp.import} of the form
     with the implementation and the \tcode{" "} form for sources
     outside the control of the implementation
     achieves wider portability. For instance:
-    
+
     \begin{codeblock}
         #include <stdio.h>
         #include <unistd.h>
         #include "usefullib.h"
         #include "myprog.h"
     \end{codeblock}
-    
+
 \end{note}
 
 \pnum
@@ -1328,7 +1330,7 @@ is instead replaced by an \tcode{import} directive\iref{cpp.import} of the form
     This illustrates macro-replaced
     \tcode{\#include}
     directives:
-    
+
     \begin{codeblock}
         #if VERSION == 1
         #define INCFILE  "vers1.h"
@@ -1611,11 +1613,11 @@ the behavior is undefined.
     and generating more code than a function if invoked several times.
     It also cannot have its address taken,
     as it has none.
-    
+
     \begin{codeblock}
         #define max(a, b) ((a) > (b) ? (a) : (b))
     \end{codeblock}
-    
+
     The parentheses ensure that the arguments and
     the resulting expression are bound properly.
 \end{example}
@@ -1655,8 +1657,8 @@ Let the \defn{stringizing argument} be the preprocessing token sequence
 for the corresponding argument with placemarker tokens removed.
 Each occurrence of \cwhitespace{whitespace} between the stringizing argument's preprocessing
 tokens becomes a single space character in the character string literal.
-\added{Any} \cwhitespace{Whitespace} before the first preprocessing token and after the last
-preprocessing token comprising the stringizing argument is deleted.
+\added{All} \cwhitespace{Whitespace} before the first preprocessing token and after the last
+preprocessing token comprising the stringizing argument \changed{is}{are} deleted.
 Otherwise, the original spelling of each preprocessing token in the
 stringizing argument is retained in the character string literal,
 except for special handling for producing the spelling of
@@ -1736,7 +1738,7 @@ operators is unspecified.
         #define xglue(a, b) glue(a, b)
         #define HIGHLOW     "hello"
         #define LOW         LOW ", world"
-        
+
         debug(1, 2);
         fputs(str(strncmp("abc@\textbackslash@0d", "abc", '@\textbackslash@4')        // this goes away
         == 0) str(: @\atsign\textbackslash@n), s);
@@ -1760,7 +1762,7 @@ operators is unspecified.
         "hello";
         "hello, world"
     \end{codeblock}
-    
+
     \cwhitespace{Space} around the \tcode{\#} and \tcode{\#\#} tokens in the macro definition
     is optional.
 \end{example}
@@ -1768,7 +1770,7 @@ operators is unspecified.
 \pnum
 \begin{example}
     In the following fragment:
-    
+
     \begin{codeblock}
         #define hash_hash # ## #
         #define mkstr(a) # a
@@ -1776,9 +1778,9 @@ operators is unspecified.
         #define join(c, d) in_between(c hash_hash d)
         char p[] = join(x, y);          // equivalent to \tcode{char p[] = "x \#\# y";}
     \end{codeblock}
-    
+
     The expansion produces, at various stages:
-    
+
     \begin{codeblock}
         join(x, y)
         in_between(x hash_hash y)
@@ -1786,7 +1788,7 @@ operators is unspecified.
         mkstr(x ## y)
         "x ## y"
     \end{codeblock}
-    
+
     In other words, expanding \tcode{hash_hash} produces a new token,
     consisting of two adjacent sharp signs, but this new token is not the
     \tcode{\#\#} operator.
@@ -1935,9 +1937,12 @@ has no effect.
 
 \renewcommand{\section}[2]{}%
 \begin{thebibliography}{9}
-     
+
+\bibitem[N4885]{N4885}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4885}
+
 \end{thebibliography}
-
-
 
 \end{document}
