@@ -18,7 +18,7 @@
 \newcommand{\UnicodeLetter}[1]{\textbf{\textcolor{BrickRed}{\Large\tcode{#1}}}}
 
 \title{Trimming whitespaces before line splicing}
-\docnumber{P2223R1}
+\docnumber{P2223R2}
 \audience{EWG, CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -34,6 +34,11 @@ We propose to make trailing whitespaces after \textbackslash \ non-significant.
 This paper has been extracted from \paper{P2178R0} and is part of a larger effort from SG-16 to improve lexing.
 
 \section{Revisions}
+
+\subsection*{Revision 2}
+\begin{itemize}
+    \item Wording changes as per CWG review (April 14).
+\end{itemize}
 
 \subsection*{Revision 1}
 \begin{itemize}
@@ -140,11 +145,17 @@ Modify 5.2.1.2 of [N4861] as follows:
 
 \rSec1[lex.phases]{Phases of translation}%
 
-Each instance of a backslash character (\textbackslash)
-immediately followed \added{by zero or more whitespace characters (other than new-line) followed by} a new-line character is deleted, splicing
+Each \changed{instance}{sequence} of a backslash character (\textbackslash)
+immediately followed \added{by zero or more whitespace characters other than new-line followed by} a new-line character is deleted, splicing
 physical source lines to form logical source lines. Only the last
 backslash on any physical source line shall be eligible for being part
-of such a splice. [...]
+of such a splice.
+Except for splices reverted in a raw string literal, if a splice results in
+a character sequence that matches the
+syntax of a \grammarterm{universal-character-name}, the behavior is
+undefined. A source file that is not empty and that does not end in a new-line character, or that ends in a \changed{new-line character immediately preceded by a backslash character before any such splicing takes place}{splice},
+shall be processed as if an additional new-line character were appended
+to the file.
 
 
 \section{References}

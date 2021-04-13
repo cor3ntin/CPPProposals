@@ -4,22 +4,19 @@
 
 \RequirePackage{luatex85}
 
-
 \documentclass{wg21}
 
 
-
-\newcommand{\UnicodeLetter}[1]{\textbf{\textcolor{BrickRed}{\Large\tcode{#1}}}}
-
 \title{Support for UTF-8 as a portable source file encoding}
-\docnumber{P2295R1}
+\docnumber{P2295R2}
 \audience{SG-16, EWG, SG-22}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 \begin{document}
+    
 \maketitle
 
-\paperquote{We should have some notion of a portable C++ source file, and without a known fixed encoding it's hard to argue that such a thing exists - Richard Smith}
+\paperquote{We should have some notion of a portable C++ source file, and without a known fixed encoding it's hard to argue that such a thing exists --- Richard Smith}
 
 \section{Credits}
 
@@ -34,6 +31,13 @@ We propose that UTF-8 source files should be supported by all C++ compilers.
 
 \section{Revisions}
 
+\subsection{R2}
+\begin{itemize}
+    \item Add references for BOM guidelines
+    \item Clarify that Clang will support a wider range of source encodings in the future
+    \item Clarify that phase 5 codepoint preservation is handled by \paper{P2314R1}.
+\end{itemize}
+
 \subsection{R1}
 \begin{itemize}
     \item Remove the section about whitespaces and associated wording
@@ -46,18 +50,18 @@ We propose that UTF-8 source files should be supported by all C++ compilers.
 \begin{codeblock}
     int main() {}
 \end{codeblock}
- - Beman Dawes
+ --- Beman Dawes
 \end{quoteblock}
 
 The set of source file character sets is implementation-defined, which makes writing portable C++ code impossible.
-We proposed to mandate that C++ compilers must accept UTF-8 as an input format. Both to increase portability and
+We propose to mandate that C++ compilers must accept UTF-8 as an input format both to increase portability and
 to ensure that Unicode related features (ex \paper{P1949R3}) can be used widely.
 This would also allow us to better specify how Unicode encoded files are handled.
 
 How the source file encoding is detected, and which other input formats are accepted would remain implementation-defined.
 Supporting UTF-8 would also not require mentioning files in the wording, the media providing the stream of UTF-8 data is not important.
 
-Most C++ compilers ( GCC, EDG, MSVC, Clang) support utf8 as one of their input format - Clang only supports utf8 (but there is an ongoing effort to extend the set of supported
+Most C++ compilers (GCC, EDG, MSVC, Clang) support UTF-8 as one of their input format - Clang only supports UTF-8 (but there is an ongoing effort to extend the set of supported
 source encodings).
 
 \section{Previous works}
@@ -70,14 +74,14 @@ More recent discussions about Normalizxation preservation, whitespaces, and UTF 
 \subsection{Codepoint preservations}
 
 An important reason to mandate support for UTF-8 support is that it allows us to mandate codepoint preservation during lexing:
-The compiler should not try to normalize utf encoded strings, remove characters, and so forth so that users can expect the content
+the compiler should not try to normalize UTF encoded strings, remove characters, and so forth so that users can expect the content
 of strings to be preserved through translation.
 (This does not negate that neither the source encoding nor the encoding used internally by the compiler are unobservable by the program).
 
 \subsection{Invalid code units}
 
 Not all code units or code unit sequences represent valid code points.
-For example, in UTF8, some sequences can be overlong(\tcode{0xC0 0xAF}).
+For example, in UTF-8, some sequences can be overlong (\tcode{0xC0 0xAF}).
 
 In other encodings, some code unit sequences may encode an unassigned code point, which therefore cannot be represented in Unicode.
 For example \tcode{0x8 0x00} is an unallocated JIS X 0208:1997 sequence.
@@ -91,9 +95,9 @@ As such, the compiler is interpreting the source file incorrectly and the result
 resulting in compilation failures or bad interpretation of string literals further down the line.
 
 The issue can sometimes be innocuous:
-Frequently, non-ASCII characters appear in comments of files that otherwise only contain ASCII, usually when the name of
+frequently, non-ASCII characters appear in comments of files that otherwise only contain ASCII, usually when the name of
 a maintainer appears in a source file.
-However, most mojibake cannot be detected. If the compiler detects invalid characters in comments, there may be undetectable
+However, most mojibake (encoding miss-interpretation issues) cannot be detected. If the compiler detects invalid characters in comments, there may be undetectable
 mojibake in string literals, which would lead to runtime bugs.
 
 Therefore, we think invalid code unit sequences in phase 1 should always be diagnosed.
@@ -111,16 +115,19 @@ The only time the Unicode is relevant during lexing is for checking whether an i
 
 \subsection{BOM}
 
-Unlike \paper{N3463}, we do not intend to mandate or say anything about BOMs (Byte Order Mark), following Unicode recommendations.
+Unlike \paper{N3463}, we do not intend to mandate or say anything about BOMs (Byte Order Mark), following Unicode recommendations \cite{BOM}.
 BOMs should be ignored (but using BOMs as a means to detect UTF-8 files is a valid implementation strategy, which is notably used by MSVC).
 Indeed, we should give enough freedom to implementers to handle the cases where a BOM contradicts a compiler flag.
 Web browsers for example found a BOM to not be a reliable mechanism.
-There are further issues with BOMs and toolings, such that they may be removed by IDEs or tooling.
+There are further issues with BOMs and toolings, such that they may be removed by IDEs or source refactoring tools.
 They are also widely used, and different companies have different policies.
 
 In any case, mandating BOM recognition goes against Unicode recommendations\footnote{Unicode 13 Standard, and confirmed in a \href{https://corp.unicode.org/mailman/private/unicode/2020-June/008716.html}{mailing list discussion} with members of the Unicode consortium}. But it is a widespread practice, and as such we recommend neither mandating nor precluding any behavior.
 
+\pagebreak
+
 For the purpose of translation, a leading BOM is therefore ignored (and doesn't affect the column count of \tcode{source_location::column()}).
+\footnote{Unicode Standard, 23.8: \emph{In those cases, it is not part of the textual content and should be removed before processing, because otherwise it may be mistaken for a legitimate zero width no-break space}.}.
 
 \section{Non goals}
 
@@ -128,16 +135,16 @@ Other existing and upcoming papers try to improve various aspects of lexing rela
 and \paper{P2194R0}.
 This paper only focuses on the handling of UTF-8 physical source files.
 
-In particular, it doesn't try to provide a standard  way to specify or detect encoding for the current translation unit or current source file:
-This proposal conserves the status quo: The mechanism by which encoded is inferred by the compiler for each source file remains implementation-defined.
+In particular, it doesn't try to provide a standard  way to specify or detect encoding for the current translation unit or current source file. This proposal conserves the status quo: the mechanism by which encoded is inferred by the compiler for each source file remains implementation-defined.
 
 We further do not propose to restrict in any way the set of input encodings or "physical source character set"
 accepted by compiler beyond mandating that this implementation-defined set contains at least the UTF-8 encoding.
 
 We do not propose a standard mechanism to specify a different encoding per header. This may be explored in a separate paper.
 
-Finally, conservation of code point sequences in phase 5 of translation when encoding a narrow literal character or string in the utf-8
+Finally, conservation of code point sequences in phase 5 of translation when encoding a narrow literal character or string in the UTF-8
 encoding is not proposed in this paper which focuses on phase 1 of translation.
+This is covvered by \paper{P2314R1}.
 
 
 
@@ -151,7 +158,7 @@ MSVC, EDG, Clang, GCC support compiling UTF-8 source files.
 \item Currently (Clang 11), Clang only support UTF-8 and assume all files are UTF-8. BOMs are ignored.
 \item GCC supports UTF-8 through iconv and the command line flag \tcode{-finput-charset=UTF-8} can be used to interpret source files as UTF-8.
 The default encoding is inferred from the environment and fallbacks to UTF-8 when not possible. BOMs are ignored.
-\item MSVC supports UTF-8 source files with the \tcode{/source-charset:utf-8} command line flag. MSVC uses UTF-8 by default when a BOM is present.
+\item MSVC supports UTF-8 source files with the \tcode{/source-charset:UTF-8} command line flag. MSVC uses UTF-8 by default when a BOM is present.
 \end{itemize}
 
 
@@ -188,41 +195,51 @@ For example, for MSVC, the flags \tcode{/source-charset:utf-8 /we4828} are suffi
 \subsection{UTF-8 source files is existing practice}
 
 \begin{itemize}
-    \item By default, VCPKG compiles all the packages in its repository with \tcode{/utf-8} - which sets utf-8 as the source AND execution encoding (\href{https://github.com/vicroms/vcpkg/blob/master/scripts/toolchains/windows.cmake#L16}{Reference})
-    \item Qt source files are UTF-8 - Users of Qt are recommemded to use UTF-8 source files (\href{https://wiki.qt.io/Strings_and_encodings_in_Qt}{Reference})
+    \item By default, VCPKG compiles all the packages in its repository with \tcode{/utf-8} - which sets UTF-8 as the source AND execution encoding (\href{https://github.com/vicroms/vcpkg/blob/master/scripts/toolchains/windows.cmake#L16}{Reference})
+    \item Qt source files are UTF-8 - Users of Qt are recommended to use UTF-8 source files (\href{https://wiki.qt.io/Strings_and_encodings_in_Qt}{Reference})
     \item Chromium is built with UTF-8 (by virtue of being compiled with Clang)
 \end{itemize}
-
+\pagebreak
 \section{SG16 Polls}
 
 See \href{https://github.com/sg16-unicode/sg16-meetings/blob/master/README-2020.md}{Minutes for P2178}
 
-\begin{codeblock}
-
-
+\begin{quoteblock}
 It should be implementation-defined whether a UTF-8 BOM is used to inform the encoding of a source file
-SF	F	N	A	SA
-4	3	1	2	0
-Consensus is in favor
+\\\\    
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+SF & F & N & A & SA \\
+\hline
+4 & 3 & 1 & 2 & 0 \\
+\hline
+\end{tabular}
 
+\textbf{Consensus is in favor}
+\end{quoteblock}
+
+\begin{quoteblock}
 The presence or absence of a BOM is a reasonable portable mechanism
-for detecting UTF-8 source file encoding.
+for detecting UTF-8 source file encoding
+\\\\
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+SF & F & N & A & SA \\
+\hline
+0 & 1 & 0 & 3 & 6 \\
+\hline
+\end{tabular}
 
-SF	F	N	A	SA
-0	1	0	3	6
+\textbf{No consensus};  or rather,
+consensus is that a BOM is not a reasonable portable mechanism for detection of source file encoding.    
+\end{quoteblock}
 
-No consensus;  or rather,
-consensus is that a BOM is not a reasonable portable mechanism for detection of source file encoding.
+\begin{quoteblock}
+We agree that, for Unicode source files, that normalization is preserved through translation phases 1 and 5.
 
-
-Poll: We agree that, for Unicode source files, that normalization is preserved
-through translation phases 1 and 5.
-
-No objection to unanimous consent.
-
-\end{codeblock}
-
-SG-16 was generally in favor of specifying what the whitespace characters are, but no polls were taken.
+\textbf{No objection to unanimous consent.}
+    
+\end{quoteblock}
 
 \section{Wording}
 
@@ -237,7 +254,7 @@ As such, the wording reflects the intent but not necessarily the terminology tha
 
 Notably, SG-16 and CWG are working on removing the mapping of characters to universal-character-name in phase 1, which has no observable impact on the behavior of C++ programs.
 
-The proposed wording assumes P2223R1 has previously been applied to the wording draft
+The proposed wording assumes \paper{P2223R1} has previously been applied to the wording draft
 
 
 \rSec1[lex.phases]{Phases of translation}%
@@ -283,651 +300,13 @@ immediately followed by zero or more whitespace characters (other than new-line 
 physical source lines to form logical source lines. Only the last
 backslash on any physical source line shall be eligible for being part
 of such a splice.
-%Except for splices reverted in a raw string literal, if a splice results in
-%a character sequence that matches the
-%syntax of a \grammarterm{universal-character-name}, the behavior is
-%undefined. A source file that is not empty and that does not end in a \changed{new-line character}{\grammarterm{new-line}}, or that ends in a \changed{new-line character}{\grammarterm{new-line}} immediately preceded by a
-%backslash character before any such splicing takes place,
-%shall be processed as if an additional \changed{new-line character}{LINE FEED} were appended
-%to the file.
-%
-%\item The source file is decomposed into preprocessing
-%tokens\iref{lex.pptoken} and sequences of \changed{whitespace characters
-%(including comments)}{\grammarterm{whitespace} and comments}. A source file shall not end in a partial
-%preprocessing token or in a partial comment.
-%
-%Each comment is replaced by one \changed{space}{SPACE} character. \changed{New-line characters}{\grammarterm{new-line}} are
-%retained. Whether each nonempty sequence of \changed{whitespace characters other
-%than new-line}{\grammarterm{whitespace} other than \grammarterm{new-line}} is retained or replaced by one \changed{space}{SPACE}  character is
-%unspecified. The process of dividing a source file's
-%characters into preprocessing tokens is context-dependent.
-%\begin{example}
-%    See the handling of \tcode{<} within a \tcode{\#include} preprocessing
-%    directive.
-%\end{example}
-%
-%\item Preprocessing directives are executed, macro invocations are
-%expanded, and \tcode{_Pragma} unary operator expressions are executed.
-%If a character sequence that matches the syntax of a
-%\grammarterm{universal-character-name} is produced by token
-%concatenation\iref{cpp.concat}, the behavior is undefined. A
-%\tcode{\#include} preprocessing directive causes the named header or
-%source file to be processed from phase 1 through phase 4, recursively.
-%All preprocessing directives are then deleted.
-%
-%\item
-%Each
-%\grammarterm{basic-c-char},
-%\grammarterm{basic-s-char}, and
-%\grammarterm{r-char}
-%in a \grammarterm{character-literal} or a \grammarterm{string-literal},
-%as well as each
-%\grammarterm{escape-sequence} and \grammarterm{universal-character-name}
-%in a \grammarterm{character-literal} or a non-raw string literal,
-%is encoded in the literal's associated character encoding as specified in
-%\ref{lex.ccon} and \ref{lex.string}.
-%
-%\item
-%Adjacent \grammarterm{string-literal}s are concatenated
-%and a null character is appended to the result
-%as specified in \ref{lex.string}.
-%
-%\item \changed{White-space characters}{Sequences of \grammarterm{whitespace}} separating tokens are no longer
-%significant. Each preprocessing token is converted into a
-%token\iref{lex.token}. The resulting tokens are syntactically and
-%semantically analyzed and translated as a translation unit.
-%\begin{note}
-%    The process of analyzing and translating the tokens can occasionally
-%    result in one token being replaced by a sequence of other
-%    tokens\iref{temp.names}.
-%\end{note}
-%It is
-%\impldef{whether the sources for
-%    module units and header units
-%    on which the current translation unit has an interface
-%    dependency are required to be available during translation}
-%whether the sources for
-%module units and header units
-%on which the current translation unit has an interface
-%dependency (\ref{module.unit}, \ref{module.import})
-%are required to be available.
-%\begin{note}
-%    Source files, translation
-%    units and translated translation units need not necessarily be stored as
-%    files, nor need there be any one-to-one correspondence between these
-%    entities and any external representation. The description is conceptual
-%    only, and does not specify any particular implementation.
-%\end{note}
+
 \end{enumerate}
-%
-%\rSec1[lex.pptoken]{Preprocessing tokens}
-
-%\begin{addedblock}
-%\begin{bnf}
-%\nontermdef{new-line}\br
-%    \textnormal{U+000A LINE FEED}\br
-%    \textnormal{U+000B VERTICAL TAB}\br
-%    \textnormal{U+000C FORM FEED}\br
-%    \textnormal{U+000D CARRIAGE RETURN}\br
-%    \textnormal{U+0085 NEXT LINE}\br
-%    \textnormal{U+2028 LINE SEPARATOR}\br
-%    \textnormal{U+2029 PARAGRAPH SEPARATOR}\br
-%    \textnormal{U+000D U+000A}
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{whitespace}\br
-%    new-line\br
-%    \textnormal{U+0009 HORIZONTAL TAB}\br
-%    \textnormal{U+0009 SPACE}
-%\end{bnf}
-
-% Unless otherwise specified, whitespaces and whitespace characters refer to \grammarterm{whitespace}.
-
-
-%\end{addedblock}
-%
-%\begin{bnf}
-%    \nontermdef{preprocessing-token}\br
-%    header-name\br
-%    import-keyword\br
-%    module-keyword\br
-%    export-keyword\br
-%    identifier\br
-%    pp-number\br
-%    character-literal\br
-%    user-defined-character-literal\br
-%    string-literal\br
-%    user-defined-string-literal\br
-%    preprocessing-op-or-punc\br
-%    \textnormal{each non-whitespace character that cannot be one of the above}
-%\end{bnf}
-%
-%\pnum
-%Each preprocessing token that is converted to a token\iref{lex.token}
-%shall have the lexical form of a keyword, an identifier, a literal,
-%or an operator or punctuator.
-%
-%\pnum
-%A preprocessing token is the minimal lexical element of the language in translation
-%phases 3 through 6. The categories of preprocessing token are: header names,
-%placeholder tokens produced by preprocessing \tcode{import} and \tcode{module} directives
-%(\grammarterm{import-keyword}, \grammarterm{module-keyword}, and \grammarterm{export-keyword}),
-%identifiers, preprocessing numbers, character literals (including user-defined character
-%literals), string literals (including user-defined string literals), preprocessing
-%operators and punctuators, and single non-whitespace characters that do not lexically
-%match the other preprocessing token categories. If a \tcode{'} or a \tcode{"} character
-%matches the last category, the behavior is undefined. Preprocessing tokens can be
-%separated by
-%\indextext{whitespace}%
-%whitespace;
-%\indextext{comment}
-%this consists of comments\iref{lex.comment}, or \changed{whitespace characters}{\grammarterm{whitespace}}
-%\removed{(space, horizontal tab, new-line, vertical tab, and
-%form-feed)}, or both. As described in \ref{cpp}, in certain
-%circumstances during translation phase 4, \changed{whitespace}{\grammarterm{whitespace}} (or the absence
-%thereof) serves as more than preprocessing token separation. \changed{White space}{\grammarterm{whitespace}}
-%can appear within a preprocessing token only as part of a header name or
-%between the quotation characters in a character literal or
-%string literal.
-%
-%[..]
-%
-%\rSec1[lex.comment]{Comments}
-%
-%\pnum
-%\indextext{comment|(}%
-%\indextext{comment!\tcode{/*} \tcode{*/}}%
-%\indextext{comment!\tcode{//}}%
-%The characters \tcode{/*} start a comment, which terminates with the
-%characters \tcode{*/}. These comments do not nest.
-%\indextext{comment!\tcode{//}}%
-%The characters \tcode{//} start a comment, which terminates immediately before the
-%next \changed{new-line character}{\grammarterm{new-line}}. \removed{If there is a form-feed or a vertical-tab
-%character in such a comment, only whitespace characters shall appear
-%between it and the new-line that terminates the comment; no diagnostic
-%is required}.
-%\begin{note}
-%    The comment characters \tcode{//}, \tcode{/*},
-%    and \tcode{*/} have no special meaning within a \tcode{//} comment and
-%    are treated just like other characters. Similarly, the comment
-%    characters \tcode{//} and \tcode{/*} have no special meaning within a
-%    \tcode{/*} comment.
-%\end{note}
-%\indextext{comment|)}
-%
-%\rSec1[lex.header]{Header names}
-%
-%\indextext{header!name|(}%
-%\begin{bnf}
-%    \nontermdef{header-name}\br
-%    \terminal{<} h-char-sequence \terminal{>}\br
-%    \terminal{"} q-char-sequence \terminal{"}
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{h-char-sequence}\br
-%    h-char\br
-%    h-char-sequence h-char
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{h-char}\br
-%    \textnormal{any member of the source character set except \changed{new-line}{\grammarterm{new-line}} and \terminal{>}}
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{q-char-sequence}\br
-%    q-char\br
-%    q-char-sequence q-char
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{q-char}\br
-%    \textnormal{any member of the source character set except \changed{new-line}{\grammarterm{new-line}} and \terminal{"}}
-%\end{bnf}
-%
-%
-%\rSec2[lex.ccon]{Character literals}
-%
-%[..]
-%
-%\begin{bnf}
-%    \nontermdef{c-char}\br
-%    basic-c-char\br
-%    escape-sequence\br
-%    universal-character-name
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{basic-c-char}\br
-%    \textnormal{any member of the basic source character set except the single-quote \terminal{'}, backslash \terminal{\textbackslash}, or \changed{new-line character}{\grammarterm{new-line}}}
-%\end{bnf}
-%
-%[...]
-%
-%\begin{floattable}{Simple escape sequences}{lex.ccon.esc}
-%    {lll}
-%\topline
-%\changed{new-line}{LINE FEED}       &   NL(LF)          &   \tcode{\textbackslash n}                \\
-%horizontal tab  &   HT              &   \tcode{\textbackslash t}                \\
-%vertical tab    &   VT              &   \tcode{\textbackslash v}                \\
-%backspace       &   BS              &   \tcode{\textbackslash b}                \\
-%carriage return &   CR              &   \tcode{\textbackslash r}                \\
-%form feed       &   FF              &   \tcode{\textbackslash f}                \\
-%alert           &   BEL             &   \tcode{\textbackslash a}                \\
-%backslash       &   \textbackslash  &   \tcode{\textbackslash\textbackslash}    \\
-%question mark   &   ?               &   \tcode{\textbackslash ?}                \\
-%single quote    &   \tcode{'}       &   \tcode{\textbackslash '}                \\
-%double quote    &   \tcode{"}       &   \tcode{\textbackslash "}                \\
-%\end{floattable}
-%
-%\rSec2[lex.string]{String literals}
-%
-%[...]
-%
-%\begin{bnf}
-%    \nontermdef{s-char}\br
-%    basic-s-char\br
-%    escape-sequence\br
-%    universal-character-name
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{basic-s-char}\br
-%    \textnormal{any member of the basic source character set except the double-quote \terminal{"}, backslash \terminal{\textbackslash}, or \changed{new-line character}{\grammarterm{new-line}}}
-%\end{bnf}
-%
-%[..]
-%
-%A \grammarterm{string-literal} that has an \tcode{R}
-%\indextext{prefix!\idxcode{R}}%
-%in the prefix is a \defn{raw string literal}. The
-%\grammarterm{d-char-sequence} serves as a delimiter. The terminating
-%\grammarterm{d-char-sequence} of a \grammarterm{raw-string} is the same sequence of
-%characters as the initial \grammarterm{d-char-sequence}. A \grammarterm{d-char-sequence}
-%shall consist of at most 16 characters.
-%
-%\begin{addedblock}
-%Each instance of a \grammarterm{new-line} in the \defn{raw string literal} is replaced by a \tcode{LINE FEED (U+000A).}
-%\end{addedblock}
-%
-%\begin{quoteblock}
-%Is this the behavior that we want?
-%\end{quoteblock}
-%
-%\pnum
-%\begin{note}
-%    The characters \tcode{'('} and \tcode{')'} are permitted in a
-%    \grammarterm{raw-string}. Thus, \tcode{R"delimiter((a|b))delimiter"} is equivalent to
-%    \tcode{"(a|b)"}.
-%\end{note}
-%
-%\pnum
-%\begin{note}
-%    \begin{removedblock}
-%    A source-file new-line in a raw string literal results in a new-line in the
-%    resulting execution string literal.
-%   \end{removedblock}
-% Assuming no
-%    whitespace at the beginning of lines in the following example, the assert will succeed:
-%    \begin{codeblock}
-%        const char* p = R"(a\
-%        b
-%        c)";
-%        assert(std::strcmp(p, "a\\\nb\nc") == 0);
-%    \end{codeblock}
-%\end{note}
-%
-%
-%\subsection{Preprocessing directives}%
-%\indextext{preprocessing directive|(}
-%
-%\indextext{compiler control line|see{preprocessing directive}}%
-%\indextext{control line|see{preprocessing directive}}%
-%\indextext{directive, preprocessing|see{preprocessing directive}}
-%
-%\gramSec[gram.cpp]{Preprocessing directives}
-%
-%\rSec1[cpp.pre]{Preamble}
-%
-%\begin{bnf}
-%    \nontermdef{preprocessing-file}\br
-%    \opt{group}\br
-%    module-file
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{module-file}\br
-%    \opt{pp-global-module-fragment} pp-module \opt{group} \opt{pp-private-module-fragment}
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{pp-global-module-fragment}\br
-%    \keyword{module} \terminal{;} new-line \opt{group}
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{pp-private-module-fragment}\br
-%    \keyword{module} \terminal{:} \keyword{private} \terminal{;} new-line \opt{group}
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{group}\br
-%    group-part\br
-%    group group-part
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{group-part}\br
-%    control-line\br
-%    if-section\br
-%    text-line\br
-%    \terminal{\#} conditionally-supported-directive
-%\end{bnf}
-%
-%\begin{bnf}\obeyspaces
-%    \nontermdef{control-line}\br
-%    \terminal{\# include} pp-tokens new-line\br
-%    pp-import\br
-%    \terminal{\# define } identifier replacement-list new-line\br
-%    \terminal{\# define } identifier lparen \opt{identifier-list} \terminal{)} replacement-list new-line\br
-%    \terminal{\# define } identifier lparen \terminal{... )} replacement-list new-line\br
-%    \terminal{\# define } identifier lparen identifier-list \terminal{, ... )} replacement-list new-line\br
-%    \terminal{\# undef  } identifier new-line\br
-%    \terminal{\# line   } pp-tokens new-line\br
-%    \terminal{\# error  } \opt{pp-tokens} new-line\br
-%    \terminal{\# pragma } \opt{pp-tokens} new-line\br
-%    \terminal{\# }new-line
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{if-section}\br
-%    if-group \opt{elif-groups} \opt{else-group} endif-line
-%\end{bnf}
-%
-%\begin{bnf}\obeyspaces
-%    \nontermdef{if-group}\br
-%    \terminal{\# if     } constant-expression new-line \opt{group}\br
-%    \terminal{\# ifdef  } identifier new-line \opt{group}\br
-%    \terminal{\# ifndef } identifier new-line \opt{group}
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{elif-groups}\br
-%    elif-group\br
-%    elif-groups elif-group
-%\end{bnf}
-%
-%\begin{bnf}\obeyspaces
-%    \nontermdef{elif-group}\br
-%    \terminal{\# elif   } constant-expression new-line \opt{group}
-%\end{bnf}
-%
-%\begin{bnf}\obeyspaces
-%    \nontermdef{else-group}\br
-%    \terminal{\# else   } new-line \opt{group}
-%\end{bnf}
-%
-%\begin{bnf}\obeyspaces
-%    \nontermdef{endif-line}\br
-%    \terminal{\# endif  } new-line
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{text-line}\br
-%    \opt{pp-tokens} new-line
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{conditionally-supported-directive}\br
-%    pp-tokens new-line
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{lparen}\br
-%    \descr{a \terminal{(} character not immediately preceded by whitespace}
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{identifier-list}\br
-%    identifier\br
-%    identifier-list \terminal{,} identifier
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{replacement-list}\br
-%    \opt{pp-tokens}
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{pp-tokens}\br
-%    preprocessing-token\br
-%    pp-tokens preprocessing-token
-%\end{bnf}
-%
-%\begin{removedblock}
-%\begin{bnf}
-%    \nontermdef{new-line}\br
-%    \descr{the new-line character}
-%\end{bnf}
-%\end{removedblock}
-%
-%\pnum
-%A \defn{preprocessing directive} consists of a sequence of preprocessing tokens
-%that satisfies the following constraints:
-%At the start of translation phase 4,
-%the first token in the sequence,
-%referred to as a \defnadj{directive-introducing}{token},
-%begins with the first character in the source file
-%(optionally after whitespace containing no \changed{new-line characters}{\grammarterm{new-line}}) or
-%follows whitespace containing at least one \changed{new-line character}{\grammarterm{new-line}},
-%and is
-%
-%\begin{itemize}
-%    \item
-%    a \tcode{\#} preprocessing token, or
-%
-%    \item
-%    an \keyword{import} preprocessing token
-%    immediately followed on the same logical line by a
-%    \grammarterm{header-name},
-%    \tcode{<},
-%    \grammarterm{identifier},
-%    \grammarterm{string-literal}, or
-%    \tcode{:}
-%    preprocessing token, or
-%
-%    \item
-%    a \keyword{module} preprocessing token
-%    immediately followed on the same logical line by an
-%    \grammarterm{identifier},
-%    \tcode{:}, or
-%    \tcode{;}
-%    preprocessing token, or
-%
-%    \item
-%    an \keyword{export} preprocessing token
-%    immediately followed on the same logical line by
-%    one of the two preceding forms.
-%\end{itemize}
-%
-%The last token in the sequence is the first token within the sequence that
-%is immediately followed by whitespace containing a \changed{new-line character}{\grammarterm{new-line}}.
-%\begin{note}
-%    A \changed{new-line character}{\grammarterm{new-line}} ends the preprocessing directive even if it occurs
-%    within what would otherwise be an invocation of a function-like macro.
-%\end{note}
-%
-%\begin{example}
-%    \begin{codeblock}
-%        #                       // preprocessing directive
-%        module ;                // preprocessing directive
-%        export module leftpad;  // preprocessing directive
-%        import <string>;        // preprocessing directive
-%        export import "squee";  // preprocessing directive
-%        import rightpad;        // preprocessing directive
-%        import :part;           // preprocessing directive
-%
-%        module                  // not a preprocessing directive
-%        ;                       // not a preprocessing directive
-%
-%        export                  // not a preprocessing directive
-%        import                  // not a preprocessing directive
-%        foo;                    // not a preprocessing directive
-%
-%        export                  // not a preprocessing directive
-%        import foo;             // preprocessing directive (ill-formed at phase 7)
-%
-%        import ::               // not a preprocessing directive
-%        import ->               // not a preprocessing directive
-%    \end{codeblock}
-%\end{example}
-%
-%\pnum
-%A sequence of preprocessing tokens is only a \grammarterm{text-line}
-%if it does not begin with a directive-introducing token.
-%A sequence of preprocessing tokens is only a \grammarterm{conditionally-supported-directive}
-%if it does not begin with any of the directive names
-%appearing after a \tcode{\#} in the syntax.
-%A \grammarterm{conditionally-supported-directive} is
-%conditionally-supported with
-%\impldef{additional supported forms of preprocessing directive}
-%semantics.
-%
-%\pnum
-%At the start of phase 4 of translation,
-%the \grammarterm{group} of a \grammarterm{pp-global-module-fragment} shall
-%contain neither a \grammarterm{text-line} nor a \grammarterm{pp-import}.
-%
-%\pnum
-%When in a group that is skipped\iref{cpp.cond}, the directive
-%syntax is relaxed to allow any sequence of preprocessing tokens to occur between
-%the directive name and the following \changed{new-line character}{\grammarterm{new-line}}.
-%
-%\pnum
-%The only whitespace characters that shall appear
-%between preprocessing tokens
-%within a preprocessing directive
-%(from just after the directive-introducing token
-%through just before the terminating \changed{new-line character}{\grammarterm{new-line}})
-%are \changed{space}{SPACE} and \changed{horizontal-tab}{HOROZONTAL TAB}
-%(including \changed{spaces}{SPACE} that have replaced comments
-%or possibly other whitespace characters
-%in translation phase 3).
-%
-%[..]
-%
-%\pnum
-%A preprocessing directive of the form
-%\begin{ncsimplebnf}
-%    \terminal{\# define} identifier replacement-list new-line
-%    \indextext{\idxcode{\#define}}%
-%\end{ncsimplebnf}
-%defines an
-%\defnadj{object-like}{macro} that
-%causes each subsequent instance of the macro name
-%to be replaced by the replacement list of preprocessing tokens
-%that constitute the remainder of the directive.
-%The replacement list is then rescanned for more macro names as
-%specified below.
-%
-%\pnum
-%\begin{example}
-%    The simplest use of this facility is to define a ``manifest constant'',
-%    as in
-%    \begin{codeblock}
-%        #define TABSIZE 100
-%        int table[TABSIZE];
-%    \end{codeblock}
-%\end{example}
-%
-%\pnum
-%A preprocessing directive of the form
-%\begin{ncsimplebnf}
-%    \terminal{\# define} identifier lparen \opt{identifier-list} \terminal{)} replacement-list new-line\br
-%    \terminal{\# define} identifier lparen \terminal{...} \terminal{)} replacement-list new-line\br
-%    \terminal{\# define} identifier lparen identifier-list \terminal{, ...} \terminal{)} replacement-list new-line
-%\end{ncsimplebnf}
-%defines a \defnadj{function-like}{macro}
-%with parameters, whose use is
-%similar syntactically to a function call.
-%The parameters
-%\indextext{parameter!macro}%
-%are specified by the optional list of identifiers.
-%Each subsequent instance of the function-like macro name followed by a
-%\tcode{(}
-%as the next preprocessing token
-%introduces the sequence of preprocessing tokens that is replaced
-%by the replacement list in the definition
-%(an invocation of the macro).
-%\indextext{invocation!macro}%
-%The replaced sequence of preprocessing tokens is terminated by the matching
-%\tcode{)}
-%preprocessing token, skipping intervening matched pairs of left and
-%right parenthesis preprocessing tokens.
-%Within the sequence of preprocessing tokens making up an invocation
-%of a function-like macro, \changed{new-line is considered a normal whitespace character}{\grammarterm{new-line} are considered like other \grammarterm{whitespace}}.
-%
-%\pnum
-%\indextext{macro!function-like!arguments}%
-%The sequence of preprocessing tokens
-%bounded by the outside-most matching parentheses
-%forms the list of arguments for the function-like macro.
-%The individual arguments within the list
-%are separated by comma preprocessing tokens,
-%but comma preprocessing tokens between matching
-%inner parentheses do not separate arguments.
-%If there are sequences of preprocessing tokens within the list of
-%arguments that would otherwise act as preprocessing directives,
-%the behavior is undefined.
-%
-%[...]
-%
-%\pnum
-%The
-%\defn{line number}
-%of the current source line is one greater than
-%the number of \changed{new-line}{\grammarterm{new-line}} characters read or introduced
-%in translation phase 1\iref{lex.phases}
-%while processing the source file to the current token.
-%
-%[...]
-%
-%
-%\subsection{Time library}
-%
-%\rSec1[time.format]{Formatting}
-%
-%
-%\begin{LongTable}{Meaning of conversion specifiers}{time.format.spec}{lx{.8\hsize}}
-%    \\ \topline
-%    \lhdr{Specifier} & \rhdr{Replacement} \\ \capsep
-%    \endfirsthead
-%    \continuedcaption\\
-%    \hline
-%    \lhdr{Specifier} & \rhdr{Replacement} \\ \capsep
-%    \endhead
-%    \\ \rowsep
-%    \tcode{\%M} &
-%    The minute as a decimal number.
-%    If the result is a single digit, it is prefixed with \tcode{0}.
-%    The modified command \tcode{\%OM} produces
-%    the locale's alternative representation.
-%    \\ \rowsep
-%    \tcode{\%n} &
-%    A \changed{new-line}{LINE FEED} character.
-%    \\ \rowsep
-%    \tcode{\%p} &
-%    The locale's equivalent of the AM/PM designations associated with a 12-hour clock.
-%    \\
-%\end{LongTable}
-%
 
 \section{Acknowledgments}
 
 As usual, many people in SG-16 provided great feedbacks on this paper.
-In particular JeanHeyd Meneide offered the great insight that invalid UTF-8 can be supported by being considered a different encoding than UTF-8.
+In particular JeanHeyd Meneide offered the great insight that invalid UTF-8 can be supported by being considered a different encoding than UTF-8; Tom Honermann, Jens Maurer and Peter Brett offered valuable feedback!
 
 
 \section{References}
@@ -938,24 +317,28 @@ In particular JeanHeyd Meneide offered the great insight that invalid UTF-8 can 
 \begin{thebibliography}{9}
 
 
-    \bibitem[Unicode]{Unicode}
-    Unicode 13\newline
-    \url{http://www.unicode.org/versions/Unicode13.0.0/}
+\bibitem[Unicode]{Unicode}
+Unicode 13\newline
+\url{http://www.unicode.org/versions/Unicode13.0.0/}
 
+\bibitem[N4885]{N4885}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4885}
 
-    \bibitem[N4861]{N4861}
-    Richard Smith
-    \emph{Working Draft, Standard for Programming Language C++}\newline
-    \url{https://wg21.link/N4861}
+\bibitem[UAX-14]{UAX-14}
+\emph{UNICODE LINE BREAKING ALGORITHM}\newline
+\url{https://www.unicode.org/reports/tr14/}
 
+ \bibitem[UAX-31]{UAX-31}
+\emph{UNICODE IDENTIFIER AND PATTERN SYNTAX}\newline
+\url{https://www.unicode.org/reports/tr31/}
 
-    \bibitem[UAX-14]{UAX-14}
-    \emph{UNICODE LINE BREAKING ALGORITHM}\newline
-    \url{https://www.unicode.org/reports/tr14/}
-
-     \bibitem[UAX-31]{UAX-31}
-    \emph{UNICODE IDENTIFIER AND PATTERN SYNTAX}\newline
-    \url{https://www.unicode.org/reports/tr31/}
+\bibitem{BOM}
+Tom Honermann
+Clarify guidance for use of a BOM as a UTF-8 encoding signature
+\url{https://www.unicode.org/L2/L2021/21038-bom-guidance.pdf}
+    
 
 \end{thebibliography}
 \end{document}

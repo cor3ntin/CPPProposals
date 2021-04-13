@@ -98,7 +98,7 @@
 
 \renewcommand{\maketitle}{%
   \null \vskip 1em%
-  {\center \LARGE \@title \par}%
+  {\center \LARGE \@title  \par}%
   \begin{flushright}%
     \begin{tabular}{ll}%
       Document \#:&\@docnumber\\%
@@ -441,7 +441,7 @@
 %% Notes and examples
 \newcommand{\noteintro}[1]{[\,\textit{#1:}\space}
 \newcommand{\noteoutro}[1]{\textit{\,---\,end #1}\,]}
-\renewenvironment{footnote}[1][Footnote]{\noteintro{#1}}{\noteoutro{wgfootnote}\xspace}
+\newenvironment{wfootnote}[1][Footnote]{\noteintro{#1}}{\noteoutro{wgfootnote}\xspace}
 \newenvironment{note}[1][Note]{\noteintro{#1}}{\noteoutro{note}\xspace}
 
 \newenvironment{example}[1][Example]{\noteintro{#1}}{\noteoutro{example}\xspace}
