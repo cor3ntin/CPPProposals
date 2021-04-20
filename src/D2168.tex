@@ -11,7 +11,7 @@
 \newcolumntype{?}{!{\vrule width 1pt}}
 
 \title{\tcode{std::generator}: Synchronous Coroutine Generator for Ranges}
-\docnumber{P2168R2}
+\docnumber{D2168R3}
 \audience{LEWG}
 \author{Lewis Baker}{lewissbaker@gmail.com}
 \authortwo{Corentin Jabot}{corentin.jabot@gmail.com}
@@ -26,6 +26,16 @@ We propose a standard library type \tcode{std::generator} which implements a cor
 
 
 \section{Revisions}
+
+\subsection{R4}
+\begin{itemize}
+\item Wording improvements
+\end{itemize}
+
+\subsection{R3}
+\begin{itemize}
+\item Wording improvements
+\end{itemize}
 
 \subsection{R2}
 \begin{itemize}
@@ -633,7 +643,7 @@ struct dangling;
 
 \begin{addedblock}
 \begin{codeblock}
-template<std::ranges::input_range R>
+template<std::ranges::input_range R, class Allocator = std::allocator<std::byte>>
 struct elements_of;
 \end{codeblock}
 \end{addedblock}
@@ -653,11 +663,11 @@ using borrowed_iterator_t = conditional_t<@\libconcept{borrowed_range}@<R>, iter
 \rSec2[ranges.elementsof]{ranges::element_of}
 
 
-\tcode{elements_of} is a type that encapsulates a range and acts as a tag in overload sets to disambiguate when a range should be treated as a sequence rather than a single value in genetric contexts.
+\tcode{elements_of} is a template that encapsulates a range and acts as a tag in overload sets to disambiguate when a range should be treated as a sequence rather than a single value in generic contexts.
 
 \begin{example}
     \begin{codeblock}
-        generator<any> f(input_range auto rng) {
+        generator<any> f(input_range auto&& rng) {
             co_yield rng; // yield rng as a single value
             co_yield elements_of(rng); // yield each element of rng
         }
@@ -667,40 +677,69 @@ using borrowed_iterator_t = conditional_t<@\libconcept{borrowed_range}@<R>, iter
 
 \begin{codeblock}
 namespace std::ranges {
-    template<std::ranges::input_range R>
+    template<std::ranges::input_range R, class Allocator = std::allocator<std::byte>>
     struct elements_of {
+        private:
+        [[no_unique_address]] Allocator allocator_; // \expos
         R&& range_; // \expos
 
-        explicit constexpr elements_of(R&& r) noexcept;
+        public:
+        explicit constexpr elements_of(R&& r) noexcept
+        requires std::is_default_constructible_v<Allocator>;
+        
+        explicit constexpr elements_of(R&& r, Allocator allocator) noexcept;
 
         constexpr elements_of(elements_of&&) = default;
 
         elements_of(const elements_of&) = delete;
-        elements_of& operator=(const elements_of&) = delete;
-        elements_of& operator=(elements_of&&) = delete;
 
-        constexpr R && get() && noexcept;
+        constexpr R&& range() noexcept;
+        constexpr const Allocator& allocator() const noexcept;
     };
     template<std::ranges::input_range R>
-    elements_of(R&& r) -> return elements_of<R>;
-
+    elements_of(R&&) -> return elements_of<R>;
+    
+    template<std::ranges::input_range R, typename Allocator>
+    elements_of(R&&, Allocator) -> elements_of<R, Allocator>;
 }
 \end{codeblock}
 
+\rSec2[ranges.elementsof.cons]{ranges::elements_of Constructors}
+
 \begin{itemdecl}
-explicit constexpr elements_of(R&& r) noexcept;
+explicit constexpr elements_of(R&& r) noexcept
+requires std::is_default_constructible_v<Allocator>
 \end{itemdecl}
 
 \begin{itemdescr}
-\effects   Initializes \tcode{range_} with \tcode{forward<R>(r)}.
+\effects   Initializes \tcode{range_} with \tcode{std::forward<R>(r)}.
+\end{itemdescr}
+
+
+\begin{itemdecl}
+explicit constexpr elements_of(R&& r, Allocator allocator) noexcept
+\end{itemdecl}
+
+\begin{itemdescr}
+\effects   Initializes \tcode{range_} with \tcode{std::forward<R>(r)} and \tcode{allocator_} with \tcode{std::move(allocator)}.
+\end{itemdescr}
+
+\rSec2[ranges.elementsof.access]{ranges::elements_of Access}
+
+\begin{itemdecl}
+constexpr R&& range() noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\returns \tcode{std::forward<R>(range_)}.
 \end{itemdescr}
 
 \begin{itemdecl}
-constexpr R && get() && noexcept;
+constexpr const Allocator& allocator() noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-\returns \tcode{forward<R>(range_)}.
+\returns \tcode{allocator_}.
 \end{itemdescr}
 
 \pagebreak
@@ -716,7 +755,7 @@ constexpr R && get() && noexcept;
 namespace std {
 
     template<class Ref,
-        common_reference_with<Ref> Value = remove_cvref_t<Ref>,
+        class Value = remove_cvref_t<Ref>,
         class Allocator = void>
     class generator;
 
@@ -740,7 +779,7 @@ Elements of the sequence are produced by the coroutine each time a \tcode{co_yie
 When the \tcode{co_yield} expression is of the form \tcode{co_yield elements_of(rng)}, each element of the range \tcode{rng} is successively produced
 as an element of the generator.
 
-\tcode{generator} models \tcode{view} and \tcode{input_view}.
+\tcode{generator} models \tcode{view} and \tcode{input_range}.
 
 
 \begin{example}
@@ -765,8 +804,9 @@ as an element of the generator.
 
 namespace std {
 
-template <class Ref, common_reference_with<Ref> Value = remove_cvref_t<Ref>,
+template <class Ref, Value = remove_cvref_t<Ref>,
           class Allocator = void>
+requires  common_reference_with<Ref&&, value&>
 class generator  {
     class promise_type_; // \expos
 
@@ -780,10 +820,10 @@ public:
 
     ~generator();
 
-    generator &operator=(generator other) noexcept;
+    generator &operator=(generator&& other) noexcept;
 
     iterator begin();
-    sentinel end() const noexcept;
+    default_sentinel_t end() const noexcept;
 
 private:
     std::coroutine_handle<promise_type> coroutine_ = nullptr; // \expos
@@ -821,7 +861,7 @@ Initializes \tcode{coroutine_} with \tcode{exchange(other.coroutine_, \{\})}, \\
 \end{itemdescr}
 
 \begin{itemdecl}
-~generator() noexcept;
+~generator();
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -835,7 +875,7 @@ Initializes \tcode{coroutine_} with \tcode{exchange(other.coroutine_, \{\})}, \\
 \end{itemdescr}
 
 \begin{itemdecl}
-generator &operator=(generator other) noexcept;
+generator &operator=(generator&& other) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -893,6 +933,9 @@ class generator<Ref, Value, Allocator>::promise_type_ {
 
     friend generator;
 
+    // \textbf{This doesn't work if a Ref is a reference type}
+    // \textbf{we either need some kind of wrapper (see manual_lifetime in our \\   implementation, or only store a pointer in all cases)}
+    
     union {
         Ref value_; // \expos
     };
@@ -920,9 +963,9 @@ public:
     template <class TVal, class TAlloc>
     @\unspec@ yield_value(elements_of<generator<Ref, TVal, TAlloc>> g) noexcept; // \seebelownc
 
-    template<ranges::input_range R>
+    template<ranges::input_range R, typename Allocator>
     requires convertible_to<ranges::range_reference_t<R>, Ref>
-    @\unspec@ yield_value(elements_of<R> rng); // \seebelownc
+    @\unspec@ yield_value(elements_of<R, Allocator> rng); // \seebelownc
 
     void await_transform() = delete;
 
@@ -1016,9 +1059,9 @@ Generators can transfer control recursively.
 
 
 \begin{itemdecl}
-template<std::ranges::input_range R>
-  requires convertible_to<ranges::range_reference_t<R>, Ref>
-auto yield_value(elements_of<R> rng);
+template<std::ranges::input_range R, typename Allocator>
+requires convertible_to<ranges::range_reference_t<R>, Ref>
+auto yield_value(elements_of<R, Allocator> rng);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -1026,24 +1069,20 @@ auto yield_value(elements_of<R> rng);
 Equivalent to:
 \begin{codeblock}
 {
-    auto it = std::ranges::begin(rng.get());
-    auto itEnd = std::ranges::end(rng.get());
-    while (it != itEnd) {
-        co_yield *it;
-        ++it;
-    }
+    return yield_value(std::ranges::elements_of([](R&& rng, allocator_arg_t, Allocator alloc) 
+    -> generator<Ref, Value, Allocator> {
+        auto it = std::ranges::begin(rng);
+        auto itEnd = std::ranges::end(rng);
+        while (it != itEnd) {
+            co_yield *it;
+            ++it;
+        }
+    }(std::rng.range()), rng.allocator())));
 }
 \end{codeblock}
 
 The return object is of an implementation defined type T such that
 \tcode{is_same_v<coroutine_traits<T>::promise_type, coroutine_traits<generator>::promise_type>} is \tcode{true}.
-
-\begin{note}
-The coroutine state is allocated with \tcode{Allocator} - or \tcode{allocator<byte>} if \tcode{is_same_v<Allocator, void>}
-is \tcode{true}.
-\end{note}
-
-\returns An implementation-defined awaitable type.
 
 \end{itemdescr}
 
@@ -1185,16 +1224,11 @@ iterator& operator++();
 \begin{itemdescr}
 \precondition \tcode{!coroutine_.done()} is \tcode{true}.
 
-\effects
-Equivalent to:
-\begin{codeblock}
-    coroutine_.promise().destruct_value_();
-    coroutine_.resume();
-    return *this;
-\end{codeblock}
+% \effects
+
+\returns \tcode{return *this};
+
 \end{itemdescr}
-
-
 \begin{itemdecl}
 void operator++(int);
 \end{itemdecl}
