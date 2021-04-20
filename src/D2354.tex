@@ -1,0 +1,106 @@
+% !TeX document-id = {9322a846-f757-4574-9231-a2e85c743b21}
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}%
+\documentclass{wg21}
+
+\usepackage{luatexja-fontspec}
+\setmainfont{Noto Sans}
+\setmainjfont{Noto Sans CJK KR}
+
+\let\ACMmaketitle=\maketitle
+\renewcommand{\maketitle}{\begingroup\let\footnote=\thanks \ACMmaketitle\endgroup}
+
+\title{文字化け\footnotemark is Undefined Behavior}
+\docnumber{P2345R0}
+\audience{SG-16}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+
+\maketitle
+
+\footnotetext{Mojibake}
+
+
+\section{Abstract}
+
+This paper argues that functions operating on text have, by definition, a precondition that the text they process is
+encoded in a specific encoding. Violation of such precondition is Undefined Behavior.
+From that we can build a solid understanding of how encodings is C++ are used.
+
+\section{A model for text encoding}
+
+A text encoding is a mechanism to represent elements of human writing in a computer program,
+by mapping each element to a sequence of integers representing the encoded text in memory.
+
+A few important observations need to be made about text encodings:
+\begin{itemize}
+\item Encoded text is not-self descriptive. Decoding text requires knowing which transformation was applied, and that information needs to be communicated by a side channel.
+\item There exists an infinite numbers of ways to map a sequence of characters to a sequence of integers, thousands have been used and documented. 
+\item From the previous two points, we can observed that it is not, in the general case, possible to sucessfuly interpret an encoded text whose encoded is unknown.
+\item No encoding scheme is able to encode arbitrary characters, and a given encoding is only meaningful on a subset of all existing abstract characters known by humanity. These encodings-dependant set of characters are known as "character sets" and widely in size and in the characters they represent. For example ASCII represents 128 abstract characters, while Unicode, the character set of the UTF-8 encoding catalog 143859 as of this writing.
+\item As such, it is not possible, in the general case, to losselessly convert from one emcoding to another, even when the source encoding is known. However many computer systems choose to support only encodings whose character set are subsets of the Unicode character set, which make converting to an Unicode encoding such as UTF-8 a lossless operation.
+\end{itemize}
+
+\section{What is Mojibake?}
+
+A system processing text (whether for the purpose of analysis, transformation, rendering, transcoding),
+must first know how the sequence of integer values making up the text is encoded.
+As stated earlier, this is only possible if the system is communicated what the encoding is.
+
+However, more often than not, the encoding is infered or assumed rather than communicated.
+For example, it is standard practice for a process to assume all child processes will communicate using the same
+encoding as their parent process.
+
+Assumption about encoding can be made across process, networks, or even in the same process that involves different component or libraries.
+When the assumption is incorrect, that is when the system that interprets encoded text assumes an encoding that is different
+of the encoding that was actually used to encode it, the interpretation of that text is incorrect.
+
+The extent to which the text is decoded incorrectly depends on the system and the incoding involved.
+
+For example, the Czetch word for pork crakling,
+čkvarky if encoded as ISO-8859-2 but interpreted as
+ISO-8859-5 is "ṗkvarky". which isn't actually a word but looks like one.
+Did you notice the sentence above is actually incorrect? "čkvarky" isn't a word either, the correct spelling is "škvarky".
+ISO-8859-5 interpreted as ISO-8859-16 would however lead to
+"š" being treated as "č".
+
+If the encoding differ more greatly, for example if
+a multibyte encoding is treated as a single byte encoding
+the entiere text can be garbbled to the point of being unrecognizable.
+This can have other impacts, like messing up a terminal
+if the bogus interpretation of the text contains escape sequences for example, or crashes if the system assumes
+the text is valid when it actually is not, for example
+a function could skip over non leading utf-8 code units
+which might cause an out-of-bound memory access.
+
+\subsection{Text interpretations errors are errors}
+
+In 1999, when the 350 millions USD Mars Climate Orbiter mission failed, we knew why:
+A floating point value representing pound-force/seconds was interpreted as being newton/seconds, any subsequent calculation was therefore incorrect and the flight trajectory software could no longer well behave.
+The preconditions of the function had been violated\footnote{It is not known wheter
+the probe crashed or bounced back in outer space, both are possible outcomes
+of undefined behavior. And while there is no evidence of probe-eating demons on Mars we can't exclude that possibility entierly.}.
+
+That failure would be understood by most C++ users.
+After all, It is obvious to most people that 1 meter is not 1 feet.
+1 meter is not 1 feet, even in London; 1 feet is not 1 meter, even in Spanish.
+
+And yet, there is a pervasive notion among computer scientists that
+maybe \tcode{std::isalpha('a')} isn't true in China. 
+
+
+\section{Acknowledgments}
+
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+\renewcommand{\section}[2]{}%
+\begin{thebibliography}{9}
+     
+\end{thebibliography}
+
+\end{document}

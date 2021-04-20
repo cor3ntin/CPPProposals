@@ -8,7 +8,7 @@
 
 
 \title{Support for UTF-8 as a portable source file encoding}
-\docnumber{P2295R2}
+\docnumber{P2295R3}
 \audience{SG-16, EWG, SG-22}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -30,6 +30,11 @@ Thanks Mr. Dawes!
 We propose that UTF-8 source files should be supported by all C++ compilers.
 
 \section{Revisions}
+
+\subsection{R3}
+\begin{itemize}
+\item Improve wording following SG-16 guidance
+\end{itemize}
 
 \subsection{R2}
 \begin{itemize}
@@ -67,7 +72,7 @@ source encodings).
 \section{Previous works}
 
 Original Proposal: \paper{N3463} (Beman Dawes, 2012).
-More recent discussions about Normalizxation preservation, whitespaces, and UTF in \paper{P2178R1} (Points 1, 2, 3, and 8)
+More recent discussions about Normalization preservation, whitespace, and UTF in \paper{P2178R1} (Points 1, 2, 3, and 8)
 
 \section{Design}
 
@@ -237,8 +242,39 @@ consensus is that a BOM is not a reasonable portable mechanism for detection of 
 \begin{quoteblock}
 We agree that, for Unicode source files, that normalization is preserved through translation phases 1 and 5.
 
+\textbf{No objection to unanimous consent.}    
+\end{quoteblock}
+
+Polls from the 14-04-2021 (R2)
+
+\begin{quoteblock}
+We wish to require implementations to support UTF-8 source files.
+
 \textbf{No objection to unanimous consent.}
-    
+\end{quoteblock}
+
+
+\begin{quoteblock}
+We wish to require implementations to be capable of accepting UTF-8
+source files whether or not they begin with a U+FEFF byte order mark.
+
+\textbf{No objection to unanimous consent.}
+\end{quoteblock}
+
+\begin{quoteblock}
+We wish to require implementations to have a mode in which they diagnose
+ill-formed UTF-8 source files (regardless of whether the ill-formedness is
+located in comments, header names or string literals).
+\\\\
+\begin{tabular}{|c|c|c|c|c|}
+    \hline
+    SF & F & N & A & SA \\
+    \hline
+    8 & 2 & 0 & 0 & 0 \\
+    \hline
+\end{tabular}
+
+\textbf{Very strongly in favour} 
 \end{quoteblock}
 
 \section{Wording}
@@ -268,24 +304,21 @@ following phases.
     \item
 
 \begin{addedblock}
-    A UTF-8 source file is a source file encoded as a sequence of UTF-8 code units representing a sequence of UCS scalar values as defined in ISO/IEC 10646.
-
-    \begin{note}
-        Invalid UTF-8 code unit sequences in a UTF-8 source file are ill-formed.
-    \end{note}
-    An implementation accepts UTF-8 source files; The set of additional source file character encodings accepted is implementation-defined.
-
-    How the character encoding of a source file is determined is implementation-defined.
-\end{addedblock}
-
-\changed{Physical s}{S}ource file characters are mapped, in an
+    The encoding scheme of a physical source file is determined in an implementation-defined manner.
+    
+    A \defn{UTF-8 file} is a source file encoded with the UTF-8 encoding scheme defined in ISO/IEC 10646.
+    An implementation shall support \defn{UTF-8 file}{s}.
+    If the source file is determined to be a \defn{UTF-8 file}, it shall represent a well-formed sequence of UTF-8 code units and the scalar value of each source character shall be preserved.    
+    
+    For any other encoding scheme supported by the implementation,
+\end{addedblock}\changed{P}{p}hysical source file characters are mapped, in an
 \impldef{mapping physical source file characters to basic source character set} manner,
 to the basic source character set (introducing new-line characters for end-of-line
 indicators) \removed{if necessary}.
 \removed{The set of physical source file characters accepted is \impldef{physical source file characters}}.
 Any source file character not in the basic source character set\iref{lex.charset} is replaced by the \indextext{universal character name}\grammarterm{universal-character-name} that
 designates that character.
-\added{If the source file is a UTF-8 source file, the scalar value of each source character shall be preserved.}
+
 An implementation may use any internal
 encoding, so long as an actual extended character encountered in the
 source file, and the same extended character expressed in the source
@@ -293,7 +326,7 @@ file as a \grammarterm{universal-character-name} (e.g., using the \tcode{\textba
 
 \item
 \indextext{line splicing}%
-\added{If the first codepoint is U+FEFF BYTE ORDER MARK, it is deleted.}
+\added{If the first character is U+FEFF BYTE ORDER MARK, it is deleted.}
 %
 Each instance of a backslash character (\textbackslash)
 immediately followed by zero or more whitespace characters (other than new-line character) followed by a new-line character is deleted, splicing
