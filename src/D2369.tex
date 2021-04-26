@@ -1,0 +1,132 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}%
+\documentclass{wg21}
+\usepackage{threeparttable}
+\usepackage{adjustbox}
+
+\usepackage{array}
+\newcolumntype{?}{!{\vrule width 1pt}}
+
+\title{Relaxing preconditions on \tcode{coroutine\_handle::from\_address}}
+\docnumber{D2369R0}
+\audience{EWG}
+\author{Lewis Baker}{lewissbaker@gmail.com}
+\authortwo{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+
+\section{Abstract}
+This paper avoids the storing of an additional pointer in \tcode{std::generator} by relaxing preconditions on \tcode{coroutine_handle::from_address}.
+
+
+\section{Motivation}
+
+\tcode{std::generator} as presented in \paper{P2168R4} supports yielding elements of a nested generator, which should be implemented via symmetric transfer for performance reason,
+as well as allocator support.
+
+We want to be able to yields elements of a different allocator type
+
+\begin{colorblock}
+    std::generator<int, int, std::allocator> g();
+    std::generator<int, int, my_allocator> f() {
+        co_yield elements_of(g());
+    }
+\end{colorblock}
+
+
+Because the allocator is part of the promise type, f and g do not have the same promise type.
+A good, if not the only implementation strategy for \tcode{std::generator} is for the promise types to share a base_class so that generators of different allocator types can yield each other.
+
+\begin{colorblock}
+template <typename Ref>
+struct promise_base {
+   // data members
+};
+
+template <typename Ref, typename Allocator>
+struct promise : promise_base<Ref,Allocator> {
+    // NO DATA members
+};
+\end{colorblock}
+
+The implementation of symmetric transfer then needs to get access to a promise_base pointer so that the yielded value, exceptions pointer, etc
+are set on the topmost/root generator.
+Within the current wording rules, we have to store that promise_base pointer on the generator itself, as well as on any iterator instance (so that the iterator can access the value),
+because getting a coroutine_handle to a base object is a precondition violation, even if
+
+An implementation is currently required to store a pointer.
+
+By relaxing requierements on \tcode{coroutine_handle::from_address} we can avoid storing that extra pointer, and instead get to the promise through
+\tcode{std::coroutine_handle<promise_base>::from_address(handle.address())}.
+
+\section{Alternatives considered}
+For the purpose of \tcode{std::generator}, implementations could pretend they do not invoke UB, however, we think this change would benefit third-party code.
+
+\section{Priority}
+
+Given that \tcode{std::generator} is a P1 paper, and the change proposed in this paper could not be adopted without ABI break,
+we recommend treating this paper as a P1 paper.
+
+\section{Implementation}
+
+(One of) our \tcode{std::generator} implementation successfully assumed that this undefined behavior did not exist.
+
+\section{Impact}
+
+This affects coroutine support, so both EWG and LEWG might want to look at it.
+
+\section{Wording}
+
+Modify 17.12.4.4 [coroutine.handle.export.import] as follow
+
+\begin{quote}
+\indexlibrarymember{from_address}{coroutine_handle}%
+\begin{itemdecl}
+static constexpr coroutine_handle<Promise> coroutine_handle<Promise>::from_address(void* addr);
+\end{itemdecl}
+
+\begin{itemdescr}
+\expects
+\tcode{addr} was obtained via a prior call to \tcode{address}
+on an object of type \cv \changed{\tcode{coroutine\char`_handle<Promise>}}{\tcode{coroutine\char`_handle<T>}
+        where \tcode{T} is any type such that \tcode{is\char`_pointer\char`_interconvertible\char`_base\char`_of\char`_v<T, Promise>} is \tcode{true}\\
+        and \tcode{alignment\char`_of\char`_v<T> == alignment\char`_of\char`_v<Promise>} is \tcode{true}}.
+
+\end{itemdescr}
+\end{quote}
+
+\section{Feature test macros}
+
+Bump the value of \tcode{__cpp_lib_coroutine} to the date of adoption.
+
+\section{References}
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+\begin{thebibliography}{9}
+    \bibitem[Implementation]{Implementation}
+    Lewis Baker, Corentin Jabot
+    \emph{\tcode{std::generator} implementation}\newline
+    \url{https://github.com/lewissbaker/generator/}
+
+    \bibitem{P2168R4}
+    Corentin Jabot and Lewis Baker.
+    \newblock {P2168R4}: generator: A synchronous coroutine generator compatible
+    with ranges.
+    \newblock \url{https://wg21.link/p2168r4}, 4 2021.
+
+    \bibitem[N4885]{N4885}
+    Thomas Köppe
+    \emph{Working Draft, Standard for Programming Language C++}\newline
+    \url{https://wg21.link/N4885}
+
+
+\end{thebibliography}
+
+\end{document}
