@@ -6,7 +6,7 @@
 \RequirePackage{luatex85}%
 \documentclass{wg21}
 
-\usepackage{luatexja-fontspec}
+
 \RequirePackageWithOptions{fontspec}
 \usepackage{newunicodechar}
 
@@ -16,6 +16,7 @@
 \docnumber{P2361R0}
 \audience{SG-16, EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Aaron Ballman}{aaron.ballman@gmail.com}
 
 \usepackage{tikz}
 \usepackage[twitter]{emoji}
@@ -61,6 +62,8 @@ All of these changes are breaking changes.
 However, a survey of open source projects tend to show that none of the restrictions added
 impact existing code.
 
+\textbf{This proposal does not specify how unevaluated string literals are presented in diagnostic messages}.
+
 \section{Alternative considered}
 
 \subsection{Allowing and ignoring any prefix}
@@ -92,7 +95,7 @@ of \tcode{_Pragma}. Similarly, the only uses of \tcode{_Pragma (u8"")}, \tcode{_
 found in Clang’s test suite (both because these are valid C and because neither GCC nor Clang
 are conforming, only \tcode{L""} is described as valid by the C++ standard).
 
-\subsection{attributes}
+\subsection{Attributes}
 
 Clang does not support strings with an encoding prefix in attributes, other compilers accept them.
 
@@ -123,7 +126,7 @@ static_assert(false, u8"Your code is on @\emoji{1F525}@");
 <source>(1): error C2002: invalid wide-character constant
 \end{codeblock}
 \end{quoteblock}
-\subsection{extern \& asm}
+\subsection{\tcode{extern} \& \tcode{asm}}
 
 No compiler support strings with an encoding prefix in extern and asm statements.
 
@@ -143,20 +146,184 @@ the future; we can imagine the following grammar:
     \keyword{static_assert} \terminal{(} constant-expression \terminal{,} constant-expression \terminal{)} \terminal{;}
 \end{bnf}
 
-Thos may make \tcode{static_assert(true, u8"foo");} valid again as \tcode{u8"foo"} would be a valid constant expression.
+Those may make \tcode{static_assert(true, u8"foo");} valid again as \tcode{u8"foo"} would be a valid constant expression.
+
+
+\section{Implementability}
+
+This proposal requires implentations to keep around a non-encoded string for diagnostic purposes.
+This has recently come up in a clang patch to support EBCDIC as the literal encoding.
+To support diagnostics in this context, especially on a non-EBCDIC platform the original sequence of characters must be retained.
+This proposal offers a well-specified, portable mechanism to solve this problem.
 
 \section{Wording Challenges}
 
 Strings are handled in phase 5 and 6 before the program is parsed,
 which might force us to have a "reversal" of these phases.
 
+\section{Previous works}
+
+\paper{P2246R1} removes wording specific to attributes mandating that diagnostic with characters
+from the basic characters are displayed in diagnostic messages, which was not implementable.
+
 \section{Wording}
 
-Relative to N4885 + P2314 applied.
+\ednote{The wording is relative to N4885 + \paper{P2314R2} applied}
+
+
+\rSec1[lex.phases]{Phases of translation}%
+
+\ednote{Modify "[lex.phases]/p1.6" as follow}
+
+\begin{enumerate}
+\setcounter{enumi}{5}
+\item Adjacent \grammarterm{string-literal}s are concatenated and a null character is appended to the result as specified in [lex.string].
+\added{Adjacent \grammarterm{unevaluated-string-literal}s are concatenated}.
+\end{enumerate}
+
+
+\rSec1[lex.pptoken]{Preprocessing tokens}
+
+\ednote{Modify "5.4 Preprocessing tokens" as follow}
+
+\indextext{token!preprocessing|(}%
+\begin{bnf}
+    \nontermdef{preprocessing-token}\br
+    header-name\br
+    import-keyword\br
+    module-keyword\br
+    export-keyword\br
+    identifier\br
+    pp-number\br
+    character-literal\br
+    user-defined-character-literal\br
+    string-literal\br
+    \added{unevaluated string-literal}\br
+    user-defined-string-literal\br
+    preprocessing-op-or-punc\br
+    \textnormal{each non-whitespace character that cannot be one of the above}
+\end{bnf}
+
+\pnum
+Each preprocessing token that is converted to a token\iref{lex.token}
+shall have the lexical form of a keyword, an identifier, a literal,
+or an operator or punctuator.
+
+\pnum
+A preprocessing token is the minimal lexical element of the language in translation
+phases 3 through 6. The categories of preprocessing token are: header names,
+placeholder tokens produced by preprocessing \tcode{import} and \tcode{module} directives
+(\grammarterm{import-keyword}, \grammarterm{module-keyword}, and \grammarterm{export-keyword}),
+identifiers, preprocessing numbers, character literals (including user-defined character
+literals), string literals (including user-defined string literals \added{and unevaluated string literals}), preprocessing
+operators and punctuators, and single non-whitespace characters that do not lexically
+match the other preprocessing token categories. If a \tcode{'} or a \tcode{"} character
+matches the last category, the behavior is undefined. Preprocessing tokens can be
+separated by
+\indextext{whitespace}%
+whitespace;
+\indextext{comment}%
+this consists of comments\iref{lex.comment}, or whitespace
+characters (space, horizontal tab, new-line, vertical tab, and
+form-feed), or both. As described in \ref{cpp}, in certain
+circumstances during translation phase 4, whitespace (or the absence
+thereof) serves as more than preprocessing token separation. Whitespace
+can appear within a preprocessing token only as part of a header name or
+between the quotation characters in a character literal or
+string literal..
+
+
+
 
 \rSec2[lex.string]{String literals}
 
-// [...]
+\ednote{Modify "[lex.string]" as follow}
+
+\begin{bnf}
+    \nontermdef{string-literal}\br
+    \opt{encoding-prefix} \terminal{"} \opt{s-char-sequence} \terminal{"}\br
+    \opt{encoding-prefix} \terminal{R} raw-string
+\end{bnf}
+
+\begin{addedblock}
+\begin{bnf}
+    \nontermdef{unevaluated string-literal}\br
+    \terminal{"} \opt{s-char-sequence} \terminal{"}\br
+    \terminal{R} raw-string
+\end{bnf}
+\end{addedblock}
+
+\begin{bnf}
+    \nontermdef{s-char-sequence}\br
+    s-char\br
+    s-char-sequence s-char
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{s-char}\br
+    basic-s-char\br
+    escape-sequence\br
+    universal-character-name
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{basic-s-char}\br
+    \textnormal{any member of the basic source character set except the double-quote \terminal{"}, backslash \terminal{\textbackslash}, or new-line character}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{raw-string}\br
+    \terminal{"} \opt{d-char-sequence} \terminal{(} \opt{r-char-sequence} \terminal{)} \opt{d-char-sequence} \terminal{"}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{r-char-sequence}\br
+    r-char\br
+    r-char-sequence r-char
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{r-char}\br
+    \textnormal{any member of the source character set, except a right parenthesis \terminal{)} followed by}\br
+    \bnfindent\textnormal{the initial \grammarterm{d-char-sequence} (which may be empty) followed by a double quote \terminal{"}.}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{d-char-sequence}\br
+    d-char\br
+    d-char-sequence d-char
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{d-char}\br
+    \textnormal{any member of the basic source character set except:}\br
+    \bnfindent\textnormal{space, the left parenthesis \terminal{(}, the right parenthesis \terminal{)}, the backslash \terminal{\textbackslash}, and the control characters}\br
+    \bnfindent\textnormal{representing horizontal tab, vertical tab, form feed, and newline.}
+\end{bnf}
+
+[...]
+
+\pnum
+\indextext{concatenation!string}%
+In translation phase 6\iref{lex.phases}, adjacent \grammarterm{string-literal}{s} are concatenated. If
+both \grammarterm{string-literal}{s} have the same \grammarterm{encoding-prefix}, the resulting concatenated \grammarterm{string-literal} has
+that \grammarterm{encoding-prefix}. If one \grammarterm{string-literal} has no \grammarterm{encoding-prefix}, it is treated as a \grammarterm{string-literal} of
+the same \grammarterm{encoding-prefix} as the other operand. If a UTF-8 string literal token is adjacent to a
+wide string literal token, the program is ill-formed. Any other concatenations are
+conditionally-supported with \impldef{concatenation of some types of \grammarterm{string-literal}s}
+behavior.
+\added{Adjacent \grammarterm{unevaluated string-literal}{s} are concatenated}.
+
+\begin{note}
+    This concatenation is an interpretation, not a conversion.
+    Because the interpretation happens in translation phase 6
+    (after the string literal contents have been encoded in
+    the \grammarterm{string-literal}'s associated character encoding),
+    a \grammarterm{string-literal}'s initial rawness
+    has no effect on the interpretation or well-formedness of the concatenation.
+\end{note}
+
+[...]
 
 \pnum
 Evaluating a \grammarterm{string-literal} results in a string literal object
@@ -244,14 +411,17 @@ in order as follows:
     what effect these sequences have on encoding state.
 \end{itemize}
 
+\ednote{Add after "[lex.string]/p10"}
+
 \begin{addedblock}
-An \grammarterm{unevaluated string-literal} is a \grammarterm{string-literal} which shall have no \tcode{encoding-prefix}.
-%In phase 7, in contexts where an \grammarterm{unevaluated string-literal} is expected, \grammarterm{string-literal} are treated as \grammarterm{unevaluated string-literal}.
-An \grammarterm{unevaluated string-literal} which contains a \grammarterm{numeric-escape-sequence}
-or a \grammarterm{conditional-escape-sequence} is ill-formed.
 Each \grammarterm{universal-character-name} and each \grammarterm{simple-escape-sequence} in an \grammarterm{unevaluated-string-literal} is replaced by the member of the translation set it denotes.
-\grammarterm{unevaluated-string-literal} shall not contain the null character.
+An \grammarterm{unevaluated string-literal} which contains the null character, a \grammarterm{numeric-escape-sequence}
+or a \grammarterm{conditional-escape-sequence} is ill-formed.
+
+An \grammarterm{unevaluated-string-literal} is never evaluated and its interpretation depends on the context in which they appear.
 \end{addedblock}
+
+\ednote{"translation set" is defined in \paper{P2314R2} in [lex.phases]}
 
 
 \rSec1[dcl.dcl]{Declarations}%
@@ -840,7 +1010,7 @@ the behavior is undefined.
 A preprocessing directive of the form
 
 \begin{ncsimplebnf}
-    \terminal{\# line} digit-sequence \terminal{"} \changed{\opt{s-char-sequence}}{unevaluated-string-literal} \terminal{"} new-line
+    \terminal{\# line} digit-sequence \changed{\terminal{"} \opt{s-char-sequence} \terminal{"}}{unevaluated-string-literal} new-line
 \end{ncsimplebnf}
 
 sets the presumed line number similarly and changes the

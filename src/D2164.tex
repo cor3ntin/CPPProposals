@@ -5,8 +5,8 @@
 \documentclass{wg21}
 
 \title{\tcode{views::enumerate}}
-\docnumber{P2164R4}
-\audience{LEWG}
+\docnumber{P2164R5}
+\audience{SG-9}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 \begin{document}
@@ -20,6 +20,18 @@ representing respectively the position and value of the elements in the adapted 
 
 \section{Revisions}
 
+\subsection{R5}
+
+Instead of adding complexity to \tcode{enumerate_result}, we assume changes made by \paper{P2165R2}.
+\paper{P2165R2} makes \tcode{pair} constructible from \placeholder{pair-like} objects, and associative containers deduction guides work
+with ranges of \placeholder{pair-like} objects.
+With these changes, \tcode{enumerate_result} can remain a simple aggregate. We just need to implement the tuple protocol for it (\tcode{get}, \tcode{tuple_element}, \tcode{tuple_size}).
+
+For simplicity, consistency with \tcode{zip} and \tcode{carthesian_product} and to avoid \tcode{enumerate_result} propagating,
+the reference type of \tcode{enumerate_view} is \tcode{enumerate_result}  and its value type is \tcode{tuple}.
+
+\paper{P2165R2} ensures a common reference exists as long as one exists between each element.
+
 \subsection{R4}
 
 This revision is intended to illustrate the effort necessary to support named fields for \tcode{index} and \tcode{value}.
@@ -28,8 +40,7 @@ In previous revisions, the value and reference types were identical, a regrettab
 
 If that direction is acceptable, better wording will be provided to account for these new \tcode{reference} and \tcode{value_type} types.
 
-This revision also gets rid of the \tcode{const} \tcode{index} value as LEWG strongly agreed that it was a terrible idea to begin with,
-one that would make composition with other views cumbersome.
+This revision also gets rid of the \tcode{const} \tcode{index} value as LEWG strongly agreed that it was a terrible idea to begin with, one that would make composition with other views cumbersome.
 
 \subsection{R3}
 
@@ -77,9 +88,8 @@ for(const auto & d : days) {
 std::vector days{"Mon", "Tue",
   "Wed", "Thu", "Fri", "Sat", "Sun"};
 
-for(const auto & [idx, d]
-      : std::views::enumerate(days)) {
-    print("{} {} \n", idx, d);
+for(const auto & e : std::views::enumerate(days)) {
+    print("{} {} \n", e.index, e.value);
 }
 
 \end{colorblock}
@@ -91,8 +101,7 @@ for(const auto & [idx, d]
 
 \section{Motivation}
 
-The impossibility to extract an index from a range-based for loop leads to the use of non-range based for loop,
-or the introduction of a variable in the outer scope. This is both more verbose and error-prone: in the example above, the type of \tcode{index} is incorrect.
+The impossibility to extract an index from a range-based for loop leads to the use of non-range-based \tcode{for} loops, or the introduction of a variable in the outer scope. This is both more verbose and error-prone: in the example above, the type of \tcode{idx} is incorrect.
 
 \tcode{enumerate} is a library solution solving this problem, enabling the use of range-based for loops in more cases.
 
@@ -106,98 +115,71 @@ my_vector | views::enumerate | ranges::to<map>;
 This feature exists in some form in Python, Rust, Go (backed into the language), and in many C++ libraries: ranges-v3, folly, boost::ranges (\tcode{indexed}).
 
 
-The existence of this feature or lack thereof is the subject of recurring stackoverflow questions.
+The existence of this feature or lack thereof is the subject of recurring StackOverflow questions.
 
 
 \section{Design}
 
-\subsection{The result is \sout{a simple aggregate} the simple type that would satisfy the \tcode{common_reference} requierements}
+\subsection{The reference type is a simple aggregate with name members}
 
-Following the trend of using meaningful names instead of returning pairs or tuples, this proposal uses structured with named public members.
+Following the trend of using meaningful names instead of returning pairs or tuples, this proposal uses a struct with named public members.
 \begin{colorblock}
-struct result {
+struct enumerate_result {
     count index;
     T value;
 };
 \end{colorblock}
 
-This design was previously discussed by LEWGI in Belfast in the context of \paper{P1894R0}.
+This design was previously discussed by LEWGI in Belfast in the context of \paper{P1894R0}, and many people have expressed a desire for such struct with names.
+Using this struct for both the reference type and the value type would add significant complexity, as the value and reference type need to share a \tcode{common_reference} (see \paper{P2164R4}).
 
-Unfortunately, to satisfy the \tcode{indirectly_readable} requierements, the \tcode{value_type} and \tcode{reference_type} must have a common
-reference.
+Instead, we propose that the reference type is \tcode{enumerate_result<index, range_reference_t<Base>>} and the value type is
+\tcode{tuple<index, range_value_t<Base>>}.
 
-This adds some complexity to the design.
-Below would be the minimum implementation of the value \& reference types:
+With is design, only \tcode{get}, \tcode{tuple_element}, \tcode{tuple_size} need to be implemented for \tcode{enumerate_result},
+and \tcode{enumerate_result} remains a simple aggregate.
 
-\begin{smallcolorblock}
-template <typename count_type, typename T>
-struct result {
+This design works nicely with \tcode{ranges::to} as it will create a container based on the \tcode{value} type:
 
-    count_type index;
-    T value;
+\begin{colorblock}
+std::vector<double> v;
+enumerate(view) | to<std::vector>(); // std::vector<std::tuple<std::size_t, double>>.
+enumerate(view) | to<std::map>();    // std::map<std::size_t, double>.
+\end{colorblock}
 
-    result() requires std::is_default_constructible_v<T> = default;
+This gives us some consistency: \tcode{enumerate}'s value type is a \tcode{tuple}, similar to that of \tcode{zip}, \tcode{carthesian_product},
+while retaining the ease of use and added benefits of a struct with named members while iterating over an \tcode{enumerate_view}.
 
-    template <typename U>
-    requires std::constructible_from<T, U>
-    result(count_type index, U&& value)
-    noexcept(std::is_nothrow_constructible_v<T, U>)
-    : index(index), value(std::forward<U>(value)) {}
+\subsection{Why not just always return a tuple/pair and rely on structure binding?}
 
-    result(const result & other) requires std::copyable<T> = default;
+If a range reference type is convertible to the index type,
+it is error-prone whether one should write
 
-    template <typename U>
-    requires std::constructible_from<T, U>
-    result(enumerate_result_tcount_type, U> && other)
-    noexcept(std::is_nothrow_constructible_v<T, U>)
-    : index(other.index), value(std::forward<enumerate_result_tcount_type, U>>(other).value) {};
+\begin{colorblock}
+for(auto && [value, index] : view | std::views::enumerate)
+for(auto && [index, value] : view | std::views::enumerate)
+\end{colorblock}
 
-    template <typename U>
-    requires std::constructible_from<T, U>
-    result(const enumerate_result_tcount_type, U> & other)
-    noexcept(std::is_nothrow_constructible_v<T, U>)
-    : index(other.index), value(other.value) {};
+Having named members avoids this issue.
+The feedback I keep getting is "we should use a struct if we can". Which is consistent with previous LEWG guidelines to avoid using pair
+when a more meaningful type is possible.
 
-    result & operator=(const result & other) requires std::assignable_from<T, T> = default;
+And we can. The proposed design in R5 is not involved.
+Keep in mind that zipping the view with iota \href{https://github.com/ericniebler/range-v3/issues/1141}{does not actually work}
+(see also \href{http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2020/p2214r0.html#enumerates-first-range}{\paper{P2214R0}}),
+and a custom \tcode{index_view} would need to be used as the first range composed with \tcode{zip}, so a custom \tcode{enumerate} view with
+appropriately named members is not adding a lot of work if we pursue \paper{P2165R2}.
 
-    template <typename U>
-    requires std::convertible_to<U, T>
-    result & operator=(const enumerate_result_tcount_type, U> & other)
-    noexcept(noexcept(value  = std::forward<enumerate_result_tcount_type, U>>(other).value)) {
-        index  = other.index;
-        value  = other.value;
-        return *this;
-    }
+Granted, \paper{P2165R2} and this paper justify each other, and \paper{P2165R2} is not a trivial amount of work.
+However, P2165 offers further benefits besides enabling a slightly nicer enumerate, so if we think P2165 is generally useful,
+we can pursue this paper. If we don't, we can quickly respecify \tcode{enumerate} in terms of \tcode{zip} and some \tcode{index_view}, for which we
+have usage experience.
 
-    template <typename U>
-    requires std::equality_comparable_with<T,U>
-    constexpr bool operator==(const enumerate_result_tcount_type, U> &other) const noexcept {
-        return other.index == index && other.value = value;
-    }
+\tcode{enumerate} as presented here is slightly less work for the compiler, but both solutions generate similar assembly.
 
-    template <typename U>
-    requires std::three_way_comparable_with<T,U>
-    constexpr auto operator<=>(const enumerate_result_tcount_type, U> &other) const noexcept {
-        std::tie(index, value) <=> std::tie(other.index, other.value);
-    }
+\subsection{index_type}
 
-    template <typename U>
-    friend void swap(result & a, enumerate_result_tcount_type, U>& b);
-};
-\end{smallcolorblock}
-
-I think it's very important here not to try to recreate a \tcode{pair}.
-This type should not be a general-purpose type with different names than pair.
-As such it has fewer constructors (doesn't need to be constructed from literals), no deduction guides, etc.
-Missing at the moment is support for \tcode{tuple_size}, \tcode{tuple_element}, \tcode{get}.
-Ideally convertibility to \tcode{tuple} is desired.  This could be dealt with something like \paper{P2165R0} (a paper which needs a redesign to support types like \tcode{array}...).
-
-Despite that newly discovered complexity, I remained convince that it's worth the effort to get these names,
-and several people have expressed to me that they want names "if we can get them".
-
-\subsection{count_type}
-
-\tcode{count_type} is defined as follow:
+\tcode{index_type} is defined as follow:
 \begin{itemize}
     \item \tcode{ranges::range_size_t<Base>} if \tcode{Base} models \tcode{ranges::sized_range}
     \item Otherwise, \tcode{make_unsigned_t<ranges::range_difference_t<Base>>}
@@ -208,7 +190,7 @@ This is consistent with ranges-v3 and allows the view to support both sized and 
 
 \subsection{Performance}
 
-An optimizing compiler can generate the same machine code for \tcode{views::enumerate} as it would for an equivalent \tcode{for} loop.  \href{https://godbolt.org/z/2Kxo8d}{Compiler Explorer}
+An optimizing compiler can generate the same machine code for \tcode{views::enumerate} as it would for an equivalent \tcode{for} loop.  \href{https://godbolt.org/z/2Kxo8d}{Compiler Explorer} \ednote{This implementation is a prototype not fully reflective of the proposed design}.
 
 
 \subsection{Implementation}
@@ -224,6 +206,8 @@ representing respectively the position and value of the elements in the adapted 
 \section{Wording}
 
 \begin{addedblock}
+
+\ednote{TODO: ranges synopsis}
 
 \rSec2[range.enumerate]{Enumerate view}
 
@@ -252,52 +236,27 @@ for (auto [index, value] : enumerate(vec) )
 
 \begin{codeblock}
 namespace std::ranges {
-
-
-    template <typename count_type, typename T>
-    struct enumerate_result_t {
-
-        count_type index;
-        T value;
-
-        enumerate_result_t() requires std::is_default_constructible_v<T> = default;
-
-        template <typename U>
-        requires std::constructible_from<T, U>
-        enumerate_result_t(count_type index, U&& value) noexcept(std::is_nothrow_constructible_v<T, U>);
-
-        enumerate_result_t(const result & other)
-        requires std::copyable<T> = default;
-
-        template <typename U>
-        requires std::constructible_from<T, U>
-        enumerate_result_t(enumerate_result_tcount_type, U> && other)
-        noexcept(std::is_nothrow_constructible_v<T, U>);
-
-        template <typename U>
-        requires std::constructible_from<T, U>
-        enumerate_result_t(const enumerate_result_t<count_type, U> & other)
-        noexcept(std::is_nothrow_constructible_v<T, U>);
-
-        enumerate_result_t & operator=(const enumerate_result_t & other)
-        requires std::assignable_from<T, T> = default;
-
-        template <typename U>
-        requires std::convertible_to<U, T>
-        enumerate_result_t & operator=(const enumerate_result_tcount_type, U> & other)
-        noexcept(noexcept(value  = std::forward<enumerate_result_t<count_type, U>>(other).value));
-
-        template <typename U>
-        requires std::equality_comparable_with<T,U>
-        constexpr bool operator==(const enumerate_result_tcount_type, U> &other) const noexcept;
-
-        template <typename U>
-        requires std::three_way_comparable_with<T,U>
-        constexpr auto operator<=>(const enumerate_result_tcount_type, U> &other) const noexcept;
-
-        template <typename U>
-        friend void swap(result & a, enumerate_result_tcount_type, U>& b);
+    template <class Index, class Value>
+    struct enumerate_result {
+        Index index;
+        Value value;
     };
+
+    template<size_t I, class Index, class Value>
+    constexpr tuple_element_t<I, enumerate_result<Index, Value>>&
+    get(enumerate_result<Index, Value>&) noexcept;
+
+    template<size_t I, class Index, class Value>
+    constexpr tuple_element_t<I, enumerate_result<Index, Value>>&&
+    get(enumerate_result<Index, Value>&&) noexcept;
+
+    template<size_t I, class Index, class Value>
+    constexpr const tuple_element_t<I, enumerate_result<Index, Value>>&
+    get(const enumerate_result<Index, Value>&) noexcept;
+
+    template<size_t I, class Index, class Value>
+    constexpr const tuple_element_t<I, enumerate_result<Index, Value>>&&
+    get(const enumerate_result<Index, Value>&&) noexcept;
 
     template<@\libconcept{input_range}@ V>
     requires view<V>
@@ -353,8 +312,63 @@ namespace std::ranges {
     };
     template<class R>
     enumerate_view(R&&) -> enumerate_view<views::all_t<R>>;
+}
+
+namespace std {
+
+   template<class Index, class Value>
+   struct tuple_size<ranges::enumerate_result<Index, Value>> : integral_constant<size_t, 2> { };
+
+   template<size_t I, class Index, class Value>
+   struct tuple_element<I, ranges::enumerate_result<Index, Value>> {
+       using type = see below ;
+   };
+
+}
 
 \end{codeblock}
+
+\begin{itemdecl}
+template<size_t I, class Index, class Value>
+struct tuple_element<I, ranges::enumerate_result<Index, Value>> {
+    using type = @\seebelow@;
+};
+\end{itemdecl}
+
+\begin{itemdescr}
+\mandates \tcode{I < 2}.
+
+\ctype The type \tcode{Index} if \tcode{I} is \tcode{0}, otherwise the type \tcode{Value}.
+\end{itemdescr}
+
+
+\begin{itemdecl}
+template<size_t I, class Index, class Value>
+constexpr tuple_element_t<I, enumerate_result<Index, Value>>&
+get(enumerate_result<Index, Value>& r) noexcept;
+
+template<size_t I, class Index, class Value>
+constexpr tuple_element_t<I, enumerate_result<Index, Value>>&&
+get(enumerate_result<Index, Value>&& r) noexcept;
+
+template<size_t I, class Index, class Value>
+constexpr const tuple_element_t<I, enumerate_result<Index, Value>>&
+get(const enumerate_result<Index, Value>& r) noexcept;
+
+template<size_t I, class Index, class Value>
+constexpr const tuple_element_t<I, enumerate_result<Index, Value>>&&
+get(const enumerate_result<Index, Value>&& r) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\mandates \tcode{I < 2}.
+\returns
+\begin{itemize}
+\item if {I} is 0, returns a reference to \tcode{r.index}.
+\item if {I} is 1, returns a reference to \tcode{r.value}.
+\end{itemize}
+\end{itemdescr}
+
 
 \begin{itemdecl}
     constexpr enumerate_view(V base);
@@ -376,17 +390,17 @@ namespace std::ranges {
     class enumerate_view<V>::@\exposid{iterator}@ {
 
         using Base = conditional_t<Const, const V, V>;
-        using count_type = @\seebelow@;
+        using index_type = @\seebelow@;
 
         iterator_t<Base> current_ = iterator_t<Base>();
-        count_type pos_ = 0;
+        index_type pos_ = 0;
 
 
       public:
         using iterator_category = typename iterator_traits<iterator_t<Base>>::iterator_category;
 
-        using reference = enumerate_result_t<count_type, range_reference_t<Base>>;
-        using value_type = enumerate_result_t<count_type, range_value_t<Base>>;
+        using reference  = enumerate_result<index_type, range_reference_t<Base>>;
+        using value_type = tuple<index_type, range_value_t<Base>>;
 
         using difference_type = range_difference_t<Base>;
 
@@ -448,7 +462,7 @@ namespace std::ranges {
 \end{codeblock}
 
 
-\tcode{iterator::count_type} is defined as follow:
+\tcode{iterator::index_type} is defined as follow:
 \begin{itemize}
     \item \tcode{ranges::range_size_t<Base>} if \tcode{Base} models \tcode{ranges::sized_range}
     \item Otherwise, \tcode{make_unsigned_t<ranges::range_difference_t<Base>>}
@@ -463,7 +477,7 @@ namespace std::ranges {
 \begin{itemdescr}
     \pnum
     \effects
-    Initializes \tcode{current_} with \tcode{move(current)} and \exposid{pos} with \tcode{static_cast<count_type>(pos)}.
+    Initializes \tcode{current_} with \tcode{move(current)} and \exposid{pos} with \tcode{static_cast<index_type>(pos)}.
 \end{itemdescr}
 
 \begin{itemdecl}
@@ -820,10 +834,9 @@ namespace std::ranges {
 \section{References}
 \renewcommand{\section}[2]{}%
 \bibliographystyle{plain}
-\bibliography{wg21}
+\bibliography{wg21, extra}
 
 \begin{thebibliography}{9}
-
     \bibitem[N4878]{N4878}
     Richard Smith
     \emph{Working Draft, Standard for Programming Language C++}\newline

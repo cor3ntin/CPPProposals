@@ -6,12 +6,12 @@
 \documentclass{wg21}
 \usepackage{threeparttable}
 \usepackage{adjustbox}
-
+\usepackage{xcolor,colortbl}
 \usepackage{array}
 \newcolumntype{?}{!{\vrule width 1pt}}
 
 \title{\tcode{std::generator}: Synchronous Coroutine Generator for Ranges}
-\docnumber{D2168R3}
+\docnumber{D2168R5}
 \audience{LEWG}
 \author{Lewis Baker}{lewissbaker@gmail.com}
 \authortwo{Corentin Jabot}{corentin.jabot@gmail.com}
@@ -22,7 +22,7 @@
 
 \section{Abstract}
 
-We propose a standard library type \tcode{std::generator} which implements a coroutine generator compatible with ranges
+We propose a standard library type \tcode{std::generator} which implements a coroutine generator compatible with ranges.
 
 
 \section{Revisions}
@@ -82,12 +82,12 @@ We propose a standard library type \tcode{std::generator} which implements a cor
 C++ 20 had very minimalist library support for coroutines.
 Synchronous generators are an important use case for coroutines, one that cannot be supported without
 the machinery presented in this paper.
-Writing an efficient and correctly behaving recursive generator is non-trivial, the standard should provide one.
+Writing an efficient and correctly behaving recursive generator is non-trivial. The standard should provide one.
 
 
 \section{Design}
 
-While the proposed \tcode{std::generator} interface is fairly straight-forward, a few decisions are worth pointing out.
+While the proposed \tcode{std::generator} interface is fairly straightforward, a few decisions are worth pointing out.
 
 \subsection{\tcode{input_view}}
 
@@ -122,9 +122,236 @@ Multiple options are available as to where put the \tcode{generator} class.
 
 \end{itemize}
 
+\section{Reference type}
+
+\tcode{generator} takes 3 template parameters:
+
+\tcode{generator<Type, Value, Allocator>}
+
+\begin{itemize}
+\item a \tcode{Type} from which the \tcode{reference} type is derived
+\item a \tcode{Value} type, whose default is derived from the Reference type, and which has a \mbox{\tcode{common\_reference}} with the reference type
+\item An allocator or \tcode{use_allocator_arg} which is the default value.
+\end{itemize}
+
+Only the first parameter is required, and we expect most users to concern themselves with that first parameter, as good defaults are provided for the other two.
+That first parameter controls the iterator's \tcode{reference} type. But that in turns informs both the types passed to \tcode{yield_value},
+which also impacts how values are stored in the implementation.
+
+This first \tcode{Type} parameter, therefore, does a lot of heavy lifting.
+In earlier versions of this paper, the reference type was exactly the first template parameter.
+This had the advantage of being simple.
+But it was a terrible performance trap:
+
+Consider the behavior of the following code assuming the reference type is exactly the first template argument:
+
+\begin{colorblock}
+
+generator<std::string> f() {
+    std::string hello = "hello";
+    co_yield hello;   // 0 or 1 copy depending on implementation
+    co_yield "Hello"; // 1 copy (conversion from const char* to std::string)
+}
+
+for(auto && str : f()) {} // 1 copy (*it returns std::string)
+\end{colorblock}
+
+Of course the solution, which we advocated for, is for the user to specify manually specify an explicit reference type:
+
+\begin{colorblock}
+    generator<const std::string&> f() {
+        co_yield hello;   // 0 or 1 copy depending on implementation
+        co_yield "Hello"; // 1 copy (conversion from const char* to std::string)
+    }
+
+    for(auto && str : f()) {} // 0 copy
+
+\end{colorblock}
+
+This works can be explained and is even logical. You get what you asked for.
+It is nonetheless surprising for non-experts that it would create 2 copies.
+
+To hope users would not routinely forget to use a reference type when using \tcode{std::generator} calls for a heaping barrel of optimism.
+
+Instead we propose that for a \tcode{generator<T>}, its reference type be defined as\\
+\tcode{conditional_t<is_reference<T>, T, std::add_lvalue_reference_t<std::add_const_t<T>>>}.
+
+\newcommand{\cellif}{\cellcolor{red!25}IF}
+\newcommand{\cellid}{\cellcolor{red!70}IF}
+\newcommand{\cellbl}{\cellcolor{green!70}0}
+\newcommand{\cellzr}{\cellcolor{green!25}0}
+\newcommand{\cellon}{\cellcolor{orange!25}1}
+
+
+\begin{tabular}{|c|c|c|c|c|}
+    \hline
+    First parameter &  reference type & default value& can yield mutable lvalue ref?\\ \hline
+    \tcode{int} & \tcode{const int\&} & \tcode{int} & No \\ \hline
+    \tcode{const int\&} & \tcode{const int\&} & \tcode{int} & No \\ \hline
+    \tcode{int\&} & \tcode{int\&} & \tcode{int} & Yes \\ \hline
+    \tcode{int\&\&} & \tcode{int\&\&} & \tcode{int} & No \\ \hline
+    \tcode{const int\&\&} & \tcode{const int\&\&} & \tcode{int} & No \\ \hline
+\end{tabular}
+
+Attempts have been made to characterize the exact relations between reference, value, storage, and co_yield exception types and categories.
+Ultimately, a simpler mental model is to characterize what expressions can be yielded for a given reference type and how many copies are made for each scenario.
+
+\begin{tabular}{|c|c|c|c|c|}
+    \hline
+    First parameter & \tcode{co_yield const T\&} & \tcode{co_yield T\&} & \tcode{co_yield T\&\&}& \tcode{co_yield U\&\&}\\ \hline
+    \tcode{T}           & \cellbl & \cellbl & \cellbl & \cellon \\ \hline
+    \tcode{const T\&}   & \cellzr & \cellzr & \cellzr & \cellon \\ \hline
+    \tcode{T\&}         & \cellif & \cellzr & \cellif & \cellif \\ \hline
+    \tcode{T\&\&}       & \cellif & \cellif & \cellzr & \cellon \\ \hline
+    \tcode{const T\&\&} & \cellif & \cellif & \cellzr & \cellon \\ \hline
+\end{tabular}
+
+In this table, we see that only \tcode{co_yield} that requires conversion incurs copy, which is expected.
+Coroutines guarantee that the yielded expression exceeds the lifetime of the \tcode{co_yield} expression,
+so \tcode{generator} can only store a pointer to that reference.
+
+\tcode{co_yield} expressions involving conversion can store the yielded value in an awaiter.
+The type of the stored expression is the reference type with its reference qualifiers stripped, but that is an implementation
+detail that is not observable and is therefore of limited interest. Of course, that type needs to be constructible from yielded values.
+
+Besides the T case, this behaves very much like returning from a function that is intended.
+
+\subsection{Move-only and immovable types}
+
+LEWG was interested in how this works with \tcode{generator} of move-only and immovable types.
+
+
+\begin{tabular}{|c|c|c|c|}
+\hline
+First parameter & \tcode{co_yield const T\&} & \tcode{co_yield T\&} & \tcode{co_yield T\&\&}\\ \hline
+\tcode{move_only}           & \cellbl & \cellbl & \cellbl \\ \hline
+\tcode{const move_only\&}   & \cellzr & \cellzr & \cellzr \\ \hline
+\tcode{move_only\&}         & \cellif & \cellzr & \cellif \\ \hline
+\tcode{move_only\&\&}       & \cellif & \cellif & \cellzr \\ \hline
+\tcode{const move_only\&\&} & \cellif & \cellif & \cellzr \\ \hline \hline
+
+\tcode{immovable}           & \cellbl & \cellbl & \cellbl \\ \hline
+\tcode{const immovable\&}   & \cellzr & \cellzr & \cellzr \\ \hline
+\tcode{immovable\&}         & \cellif & \cellzr & \cellif \\ \hline
+\tcode{immovable\&\&}       & \cellif & \cellif & \cellzr \\ \hline
+\tcode{const immovable\&\&} & \cellif & \cellif & \cellzr \\ \hline
+\end{tabular}
+
+As that table shows, these types work exactly like other types.
+However, to be able to move from a move only reference type, the coroutine has to explicitely state so:
+
+\begin{colorblock}
+auto f = []() -> std::generator<move_only> { co_yield move_only{}; }();
+for(auto&& x : f) {
+    move_only mo = std::move(x); // ill-formed, decltype(x) is const move_only&
+}
+
+auto f = []() -> std::generator<move_only&&> { co_yield move_only{}; }();
+for(auto&& x : f) {
+    move_only mo = x // ok
+}
+
+auto f = []() -> std::generator<move_only&> { move_only m; co_yield m; }();
+for(auto&& x : f) {
+    move_only mo = std::move(x) // dicey but okay
+}
+
+\end{colorblock}
+
+\subsection{Potential downsides}
+
+
+\begin{colorblock}
+auto f = []() -> std::generator<MyType> { 
+    MyType t; 
+    co_yield std::move(t);
+}();
+\end{colorblock}
+
+In the example above \tcode{std::move} doesn't move. Arguably more than usual.
+Indedd the code expands to something similar to:
+
+\begin{colorblock}
+
+auto && __temp = std::move(t);
+yield_value(_temp); // <=> promise.value = std::addressof(__temp); // no move
+
+\end{colorblock}
+
+Of course, a move would not have occured for a \tcode{std::generator<const MyType\&>} either as these things are identical.
+It might be suprising?
+The only way to avoid that is to create temporary value for rvalue reference, which would force a move to actually occurs,
+at the cost of performance.
+
+
+\subsection{Alternatives considered}
+
+\subsubsection{Mandating a reference as the first parameter}
+
+We could make \tcode{generator<int>} ill-formed and force people to specify a reference type like \tcode{generator<const int\&>}.
+We do not think this is very user-friendly, given that we can provide a reasonable default.
+
+We rejected this option.
+
+\subsubsection{Using \tcode{T\&} as the default}
+
+There are two issues with mutable references:
+\begin{itemize}
+\item They are mutable (They allow mutating the coroutine frame), which would be an \emph{interesting} default.
+\item They are very restrictive as to the set of \tcode{co_yield} expression allowed with them.
+\end{itemize}
+
+We rejected this option.
+
+\subsubsection{Using \tcode{T\&\&} as the default}
+
+This avoids a copy when doing \tcode{auto object = *it`} (where it is a \tcode{std::generator::iterator}),
+but it is very easy to missuse, consider:
+
+\begin{colorblock}
+auto f = []() -> std::generator<std::string> { co_yield "footgun"; }();
+for(auto && x : f) {
+    auto y = x; // nothing suggest a move
+    y.transform();
+    if(x != y) {
+        // always triggers, likely to be supprising
+    }
+}
+
+\end{colorblock}
+We rejected this option.
+
+
+\subsubsection{Doing something clever for move-only types}
+
+We considered returning \tcode{T\&} for move_only types so that they can be moved from by default.
+We realized this was too clever and inconsistent.
+Notably, adding a copy constructor to \tcode{T} would change the meaning of the code.
+
+We rejected this option.
+
+\subsubsection{Doing something clever for reference types}
+
+By default \tcode{generator<reference_wrapper<T>>} could yield \tcode{reference_wrapper<T>} has that is already a "reference-like" type.
+However, no other view does that, "reference-like" is fuzzily defined, and this would probably cause more trouble than it's worth.
+
+We rejected this option.
+
+\subsubsection{Keeping the R4 design}
+
+Returning values has the potential to severely impact performance, is inconsistent with other views, and is not necessary.
+It also did not work with non-copyable types.
+
+The change, along with an implementation strategy described in the "How to store the yielded value in the promise type?" guarantees that
+no copy needs to be made if the reference and yielded types are the same (with qualifiers stripped).
+
+We think this new approach keeps the simplicity of the original design, improves performance, and works with more types.
+
+Thank you LEWG, and in particular Mathias, for highlighting these concerns!
+
 \subsection{Separately specifyable Value Type}
 
-This proposal supports specifying both the "yielded" type, which is the iterator ""reference"" type (not required to be a reference), and its corresponding value type.
+This proposal supports specifying both the "yielded" type, which is the iterator ""reference"" type (not required to be a reference) and its corresponding value type.
 This allow ranges to handle proxy types and wrapped \tcode{reference}, like this implementation of \tcode{zip}:
 
 \begin{colorblock}
@@ -147,7 +374,7 @@ This allow ranges to handle proxy types and wrapped \tcode{reference}, like this
     }
 \end{colorblock}
 
-In this second example, using \tcode{string} as value type ensures that calling code can take the necessay steps
+In this second example, using \tcode{string} as value type ensures that calling code can take the necessary steps
 to make sure iterating over a generator would not invalidate any of the yielded values
 
 \begin{colorblock}
@@ -175,6 +402,63 @@ std::generator<std::string_view, std::string> strings() {
 auto v = std::ranges::to<vector>(strings()); // (@{\paper{P1206R3}}@)
 
 \end{colorblock}
+
+
+\subsection{How to store the yielded value in the promise type?}
+
+There are multiple implementation strategies possible to store the value in the generator.
+A previous revision of this paper always stored a copy of the yielded value, leading to an extra copy.
+
+However, the yielded expression is guaranteed to be alive until the coroutine resumes. It is, therefore, sufficient to store
+its address.
+
+We can take advantage of that fact by only storing a pointer in the generator. When a copy needs to be made
+by \tcode{yield_value} (because the yielded value is not of the same type or cannot bind to the reference type), we can store the value in an awaiter that will remain alive until the end of the co_yield expression.
+
+\begin{colorblock}
+
+    std::suspend_always yield_value(const Ref& x) {
+        auto &root = rootOrLeaf_.promise();
+        root.valuePtr_ = std::addressof(x);
+        return {};
+    }
+
+    std::suspend_always yield_value(Ref& x) {
+        auto &root = rootOrLeaf_.promise();
+        root.valuePtr_ = std::addressof(x);
+        return {};
+    }
+
+    template<typename T = std::remove_cvref_t<Ref>>
+    requires !is_reference_v<Ref> && is_constructible_v<Ref, T>
+    auto yield_value(T&& x) {
+        struct yield_value_holder {
+            Ref ref;
+
+            bool await_ready() noexcept { return false; }
+
+            template<typename Promise>
+            void await_suspend(coroutine_handle<Promise> h) noexcept {
+                h.promise().valuePtr_ = addressof(ref);
+            }
+            void await_resume() noexcept {}
+        };
+        return yield_value_holder{forward<T>(x)};
+    }
+\end{colorblock}
+
+
+A drawback of this solution is that the yielded value is only destroyed at the end of the
+full expression:
+\begin{colorblock}
+    (co_yield x, co_yield y); // x is destroyed after y is yielded.
+\end{colorblock}
+
+We think this is a reasonable tradeoff as it avoids a copy.
+Further optimization could be done to copy small values - and avoid an indirection.
+But it is unclear what the cost of this indirection is, as none of these accesses should result in cache misses).
+
+To support this implementation strategy, the wording does not specify a type for the return value of \tcode{yield_value}.
 
 
 \subsection{Recursive generator}
@@ -239,7 +523,7 @@ and is more cumbersome to write
 
 Exceptions that propagate out of the body of nested \tcode{generator} coroutines
 are rethrown into the parent coroutine from the \tcode{co_yield} expression rather
-than propagating out of the top-level `iterator::operator++()`. This follows the mental model that `co_yield someGenerator` is semantically equivalent to manually
+than propagating out of the top-level \tcode{iterator::operator++()}. This follows the mental model that  \tcode{co_yield someGenerator} is semantically equivalent to manually
 iterating over the elements and yielding each element.
 
 For example: \tcode{nested_ints()} is semantically equivalent to \tcode{manual_ints()}
@@ -321,10 +605,10 @@ The recursive form can be implemented efficiently with symmetric transfer.
 Earlier works in \cite{CppCoro} implemented this feature in a distinct \tcode{recursive_generator} type.
 
 However, it appears that a single type is reasonably efficient thanks to HALO optimizations and symmetric transfer.
-The memory cost of that feature is 3 extra pointers per generator.
+The memory cost of that feature is three extra pointers per generator.
 It is difficult to evaluate the runtime cost of our design given the current coroutine support in compilers.
 However our tests show no noticeable difference between a \tcode{generator} and a \tcode{recursive_generator}
-which is called non recursively. It is worth noting that the proposed design makes sure that HALO \cite{P0981R0} optimizations are possible.
+which is called non-recursively. It is worth noting that the proposed design makes sure that HALO \cite{P0981R0} optimizations are possible.
 
 While we think a single \tcode{generator} type is sufficient and offers a better API, there are three options:
 
@@ -366,78 +650,11 @@ While we think a single \tcode{generator} type is sufficient and offers a better
 \end{itemize}
 
 Symmetric transfer is possible for different generator types as long as the \tcode{reference} type is the same, aka,
-different value type or allocator type does not preclude symmetric transfer (see sectiion on allocators).
-
-\subsection{How to store the yielded value in the promise type?}
-
-When the \tcode{reference} type of \tcode{generator} is not a reference,
-A copy of the yielded value need to be stored, to support both rvalue references and
-yielding values of different types (which are convertible_to \tcode{reference}).
-
-
-There are multiple implementation strategies possible to store the value in the generator.
-A previous revision of this paper always stored a copy of the yielded value.
-When the reference type was not a reference, this led to two copies:
- - One at the point of the co_yield expression
- - One when calling the \tcode{iterator::operator*}.
-
-However, the yielded expression is guaranteed to be alive until the coroutine resumes, it is, therefore, sufficient to store
-its address.
-
-We can take advantage of that fact by only storing a pointer in the generator. When a copy needs to be made
-by \tcode{yield_value} (because the yielded value is not of the same type, or cannot bind to the reference type), we can store the value in an awaiter that will remain alive until the end of the co_yield expression.
-
-\begin{colorblock}
-
-std::suspend_always yield_value(const Ref& x) {
-    auto &root = rootOrLeaf_.promise();
-    root.valuePtr_ = std::addressof(x);
-    return {};
-}
-
-std::suspend_always yield_value(Ref& x) {
-    auto &root = rootOrLeaf_.promise();
-    root.valuePtr_ = std::addressof(x);
-    return {};
-}
-
-template<typename T = std::remove_cvref_t<Ref>>
-requires !is_reference_v<Ref> && is_constructible_v<Ref, T>
-auto yield_value(T&& x) {
-    struct yield_value_holder {
-        Ref ref;
-
-        bool await_ready() noexcept { return false; }
-
-        template<typename Promise>
-        void await_suspend(coroutine_handle<Promise> h) noexcept {
-            h.promise().valuePtr_ = addressof(ref);
-        }
-        void await_resume() noexcept {}
-    };
-    return yield_value_holder{forward<T>(x)};
-}
-\end{colorblock}
-
-
-A drawback of this solution is that the yielded value is only destroyed at the end of the
-full expression:
-\begin{colorblock}
-(co_yield x, co_yield y); // x is destroyed after y is yielded.
-\end{colorblock}
-
-We think this is a reasonable tradeof as it avoids a copy.
-Further optimization could be done to copy small values - and avoid an indirection.
-but it is unclear what the cost of this indirection is, as none of these accesses should result in cache misses).
-
-To support different implementation strategies to store the value, the wording does not specify a type for the return
-value of \tcode{yield_value}.
-
+different value type or allocator type does not preclude symmetric transfer (see the section on allocators).
 
 \section{Allocator support}
 
-In line with the design exploration done in section 2 of \paper{P1681R0}, \tcode{std::generator} can support both stateless and stateful allocators, and strive
-to minimize the interface verbosity for stateless allocators, by templating both the generator itself and the \tcode{promise_type}'s \tcode{new} operator
+In line with the design exploration done in section 2 of \paper{P1681R0}, \tcode{std::generator} can support both stateless and stateful allocators and strive to minimize the interface verbosity for stateless allocators by templating both the generator itself and the \tcode{promise_type}'s \tcode{new} operator
 on the allocator type. Details for this interface are found in \paper{P1681R0}.
 
 \tcode{coroutine_parameter_preview_t} such as discussed in section 3 of \paper{P1681R0} has not been explored in this paper.
@@ -461,10 +678,10 @@ on the allocator type. Details for this interface are found in \paper{P1681R0}.
 The proposed interface requires that, if an allocator is provided, it is the second argument to the coroutine function,
 immediately preceded by an instance of \tcode{std::allocator_arg_t}.
 This approach is necessary to distinguish the allocator desired to allocate the coroutine state from allocators whose purpose is to be used in the body of the coroutine function.
-The required argument order might be a limitation if any other argument is required to be the first, however, we cannot think of any scenario where that would be the case.
+The required argument order might be a limitation if any other argument is required to be the first. However, we cannot think of any scenario where that would be the case.
 
 We think it is important that all standard and user coroutines types can accommodate similar interfaces for allocator support.
-In fact, the implementation for that allocator support can be shared amongst \tcode{generator}, \tcode{lazy} and other standard types.
+In fact, the implementation for that allocator support can be shared amongst \tcode{generator}, \tcode{lazy}, and other standard types.
 
 
 \textbf{By default \tcode{std::generator} type erases the allocator type, and uses \tcode{std::allocator} unless an allocator is provided to
@@ -519,8 +736,8 @@ The allocator is copied in the coroutine state.
 \subsection{Interaction with symmetric transfer and allocator support}
 
 The allocator must be part of the promise type.
-Or implementation uses a base class so that generators of different allocator types can yield each other.
-This leaves with 2 implementation strategies
+Our implementation uses a base class so that generators of different allocator types can yield each other.
+This leaves with two implementation strategies
 \begin{itemize}
 \item Storing a pointer to the base class in the promise handle
 \item Leave implementers find the best implementation strategy and can bell their own implementation to be well-formed
@@ -563,7 +780,7 @@ However, it would be possible to extend support for different mechanisms (such a
 \tcode{generator} has been provided as part of cppcoro and folly.
 However, cppcoro offers a separate \tcode{recursive_generator} type, which is different than the proposed design.
 
-Folly uses a single \tcode{generator} type which can be recursive but doesn't implement symmetric transfer. Despite that,
+Folly uses a single \tcode{generator} type, which can be recursive but doesn't implement symmetric transfer. Despite that,
 Folly users found the use of \tcode{Folly:::Generator} to be a lot more efficient than the eager algorithm they replaced with it.
 
 \tcode{ranges-v3} also implements a \tcode{generator} type, which is never recursive and predates the work on move-only views and
@@ -607,16 +824,16 @@ yielding each element of the range. This is especially noticeable with deep recu
 
 
 The values are expressed in nanoseconds. However, please note that the comparison of the same result across compiler is not meaningful, notably because the MSVC results were obtained on different hardware.
-That being said we observe:
+That being said, we observe:
 
 \begin{itemize}
     \item Only Clang can perform constant folding of values yielded by simple coroutine (1)
     \item When the \tcode{generator} supports symmetric transfer, clang is not able to fully inline the generator construction, but HALO is still performed (2).
-    \item When HALO is not performed, the relative performance of both approach is similar (3).
+    \item When HALO is not performed, the relative performance of both approaches is similar (3).
     \item Supporting recursion is greatly beneficial to nested/recursive algorithms (4).
 \end{itemize}
 
-The code for these benchmarks as well as more detailled results can be found on \href{https://github.com/cor3ntin/coro_benchmark}{Github}.
+The code for these benchmarks, as well as more detailed results, can be found on \href{https://github.com/cor3ntin/coro_benchmark}{Github}.
 
 
 \section{Wording}
@@ -686,7 +903,7 @@ namespace std::ranges {
         public:
         explicit constexpr elements_of(R&& r) noexcept
         requires std::is_default_constructible_v<Allocator>;
-        
+
         explicit constexpr elements_of(R&& r, Allocator allocator) noexcept;
 
         constexpr elements_of(elements_of&&) = default;
@@ -694,11 +911,11 @@ namespace std::ranges {
         elements_of(const elements_of&) = delete;
 
         constexpr R&& range() noexcept;
-        constexpr const Allocator& allocator() const noexcept;
+        constexpr Allocator get_allocator() const noexcept;
     };
     template<std::ranges::input_range R>
     elements_of(R&&) -> return elements_of<R>;
-    
+
     template<std::ranges::input_range R, typename Allocator>
     elements_of(R&&, Allocator) -> elements_of<R, Allocator>;
 }
@@ -735,7 +952,7 @@ constexpr R&& range() noexcept;
 \end{itemdescr}
 
 \begin{itemdecl}
-constexpr const Allocator& allocator() noexcept;
+constexpr Allocator get_allocator() const noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -935,7 +1152,7 @@ class generator<Ref, Value, Allocator>::promise_type_ {
 
     // \textbf{This doesn't work if a Ref is a reference type}
     // \textbf{we either need some kind of wrapper (see manual_lifetime in our \\   implementation, or only store a pointer in all cases)}
-    
+
     union {
         Ref value_; // \expos
     };
@@ -1069,7 +1286,7 @@ auto yield_value(elements_of<R, Allocator> rng);
 Equivalent to:
 \begin{codeblock}
 {
-    return yield_value(std::ranges::elements_of([](R&& rng, allocator_arg_t, Allocator alloc) 
+    return yield_value(std::ranges::elements_of([](R&& rng, allocator_arg_t, Allocator alloc)
     -> generator<Ref, Value, Allocator> {
         auto it = std::ranges::begin(rng);
         auto itEnd = std::ranges::end(rng);
@@ -1077,7 +1294,7 @@ Equivalent to:
             co_yield *it;
             ++it;
         }
-    }(std::rng.range()), rng.allocator())));
+    }(std::rng.range()), rng.get_allocator())));
 }
 \end{codeblock}
 
@@ -1140,7 +1357,7 @@ static void operator delete(void* pointer, size_t size) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-Deallocate the coroutine state with an instance of the allocator equivalent to the one that was use to allocate it.
+Deallocate the coroutine state with an instance of the allocator equivalent to the one that was used to allocate it.
 \end{itemdescr}
 
 \rSec3[coroutine.generator.iterator]{Class template \tcode{generator::iterator}}
@@ -1172,7 +1389,7 @@ public:
     void operator++(int);
 
     reference operator*() const noexcept(std::is_nothrow_copy_constructible_v<reference>);
- 
+
 private:
     friend class generator<Ref, Value, Allocator>;
     explicit iterator(std::coroutine_handle<promise_type> coroutine) noexcept; // \expos

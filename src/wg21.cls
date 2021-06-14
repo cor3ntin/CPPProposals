@@ -170,7 +170,7 @@
 %% Difference markups
 \definecolor{addclr}{rgb}{0,.6,.6}
 \definecolor{remclr}{rgb}{1,0,0}
-\definecolor{noteclr}{rgb}{0,0,1}
+\definecolor{noteclr}{rgb}{0.55,0,55}
 
 \newcommand{\added}[1]{\textcolor{addclr}{\uline{#1}}}
 \newcommand{\removed}[1]{\textcolor{remclr}{\sout{#1}}}

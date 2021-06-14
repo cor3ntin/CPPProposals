@@ -11,7 +11,6 @@
 \usepackage{newunicodechar}
 
 \setmainfont{Noto Sans}
-\setmainjfont{Noto Sans CJK KR}
 
 \newfontfamily{\fallbackfont}{Noto Sans}
 \DeclareTextFontCommand{\textfallback}{\fallbackfont}
@@ -22,7 +21,7 @@
 
 
 \title{Type deduction for non-trailing parameter packs}
-\docnumber{D2347R0}
+\docnumber{P2347R0}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Bruno Manganelli}{bruno.manga95@gmail.com}
@@ -32,22 +31,196 @@
 
 \section{Abstract}
 
+We propose that, during function template argument deduction, a single non-trailing parameters pack be deduced solely based on the arity of the list of arguments.
+
 \section{Motivation}
 
-\paper{P0478R0}
+\subsection{\tcode{source_location}}
 
-\href{https://cor3ntin.github.io/posts/variadic/}{Non-terminal variadic template parameters}
+Our main motivation for this change is to improve the usability of \tcode{source_location}.
+Many loggers, especially those using fmt, such as \tcode{spdlog} offer a log function of the following form:
+
+\begin{colorblock}
+void log(string_view formatString, auto&&...args);
+\end{colorblock}
+Which can then be called with arbitrary arguments: \tcode{log("Hello {}!", "world");}
+
+Naturally, we would like to extend this function to support source location, and offer a more useful logging framework:
+
+\begin{colorblock}
+void log(string_view formatString, auto&&...args, source_location loc = source_location::current());
+\end{colorblock}
+
+Unfortunately, this is not possible because non-trailing packs cannot be deduced!
+Folks on \href{https://stackoverflow.com/questions/57547273/how-to-use-source-location-in-a-variadic-template-function}{Stackoverflow} have found a number of clever workarounds, all of which involves using extra types or templates.
+So, even if the use case can be somewhat covered, it relies on somewhat arcane solutions that are worse for diagnostics, compile-time, etc.
+
+\subsection{Accessing the last argument of a pack}
+
+It is sometimes useful to handle the last parameter differently.
+The following example is taken from \paper{P0478R0}:
+
+\begin{colorblock}
+template <class... Args, class Last>
+void signal(Args... args, Last last) {
+    // callback expects 5 arguments, and we only want to pass it the first 5
+    if constexpr(sizeof... (Args) > 5) {
+        return signal(args...);
+    } else if constexpr (sizeof... (Args) == 4) {
+        callback(args..., last);
+    } else {
+        callback(args...);
+    }
+}
+\end{colorblock}
+
+Or consider that function which prints its arguments:
+
+\begin{colorblock}
+void print(auto&&... args, auto && last) {
+    if constexpr(sizeof...(args) > 0)
+        ((std::cout << args << ", "),...);
+    std::cout << last << "\n";
+}
+\end{colorblock}
+
+This is currently rather difficult.
+
+Or a usage of \tcode{apply} that handles the last argument differently:
+
+\begin{colorblock}
+
+std::apply([](auto&&..., auto && last) {
+    assert(last == 3);
+}, std::tuple{1, 2, 3});
+\end{colorblock}
+
+A \tcode{apply_last} function can be written, albeit it's a bit cumbersome.
+
+\begin{colorblock}
+template <class F, class Tuple>
+constexpr decltype(auto) apply_last(F &&f, const Tuple &t) {
+    return [&]<auto... I>(std::index_sequence<I...>) {
+        return f(std::get<std::tuple_size_v<std::remove_reference_t<Tuple>> - 1>(t),
+        std::get<I>(t)...);
+    }(std::make_index_sequence<std::tuple_size_v<std::remove_cvref_t<Tuple>> -1>{});
+}
+\end{colorblock}
+
+\subsection{Consistent interfaces with variadic arguments}
+
+We might consider providing N ranges overloads to \tcode{std::transform}, \tcode{std::merge} and similar algorithms,
+such that they are consistent with the order of parameters of existing 1 and 2 ranges overloads.
+
+We would also argue that \tcode{visit} would be more intuitive if the variants were the first parameters.
+
+Lifting the limitations on where a parameter pack can appear gives more flexibility in API design and usage.
 
 \section{Design}
 
-The general idea is to deduce a single pack, and to deduce the size of that pack such that once expanded,
-the argument list matches the size of the parameter-list, excluding any defaulted parameter.
+We propose that if there is one (and only one) parameter pack in a function,
+the arity of that parameter pack, when deduced, is the number of not yet deduced function arguments, minus the number of non-defaulted
+parameters following the pack.
 
-Questions:
+The general idea is to deduce a single pack and to deduce the size of that pack such that once expanded,
+the argument list matches the size of the parameter list, excluding any defaulted parameter.
+
+\begin{colorblock}
+void f(auto a, auto...b, auto c, auto d);
+void g(auto a, auto...b, auto c, int d = 0);
+void h(auto a, auto...b, int c = 0);
+
+
+f(0, 0, 0, 0);      // size of b is deduced to be 1
+f(0, 0, 0, 0, 0);   // size of b is deduced to be 2
+f(0, 0, 0);         // size of b is deduced to be 0
+
+g(0, 0);           // size of b is deduced to be 0
+g(0, 0, 0, 0);     // size of b is deduced to be 2
+
+h(0, 0);           // size of b is deduced to be 1
+h(0, 0, 0);        // size of b is deduced to be 2
+
+\end{colorblock}
+
+Unlike \paper{P0478R0}, we do not propose that the compiler should try to deduce a valid overload with or without default parameter or apply
+a more clever logic.
+This proposal is based solely on the arity of the arguments.
+This is why we consider this paper lifts a restriction rather than introducing a new feature.
+We do not propose any changes to overload resolution nor to the ordering of function templates.
+
+As such, a limitation of this proposal is that if a parameter pack is immediately followed by a parameter P with a default value,
+it is not possible for the caller to provide a value for P.
+
+\begin{colorblock}
+void f(auto...a, int c = 42);
+f()     // a is empty, c == 42
+f(1)    // a is of size 1,  c == 42
+f(1, 2) // a is of size 2,  c == 42
+
+\end{colorblock}
+
+We found that trying to be clever here is not likely to be worth it:
+
 \begin{itemize}
-    \item Should partial ordering be modified ?
-    \item Should we apply the same logic to type deduction ?
+\item Generating automatically extra overloads for each defaulted parameter has a cost in compile times.
+\item It would blur the lines between template argument deduction and overload resolution.
 \end{itemize}
+
+If one really needs a defaulted argument immediately following a pack,
+it is always possible to manually craft an overloads set that would allow a parameter to be both provided and defaulted, for example:
+
+\begin{colorblock}
+template <typename... T>
+void f(T&&... args, source_location loc = {})
+requires (!(std::same_as<T, source_location>||...));
+
+void f(auto&&... args, source_location loc);
+\end{colorblock}
+
+\section{Previous works}
+
+\paper{P0478R0} was first presented in Issaquah, and offered a more complicated approach to some of the problems presented here.
+Concerns were expressed mostly because \paper{P0478R0} proposed to modify rules around overload resolution, which the current paper does not,
+it is therefore a lot more simpler.
+
+We also consider that \tcode{source_location} demands that this question be revisited.
+
+\section{Alternatives and future evolutions}
+
+\subsection{Generalized pack manipulation facilities}
+
+Several proposals, including \paper{P1858R2} and \paper{P1306R1}, would make manipulating pack simpler,
+and we hope these papers progress.
+However, neither of these could address the \tcode{source_location} issue (which we realize is rather specific) and are not as elegant in some use cases.
+
+\subsection{Pack separators}
+
+Circle provides a syntax to denotes the end of a pack, which allows separating a pack from subsequents defaulted arguments,
+and also to support the deduction of multiple packs \href{https://github.com/seanbaxter/QDA/blob/master/README.md#parameter-packs} as described in the {Circle documentation}. We are not proposing a similar feature, but it is something that we could consider in the future in a backward-compatible manner.
+
+\subsection{Injecting multiple overloads for different combinations of defaulted parameters}
+
+This is discussed in a previous section, and it is a direction we rejected because of its cost and complexity.
+It is important to note that adopting such a feature in the future would be a breaking change in regard to this paper.
+
+\subsection{Non-trailing template parameters of class and alias template}
+
+Similar restrictions on the positioning of parameter packs exist for class templates and alias.
+We could lift these restrictions using the same heuristic - aka using the number of template arguments
+to deduce the size of a single non-trailing parameter pack.
+
+\begin{colorblock}
+template <typename... T, typename> // ill-formed
+struct S;
+\end{colorblock}
+
+This is not proposed in this paper.
+
+\section{Implementation}
+    
+Both this paper and \paper{P0478R0} have been implemented in clang with no difficulties.
+In particular, this proposal required a very small amount of work.
 
 \section{Wording}
 
@@ -55,7 +228,7 @@ Questions:
 
 //...
 
-\added{Let N be the number of remaining non-defaulted template function parameters parameters and K be the numbers of remaining arguments of the call.}
+\added{Let N be the number of remaining non-defaulted template function parameters and K be the number of remaining arguments of the call.}
 
 For a function parameter pack \removed{that occurs at the end
 of the \grammarterm{parameter-declaration-list}},
@@ -74,7 +247,7 @@ never deduced.
     template<class ... Types> void f(Types& ...);
     template<class T1, class ... Types> void g(T1, Types ...);
     template<class T1, class ... Types> void g1(Types ..., T1);
-    
+
     void h(int x, float& y) {
         const int z = x;
         f(x, y, z);                   // \tcode{Types} deduced as \tcode{int}, \tcode{float}, \tcode{const int}
@@ -82,7 +255,7 @@ never deduced.
         g1(x, y, z);                  // error: \tcode{Types} is not deduced
         g1<int, int, int>(x, y, z);   // OK, no deduction occurs
     }
-\end{codeblock}   
+\end{codeblock}
 \end{removedblock}
 
 \begin{addedblock}
@@ -118,16 +291,16 @@ and
 the deduction is then done as described in [temp.deduct.type].
 
 \begin{addedblock}
-Let N be the number of remaining non-defaulted template function parameters and K be the numbers of remaining arguments of the call.
+Let N be the number of remaining non-defaulted template function parameters and K be the number of remaining arguments of the call.
 \end{addedblock}
 
-If \tcode{P} is a function parameter pack, 
+If \tcode{P} is a function parameter pack,
 the type \tcode{A} of each \changed{remaining}{of the the next {K-N}}
 parameter types of the argument template is compared with the type \tcode{P} of
 the \grammarterm{declarator-id} of the function parameter pack. Each comparison
 deduces template arguments for subsequent positions in the template parameter
 packs expanded by the function parameter pack.
-Similarly, if \tcode{A} was transformed from a function parameter pack,
+Similarly, if \tcode{A} was ed from a function parameter pack,
 it is compared with each  \changed{remaining}{of the the next {N-K}} parameter type of the parameter template.
 \begin{addedblock}
 \begin{example}
@@ -149,7 +322,7 @@ as the type from the parameter template.
         template<class T1, class... Args>    void f(T1 a1, Args... args); // \#2
         template<class T1, class T2>         void f(T1 a1, T2 a2);        // \#3
         template<class Args.., class TLast>  void g(Args.., int i = 42); //  \#4
-        
+
         f();                // calls \#1
         f(1, 2, 3);         // calls \#2
         f(1, 2);            // calls \#3; non-variadic template \#3 is more specialized
@@ -225,7 +398,7 @@ a type for which deduction from an initializer list is specified\iref{temp.deduc
 %\begin{itemize}
 %    \item if \tcode{P} does not contain a template argument corresponding to
 %    $\texttt{A}_i$ then $\texttt{A}_i$ is ignored;
-%    
+%
 %    \item otherwise, if $\texttt{P}_i$ is not a pack expansion, template argument
 %    deduction fails.
 %\end{itemize}
@@ -235,7 +408,7 @@ a type for which deduction from an initializer list is specified\iref{temp.deduc
 %        template<class T1, class... Z> class S<T1, const Z&...> { };            // \#2
 %        template<class T1, class T2>   class S<T1, const T2&> { };              // \#3
 %        S<int, const int&> s;           // both \#2 and \#3 match; \#3 is more specialized
-%        
+%
 %        template<class T, class... U>            struct A { };                  // \#1
 %        template<class T1, class T2, class... U> struct A<T1, T2*, U...> { };   // \#2
 %        template<class T1, class T2>             struct A<T1, T2> { };          // \#3
@@ -243,8 +416,16 @@ a type for which deduction from an initializer list is specified\iref{temp.deduc
 %    \end{codeblock}
 %\end{example}
 
+
+\section{Feature test macros}
+
+\ednote{Add a new macro in \tcode{[tab:cpp.predefined.ft]} : \tcode{__cpp_non_trailing_function_pack} set to the date of adoption}.
+
+
 \section{Acknowledgments}
 
+Thanks to Sy Brand and Michael Wong for their work on P0478 and encouragements.
+Tony Van Eerd and Ólafur Waage for proofreading this paper and offering their feedbacks.
 
 
 \bibliographystyle{plain}
@@ -253,12 +434,12 @@ a type for which deduction from an initializer list is specified\iref{temp.deduc
 
 \renewcommand{\section}[2]{}%
 \begin{thebibliography}{9}
-    
+
     \bibitem[N4885]{N4885}
     Thomas Köppe
     \emph{Working Draft, Standard for Programming Language C++}\newline
     \url{https://wg21.link/N4885}
-     
+
 \end{thebibliography}
 
 

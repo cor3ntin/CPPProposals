@@ -8,7 +8,7 @@
 
 \title{Conversions from ranges to containers}
 \docnumber{P1206R4}
-\audience{LEWG}
+\audience{SG-9}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Eric Niebler}{eric.niebler@gmail.com}
 \authorthree{Casey Carter}{casey@carter.net}
@@ -18,14 +18,16 @@
 
 \section{Abstract}
 
-We propose a function to copy or materialize any range (containers and views alike) to a container.
+We propose facilities to make constructing containers from ranges more convenient.
 
 \section{Revisions}
 
 \subsection*{Revision 4}
 \begin{itemize}
     \item Add \tcode{from_range_t} and methods taking ranges to most containers
-    \item improve wording
+    \item Improve the wording of \tcode{ranges::to}
+    \item \tcode{ranges::to} calls reserve when possible
+    \item Rewrite the motivation
 \end{itemize}
 
 \subsection*{Revision 3}
@@ -37,33 +39,152 @@ We propose a function to copy or materialize any range (containers and views ali
 
 \subsection*{Revision 2}
 \begin{itemize}
-	\item Remove the implicit const removal when converting an associative container to a container of pairs
-	\item Use CTAD to determine the value type of the returned container
-	\item Attempt at wording
+    \item Remove the implicit const removal when converting an associative container to a container of pairs
+    \item Use CTAD to determine the value type of the returned container
+    \item Attempt at wording
 \end{itemize}
 
 \subsection*{Revision 1}
 \begin{itemize}
-	\item Split out the proposed constructors for string view and span into separate papers (\cite{P1391} and \cite{P1394} respectively)
-	\item Use a function based approach rather than adding a constructor to standard containers, as it proved unworkable.
+    \item Split out the proposed constructors for string view and span into separate papers (\cite{P1391} and \cite{P1394} respectively)
+    \item Use a function based approach rather than adding a constructor to standard containers, as it proved unworkable.
 \end{itemize}
 
 
-\section{Motivation}
+\section{Overview}
 
-// TODO
+We propose 2 facilites to make it easier to construct container and from ranges:
 
-\section{Implementation}
+\begin{itemize}
+\item \tcode{ranges::to} a function that can materialize any range as a container, including non-standard containers, and recursive containers
+\item tagged constructors, \tcode{insert} and \tcode{assign} methods for standard containers and string types.
+\end{itemize}
 
-// TODO
 
-\section{Design}
+We propose that all the following syntaxes be valid constructs.
+The examples are meant to be illustrative of the interface's capabilities - the primary use case for it is to materialize views, even if copying from one container type to another is possible.
+
+\begin{colorblock}
+auto l = std::views::iota(1, 10);
+
+// create a vector with the elements of l
+auto vec = ranges::to<std::vector<int>>(l); // or vector{std::from_range, l};
+
+//Specify an allocator
+auto b = ranges::to<std::vector<int, Alloc>>(l, alloc); // or vector{std::from_range, l, alloc};
+
+//deducing value_type
+auto c = ranges::to<std::vector>(l);
+
+// explicit conversion int -> long
+auto d = ranges::to<std::vector<long>>(l);
+
+
+//Supports converting associative container to sequence containers
+auto f = ranges::to<vector>(m);
+
+//Supports converting sequence containers to associative ones
+auto g = ranges::to<map>(f);
+
+//Pipe syntaxe
+auto g = l | ranges::view::take(42) | ranges::to<std::vector>();
+
+//Pipe syntax with allocator
+auto h = l | ranges::view::take(42) | ranges::to<std::vector>(alloc);
+
+//The pipe syntax also support specifying the type and conversions
+auto i = l | ranges::view::take(42) | ranges::to<std::vector<long>>();
+
+// Nested ranges
+std::list<std::forward_list<int>> lst = {{0, 1, 2, 3}, {4, 5, 6, 7}};
+auto vec1 = ranges::to<std::vector<std::vector<int>>>(lst);
+auto vec2 = ranges::to<std::vector<std::deque<double>>>(lst);
+
+\end{colorblock}
+
+
+\section{Tony tables}
+\begin{center}
+\begin{tabular}{l|l}
+Before & After\\ \hline
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+std::list<int> lst = /*...*/;
+std::vector<int> vec
+    {std::begin(lst), std::end(lst)};
+\end{colorblock}
+\end{minipage}
+&
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+std::vector<int> vec = lst | ranges::to<std::vector>();
+\end{colorblock}
+\end{minipage}
+\\\\ \hline
+
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+auto view = ranges::iota(42);
+vector <
+  iter_value_t<
+    iterator_t<decltype(view)>
+  >
+> vec;
+if constexpr(SizedRanged<decltype(view)>) {
+  vec.reserve(ranges::size(view)));
+}
+ranges::copy(view, std::back_inserter(vec));
+\end{colorblock}
+\end{minipage}
+&
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+auto vec = ranges::iota(0, 42)
+    | ranges::to<std::vector>();
+\end{colorblock}
+\end{minipage}
+\\\\ \hline
+
+
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+std::map<int, widget> map = get_widgets_map();
+std::vector<
+  typename decltype(map)::value_type
+> vec;
+vec.reserve(map.size());
+ranges::move(map, std::back_inserter(vec));
+\end{colorblock}
+\end{minipage}
+&
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+auto vec = get_widgets_map()
+          | ranges::to<vector>();
+\end{colorblock}
+\end{minipage}
+\\\\ \hline
+
+\end{tabular}
+\end{center}
+
+
+\section{Design Notes}
 
 \tcode{from_range} is declared as an instance of a tag_type \tcode{from_range_t} in \tcode{std}.
 
-\tcode{ranges::to} is declared in <ranges>
+\subsection{\tcode{ranges::to}}
 
-For any constructor or methods taking a pair of \tcode{InputIterator}s in containers (whith the exception of \tcode{regex} and \tcode{filesystem::path}),
+\begin{itemize}
+    \item \tcode{ranges::to} is declared in \tcode{<ranges>}
+    \item Can deduce the container value type (using ctad).
+    \item Uses the most efficient construction method (copy constructor, tagged range constructors, iterators constructors, \tcode{std::copy})
+    \item Supports recursion.
+\end{itemize}
+
+\subsection{Containers range constructors and methods}
+
+For any constructor or methods taking a pair of \tcode{InputIterator}s in containers (with the exception of \tcode{regex} and \tcode{filesystem::path}),
 a similar method is added taking a range instead.
 All added constructors are tagged with \tcode{from_range_t}. Methods that may be ambiguous are suffixed  with \tcode{_range}.
 
@@ -124,6 +245,148 @@ The following methods and constructors are added to unordered containers:
 \end{itemize}
 
 For every constructor, a deduction guide is added.
+
+
+\section{Considerations}
+
+
+\subsection{Why do we need this?}
+
+Containers do not have containers constructors, so
+
+\begin{colorblock}
+vector v = views::iota(0, 10);
+\end{colorblock}
+
+is currently not valid syntax.
+
+They do have a constructors taking a pair of iterators.
+So, it would theorically be possible to write:
+
+\begin{colorblock}
+auto view = views::iota(0, 10);
+vector<int> v(ranges::begin(view), ranges::end(view));
+\end{colorblock}
+
+Which is more cumbersome. But that isn't enough! Containers expect the same types for both iterators - they do not support sentinels.
+A solution would be to write:
+\begin{colorblock}
+auto view = views::iota(0, 10) | views::commom;
+vector<int> v(ranges::begin(view), ranges::end(view));
+\end{colorblock}
+
+And that still does not always work. `Cpp17Iterators` requiered by containers can have slightly different semantics.
+Namely, `input_iterator` may not be copyable. So the following does not work:
+
+\begin{colorblock}
+std::generator<std::pair<int, string>> f() {
+   co_yield {0, "Hello"};
+   co_yield {1, "World"};
+}
+auto view = f(); // attempts to use views::common here would be ill-formed
+map<int, std::string> v(ranges::begin(view), ranges::end(view));
+\end{colorblock}
+
+Instead, one has to insert each element manually.
+
+This is sufficiently complex and error-prone approach that multiple blog posts and stackoverflow questions address it:
+
+\begin{itemize}
+\item \href{https://timur.audio/how-to-make-a-container-from-a-c20-range}{How to make a container from a C++20 range}
+\item \href{https://stackoverflow.com/questions/59452296/will-we-be-able-to-construct-containers-with-views-in-c20}{Will we be able to construct containers with views in C++20?}
+\item \href{https://stackoverflow.com/questions/62043660/range-concept-and-containers-constructors}{Range concept and containers constructors}
+\item \href{https://stackoverflow.com/questions/62043660/range-concept-and-containers-constructors}{Initializing std::vector with ranges library}
+\end{itemize}
+
+\subsection{Why do we need a tag / different method names ?}
+
+Ambiguities can arise in 2 cases. Using different methods resolves these ambiguities.
+
+\subsubsection{CTAD}
+
+Consider the following code:
+
+\begin{colorblock}
+std::list<int> l;
+std::vector v{l};
+\end{colorblock}
+
+Should \tcode{v} be \tcode{std::vector<int>} or \tcode{std::vector<std::list<int>>} ?
+It is currently equivalent to the latter!
+Adding a tag solves this issue(although one needs to remember using a tag!).
+
+\subsubsection{Ambiguous conversions}
+
+They other issues is with \tcode{vector<any>}.
+
+\begin{colorblock}
+std::list<any> l;
+std::vector<any> v;
+v.insert(l);
+\end{colorblock}
+
+Does that insert a range of any or a single any?
+Using a different name resolves this ambiguity.
+
+\tcode{assign} always takes a range or count + value, so it does not suffer this ambiguity.
+
+\subsection{Do we need both approaches?}
+Both approaches are complementary. \tcode{ranges::to} works with non-standard containers and supports constructing containers of containers.
+Tagged constructors offer an opportunity for containers to provide a more efficient implementation.
+For example, many containers do not have a \tcode{reserve} method.
+\tcode{ranges::to} uses the tagged constructor when available.
+As such, tagged constructors offer a customization mechanism to opt-in into ranges::to and could be extended to things that are not containers.
+
+\tcode{ranges::to} does not replace the proposed \tcode{insert_range} and \tcode{assign} methods.
+
+While we recommend pursuing both approaches, it is essential to make sure \tcode{ranges::to} is part of C++23 as it is a critical missing piece of
+ranges. Approaches can easily be split off if necessary.
+
+\subsection{Do we need iterator/sentinel pair constructors as well?}
+
+
+The new standard library algorithms in the `std::ranges` namespace all provide multiple overloads taking both a range and an iterator/sentinel pair. This raises the question: should our new constructors provide a "range" overload (only), an iterator/sentinel pair overload (only), or both?
+
+The second case (an iterator/sentinel pair only) is easily dismissed. There exist ranges which model \tcode{sized_range}, but whose iterators/sentinels do not model \tcode{sized_sentinel_for} - the canonical example being \tcode{std::list}. With such types, a constructor call like
+
+\begin{colorblock}
+std::list<int> list = get_list();
+std::vector<int> vec(std::from_range, list); // copy into vector
+\end{colorblock}
+
+would know the size of the list and would therefore be able to allocate the required vector size upfront. On the other hand, a hypothetical call to
+
+\begin{colorblock}
+std::list<int> list = get_list();
+std::vector<int> vec(std::from_range, list.begin(), list.end());
+\end{colorblock}
+
+cannot know the size of the input range upfront, and so would need two passes over the data.
+
+We are thus left to decide whether to provide an iterator/sentinel constructor in addition to a "range" constructor. In the authors' opinion, this would be redundant. In cases where we do have separate iterator and sentinel objects that we wish to pass to a container constructor, we can do so using `subrange`, as in
+
+\begin{colorblock}
+std::vector vec(std::from_range, subrange(my_iter, my_sentinel));
+\end{colorblock}
+
+Furthermore, it is intended that users should be able to opt-in to \tcode{ranges::to} support for their own container classes by providing constructors which take \tcode{from_range_t} as their first argument. Adding iterator/sentinel constructors in addition to "range" constructors means more work for users to adhere to the protocol, and no doubt risks confusion about whether one, either, or both are required.
+
+
+\section{Implementation Experience}
+
+Implementations of `ranges::to` are available in \cite{Range V3}, \cite{cmcstl2} and on Github \cite{rangesnext}.
+The tagged ranges constructors, insert methods and other range-taking container members fuctions have \textbf{not} been
+implemented.
+
+\section{Related Paper and future work}
+
+Future work is needed to allow constructing \tcode{std::array} from \EXPO{tiny-ranges}.
+
+\section{Acknowledgements}
+We would like to thank the people who gave feedback on this paper, notably Christopher Di Bella, Arthur O'Dwyer, Barry Revzin
+and Tristan Brindle.\\
+
+
 
 %\section{Quick Overview}
 %We propose all the following syntaxes to be valid constructs.
@@ -415,7 +678,6 @@ For every constructor, a deduction guide is added.
 \section{Proposed wording}
 
 Wording is relative to \cite{N4885}.
-
 
 
 \rSec1[containers]{Containers}
@@ -4817,7 +5079,6 @@ equivalent to:
 
 \item Otherwise \tcode{ranges::to<C>(r, args)} is ill-formed.
 
-%if \tcode{sized_range<R>} is \tcode{true}, \tcode{RESERVE(c)} is equivalent to \tcode{c.reserve(ranges::size(r))} if that is a valid expression.
 
 \end{itemize}
 
@@ -4890,20 +5151,23 @@ assert(v1 == v2 && v2 == v3 && v3 == v4);
 \end{addedblock}
 
 
+\section{Feature test macros}
+
+Bump the value of \tcode{__cpp_lib_ranges} to the date of adoption.
+
+Add a new macro in \tcode{<version>} \tcode{__cpp_lib_containers_ranges} set to the date of adoption.
+
+The macro \tcode{__cpp_lib_containers_ranges} is also present in
+<vector>, <list>, <forward_list> <map>, <set> <unordered_map>, <unordered_set>, <deque>, <queue>, <priority_queue>, <stack>, and <string>
+
 
 \section{Implementation Experience}
 
-Implementations of this proposal are available on in the 1.0 branch of \cite{Range V3} and in \cite{cmcstl2}.
-Another implementation reflecting exactly this proposal is available on Github \cite{rangesnext}.
-
+Implementations of `ranges::to` are available in \cite{Range V3}, \cite{cmcstl2} and on Github \cite{rangesnext}.
+The tagged ranges constructors, insert methods and other range-taking container members fuctions have \textbf{not} been
+implemented.
 
 \section{Related Paper and future work}
-
-\begin{itemize}
-	\item \paper{P1989R0} adds range and iterator constructor to \tcode{string\_view}
-    \item \cite{P1425} adds iterator constructors to \tcode{stack} and \tcode{queue}
-    \item \cite{P1419} Provide facilities to implementing \tcode{span} constructors more easily.
-\end{itemize}
 
 Future work is needed to allow constructing \tcode{std::array} from \EXPO{tiny-ranges}.
 
