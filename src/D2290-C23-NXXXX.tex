@@ -1,0 +1,322 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}
+
+
+\documentclass{wg21}
+
+\newcommand{\UnicodeLetter}[1]{\textbf{\textcolor{BrickRed}{\Large\tcode{#1}}}}
+
+\title{Delimited escape sequences}
+\project{Programming Language C}
+\docnumber{N2785}
+\audience{Application programmers}
+\category{New feature}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Aaron Ballman}{aaron@aaronballman.com}
+
+
+\begin{document}
+\maketitle
+
+\paperquote{}
+
+\section{Abstract}
+
+We propose an additional, clearly delimited syntax for octal, hexadecimal and universal character name escape sequences to clearly delimit the boundaries of the escape sequence. WG21 has shown an interest in adjusting this feature, and this proposal is intended to keep C and C++ in alignment. This feature is a pure extension to the language that should not impact existing code.
+
+
+\section{Motivation}
+
+\subsection{universal-character-name escape sequences}
+
+As their name does not indicate, universal-character-name escape sequences represent Unicode scalar values,
+using either 4, or 8 hexadecimal digits, which is either 16 or 32 bits.
+However, the Unicode codespace is limited to 0-0x10FFFF, and all currently assigned codepoints can be written with 5 or less
+hexadecimal digits (Supplementary Private Use Area-B non-withstanding).
+As such, the \~50\% of codepoints that need 5 hexadecimal digits to be expressed are currently a bit awkward to write: \tcode{\textbackslash U0001F1F8}.
+
+\subsection{Octal and hexadecimal escape sequences have variable length}
+
+\tcode {\textbackslash 1}, {\textbackslash 01}, {\textbackslash 001} are all valid escape sequences.
+\tcode {\textbackslash 17} is equivalent to \tcode{"0x0F"} while \tcode {\textbackslash 18} is equivalent to \tcode {"0x01" "8"}
+
+While octal escape sequences accept 1 to 3 digits as arguments, hexadecimal sequences accept an arbitrary number of digits
+applying the maximal much principle.
+
+
+This is how the \href{https://docs.microsoft.com/en-us/cpp/c-language/octal-and-hexadecimal-character-specifications?view=msvc-160}{Microsoft documentation} describes this problem:
+
+\begin{quoteblock}
+
+    Unlike octal escape constants, the number of hexadecimal digits in an escape sequence is unlimited. A hexadecimal escape sequence terminates at the first character that is not a hexadecimal digit. Because hexadecimal digits include the letters a through f, care must be exercised to make sure the escape sequence terminates at the intended digit. To avoid confusion, you can place octal or hexadecimal character definitions in a macro definition:
+
+    \begin{colorblock}
+        #define Bell '\x07'
+    \end{colorblock}
+
+    For hexadecimal values, you can break the string to show the correct value clearly:
+
+    \begin{colorblock}
+        "\xabc"    /* one character  */
+        "\xab" "c" /* two characters */
+    \end{colorblock}
+
+\end{quoteblock}
+
+As this documentation suggests, there are workarounds to this problem. However, neither solution completely solves the maintenance issue. It may not be clear why a string literal uses literal concatenation, so a future refactoring of the code may accidentally combine the strings. Further, literal concatenation is not a common pattern for arbitrary string literal uses.
+
+\subsection{Status of \paper{P2290R1} in WG21}
+
+Lastly, we propose this feature for C for compatibility with the C++ proposal \paper{P2290R1}.
+This feature is presented to the C committee to ensure that either C adopts it (for consistency) or does not object to C++ using this syntax.
+We hope that if C should adopt this feature in the future, it would do so with both the same syntax and semantics as what is proposed in
+\paper{P2290R1}.
+Our hope is that WG14 will be interested in adopting this feature for C23 based on the merits of the feature. However, we recognize that WG14 may not be ready to adopt this proposal yet, and so our secondary goal is to identify concerns WG14 has with the feature to ensure that future work in this area within C is done in a way that is compatible with C++. We don't believe there is much room for different designs for this functionality, but we want to make sure WG21 doesn't pick curly braces while WG14 picks parentheses or other such superficial incompatibilities.
+
+
+EWG took the following straw poll in July 2021:
+
+\begin{quoteblock}
+We would like to adopt this for C++23, assuming the Core wording is improved in the paper and assuming SG22 / WG14 intend to avoid divergence in C.
+
+\begin{tabular}{|c|c|c|c|c|}
+    \hline
+    SF & F & N & A & SA \\
+    \hline
+    1 & 10 & 0 & 0 & 0 \\
+    \hline
+\end{tabular}
+
+\end{quoteblock}
+
+
+\section{Proposed solution}
+
+We propose new syntaxes \tcode{\textbackslash u\{\}, \textbackslash o\{\}, \textbackslash x\{\}} usable in places where
+\textbackslash u, \textbackslash x, \textbackslash nnn currently are.
+\textbackslash o\{\} accepts an arbitrary number of octal digits and \tcode{\textbackslash u\{\}} and \tcode{\textbackslash x\{\}} accept
+an arbitrary number of hexadecimal digit.
+
+The values represented by these new syntaxes would, of course have the same requirements as existing escape sequences:
+
+\textbackslash u\{nnnn\} must represent a valid Unicode scalar value.
+
+\textbackslash x\{nnnn\} and \textbackslash o\{nnnn\} must represent a value that can be represented in a single code unit of the encoding of string or character literal they are a part of.
+
+Note that \tcode{"\textbackslash x\{4" "2\}"} would not be valid as escape sequences are replaced before string concatenation, which we think is the right design.
+
+
+We explicitly do not allow digit separators in these digit sequences. This is to avoid a parsing ambiguity for character literals where \tcode{'} already has special meaning, as in: \tcode{'\textbackslash u{12'34}'}.
+
+
+\subsection{Should existing forms be deprecated?}
+
+No (we are not in the business of breakings everyone's code)!
+
+\subsection{Impact on existing implementations}
+
+No compiler currently accepts \tcode{\textbackslash x\{} or \tcode{\textbackslash u\{} as valid syntax.
+Furthermore, while \tcode{\textbackslash o} is currently reserved for implementations, no tested implementation (GCC, Clang, MSVC, ICC, TCC, Tendra) makes use of it.
+
+\subsection{Identifiers}
+
+Universal character names can appear as part of identifiers, 
+and the proposed new syntax to spell universal characters names would be applied to identifiers for consistency.
+
+\section{Prior art and alternatives considered}
+
+\tcode{\textbackslash u\{\}} is a valid syntax in rust and javascript.
+The syntax is identical to that of \paper{P2071R0}
+
+\tcode{\textbackslash x\{\}} is a bit more novel - It is present in Perl and some regex syntaxes.
+However, most languages (python, D, Perl, javascript, rust, PHP) specify hexadecimal sequences to be exactly 2 hexadecimal digits long (\tcode{\textbackslash xFF}), which sidestep the issues described in this paper.
+
+Most languages surveyed follow in C and C++ footstep for the syntax of octal numbers (no braces, 1-3 digits), so this would be novel indeed.
+
+As such, for consistency with other C++ proposals and existing art, we have not considered other syntaxes.
+
+\section{Impact on EBCDIC programs}
+
+In some EBCDIC encodings, the \tcode{\{\ \}} characters might not be avaible.
+This was raised in the context of the \tcode{filetag} pragma such that xCl users often have to specify the encoding of a source file.
+
+\begin{colorblock}
+??=pragma filetag ("IBM-1047")
+\end{colorblock}
+
+In this specific context, hexadecimal and octal sequences are not useful - the string is not evaluated.
+\grammarterm{Universal characters name}s can be specified but, \grammarterm{universal characters name}s exclude most of the basic Latin 1
+characters used to specify encodings.
+Encoding names are designed to safe for inter exchange and as such avoid non-basic-latin characters \cite{rfc3808} \cite{TR22}, making the proposed feature
+of limited usefulness in the context of \tcode{pragma filetag} \cite{filetag}.
+
+After this initial pragma, most code targeting EBCDIC platforms can use braces.
+Otherwise, users can either use the pre-existing syntaxes or use trigraphs.
+
+Given the existing syntax for delimiting lists of elements with curly braces in C already (enumerations, initialization, structure members, etc) and the expectation that delimited escape sequence use is expected to be vanishingly rare in pragmas and identifiers, we believe delimiting with \tcode{\{} and \tcode{\}} is not an undue burden for implementers or users.
+
+
+\section{Wording}
+
+\subsection{6.4.3 Universal character names}
+
+\textbf{Syntax}
+
+\begin{bnf}
+    \nontermdef{hex-quad}\br
+    hexadecimal-digit hexadecimal-digit hexadecimal-digit hexadecimal-digit\br
+\end{bnf}
+
+\begin{addedblock}
+    \begin{bnf}
+        \nontermdef{simple-hexadecimal-digit-sequence}\br
+        hexadecimal-digit\br
+        simple-hexadecimal-digit-sequence hexadecimal-digit\br
+    \end{bnf}
+\end{addedblock}
+
+%\begin{addedblock}
+%\begin{bnf}
+%    \nontermdef{delimited-universal-character-name}\br
+%    \terminal{\textbackslash u\{}simple-hexadecimal-digit-sequence  \terminal{\}}
+%\end{bnf}
+%\end{addedblock}
+
+\begin{bnf}
+    \nontermdef{universal-character-name}\br
+    \terminal{\textbackslash u} hex-quad\br
+    \terminal{\textbackslash U} hex-quad hex-quad\br
+    \added{\terminal{\textbackslash u\{}simple-hexadecimal-digit-sequence  \terminal{\}}}
+\end{bnf}
+
+\ednote{Remove The following paragraph in red}
+
+\begin{removedblock}
+
+\textbf{Constraints}
+
+A universal character name shall not specify a character whose short identifier is less than 00A0
+other than 0024 (\$), 0040 (\\@), or 0060 (\\‘), nor one in the range D800 through DFFF inclusive.
+
+\end{removedblock}
+
+\textbf{Description}
+Universal character names may be used in identifiers, character constants, and string literals to
+designate characters that are not in the basic character set.
+
+\textbf{Semantics}
+\removed{The universal character name \textbackslash Unnnnnnnn designates the character whose eight-digit short identifier
+(as specified by ISO/IEC 10646) is nnnnnnnn.
+Similarly, the universal character name \textbackslash unnnn
+designates the character whose four-digit short identifier is nnnn (and whose eight-digit short identifier is 0000nnnn).}
+
+\ednote{Remove footnote 79}
+
+\begin{addedblock}
+A universal character name designates the character in ISO/IEC 10646 whose code point is the hexadecimal number represented by the sequence of hexadecimal digits in the universal character name. That code point shall not be in the range D800 through DFFF inclusive, nor less than 00A0, except for 0024 (\$), 0040 (@), or 0060 (‘) \ednote{Attach footnote 78 here}.
+
+\end{addedblock}
+
+
+
+\subsection{6.4.4.4 Character constants}
+
+\textbf{Syntax}
+
+
+\begin{bnf}
+    \nontermdef{numeric-escape-sequence}\br
+    octal-escape-sequence\br
+    hexadecimal-escape-sequence
+\end{bnf}
+
+\begin{addedblock}
+    \begin{bnf}
+        \nontermdef{simple-octal-digit-sequence}\br
+        octal-digit\br
+        simple-octal-digit-sequence octal-digit
+    \end{bnf}
+\end{addedblock}
+
+\begin{bnf}
+    \nontermdef{octal-escape-sequence}\br
+    \terminal{\textbackslash} octal-digit\br
+    \terminal{\textbackslash} octal-digit octal-digit\br
+    \terminal{\textbackslash} octal-digit octal-digit octal-digit\br
+    \added{\terminal{\textbackslash o\{}simple-octal-digit-sequence \terminal{\}}}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{hexadecimal-escape-sequence}\br
+    \terminal{\textbackslash x} hexadecimal-digit\br
+    hexadecimal-escape-sequence hexadecimal-digit\br
+    \added{\terminal{\textbackslash x\{}simple-hexadecimal-digit-sequence  \terminal{\}}}
+\end{bnf}
+
+\ednote{Edit: Paragraph 5-7 as follow}
+
+The octal digits \removed{that follow the backslash} in an octal escape sequence are taken to be part of the
+construction of a single character for an integer character constant or of a single wide character for a
+wide character constant. The numerical value of the octal integer so formed specifies the value of
+the desired character or wide character.
+
+The hexadecimal digits \removed{that follow the backslash and the letter x} in a hexadecimal escape sequence
+are taken to be part of the construction of a single character for an integer character constant or of a
+single wide character for a wide character constant. The numerical value of the hexadecimal integer
+so formed specifies the value of the desired character or wide character.
+
+Each octal or hexadecimal escape sequence is the longest sequence of characters that can constitute
+the escape sequence.
+
+%\subsection{6.4.2.4 Identifiers}
+%
+%\ednote{Edit: Paragraph 3 as follow}
+%
+%\textbf{Semantics}
+%2 An identifier is a sequence of nondigit characters (including the underscore _, the lowercase and
+%uppercase Latin letters, and other characters) and digits, which designates one or more entities as
+%described in 6.2.1. Lowercase and uppercase letters are distinct. There is no specific limit on the
+%maximum length of an identifier.
+%
+%3 The use of universal character names in identifiers is specified in Annex D: Each universal character
+%name in an identifier shall designate a character whose encoding in ISO/IEC 10646 falls into 
+%one of the ranges specified in D.1.75)
+%The initial character shall not be a universal character name designating a character whose encoding falls into one of the ranges specified in D.2
+% An implementation may allow multibyte characters that are not part of the basic source character set to
+%appear in identifiers; which characters and their correspondence to universal character names is implementation-defined.
+%\begin{addedblock}
+%A delimited universal character-name shall not appear in an identifier.
+%\end{addedblock}
+
+
+
+\section{References}
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+\begin{thebibliography}{9}
+
+    \bibitem{rfc3808}
+    I. McDonald
+    \emph{IANA Charset MIB}\newline
+    \url{https://tools.ietf.org/html/rfc3808}
+
+    \bibitem{TR22}
+    UNICODE CHARACTER MAPPING MARKUP LANGUAGE\newline
+    \url{https://www.unicode.org/reports/tr22/tr22-8.html#Charset_Alias_Matching}
+
+    \bibitem{filetag}
+    \#pragma filetag -  z/OS XL C/C++ User's Guide\newline
+    \url{https://www.ibm.com/docs/en/zos/2.3.0?topic=descriptions-pragma-filetag}
+
+
+    \bibitem[Unicode]{Unicode}
+    Unicode 13\newline
+    \url{http://www.unicode.org/versions/Unicode13.0.0/}
+
+\end{thebibliography}
+\end{document}

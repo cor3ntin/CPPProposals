@@ -1,0 +1,122 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+\documentclass{wg21}
+
+\title{UTF-16 is standard practice}
+\docnumber{D2460R0}
+\audience{SG-16, SG-22, EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+\section{Target}
+
+C++23
+
+\section{Abstract}
+
+We propose to remove the constraints put on the encoding associated to \tcode{wchar_t} in the core wording.
+
+\section{Motivation}
+
+The standard claims that \tcode{wchar_t} should encode all characters of all wide encoding
+as single code unit.
+This does not match existing practices, as \tcode{wchar_t} denotes UTF-16 on Windows.
+The \href{https://docs.microsoft.com/en-us/windows/win32/learnwin32/working-with-strings}{Windows Documentation} states:
+
+\begin{quoteblock}
+Windows represents Unicode characters using UTF-16 encoding, in which each character is encoded as a 16-bit value. UTF-16 characters are called wide characters, to distinguish them from 8-bit ANSI characters. The Visual C++ compiler supports the built-in data type wchar_t for wide characters.
+\end{quoteblock}
+
+This is not merely an issue of MSVC being none conforming.
+It makes C++ unsuitable for development on a widely deployed operating system.
+
+
+ISO 10646 also mentions:
+
+\begin{quoteblock}
+NOTE – Former editions of this document included references to a two-octet BMP form called UCS-2 which would be a subset of the
+UTF-16  encoding form restricted to the BMP UCS scalar values. The UCS-2 form is deprecated.
+\end{quoteblock}
+
+
+Instead of stating Windows is non-conforming, which is not useful to their users, we propose to remove the claim
+from the core wording.
+
+However, we cannot change the wide functions, both for API/ABI reason, because they are controlled by C,
+and at best, this requires complex surgery.
+
+Instead, we move the constraints from the type of \tcode{wchar_t} to the constraints of the execution encoding,
+as defined by \paper{P2314R3}.
+
+Previous discussions cab be found on this \href{https://github.com/sg16-unicode/sg16/issues/9}{SG-16 issue}
+
+\section{Behavior changes}
+
+This paper makes UTF-16 in wide literals well-formed. This does not affect implementations which were already accepting them \href{https://godbolt.org/z/cPe69bshM}{[Compiler Explorer]}.
+This paper is therefore standardizing standard practices.
+
+\subsection{What about the library?}
+
+Still the status quo. Further work is needed there.
+
+\subsection{C compat}
+
+C has the same wording
+
+\begin{quoteblock}
+wide character
+
+value representable by an object of type wchar_t, capable of representing any character in the current locale
+\end{quoteblock}
+
+C should consider adopting a similar resolution, however the proposed change has no impact on C compatibility
+(we are removing a constraint).
+
+
+\section{Wording}
+
+\ednote{Modify [basic.fundamental] p8 as follow:} 
+
+\pnum
+\indextext{\idxcode{wchar_t}|see{type, \tcode{wchar_t}}}%
+\indextext{type!\idxcode{wchar_t}}%
+\indextext{type!underlying!\idxcode{wchar_t}}%
+Type \keyword{wchar_t} is a distinct type that has
+an \impldef{underlying type of \tcode{wchar_t}}
+signed or unsigned integer type as its underlying type.
+\removed{The values of type \keyword{wchar_t} can represent
+distinct codes for all members of the largest extended character set
+specified among the supported locales\iref{locale}.}
+
+
+\ednote{Change 16.3.3.3.5.1 [character.seq] paragraph 1. The wording below is relative to P2314R4}
+
+The C standard library makes widespread use of characters and character sequences that follow a few uniform conventions:
+
+\begin{itemize}
+\item Properties specified as \defn{locale-specific} may change during program execution by a call to \tcode{setlocale(int, const char*)} (28.5.1 [clocale.syn]), or by a change to a \tcode{locale} object, as described in 28.3 [locales] and Clause 29 [input.output].
+\item The \defn{execution character set} and the \defn{execution wide-character set} are supersets of the basic literal character set (5.3 [lex.charset]). The encodings of the execution character sets and the sets of additional elements (if any) are locale-specific. \added{All elements of the execution wide-character set are encoded as a single code unit representable by a value of type \tcode{wchar_t}.} \note{The encoding of the execution character sets can be unrelated to any literal encoding.}
+\end{itemize}
+
+Properties specified as locale-specific may change during program execution by a call to setlocale(int, const char*) (28.5.1 [clocale.syn]), or by a change to a locale object, as described in 28.3 [locales] and Clause 29 [input.output].
+
+A letter is any of the 26 lowercase or 26 uppercase letters in the basic execution character set.
+The decimal-point character is the locale-specific (single-byte) character used by functions that convert between a (single-byte) character sequence and a value of one of the floating-point types. It is used in the character sequence to denote the beginning of a fractional part. It is represented in Clause 17 through Clause 32 and Annex D by a period, ’.’, which is also its value in the "C" locale, but may change during program execution by a call to setlocale(int, const char*), [ Footnote: ... ] or by a change to a locale object, as described in 28.3 and Clause 29.
+
+
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+
+\renewcommand{\section}[2]{}%
+\begin{thebibliography}{9}
+    \bibitem[N4885]{N4885}
+    Thomas Köppe
+    \emph{Working Draft, Standard for Programming Language C++}\newline
+    \url{https://wg21.link/N4885}
+\end{thebibliography}
+
+\end{document}
