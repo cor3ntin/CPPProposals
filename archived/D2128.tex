@@ -6,13 +6,13 @@
 \documentclass{wg21}
 
 \title{Multidimensional subscript operator}
-\docnumber{P2128R5}
-\audience{EWG}
+\docnumber{P2128R6}
+\audience{CWG}
 \author{Mark Hoemmen}{mhoemmen@stellarscience.com}
-\authortwo{Daisy Hollman}{dshollm@sandia.gov}
+\authortwo{Daisy Hollman}{me@dsh.fyi}
 \authorthree{Corentin Jabot}{corentin.jabot@gmail.com}
 \authorfive{Christian Trott}{crtrott@sandia.gov}
-\authorfour{Isabella Muerte}{imuerte@hey.com}
+\authorfour{Isabella Muerte}{imuerte@occult.work}
 
 \begin{document}
 \maketitle
@@ -64,6 +64,10 @@ int main() {
 \end{center}
 
 \section{Revisions}
+
+\subsection{R6}
+
+Wording fixes following review by CWG. This version was approved by CWG.
 
 \subsection{R5}
 \begin{itemize}
@@ -433,8 +437,8 @@ Postfix expressions group left-to-right.
 \nontermdef{postfix-expression}\\
 primary-expression\\
 \removed{postfix-expression \terminal{[} expr-or-braced-init-list \terminal{]}}\\
-\added{postfix-expression \terminal{[}  expression-list \terminal{]}}\\
-\added{postfix-expression \terminal{[} braced-init-list \terminal{]}}\\
+\added{postfix-expression \terminal{[}  \opt{expression-list} \terminal{]}}\\
+%\added{postfix-expression \terminal{[} braced-init-list \terminal{]}}\\
 postfix-expression \terminal{(} \opt{expression-list} \terminal{)}\\
 simple-type-specifier \terminal{(} \opt{expression-list} \terminal{)}\\
 typename-specifier \terminal{(} \opt{expression-list} \terminal{)}\\
@@ -444,11 +448,18 @@ simple-type-specifier braced-init-list\\
 
 \rSec3[expr.sub]{Subscripting}
 \begin{quote}
-\pnum
-\indextext{operator!subscripting}%
-\indextext{\idxcode{[]}|see{operator, subscripting}}%
-A postfix expression followed an expression in square brackets is a
-postfix expression. One of the expressions shall be a glvalue of type ``array of
+\begin{removedblock}
+A postfix expression followed by an expression in square brackets is a
+postfix expression. 
+\end{removedblock}
+
+\begin{addedblock}
+A subscript expression is a postfix expression followed by square brackets containing a possibly empty, comma-separated list of \grammarterm{initializer-clause}{s} which constitute the arguments to the subscript operator.    
+    
+The \grammarterm{postfix-expression} is sequenced before each expression in the \grammarterm{expression-list}.
+\end{addedblock}
+
+\added{With the built-in subscript operator, an \grammarterm{expression-list} shall be present, consisting of a single \grammarterm{assignment-expression}.} One of the expressions shall be a glvalue of type ``array of
 \tcode{T}'' or a prvalue of type ``pointer
 to \tcode{T}'' and the other shall be a prvalue of unscoped enumeration or integral type.
 The result is of type ``\tcode{T}''.
@@ -460,7 +471,7 @@ The expression \tcode{E1[E2]} is identical (by definition) to
 \tcode{*((E1)+(E2))},
 except that in the case of an array operand, the result is an lvalue
 if that operand is an lvalue and an xvalue otherwise.
-The expression \tcode{E1} is sequenced before the expression \tcode{E2}.
+\removed{The expression \tcode{E1} is sequenced before the expression \tcode{E2}.}
 
 \pnum
 \begin{removedblock}
@@ -481,7 +492,13 @@ The expression \tcode{E1} is sequenced before the expression \tcode{E2}.
 \end{note}
 
 \pnum
-\changed{A \grammarterm{braced-init-list} shall not be used w}{W}ith the built-in subscript operator\changed{.}{ a \grammarterm{braced-init-list} shall not be used and an \grammarterm{expression-list} shall be a single expression.}
+\removed{A \grammarterm{braced-init-list} shall not be used with the built-in subscript operator.}
+
+
+%\changed{.} shall not be used and an \grammarterm{expression-list} shall be be present, consisting of a single expression.}
+
+% and the expression-list shall be present, consisting of
+%a single expression
 
 \end{quote}
 
@@ -497,7 +514,7 @@ The expression \tcode{E1} is sequenced before the expression \tcode{E2}.
 A subscripting operator function
 is a function named \tcode{operator[]}
 that is a non-static member function \removed{with exactly one parameter}.
-For an expression of the form\added{s}
+For an expression of the form
 
 \begin{removedblock}
 \begin{ncsimplebnf}
@@ -509,13 +526,13 @@ For an expression of the form\added{s}
 \begin{ncsimplebnf}
     postfix-expression \terminal{[}  expression-list\opt \terminal{]}
     
-    postfix-expression \terminal{[}  brace-init-list  \terminal{]}
+%    postfix-expression \terminal{[}  brace-init-list  \terminal{]}
 \end{ncsimplebnf}
 \end{addedblock}
 
 the operator function is selected by overload resolution ([over.match.oper]).
 If a member function is selected, the expression is
-interpreted\added{, respectively,} as
+interpreted as
 
 \begin{removedblock}
 \begin{ncsimplebnf}
@@ -527,8 +544,8 @@ interpreted\added{, respectively,} as
 \begin{ncsimplebnf}
      postfix-expression . operator \terminal{[}\terminal{]} \terminal{(} expresssion-list\opt \terminal{)}
 
-      postfix-expression . operator \terminal{[}\terminal{]} \terminal{(}
-      braced-init-list  \terminal{)}
+%      postfix-expression . operator \terminal{[}\terminal{]} \terminal{(}
+%      braced-init-list  \terminal{)}
 \end{ncsimplebnf}
 \end{addedblock}
 
@@ -537,16 +554,17 @@ interpreted\added{, respectively,} as
 \begin{codeblock}
     struct X {
         Z operator[](std::initializer_list<int>);
-        Z operator[](auto...);
+        @\added{Z operator[](auto...);}@
     };
     X x;
     x[{1,2,3}] = 7;                 // OK: meaning \tcode{x.operator[](\{1,2,3\})}
-    x[1,2,3] = 7;                   // OK: meaning \tcode{x.operator[](1,2,3)}
+    @\added{x[1,2,3] = 7;                                 // OK: meaning \tcode{x.operator[](1,2,3)}}@
     int a[10];
-    a[{1,2,3}] = 7;                 // error: built-in subscript operator
-    a[1,2,3] = 7;                   // error: built-in subscript operator
+    a[{1,2,3}] = 7;             // error: built-in subscript operator
+    @\added{a[1,2,3] = 7;         // error: built-in subscript operator}@
 \end{codeblock}
 \end{example}
+
 
 \rSec2[expr.comma]{Comma operator}%
 
@@ -554,7 +572,7 @@ interpreted\added{, respectively,} as
 In contexts where comma is given a special meaning,
 \begin{example}
     in
-    lists of arguments to functions ([expr.call])\added{, subscript expressions,} and lists of
+    lists of arguments to functions ([expr.call])\added{, subscript expressions ([expr.sub]),} and lists of
     initializers ([decl.init])
 \end{example}
 the comma operator as
@@ -641,8 +659,10 @@ Github: \url{https://github.com/cor3ntin/llvm-project/tree/subscript}
 \section{Acknowledgments}
 
 Thanks to Jens Maurer for his patient help with the wording, and to the many people who provided valuable feedback.
+Thanks to Dan Sunderland for additional wording feedbacks.
 Thanks to Matt Godbolt for hosting an experimental compiler with the implementation
 of this proposal on Compiler Explorer.
+Thanks to everybody ekse who gave feedback on this proposal.
 
 \section{References}
 \renewcommand{\section}[2]{}%

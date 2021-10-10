@@ -8,11 +8,10 @@
 \documentclass{wg21}
 
 
-
 \newcommand{\UnicodeLetter}[1]{\textbf{\textcolor{BrickRed}{\Large\tcode{#1}}}}
 
-\title{Delimited escapes sequences}
-\docnumber{P2290R1}
+\title{Delimited escape sequences}
+\docnumber{D2290R2}
 \audience{EWG, SG-22}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -26,6 +25,13 @@
 We propose an additional, clearly delimited syntax for octal, hexadecimal and universal character name escape sequences.
 
 \section{Revisions}
+
+\subsection{R2}
+\begin{itemize}
+    \item Improve wording
+    \item Add a note about feature macros (we do not need one)
+    \item Mention that a paper will be submitted to the C committee
+\end{itemize}
 
 \subsection{R1}
 \begin{itemize}
@@ -109,6 +115,9 @@ Furthermore, while \tcode{\textbackslash o} is currently reserved for implementa
 \subsection{Impact on C}
 
 This proposal does not impact C, however, the C committee could find that proposal interesting.
+During review, EWG asked that WG14 be maid aware of this proposal to ensure there are no incompatibilities between the two languages if C
+decided to adopt a similar, but slightly different solution.
+To that effect a paper, N2785, will be submitted to the C committee by Aaron Ballman and myself, with the hope it can be presented in September.
 
 
 \section{Prior arts and alternative considered}
@@ -122,6 +131,11 @@ However, most languages (python, D, Perl, javascript, rust, PHP) specify hexadec
 Most languages surveyed follow in C and C++ footstep for the syntax of octal numbers (no braces, 1-3 digits), so this would novel indeed.
 
 As such, for consistency with other C++ proposal and existing art, we have not considered other syntaxes.
+
+\section{Feature Macro}
+
+Because this paper proposes an alternative spelling for constructs than can be otherwise expressed in older versions of the languages,
+we are not proposing the addition of a feature macro
 
 \section{Wording}
 
@@ -139,12 +153,20 @@ As such, for consistency with other C++ proposal and existing art, we have not c
         \nontermdef{hex-quad}\br
         hexadecimal-digit hexadecimal-digit hexadecimal-digit hexadecimal-digit
     \end{bnf}
+
+    \begin{addedblock}
+    \begin{bnf}
+        \nontermdef{simple-hexadecimal-digit-sequence}\br
+        hexadecimal-digit\br
+        simple-hexadecimal-digit-sequence hexadecimal-digit\br
+    \end{bnf}
+    \end{addedblock}
     
     \begin{bnf}
         \nontermdef{universal-character-name}\br
         \terminal{\textbackslash u} hex-quad\br
         \terminal{\textbackslash U} hex-quad hex-quad\br
-        \added{\terminal{\textbackslash u\{}hexadecimal-digit...  \terminal{\}}}
+        \added{\terminal{\textbackslash u\{}simple-hexadecimal-digit-sequence  \terminal{\}}}
     \end{bnf}
     
     
@@ -167,20 +189,28 @@ As such, for consistency with other C++ proposal and existing art, we have not c
         octal-escape-sequence\br
         hexadecimal-escape-sequence
     \end{bnf}
+
+    \begin{addedblock}
+        \begin{bnf}
+            \nontermdef{simple-octal-digit-sequence}\br
+            octal-digit\br
+            simple-octal-digit-sequence octal-digit
+        \end{bnf}
+    \end{addedblock}
     
     \begin{bnf}
         \nontermdef{octal-escape-sequence}\br
         \terminal{\textbackslash} octal-digit\br
         \terminal{\textbackslash} octal-digit octal-digit\br
         \terminal{\textbackslash} octal-digit octal-digit octal-digit\br
-        \added{\terminal{\textbackslash o\{}octal-digit...  \terminal{\}}}
+        \added{\terminal{\textbackslash o\{}simple-octal-digit-sequence \terminal{\}}}
     \end{bnf}
     
     \begin{bnf}
         \nontermdef{hexadecimal-escape-sequence}\br
         \terminal{\textbackslash x} hexadecimal-digit\br
         hexadecimal-escape-sequence hexadecimal-digit\br
-        \added{\terminal{\textbackslash x\{}hexadecimal-digit...  \terminal{\}}}
+        \added{\terminal{\textbackslash x\{}simple-hexadecimal-digit-sequence  \terminal{\}}}
     \end{bnf}
     
     \begin{bnf}
@@ -191,6 +221,8 @@ As such, for consistency with other C++ proposal and existing art, we have not c
 \end{quote}
 
 \section{Acknowledgments}
+
+Thanks for people who gave feedback on this paper, notably Jens Maurer and Aaron Ballman.
 
 \section{References}
 \renewcommand{\section}[2]{}%

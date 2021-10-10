@@ -59,6 +59,7 @@
 \usepackage{enumitem}
 \usepackage{makecell}
 \usepackage{longtable}
+\usepackage[normalem]{ulem}
 
 
 \setmainfont{Noto Sans}
@@ -87,6 +88,10 @@
 
 \newcommand*{\target}[1]{\def\@target{#1}}
 
+\newcommand*{\category}[1]{\def\@category{#1}}
+
+\newcommand*{\project}[1]{\def\@project{#1}}
+
 % Defines the author of the paper and their email address.
 % usage: \author{<author>}{<email>}
 \renewcommand*{\author}[2]{\def\@author{#1} \def\@email{#2}}
@@ -103,8 +108,9 @@
     \begin{tabular}{ll}%
       Document \#:&\@docnumber\\%
       Date:       &\today\\%
-      Project:    &Programming Language C++\\%
+      \ifdef{\@project}{Project:    &\@project\\}{Programming Language C++\\}%
       Audience:   &\@audience\\%
+      \ifdef{\@category}{Proposal category:&\@category\\}{}
       Reply-to:   &\@author\ \textless\href{mailto:\@email}{\@email}\textgreater%
                   \ifdef{\@authortwo}{\\&\@authortwo\ \textless\href{mailto:\@emailtwo}{\@emailtwo}\textgreater}{}%
                   \ifdef{\@authorthree}{\\&\@authorthree\ \textless\href{mailto:\@emailthree}{\@emailthree}\textgreater}{}%
@@ -170,10 +176,16 @@
 %% Difference markups
 \definecolor{addclr}{rgb}{0,.6,.6}
 \definecolor{remclr}{rgb}{1,0,0}
+\definecolor{remclr2}{rgb}{0.71, 0.4, 0.11}
 \definecolor{noteclr}{rgb}{0.55,0,55}
+
+
+\def\squiggly{\bgroup \markoverwith{\textcolor{blue}{\lower3.5\p@\hbox{\sixly \char58}}}\ULon}
+
 
 \newcommand{\added}[1]{\textcolor{addclr}{\uline{#1}}}
 \newcommand{\removed}[1]{\textcolor{remclr}{\sout{#1}}}
+\newcommand{\removedprev}[1]{\textcolor{magenta}{\squiggly{#1}}}
 \newcommand{\changed}[2]{\removed{#1} \added{#2}}
 
 \newenvironment{addedm}{\color{addclr}}{ }
@@ -479,6 +491,7 @@
 \newcommand{\dtype}{\Fundesc{Default type}}
 \newcommand{\ctemplate}{\Fundesc{Class template}}
 \newcommand{\templalias}{\Fundesc{Alias template}}
+\newcommand{\recommended}{\Fundesc{Recommended practice}}
 \newcommand{\pnum}{}
 \newcommand{\idxoldconcept}[1]{Cpp17#1@\textit{Cpp17#1}}
 \newcommand{\oldconcept}[1]{\textit{Cpp17#1}}

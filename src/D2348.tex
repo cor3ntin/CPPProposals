@@ -13,19 +13,35 @@
 \setmainfont{Noto Sans}
 
 \title{Whitespaces Wording Revamp}
-\docnumber{P2348R0}
-\audience{SG-16, CWG}
+\docnumber{P2348R2}
+\audience{EWG, CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 \newcommand{\cwhitespace}[1]{\removed{#1} \added{\grammarterm{whitespace}}}
-\newcommand{\cwhitespaces}[1]{\removed{#1} \added{\grammarterm{whitespace}}}
+\newcommand{\cwhitespaces}[1]{\removed{#1} \added{\grammarterm{whitespace}{s}}}
 \newcommand{\chwhitespace}[1]{\removed{#1} \added{\grammarterm{horizontal-whitespace}}}
 \newcommand{\chwhitespaces}[1]{\removed{#1} \added{\grammarterm{horizontal-whitespace}{s}}}
 \newcommand{\clb}[1]{\removed{#1} \added{\grammarterm{line-break}}}
+\newcommand{\clbs}[1]{\removed{#1} \added{\grammarterm{line-break}{s}}}
+\newcommand{\clbc}[1]{\removed{#1} \added{\grammarterm{line-break-character}}}
 
 \begin{document}
 
 \maketitle
+
+\section{Revisions}
+
+\subsection*{Revision 2}
+\begin{itemize}
+    \item Wording fixes
+\end{itemize}
+
+\subsection*{Revision 1}
+\begin{itemize}
+    \item The previous revisions classified Vertical Tab and Form Feed as vertical spaces. This was consistent with Unicode, but not with the current wording, nor with any of the existing implementations. As this paper is trying not to modify the status quo, and because the author cannot find a reason to challenge the status quo, this version treats these codepoints as horizontal whitespaces.
+    \item Add a note about \tcode{\textbackslash n\textbackslash r} and other not spelled-out sequences.
+    \item Align the grammar in [lex.whitespaces] with terminology used in \paper{P2314R2} and rebase the rest of the wording on top of  \paper{P2314R2}. 
+\end{itemize}
 
 \section{Design}
 
@@ -37,16 +53,39 @@ No breaking behavior change is intended.
 \subsection{Make whitespace grammar elements}
 
 For clarity, this paper introduces a grammar for whitespaces, including comments, and then refers to whitespace as grammar terms.
-This also makes it easier to later extend the list of whitespaces.
-However, the questions of extending the list of Unicode characters
+This also makes it easier to extend the list of whitespaces later.
+However, the question of extending the list of Unicode characters
 treated as whitespace is not explored in this paper.
 Non-Unicode source encoding would continue to map their set of whitespaces and new-line to what is currently designated in the standard: CR, FF, LF, VT, SPACE, TAB.
 
 \subsection{Comments}
 
-The proposed wording change makes vertical tabs end // comments, rather than make them ill-formed no diagnostic required.
-This is consistent with Unicode which considers vertical tab and form feed to be line breaks.
-An alternative would be to make vertical tab/form feed in comments ill-formed. But this would not be consistent with Unicode guidelines.
+The proposed wording change makes vertical tabs and form-feed allowed in // comments, rather than make them ill-formed no diagnostic required.
+
+\subsection{VT and FF are treated as horizontal whitespaces}
+
+In R0, \tcode{VT} \tcode{FF} were treated as vertical, line-breaking whitespaces. This was consistent with Unicode.
+However, I failed to realize that all implementations treat them as non-breaking whitespaces.
+As this paper is not trying to challenge the status quo, which frankly would have little value, it classifies \tcode{VT} and \tcode{FF}
+as horizontal whitespaces. As such, an implementation must support them in comments and string/character literals, which is consistent with implementations.
+
+\href{https://compiler-explorer.com/z/9ahz7W7xc}{Compiler explorer}.
+
+Despite the contradition with Unicode, further research showed that treating vertical space and form feed is standard practice in many languages
+including C\#, Rust, Java, JavaScript and others.
+
+
+\subsection{\textbackslash n\textbackslash r}
+
+On BBC Micro and other Acorn systems, \tcode{\textbackslash n\textbackslash r} was used to delimited new lines.
+Similarly, some systems may not use any of the sequences for new lines outlined in this paper.
+This is consistent with both the status quo and Unicode.
+Assuming once could run a modern compiler on a BBC micro (note that this proposal only affects translation, not execution),
+the implementation-defined mapping provision allows an implementation to map platform/encoding specific line breaks to \textbackslash n in phase 1
+of translation.
+
+Similarly, while this paper tries to preserve sequences of line breaks through phases 1-6 of translation, it is not observable
+whether a sequence of line breaks is treated as one or several line-breaks except in the value of \tcode{__LINE__} and \tcode{source_location} whose values are implementation-defined
 
 \subsection{Replace the term \grammarterm{new-line} by \grammarterm{line-break}}
 
@@ -58,13 +97,20 @@ Using different terminology makes it clearer which is which.
 
 All whitespaces (including comments) are conserved by the proposed wording through phases 1-7.
 In practice, this is not observable (and we may want a note stating that somewhere).
+
+Note that some compilers (namely GCC) will emit a diagnostic for the presence of vertical tabs
+in preprocessing directives.
+With this, such diagnostic in pedantic mode is not necessary for corformance, but might still
+be useful [\href{https://godbolt.org/z/r8hdzM6Gx}{Compiler Explorer}].
+
+
 This fixes \paper{CWG2002}.
 
 \begin{quoteblock}
 According to Clause 15 [cpp] paragraphg 4,
 
 \begin{quoteblock}
-The only white-space characters that shall appear between preprocessing tokens within a preprocessing directive (from just after the introducing \# preprocessing token through just before the terminating new-line character) are space and horizontal-tab (including spaces that have replaced comments or possibly other white-space characters in translation phase 3).
+The only whitespace characters that shall appear between preprocessing tokens within a preprocessing directive (from just after the introducing \# preprocessing token through just before the terminating new-line character) are space and horizontal-tab (including spaces that have replaced comments or possibly other whitespace characters in translation phase 3).
 \end{quoteblock}
 The effect of this restriction is unclear, however, since translation phase 3 is permitted to transform all white space characters and comments into spaces. The relationship between these two rules should be clarified.
 \end{quoteblock}
@@ -73,7 +119,7 @@ The list of whitespaces is sufficient to address the needs of
 codepoints conservations through phases 1-6 of \paper{P2295R2}.
 The clause mentioned in CWG2002 is deleted.
 
-\subsection{The set of character is not expended}
+\subsection{The set of character is not expanded}
 
 We do not propose new characters as whitespaces.
 However, following Unicode guidelines, we clarify that CRLF is to be considered a single line break.
@@ -81,10 +127,12 @@ However, following Unicode guidelines, we clarify that CRLF is to be considered 
 \subsection{Raw-string literals}
 
 For clarity, that line-breaks are mapped to a new-line in raw-string-literal is made normative.
-We intend that this paper addresses \paper{CWG1655}: by using different terms for \grammarterm{line-break} and \grammarterm{new-line}, we make clear that these things are not related.  
+We intend that this paper addresses \paper{CWG1655}: by using different terms for \grammarterm{line-break} and \grammarterm{new-line}, we make clear that these things are not related.
 
 \section{Wording}
 \rSec1[lex.phases]{Phases of translation}%
+
+\ednote{The wording is based on \paper{P2314R2}}
 
 \pnum
 \indextext{translation!phases|(}%
@@ -93,22 +141,16 @@ following phases.
 \begin{enumerate}
     \item
     \indextext{character set!basic source}%
-    Physical source file characters are mapped, in an
+    \changed{Physical source file characters are mapped, in an
     \impldef{mapping physical source file characters to basic source character set} manner,
-    to the basic source character set \removed{(introducing new-line characters for end-of-line
-    indicators)} if necessary.
+    to the translation character set (introducing new-line characters for end-of-line
+    indicators)}{The physical source file is mapped, in an implementation-defined manner, to a sequence of translation character set elements}.
+
+    \ednote{The intent of this reformulation is to get rid of the term "end-of-line-indicator" which is not defined,
+    while supporting source files stored as records.}
+
     The set of physical source file characters accepted is \impldef{physical source file
         characters}.
-    Any
-    source file character not in the basic source character
-    set\iref{lex.charset} is replaced by the
-    \indextext{universal character name}\grammarterm{universal-character-name} that
-    designates that character. An implementation may use any internal
-    encoding, so long as an actual extended character encountered in the
-    source file, and the same extended character expressed in the source
-    file as a \grammarterm{universal-character-name} (e.g., using the \tcode{\textbackslash
-        uXXXX} notation), are handled equivalently
-    except where this replacement is reverted\iref{lex.pptoken} in a raw string literal.
 
     \item
     \indextext{line splicing}%
@@ -130,10 +172,12 @@ following phases.
     tokens\iref{lex.pptoken} and \cwhitespaces{sequences of whitespace characters
     (including comments)}. A source file shall not end in a partial
     preprocessing token or in a partial comment.
-    \removed{Each comment is replaced by one space character}. \changed{New-line characters are}{Each \grammarterm{line-break} is}
-    retained. \removed{Whether each nonempty sequence of whitespace characters other
+    \removed{Each comment is replaced by one space character.} 
+    %\changed{New-line characters are}{Each \grammarterm{line-break} is} retained. 
+    \removed{New-line characters are retained.} 
+    \removed{Whether each nonempty sequence of whitespace characters other
     than new-line is retained or replaced by one space character is
-    unspecified.} The process of dividing a source file's
+    unspecified.}  Each \grammarterm{universal-character-name} outside of a header-name or a character or string literal is replaced by the designated element of the translation character set ([lex.charset]). The process of dividing a source file's
     characters into preprocessing tokens is context-dependent.
     \begin{example}
         See the handling of \tcode{<} within a \tcode{\#include} preprocessing
@@ -166,7 +210,7 @@ following phases.
     and a null character is appended to the result
     as specified in \ref{lex.string}.
 
-    \item \cwhitespaces{Whitespace characters} separating tokens are no longer
+    \item \added{The} \cwhitespaces{Whitespace characters} separating tokens are no longer
     significant. Each preprocessing token is converted into a
     token\iref{lex.token}. The resulting tokens are syntactically and
     semantically analyzed and translated as a translation unit.
@@ -210,7 +254,7 @@ following phases.
     string-literal\br
     user-defined-string-literal\br
     preprocessing-op-or-punc\br
-    \textnormal{each non-whitespace character that cannot be one of the above}
+    \textnormal{each \changed{non-whitespace character}{character that cannot be part of a \grammarterm{whitespace} and} cannot be one of the above}
 \end{bnf}
 
 \pnum
@@ -220,24 +264,25 @@ or an operator or punctuator.
 
 \pnum
 A preprocessing token is the minimal lexical element of the language in translation
-phases 3 through 6. The categories of preprocessing token are: header names,
+phases 3 through 6. In this document, glyphs are used to identify elements of the basic character set ([lex.charset]) The categories of preprocessing token are: header names,
 placeholder tokens produced by preprocessing \tcode{import} and \tcode{module} directives
 (\grammarterm{import-keyword}, \grammarterm{module-keyword}, and \grammarterm{export-keyword}),
 identifiers, preprocessing numbers, character literals (including user-defined character
 literals), string literals (including user-defined string literals), preprocessing
 operators and punctuators, and single non-whitespace characters that do not lexically
-match the other preprocessing token categories. If a \tcode{'} or a \tcode{"} character
+match the other preprocessing token categories. If a U+0027 APOSTROPHE or a U+0022 QUOTATION MARK character
 matches the last category, the behavior is undefined. Preprocessing tokens can be
-separated by \cwhitespace{whitespace;}\added{.}
+separated by \cwhitespaces{whitespace;}\added{.}
 \indextext{comment}%
 \removed{this consists of comments\iref{lex.comment}, or whitespace
-characters (space, horizontal tab, new-line, vertical tab, and
-form-feed), or both}. As described in [cpp], in certain
-circumstances during translation phase 4, \cwhitespace{whitespace} (or the absence
-thereof) serves as more than preprocessing token separation. \cwhitespace{Whitespace}
+characters (U+0020 SPACE, U+0009 CHARACTER TABULATION, new-line, U+000B LINE TABULATION, and U+000C FORM FEED), or both}. As described in [cpp], in certain
+circumstances during translation phase 4, \cwhitespaces{whitespace} (or the absence
+thereof) serves as more than preprocessing token separation. \changed{Whitespace}{Whitespace characters}
 can appear within a preprocessing token only as part of a header name or
 between the quotation characters in a character literal or
 string literal.
+
+\ednote{"Whitespace characters" is intentional here: this may refer to unicode characters not considered whitespaces for the purpose of lexing, and do not refer to elements used to separate tokens.}
 
 \rSec1[lex.token]{Tokens}
 
@@ -255,9 +300,14 @@ string literal.
 \removed{There are five kinds of tokens: identifiers, keywords, literals,%
 operators, and other separators}.
 
+\ednote{This is somewhat of a drive-by partial fix of \paper{CWG1901}.
+However the use of "separator" is somewhat missleading here. Was it meant to be mean whitespace?
+The following sentence is explicitely stating that whitespace are not tokens.
+}
+
 \begin{removedblock}
 \indextext{whitespace}%
-Blanks, horizontal and vertical tabs, newlines, formfeeds, and comments
+Blanks, horizontal and vertical tabs, new-lines, form-feeds, and comments
 (collectively, ``whitespace''), as described below, are ignored except
 as they serve to separate tokens.
 \end{removedblock}
@@ -267,6 +317,8 @@ as they serve to separate tokens.
     literals, and alternative tokens containing alphabetic characters.
 \end{note}
 \indextext{token|)}
+
+
 
 \begin{addedblock}
 
@@ -280,31 +332,64 @@ as they serve to separate tokens.
 
 \begin{bnf}
     \nontermdef{horizontal-whitespace}\br
-    horizontal-whitespace\br
-    comment\br
     horizontal-whitespace-character\br
+    comment\br
 \end{bnf}
 
 \begin{bnf}
     \nontermdef{comment}\br
-    \textnormal{// any member of the basic source character set except} line-break\br
-    \textnormal{/* any member of the basic source character set */}\br
+    single-line-comment\br
+    multi-line-comment
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{single-line-comment}\br
+    \textnormal{//}\br
+    single-line-comment single-line-comment-elem\br
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{single-line-comment-elem}\br
+    \textnormal{any member of the translation character set except any character that matches} line-break-character\br
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{multi-line-comment}\br
+    \textnormal{/*}  \opt{multi-line-comment-elem-seq} \textnormal{*/}\br
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{multi-line-comment-elem-seq}\br
+    multi-line-comment-elem\br
+    multi-line-comment-elem-seq multi-line-comment-elem    
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{multi-line-comment-elem}\br
+    \textnormal{any member of the translation character set except * followed by /}\br
 \end{bnf}
 
 \begin{bnf}
     \nontermdef{line-break}\br
-    \textnormal{U+000A LINE FEED}\br
-    \textnormal{U+000B VERTICAL TAB}\br
-    \textnormal{U+000C FORM FEED}\br
-    \textnormal{U+000D CARRIAGE RETURN}\br
+    line-break-character\br
     \textnormal{U+000D CARRIAGE RETURN followed by U+000A LINE FEED}\br
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{line-break-character}\br
+    \textnormal{U+000A LINE FEED}\br
+    \textnormal{U+000D CARRIAGE RETURN}\br
 \end{bnf}
 
 \begin{bnf}
     \nontermdef{horizontal-whitespace-character}\br
     \textnormal{U+0009 HORIZONTAL TAB}\br
+    \textnormal{U+000C FORM FEED}\br
+    \textnormal{U+000B VERTICAL TAB}\br
     \textnormal{U+0020 SPACE}\br
 \end{bnf}
+
+A \tcode{whitespace} is the longest sequence of characters that could constitute a \tcode{whitespace}.
 
 \end{addedblock}
 
@@ -312,8 +397,9 @@ as they serve to separate tokens.
 \rSec2[lex.comment]{Comments}
 \end{removedblock}
 \pnum
-\changed{The characters \tcode{/*} start a comment, which terminates with the
-characters \tcode{*/}. These c}{C}omments do not nest.
+\removed{The characters \tcode{/*} start a comment, which terminates with the
+characters \tcode{*/}.} 
+%\ednote{This is retained to explain that a ine comment cannot contain the sequence \tcode{*/}}  These comments do not nest.
 \indextext{comment!\tcode{//}}%
 \removed{The characters \tcode{//} start a comment, which terminates immediately before the
 next new-line character. If there is a form-feed or a vertical-tab
@@ -328,9 +414,9 @@ is required.}
     \tcode{/*} comment.
 \end{note}
 
-\begin{addedblock}
-\grammarterm{whitespace}{s} are ignored except as they serve to separate tokens.
-\end{addedblock}
+%\begin{addedblock}
+%\grammarterm{whitespace}{s} are ignored except as they serve to separate tokens.
+%\end{addedblock}
 
 \indextext{comment|)}
 
@@ -351,7 +437,7 @@ is required.}
 
 \begin{bnf}
     \nontermdef{h-char}\br
-    \textnormal{any member of the source character set except \clb{new-line} and \terminal{>}}
+    \textnormal{any member of the source character set except \added{any character that matches} \clbc{new-line} and \terminal{>}}
 \end{bnf}
 
 \begin{bnf}
@@ -362,7 +448,7 @@ is required.}
 
 \begin{bnf}
     \nontermdef{q-char}\br
-    \textnormal{any member of the source character set except \clb{new-line} and \terminal{"}}
+    \textnormal{any member of the source character set except \added{any character that matches} \clbc{new-line} and \terminal{"}}
 \end{bnf}
 
 \pnum
@@ -414,7 +500,7 @@ is conditionally-supported with \impldef{meaning of \tcode{'}, \tcode{\textbacks
 
 \begin{bnf}
     \nontermdef{basic-c-char}\br
-    \textnormal{any member of the basic source character set except the single-quote \terminal{'}, backslash \terminal{\textbackslash}, or \clb{new-line character}}
+    \textnormal{any member of the basic source character set except the single-quote \terminal{'}, backslash \terminal{\textbackslash}, or \added{any character that matches} \clbc{new-line character}}
 \end{bnf}
 
 \begin{bnf}
@@ -516,7 +602,7 @@ is specified in \tref{lex.ccon.esc}.
 
 \begin{bnf}
     \nontermdef{basic-s-char}\br
-    \textnormal{any member of the translation character set except the double-quote \terminal{"}, backslash \terminal{\textbackslash}, or \clb{new-line character}}
+    \textnormal{any member of the translation character set except the double-quote \terminal{"}, backslash \terminal{\textbackslash}, or \added{any character that matches} \clbc{new-line character}}
 \end{bnf}
 
 \begin{bnf}
@@ -545,7 +631,7 @@ is specified in \tref{lex.ccon.esc}.
 \begin{bnf}
 \nontermdef{d-char}\br
 \textnormal{any member of the basic source character set except:}\br
-\changed{\textnormal{space}}{horizontal-whitespace-character, line-break}, \textnormal{the left parenthesis \terminal{(}, the right parenthesis \terminal{)}, the backslash \terminal{\textbackslash}\removed{, and the control characters\br
+\changed{\textnormal{space}}{any charachter that matches horizontal-whitespace-character, \\ or \clbc{new-line character}}, \textnormal{the left parenthesis \terminal{(}, the right parenthesis \terminal{)}, the backslash \terminal{\textbackslash}\removed{, and the control characters\br
 \textnormal{representing horizontal tab, vertical tab, form feed, and newline.}}}
 \end{bnf}
 
@@ -567,8 +653,8 @@ shall consist of at most 16 characters.
 \end{note}
 
 \pnum
-\removed{[\textit{Note:}}\space A \clb{source-file new-line} in a raw string literal results in a new-line in the
-    resulting execution string literal. Assuming no
+\removed{[\textit{Note:}}\space \removed{A} \added{Each longest sequence of characters that matches the grammar of a} \clb{source-file new-line} in a raw string literal \changed{results in a new-line in the
+    resulting execution string literal}{denotes a new-line}. Assuming no
     whitespace at the beginning of lines in the following example, the assert will succeed:
     \begin{codeblock}
         const char* p = R"(a\
@@ -731,7 +817,7 @@ the first token in the sequence,
 referred to as a \defnadj{directive-introducing}{token},
 begins with the first \changed{character in the source file
 (optionally after whitespace containing no new-line characters)}{non-whitespace} or
-follows \cwhitespace{whitespace} containing at least one \clb{new-line character},
+follows \added{a sequence of} \cwhitespaces{whitespace} containing at least one \clb{new-line character},
 and is
 
 \begin{itemize}
@@ -763,7 +849,7 @@ and is
 \end{itemize}
 
 The last token in the sequence is the first token within the sequence that
-is immediately followed by \cwhitespace{whitespace} containing a \clb{new-line character}.
+is immediately followed by \cwhitespaces{whitespace} containing a \clb{new-line character}.
 \begin{note}
     Thus, preprocessing directives are commonly called ``lines''.
     These ``lines'' have no other syntactic significance,
@@ -835,6 +921,12 @@ are space and horizontal-tab
 or possibly other whitespace characters
 in translation phase 3).
 \end{removedblock}
+
+\begin{addedblock}
+Only \grammarterm{horizontal-whitespace}{s} can appear between preprocessing tokens within a preprocessing directive.
+\end{addedblock}
+
+\ednote{multi-line comments containing line-breaks are considered atomic \grammarterm{horizontal-whitespace}{s} after phase 3}
 
 \pnum
 The implementation can
@@ -1436,7 +1528,7 @@ does not have a point of macro import.
 Two replacement lists are identical if and only if
 the preprocessing tokens in both have
 the same number, ordering, spelling, and \cwhitespace{whitespace} separation,
-where all \cwhitespace{whitespace} separations are considered identical.
+where all \changed{whitespace separations}{sequences of one or more \grammarterm{whitespace}{s}} are considered identical.
 
 \pnum
 An identifier currently defined as an
@@ -1478,8 +1570,7 @@ otherwise the program is ill-formed.
 
 \pnum
 \indextext{macro!replacement list}%
-There shall be \cwhitespace{whitespace} between the identifier and the replacement list
-in the definition of an object-like macro.
+There shall be \changed{whitespace}{one or more \grammarterm{whitespace}{s}} between the identifier and the replacement list in the definition of an object-like macro.
 
 \pnum
 If the \grammarterm{identifier-list} in the macro definition does not end with
@@ -1511,7 +1602,7 @@ is called the
 \indextext{name!macro|see{macro, name}}%
 \defnx{macro name}{macro!name}.
 There is one name space for macro names.
-\removed{Any} \cwhitespaces{whitespace characters} preceding or following the
+Any \cwhitespaces{whitespace characters} preceding or following the
 replacement list of preprocessing tokens are not considered
 part of the replacement list for either form of macro.
 
@@ -1662,9 +1753,9 @@ contains the spelling of the preprocessing token sequence for the
 corresponding argument (excluding placemarker tokens).
 Let the \defn{stringizing argument} be the preprocessing token sequence
 for the corresponding argument with placemarker tokens removed.
-Each occurrence of \cwhitespace{whitespace} between the stringizing argument's preprocessing
+Each \changed{occurrence of whitespace}{sequence of one or more \grammarterm{whitespace}{s}} between the stringizing argument's preprocessing
 tokens becomes a single space character in the character string literal.
-\added{All} \cwhitespace{Whitespace} before the first preprocessing token and after the last
+\added{All} \cwhitespaces{whitespace} before the first preprocessing token and after the last
 preprocessing token comprising the stringizing argument \changed{is}{are} deleted.
 Otherwise, the original spelling of each preprocessing token in the
 stringizing argument is retained in the character string literal,
@@ -1770,7 +1861,7 @@ operators is unspecified.
         "hello, world"
     \end{codeblock}
 
-    \cwhitespace{Space} around the \tcode{\#} and \tcode{\#\#} tokens in the macro definition
+    \added{The presence of} \cwhitespace{Space} around the \tcode{\#} and \tcode{\#\#} tokens in the macro definition
     is optional.
 \end{example}
 
@@ -1856,9 +1947,11 @@ shall be a character string literal.
 The
 \defn{line number}
 of the current source line is one greater than
-the number of \clb{new-line characters} read or introduced
-in translation phase 1\iref{lex.phases}
+the number of \clbs{new-line characters} \changed{read or introduced
+in}{resulting from} translation phase 1\iref{lex.phases}
 while processing the source file to the current token.
+
+%\ednote{Do we want to keep "introduced" here?}
 
 \pnum
 A preprocessing directive of the form
@@ -1938,7 +2031,7 @@ has no effect.
 
 \section{Acknowledgments}
 
-Thanks to Peter Brett who provided valuable feedback!
+Thanks to Peter Brett, Hubert Tong, Jens Maurer and the entierty of SG-16 who provided valuable feedback!
 
 \bibliographystyle{plain}
 \bibliography{wg21}
@@ -1949,7 +2042,7 @@ Thanks to Peter Brett who provided valuable feedback!
 
 \bibitem[N4885]{N4885}
 Thomas Köppe
-\emph{Working Draft, Standard for Programming Language C++}\newline
+\emph{Working Draft, Standard for Programming Language C++}\ new-line
 \url{https://wg21.link/N4885}
 
 \end{thebibliography}

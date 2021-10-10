@@ -7,7 +7,7 @@
 
 \title{Compatibility between \tcode{tuple}, \tcode{pair} and \placeholder{tuple-like} objects}
 \docnumber{P2165R2}
-\audience{SG9, LEWG}
+\audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 \begin{document}
@@ -102,7 +102,7 @@ std::map m{t, u};
 
 
 
-static_assert(same_as<std::tuple<int>,
+static_assert(<std::tuple<int>,
     range_value_t<decltype(views::zip(v))>>);
 
 static_assert(same_as<std::tuple<int,int>,
@@ -317,13 +317,21 @@ constexpr tuple<TTypes&&...> forward_as_tuple(TTypes&&...) noexcept;
 template<class... TTypes>
 constexpr tuple<TTypes&...> tie(TTypes&...) noexcept;
 
-template<class... Tuples>
+template<@\changed{class}{\placeholder{tuple-like}}@... Tuples>
 constexpr tuple<CTypes...> tuple_cat(Tuples&&...);
 
 // \ref{tuple.apply}, calling a function with a tuple of arguments
-template<class F, class Tuple>
+template<class F, @\changed{class}{\placeholder{tuple-like}}@ Tuple>
 constexpr decltype(auto) apply(F&& f, Tuple&& t);
 
+template<class T, @\changed{class}{\placeholder{tuple-like}}@ Tuple>
+constexpr T make_from_tuple(Tuple&& t);
+
+// \ref{tuple.helper}, tuple helper classes
+template<class T> struct tuple_size;                  // \notdef
+template<class T> struct tuple_size<const T>;
+
+template<class... Types> struct tuple_size<tuple<Types...>>;
 
 [...]
 
@@ -347,7 +355,7 @@ template <typename T>
 concept @\placeholder{tuple-like}@ // \expos
     = !is_reference_v<T> && requires  {
     typename tuple_size<T>::type;
-    same_as<decltype(tuple_size_v<T>), size_t>;
+    requires same_as<decltype(tuple_size_v<T>), size_t>;
 } && []<std::size_t... I>(std::index_sequence<I...>)
     { return (@\placeholder{is-tuple-element}@<T, I> && ..); }(std::make_index_sequence<tuple_size_v<T>>{});
 
@@ -851,8 +859,7 @@ is zero-based}{the type denoted by \tcode{tuple\char`_element\char`_t<$i$, UTupl
 
 \indexlibraryglobal{tuple_cat}
 \begin{itemdecl}
-template<class... Tuples>
-@\added{requires (\placeholder{tuple-like}<std::remove_reference_t<Tuples>>\&\&...)}@
+template<@\changed{class}{\placeholder{tuple-like}}@... Tuples>
 constexpr tuple<CTypes...> tuple_cat(Tuples&&... tpls);
 \end{itemdecl}
 
@@ -906,6 +913,64 @@ for each valid $k_i$ and each group $\tcode{e}_i$ in order.
     \tcode{pair} and \tcode{array}.
 \end{note}
 \end{removedblock}
+
+
+\rSec2[tuple.apply]{Calling a function with a \tcode{tuple} of arguments}
+
+\indexlibraryglobal{apply}%
+\begin{itemdecl}
+template<class F, @\changed{class}{\placeholder{tuple-like}}@ Tuple>
+constexpr decltype(auto) apply(F&& f, Tuple&& t);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Given the exposition-only function:
+\begin{codeblock}
+    template<class F, class Tuple, size_t... I>
+    constexpr decltype(auto) @\placeholdernc{apply-impl}@(F&& f, Tuple&& t, index_sequence<I...>) {
+        // \expos
+        return @\placeholdernc{INVOKE}@(std::forward<F>(f), std::get<I>(std::forward<Tuple>(t))...);  // see \ref{func.require}
+    }
+\end{codeblock}
+Equivalent to:
+\begin{codeblock}
+    return @\placeholdernc{apply-impl}@(std::forward<F>(f), std::forward<Tuple>(t),
+    make_index_sequence<tuple_size_v<remove_reference_t<Tuple>>>{});
+\end{codeblock}
+\end{itemdescr}
+
+
+\indexlibraryglobal{make_from_tuple}%
+\begin{itemdecl}
+    template<class T, @\changed{class}{\placeholder{tuple-like}}@ Tuple>
+    constexpr T make_from_tuple(Tuple&& t);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Given the exposition-only function:
+\begin{codeblock}
+    template<class T, class Tuple, size_t... I>
+    requires is_constructible_v<T, decltype(get<I>(declval<Tuple>()))...>
+    constexpr T @\placeholdernc{make-from-tuple-impl}@(Tuple&& t, index_sequence<I...>) {     // \expos
+        return T(get<I>(std::forward<Tuple>(t))...);
+    }
+\end{codeblock}
+Equivalent to:
+\begin{codeblock}
+    return @\placeholdernc{make-from-tuple-impl}@<T>(
+    std::forward<Tuple>(t),
+    make_index_sequence<tuple_size_v<remove_reference_t<Tuple>>>{});
+\end{codeblock}
+\begin{note}
+    The type of \tcode{T} must be supplied
+    as an explicit template parameter,
+    as it cannot be deduced from the argument list.
+\end{note}
+\end{itemdescr}
 
 \end{itemdescr}
 \rSec2[tuple.rel]{Relational operators}
@@ -1027,8 +1092,6 @@ struct basic_common_type<TTuple, UTuple, TQual, UQual> {
 \tcode{type} denotes the type \tcode{tuple<common_type_t_t<TTypes, UTypes>...>}.
 
 \end{itemdescr}
-
-
 \end{addedblock}
 
 \rSec1[pairs]{Pairs}
@@ -1718,10 +1781,11 @@ Thanks to Alisdair Meredith, Christopher Di Bella and Tim Song for their invalua
 
 \begin{thebibliography}{9}
 
-    \bibitem[N4861]{N4861}
-    Richard Smith
-    \emph{Working Draft, Standard for Programming Language C++}\newline
-    \url{https://wg21.link/N4861}
+\bibitem[N4885]{N4885}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4885}
+
 
 \end{thebibliography}
 \end{document}

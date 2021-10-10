@@ -8,9 +8,10 @@
 
 
 \title{Support for UTF-8 as a portable source file encoding}
-\docnumber{D2295R4}
+\docnumber{P2295R5}
 \audience{SG-16, EWG, SG-22}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Peter Brett}{pbrett@cadence.com}
 
 \begin{document}
     
@@ -30,6 +31,12 @@ Thanks Mr. Dawes!
 We propose that UTF-8 source files should be supported by all C++ compilers.
 
 \section{Revisions}
+
+
+\subsection{R5}
+\begin{itemize}
+    \item Change wording following SG-16 guidance
+\end{itemize}
 
 \subsection{R4}
 \begin{itemize}
@@ -295,7 +302,7 @@ As such, the wording reflects the intent but not necessarily the terminology tha
 
 Notably, SG-16 and CWG are working on removing the mapping of characters to universal-character-name in phase 1, which has no observable impact on the behavior of C++ programs.
 
-The proposed wording assumes \paper{P2223R1} has previously been applied to the wording draft
+\ednote{The proposed wording assumes \paper{P2314R2} has previously been applied to the wording draft.}
 
 
 \rSec1[lex.phases]{Phases of translation}%
@@ -309,23 +316,25 @@ following phases.
     \item
 
 \begin{addedblock}
-     A \defn{UTF-8 source file} is a physical source file whose encoding scheme is UTF-8 as specified in ISO/IEC 10646.
+    The encoding scheme of a physical source file is determined in an
+    implementation-defined manner. An implementation shall provide a means, that is independent of the content of the source file, by
+    which the encoding scheme of source files can be specified. \begin{note} A
+    command-line option that specifies the encoding scheme to use as the result of
+    the determination is such a means.\end{note}
+     
+    An implementation shall support the UTF-8 encoding scheme. The set of additional encodings supported by an implementation is implementation-defined.
     
-    The encoding scheme of a physical source file is determined in an implementation-defined manner. An implementation shall support UTF-8 source files.
-    
-    If the physical source file is determined to be a UTF-8 source file, it shall represent a well-formed sequence of UTF-8 code units and the scalar value of each source character shall be preserved.   
+    If the encoding scheme of a physical source file is determined to be UTF-8, then the
+    physical source file shall be a well-formed UTF-8 code unit sequence. The source file is decoded
+    to produce a sequence of UCS scalar values that constitutes the sequence of
+    elements of the translation character set. \begin{note} There are no end-of-line
+    indicators apart from the content of the UTF-8 code unit sequence. \end{note}
     
     For any other encoding scheme supported by the implementation,
 \end{addedblock}\changed{P}{p}hysical source file characters are mapped, in an
-\impldef{mapping physical source file characters to basic source character set} manner,
-to the basic source character set (introducing new-line characters for end-of-line
-indicators) \removed{if necessary}.
+implementation-defined manner, to the translation character set (introducing new-line characters for end-of-line
+indicators).
 \removed{The set of physical source file characters accepted is \impldef{physical source file characters}}.
-
-\ednote{line break inserted - the sentence below is removed by P2314}
-
-Any source file character not in the basic source character set\iref{lex.charset} is replaced by the \indextext{universal character name}\grammarterm{universal-character-name} that
-designates that character.
 
 An implementation may use any internal
 encoding, so long as an actual extended character encountered in the
@@ -347,7 +356,7 @@ of such a splice.
 \section{Acknowledgments}
 
 As usual, many people in SG-16 provided great feedbacks on this paper.
-In particular JeanHeyd Meneide offered the great insight that invalid UTF-8 can be supported by being considered a different encoding than UTF-8; Tom Honermann, Jens Maurer and Peter Brett offered valuable feedback!
+In particular JeanHeyd Meneide offered the great insight that invalid UTF-8 can be supported by being considered a different encoding than UTF-8; Tom Honermann, Jens Maurer offered valuable feedback!
 
 
 \section{References}

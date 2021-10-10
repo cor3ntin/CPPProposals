@@ -12,9 +12,9 @@
 
 \setmainfont{Noto Sans}
 
-\title{Unevaluated strings literals}
-\docnumber{P2361R0}
-\audience{SG-16, EWG}
+\title{Unevaluated strings}
+\docnumber{P2361R3}
+\audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Aaron Ballman}{aaron.ballman@gmail.com}
 
@@ -35,7 +35,7 @@ This paper clarifies how compilers should handle these strings.
 
 \section{Motivation}
 
-A \tcode{string-literal} can appear in \tcode{_Pragma}, \tcode{asm}, \tcode{extern},
+A \grammarterm{string-literal} can appear in \tcode{_Pragma}, \tcode{asm}, \tcode{extern},
 \tcode{static_assert}, \tcode{[[deprecated]]} and \tcode{[[nodiscard]]} attributes...
 
 In all of these cases, the strings are exclusively used at compile time by the compiler, and are as such not evaluated in phase 6.
@@ -44,14 +44,49 @@ This means they should not be converted to the narrow encoding or any literal en
 Their encoding should therefore not be constrained or otherwise specified,
 except that these strings can contain any Unicode characters.
 
+This proposal aim to identify contexts in which strings are not evaluated so that they can be handle consistently by compilers.
+
+\section{Revisions}
+
+\subsection{R3}
+\begin{itemize}
+    \item Improve wording by not making \grammarterm{unevaluated-string} preprocessing token as preprocessing tokens should not be context dependent. Fix the wording of \tcode{\#line} and \tcode{\_Pragma} accordingly.
+    \item Append null-terminator during evaluation of string-literals to make it clear that \grammarterm{unevaluated-string} are not null-terminated.
+    \item Adapt the grammar of \grammarterm{literal-operator-id}
+    \item Adapt the wording of \tcode{extern} to clarify that the likage specification denotes unicode characters.
+    \item Allow numeric escape sequences in asm statements.
+\end{itemize}
+
+\subsection{R2}
+\begin{itemize}
+    \item \grammarterm{unevaluated-string-literal} to \grammarterm{unevaluated-string}.
+    \item Add a note about not disallowing non-printable characters
+    \item Add a note about \grammarterm{unevaluated-string} not being expressions.
+    \item Fix typos.
+    \item Improve wording.
+\end{itemize}
+
 \section{Proposal}
 
-We propose than in all of these cases:
+Unevaluated string literals can appear in
+
+\begin{itemize}
+\item \tcode{_Pragma}
+\item \tcode{\#line} directives
+%\item \tcode{header-name}
+\item \tcode{[[nodiscard]]} and \tcode{[[deprecated]]} attributes
+\item \tcode{extern} linkage specifications
+\item \tcode{asm} statements
+\item \tcode{static_assert}
+\item literal operator
+\end{itemize}
+
+We propose that in all of these cases:
 \begin{itemize}
 \item No prefix is allowed
 \item The string is not converted to the execution encoding.
 \item \tcode{universal-character-name} and \tcode{simple-escape-sequence} (except \tcode{\textbackslash 0} ) are replaced by
-the corresponding Unicode codepoints, and other escape sequences are ill-formed.
+the corresponding Unicode codepoints, and other escape sequences are ill-formed (except in asm statements, see below).
 \end{itemize}
 
 This last point is important. Because the encoding the compiler will convert these strings to is not known, and because UCNs can represent any Unicode characters,
@@ -62,7 +97,14 @@ All of these changes are breaking changes.
 However, a survey of open source projects tend to show that none of the restrictions added
 impact existing code.
 
-\textbf{This proposal does not specify how unevaluated string literals are presented in diagnostic messages}.
+\textbf{This proposal does not specify how unevaluated strings are presented in diagnostic messages}.
+
+\subsection{Non printable characters and escape sequences}
+
+This proposal does not attempt to restrict further the characters allowed in unevaluated strings.
+In particular, they may contain all matter of space, control characters, invisible characters and alert.
+The handling of these characters in diagnostic messages is left as quality of implementation, mostly
+for simplicity. The alternative would be to only allow graphic characters (General_Category L, M, N, P, S + spaces).
 
 \section{Alternative considered}
 
@@ -75,11 +117,22 @@ It could be argued that \tcode{"foo"} not being in the narrow-encoding is also c
 
 \subsection{Allowing prefixes and encode all strings using that prefix}
 
-his is both implementer- and user-hostile It would force users to use any of u, u8, U
+This is both implementer- and user-hostile. It would force users to use any of u, u8, U
 on all of their \tcode{static_assert} which contain non-ASCII characters as it is the only way to obtain a portable encoding.
 It has the advantage of being mostly consistent (all strings except those in headers names would be encoded using the encoding associated with their prefix) but would break
 existing code using non-ASCII characters in \tcode{static_assert} and attributes and
 litter C++ code with these prefixes, which seems to be a net negative.
+
+\section{\tcode{asm} statements}
+
+Several people in SG22, as well as an implementer raised concerns about banning numeric escape sequences
+in asm statement as supposedly an implementation could do "something" here.
+Given the implementation-defined nature of \tcode{asm} statements, we decided to only preclude encoding prefixes in \tcode{asm} statements,
+and allow numeric escape sequences, whose behavior would remain implementation-defined and possibly inconsistent with the behavior of string literals
+in other contexts.
+
+An alternative approach outside of the scope of this paper would be to modify the specification of asm statements to allow a well-balanced token sequences,
+like for attributes parameters. This would better match existing practices.
 
 \section{Compilers survey}
 
@@ -99,7 +152,6 @@ are conforming, only \tcode{L""} is described as valid by the C++ standard).
 
 Clang does not support strings with an encoding prefix in attributes, other compilers accept them.
 
-\pagebreak
 
 \subsection{\tcode{static_assert}}
 
@@ -142,7 +194,7 @@ the future; we can imagine the following grammar:
 \begin{bnf}
     \nontermdef{static_assert-declaration}\br
     \keyword{static_assert} \terminal{(} constant-expression \terminal{)} \terminal{;}\br
-    \keyword{static_assert} \terminal{(} constant-expression \terminal{,} unevaluated-string-literal \terminal{)} \terminal{;}\br
+    \keyword{static_assert} \terminal{(} constant-expression \terminal{,} unevaluated-string \terminal{)} \terminal{;}\br
     \keyword{static_assert} \terminal{(} constant-expression \terminal{,} constant-expression \terminal{)} \terminal{;}
 \end{bnf}
 
@@ -160,6 +212,11 @@ This proposal offers a well-specified, portable mechanism to solve this problem.
 
 Strings are handled in phase 5 and 6 before the program is parsed,
 which might force us to have a "reversal" of these phases.
+\grammarterm{string-literal} and \grammarterm{unevaluated-string-literal} only differ by the context in which they may appear.
+
+It is important to note that \grammarterm{unevaluated-string}, by vertue of not being evaluated, are not C++ expressions.
+They are purposefully left out of the \grammarterm{literal} grammar.
+Not being literal, and not being expressions, \grammarterm{unevaluated-string} do not have a value category.
 
 \section{Previous works}
 
@@ -177,159 +234,202 @@ from the basic characters are displayed in diagnostic messages, which was not im
 
 \begin{enumerate}
 \setcounter{enumi}{5}
-\item Adjacent \grammarterm{string-literal}s are concatenated and a null character is appended to the result as specified in [lex.string].
-\added{Adjacent \grammarterm{unevaluated-string-literal}s are concatenated}.
+\item Adjacent \grammarterm{string-literal}{s} are concatenated \removed{and a null character is appended to the result as specified in [lex.string]}.
+%\added{Adjacent \grammarterm{unevaluated-string}s are concatenated}.
 \end{enumerate}
 
+%\rSec1[lex.charset]{Character sets}
 
-\rSec1[lex.pptoken]{Preprocessing tokens}
-
-\ednote{Modify "5.4 Preprocessing tokens" as follow}
-
-\indextext{token!preprocessing|(}%
-\begin{bnf}
-    \nontermdef{preprocessing-token}\br
-    header-name\br
-    import-keyword\br
-    module-keyword\br
-    export-keyword\br
-    identifier\br
-    pp-number\br
-    character-literal\br
-    user-defined-character-literal\br
-    string-literal\br
-    \added{unevaluated string-literal}\br
-    user-defined-string-literal\br
-    preprocessing-op-or-punc\br
-    \textnormal{each non-whitespace character that cannot be one of the above}
-\end{bnf}
-
-\pnum
-Each preprocessing token that is converted to a token\iref{lex.token}
-shall have the lexical form of a keyword, an identifier, a literal,
-or an operator or punctuator.
-
-\pnum
-A preprocessing token is the minimal lexical element of the language in translation
-phases 3 through 6. The categories of preprocessing token are: header names,
-placeholder tokens produced by preprocessing \tcode{import} and \tcode{module} directives
-(\grammarterm{import-keyword}, \grammarterm{module-keyword}, and \grammarterm{export-keyword}),
-identifiers, preprocessing numbers, character literals (including user-defined character
-literals), string literals (including user-defined string literals \added{and unevaluated string literals}), preprocessing
-operators and punctuators, and single non-whitespace characters that do not lexically
-match the other preprocessing token categories. If a \tcode{'} or a \tcode{"} character
-matches the last category, the behavior is undefined. Preprocessing tokens can be
-separated by
-\indextext{whitespace}%
-whitespace;
-\indextext{comment}%
-this consists of comments\iref{lex.comment}, or whitespace
-characters (space, horizontal tab, new-line, vertical tab, and
-form-feed), or both. As described in \ref{cpp}, in certain
-circumstances during translation phase 4, whitespace (or the absence
-thereof) serves as more than preprocessing token separation. Whitespace
-can appear within a preprocessing token only as part of a header name or
-between the quotation characters in a character literal or
-string literal..
+%\ednote{Modify "5.3.2" as follow}
+%
+%A \grammarterm{universal-character-name}
+%designates the character in ISO/IEC 10646 (if any)
+%whose code point is the hexadecimal number represented by
+%the sequence of \grammarterm{hexadecimal-digit}s
+%in the \grammarterm{universal-character-name}.
+%The program is ill-formed if that number is not a code point
+%or if it is a surrogate code point.
+%Noncharacter code points and reserved code points
+%are considered to designate separate characters distinct from
+%any ISO/IEC 10646 character.
+%If a \grammarterm{universal-character-name} outside
+%the \grammarterm{c-char-sequence}, \grammarterm{s-char-sequence}, or
+%\grammarterm{r-char-sequence} of
+%a \grammarterm{character-literal}\changed{ or}{,} \grammarterm{string-literal}\added{,\grammarterm{unevaluated-string}}
+%(in either case, including within a \grammarterm{user-defined-literal})
+%corresponds to a control character or
+%to a character in the basic
+%source character set, the program is ill-formed.
 
 
+%\rSec1[lex.pptoken]{Preprocessing tokens}
+%
+%\ednote{Modify "5.4 Preprocessing tokens" as follow}
+%
+%\indextext{token!preprocessing|(}%
+%\begin{bnf}
+%    \nontermdef{preprocessing-token}\br
+%    header-name\br
+%    import-keyword\br
+%    module-keyword\br
+%    export-keyword\br
+%    identifier\br
+%    pp-number\br
+%    character-literal\br
+%    user-defined-character-literal\br
+%    string-literal\br
+%    \added{unevaluated-string}\br
+%    user-defined-string-literal\br
+%    preprocessing-op-or-punc\br
+%    \textnormal{each non-whitespace character that cannot be one of the above}
+%\end{bnf}
+%
+%\pnum
+%Each preprocessing token that is converted to a token\iref{lex.token}
+%shall have the lexical form of a keyword, an identifier, a literal,
+%or an operator or punctuator.
+%
+%\pnum
+%A preprocessing token is the minimal lexical element of the language in translation
+%phases 3 through 6. The categories of preprocessing token are: header names,
+%placeholder tokens produced by preprocessing \tcode{import} and \tcode{module} directives
+%(\grammarterm{import-keyword}, \grammarterm{module-keyword}, and \grammarterm{export-keyword}),
+%identifiers, preprocessing numbers, character literals (including user-defined character
+%literals), string literals (including user-defined string literals \added{and unevaluated string}), preprocessing
+%operators and punctuators, and single non-whitespace characters that do not lexically
+%match the other preprocessing token categories. If a \tcode{'} or a \tcode{"} character
+%matches the last category, the behavior is undefined. Preprocessing tokens can be
+%separated by
+%\indextext{whitespace}%
+%whitespace;
+%\indextext{comment}%
+%this consists of comments\iref{lex.comment}, or whitespace
+%characters (space, horizontal tab, new-line, vertical tab, and
+%form-feed), or both. As described in \ref{cpp}, in certain
+%circumstances during translation phase 4, whitespace (or the absence
+%thereof) serves as more than preprocessing token separation. Whitespace
+%can appear within a preprocessing token only as part of a header name or
+%between the quotation characters in a character literal or
+%string literal..
 
 
 \rSec2[lex.string]{String literals}
 
 \ednote{Modify "[lex.string]" as follow}
 
-\begin{bnf}
-    \nontermdef{string-literal}\br
-    \opt{encoding-prefix} \terminal{"} \opt{s-char-sequence} \terminal{"}\br
-    \opt{encoding-prefix} \terminal{R} raw-string
-\end{bnf}
-
-\begin{addedblock}
-\begin{bnf}
-    \nontermdef{unevaluated string-literal}\br
-    \terminal{"} \opt{s-char-sequence} \terminal{"}\br
-    \terminal{R} raw-string
-\end{bnf}
-\end{addedblock}
-
-\begin{bnf}
-    \nontermdef{s-char-sequence}\br
-    s-char\br
-    s-char-sequence s-char
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{s-char}\br
-    basic-s-char\br
-    escape-sequence\br
-    universal-character-name
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{basic-s-char}\br
-    \textnormal{any member of the basic source character set except the double-quote \terminal{"}, backslash \terminal{\textbackslash}, or new-line character}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{raw-string}\br
-    \terminal{"} \opt{d-char-sequence} \terminal{(} \opt{r-char-sequence} \terminal{)} \opt{d-char-sequence} \terminal{"}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{r-char-sequence}\br
-    r-char\br
-    r-char-sequence r-char
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{r-char}\br
-    \textnormal{any member of the source character set, except a right parenthesis \terminal{)} followed by}\br
-    \bnfindent\textnormal{the initial \grammarterm{d-char-sequence} (which may be empty) followed by a double quote \terminal{"}.}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{d-char-sequence}\br
-    d-char\br
-    d-char-sequence d-char
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{d-char}\br
-    \textnormal{any member of the basic source character set except:}\br
-    \bnfindent\textnormal{space, the left parenthesis \terminal{(}, the right parenthesis \terminal{)}, the backslash \terminal{\textbackslash}, and the control characters}\br
-    \bnfindent\textnormal{representing horizontal tab, vertical tab, form feed, and newline.}
-\end{bnf}
+%\begin{bnf}
+%    \nontermdef{string-literal}\br
+%    \opt{encoding-prefix} \terminal{"} \opt{s-char-sequence} \terminal{"}\br
+%    \opt{encoding-prefix} \terminal{R} raw-string
+%\end{bnf}
+%
+%%\begin{addedblock}
+%%\begin{bnf}
+%%    \nontermdef{unevaluated-string}\br
+%%    \terminal{"} \opt{s-char-sequence} \terminal{"}\br
+%%    \terminal{R} raw-string
+%%\end{bnf}
+%%\end{addedblock}
+%
+%\begin{bnf}
+%    \nontermdef{s-char-sequence}\br
+%    s-char\br
+%    s-char-sequence s-char
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{s-char}\br
+%    basic-s-char\br
+%    escape-sequence\br
+%    universal-character-name
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{basic-s-char}\br
+%    \textnormal{any member of the basic source character set except the double-quote \terminal{"}, backslash \terminal{\textbackslash}, or new-line character}
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{raw-string}\br
+%    \terminal{"} \opt{d-char-sequence} \terminal{(} \opt{r-char-sequence} \terminal{)} \opt{d-char-sequence} \terminal{"}
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{r-char-sequence}\br
+%    r-char\br
+%    r-char-sequence r-char
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{r-char}\br
+%    \textnormal{any member of the source character set, except a right parenthesis \terminal{)} followed by}\br
+%    \bnfindent\textnormal{the initial \grammarterm{d-char-sequence} (which may be empty) followed by a double quote \terminal{"}.}
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{d-char-sequence}\br
+%    d-char\br
+%    d-char-sequence d-char
+%\end{bnf}
+%
+%\begin{bnf}
+%    \nontermdef{d-char}\br
+%    \textnormal{any member of the basic source character set except:}\br
+%    \bnfindent\textnormal{space, the left parenthesis \terminal{(}, the right parenthesis \terminal{)}, the backslash \terminal{\textbackslash}, and the control characters}\br
+%    \bnfindent\textnormal{representing horizontal tab, vertical tab, form feed, and newline.}
+%\end{bnf}
+%
+%[...]
+%
+%\pnum
+%\indextext{literal!string!raw}%
+%A \grammarterm{string-literal}
+%%\added{or an \grammarterm{unevaluated-string} } 
+%that has an \tcode{R}
+%\indextext{prefix!\idxcode{R}}%
+%in the prefix is a \defn{raw string literal}. The
+%\grammarterm{d-char-sequence} serves as a delimiter. The terminating
+%\grammarterm{d-char-sequence} of a \grammarterm{raw-string} is the same sequence of
+%characters as the initial \grammarterm{d-char-sequence}. A \grammarterm{d-char-sequence}
+%shall consist of at most 16 characters.
+%
+%\pnum
+%\indextext{concatenation!string}%
+%In translation phase 6\iref{lex.phases}, adjacent \grammarterm{string-literal}{s} are concatenated. If
+%both \grammarterm{string-literal}{s} have the same \grammarterm{encoding-prefix}, the resulting concatenated \grammarterm{string-literal} has
+%that \grammarterm{encoding-prefix}. If one \grammarterm{string-literal} has no \grammarterm{encoding-prefix}, it is treated as a \grammarterm{string-literal} of
+%the same \grammarterm{encoding-prefix} as the other operand. If a UTF-8 string literal token is adjacent to a
+%wide string literal token, the program is ill-formed. Any other concatenations are
+%conditionally-supported with \impldef{concatenation of some types of \grammarterm{string-literal}s}
+%behavior.
+%%\added{Adjacent \grammarterm{unevaluated-string}{s} are concatenated}.
+%
+%\begin{note}
+%    This concatenation is an interpretation, not a conversion.
+%    Because the interpretation happens in translation phase 6
+%    (after the string literal contents have been encoded in
+%    the \grammarterm{string-literal}'s associated character encoding),
+%    a \grammarterm{string-literal}'s initial rawness
+%    has no effect on the interpretation or well-formedness of the concatenation.
+%\end{note}
 
 [...]
 
-\pnum
-\indextext{concatenation!string}%
-In translation phase 6\iref{lex.phases}, adjacent \grammarterm{string-literal}{s} are concatenated. If
-both \grammarterm{string-literal}{s} have the same \grammarterm{encoding-prefix}, the resulting concatenated \grammarterm{string-literal} has
-that \grammarterm{encoding-prefix}. If one \grammarterm{string-literal} has no \grammarterm{encoding-prefix}, it is treated as a \grammarterm{string-literal} of
-the same \grammarterm{encoding-prefix} as the other operand. If a UTF-8 string literal token is adjacent to a
-wide string literal token, the program is ill-formed. Any other concatenations are
-conditionally-supported with \impldef{concatenation of some types of \grammarterm{string-literal}s}
-behavior.
-\added{Adjacent \grammarterm{unevaluated string-literal}{s} are concatenated}.
+\indextext{\idxcode{0}|seealso{zero, null}}%
+\indextext{\idxcode{0}!string terminator}%
+\indextext{\idxcode{0}!null character|see {character, null}}%
 
-\begin{note}
-    This concatenation is an interpretation, not a conversion.
-    Because the interpretation happens in translation phase 6
-    (after the string literal contents have been encoded in
-    the \grammarterm{string-literal}'s associated character encoding),
-    a \grammarterm{string-literal}'s initial rawness
-    has no effect on the interpretation or well-formedness of the concatenation.
-\end{note}
-
-[...]
+\removed{
+In translation phase 6 [lex.phases],
+after adjacent \grammarterm{string-literal}{s} are concatenated,
+a null character is appended to the result.
+}
 
 \pnum
 Evaluating a \grammarterm{string-literal} results in a string literal object
 with static storage duration\iref{basic.stc}.
 \indextext{string!distinct}%
-Whether all \grammarterm{string-literal}s are distinct (that is, are stored in
+Whether all \grammarterm{string-literal}{s} are distinct (that is, are stored in
 nonoverlapping objects) and whether successive evaluations of a
 \grammarterm{string-literal} yield the same or a different object is
 unspecified.
@@ -409,16 +509,29 @@ in order as follows:
     it is
     \impldef{effect of \grammarterm{conditional-escape-sequence} on encoding state}
     what effect these sequences have on encoding state.
+    \begin{addedblock}
+        \item A code unit of value 0 (representing the NULL character) is appened to the result.
+    \end{addedblock}
 \end{itemize}
 
 \ednote{Add after "[lex.string]/p10"}
 
 \begin{addedblock}
-Each \grammarterm{universal-character-name} and each \grammarterm{simple-escape-sequence} in an \grammarterm{unevaluated-string-literal} is replaced by the member of the translation set it denotes.
-An \grammarterm{unevaluated string-literal} which contains the null character, a \grammarterm{numeric-escape-sequence}
+
+\rSec3[lex.string.unevaluated]{Unevaluated strings}
+
+\begin{bnf}
+    \nontermdef{unevaluated-string}\br
+    string-literal
+\end{bnf}
+
+An \grammarterm{unevaluated-string} shall have no  \grammarterm{encoding-prefix}.
+
+Each \grammarterm{universal-character-name} and each \grammarterm{simple-escape-sequence} in an \grammarterm{unevaluated-string} is replaced by the member of the translation set it denotes.
+An \grammarterm{unevaluated-string} which contains a \grammarterm{numeric-escape-sequence}
 or a \grammarterm{conditional-escape-sequence} is ill-formed.
 
-An \grammarterm{unevaluated-string-literal} is never evaluated and its interpretation depends on the context in which they appear.
+An \grammarterm{unevaluated-string} is never evaluated and its interpretation depends on the context in which it appears.
 \end{addedblock}
 
 \ednote{"translation set" is defined in \paper{P2314R2} in [lex.phases]}
@@ -438,7 +551,7 @@ An \grammarterm{unevaluated-string-literal} is never evaluated and its interpret
 \begin{bnf}
     \nontermdef{static_assert-declaration}\br
     \keyword{static_assert} \terminal{(} constant-expression \terminal{)} \terminal{;}\br
-    \keyword{static_assert} \terminal{(} constant-expression \terminal{,} \added{unevaluated-}string-literal \terminal{)} \terminal{;}
+    \keyword{static_assert} \terminal{(} constant-expression \terminal{,} \added{unevaluated-}string\removed{-literal} \terminal{)} \terminal{;}
 \end{bnf}
 
 [...]
@@ -453,7 +566,7 @@ If the value of the expression when
 so converted is \tcode{true}, the declaration has no
 effect. Otherwise, the program is ill-formed, and the resulting
 diagnostic message\iref{intro.compliance} shall include the text of
-the \grammarterm{\added{unevaluated-}string-literal}, if one is supplied,
+the \grammarterm{\added{unevaluated-}string\removed{-literal}}, if one is supplied,
 except that characters not in the basic
 source character set\iref{lex.charset} are not required to appear in
 the diagnostic message.
@@ -472,11 +585,14 @@ An \tcode{asm} declaration has the form
 
 \begin{bnf}
     \nontermdef{asm-declaration}\br
-    \opt{attribute-specifier-seq} \keyword{asm} \terminal{(} \added{unevaluated-}string-literal \terminal{)} \terminal{;}
+    \opt{attribute-specifier-seq} \keyword{asm} \terminal{(} string-literal \terminal{)} \terminal{;}
 \end{bnf}
 
 The \tcode{asm} declaration is conditionally-supported; its meaning is
 \impldef{meaning of \tcode{asm} declaration}.
+\begin{addedblock}
+The encoding prefix of the \grammarterm{string-literal} shall be absent.
+\end{addedblock}
 The optional \grammarterm{attribute-specifier-seq} in
 an \grammarterm{asm-declaration} appertains to the \tcode{asm} declaration.
 \begin{note}
@@ -512,25 +628,27 @@ be achieved using a \grammarterm{linkage-specification}:
 %
 \begin{bnf}
     \nontermdef{linkage-specification}\br
-    \keyword{extern} \added{unevaluated-}string-literal \terminal{\{} \opt{declaration-seq} \terminal{\}}\br
-    \keyword{extern} \added{unevaluated-}string-literal declaration
+    \keyword{extern} \added{unevaluated-}string\removed{-literal} \terminal{\{} \opt{declaration-seq} \terminal{\}}\br
+    \keyword{extern} \added{unevaluated-}string\removed{-literal} declaration
 \end{bnf}
 
-The \grammarterm{\added{unevaluated-}string-literal} indicates the required language linkage.
+The \grammarterm{\added{unevaluated-}string\removed{-literal}} indicates the required language linkage \added{as a sequence of translation set characters}.
+
 This document specifies the semantics for the
-\grammarterm{\added{unevaluated-}string-literal}{s} \tcode{"C"} and \tcode{"C++"}. Use of a
-\grammarterm{\added{unevaluated-}string-literal} other than \tcode{"C"} or \tcode{"C++"} is
+\changed{\grammarterm{string-literal}{s}}{language linkages} \tcode{"C"} and \tcode{"C++"}. Use of a
+\changed{\grammarterm{string-literal}}{language linkage} other than \tcode{"C"} or \tcode{"C++"} is
 conditionally-supported, with \impldef{semantics of linkage specifiers} semantics.
 \begin{note}
-    Therefore, a linkage-specification with a \grammarterm{\added{unevaluated-}string-literal} that
+    Therefore, a linkage-specification with a \changed{\grammarterm{string-literal}}{language linkage} that
     is unknown to the implementation requires a diagnostic.
 \end{note}
 \begin{note}
-    It is recommended that the spelling of the \grammarterm{\added{unevaluated-}string-literal} be
+    It is recommended that the spelling of the \changed{\grammarterm{string-literal}}{language linkage} be
     taken from the document defining that language. For example, \tcode{Ada}
     (not \tcode{ADA}) and \tcode{Fortran} or \tcode{FORTRAN}, depending on
     the vintage.
 \end{note}
+
 
 \pnum
 \indextext{specification!linkage!implementation-defined}%
@@ -563,11 +681,11 @@ It shall appear at most once in each \grammarterm{attribute-list}. An
 \grammarterm{attribute-argument-clause} may be present and, if present, it shall have the form:
 
 \begin{ncbnf}
-    \terminal{(} \added{unevaluated-}string-literal \terminal{)}
+    \terminal{(} \added{unevaluated-}string\removed{-literal} \terminal{)}
 \end{ncbnf}
 
 \begin{note}
-    The \grammarterm{\added{unevaluated-}string-literal} in the \grammarterm{attribute-argument-clause}
+    The \grammarterm{\added{unevaluated-}string\removed{-literal}} in the \grammarterm{attribute-argument-clause}
     can be used to explain the rationale for deprecation and/or to suggest a replacing entity.
 \end{note}
 
@@ -583,7 +701,7 @@ An \grammarterm{attribute-argument-clause} may be present
 and, if present, shall have the form:
 
 \begin{ncbnf}
-    \terminal{(} \added{unevaluated-}string-literal \terminal{)}
+    \terminal{(} \added{unevaluated-}string\removed{-literal} \terminal{)}
 \end{ncbnf}
 
 \pnum
@@ -629,350 +747,41 @@ Implementations should issue a warning in such cases.
     This is typically because discarding the return value
     of a nodiscard call has surprising consequences.
 \end{note}
-The \grammarterm{\added{unevaluated-}string-literal}
+The \grammarterm{\added{unevaluated-}string\removed{-literal}}
 in a \tcode{nodiscard} \grammarterm{attribute-argument-clause}
 should be used in the message of the warning
 as the rationale for why the result should not be discarded.
 
 
+
+\rSec1[over.literal]{User-defined literals}%
+\indextext{user-defined literal!overloaded}%
+\indextext{overloading!user-defined literal}
+
+\begin{bnf}
+    \nontermdef{literal-operator-id}\br
+    \keyword{operator} \changed{string-literal}{unevaluated-string} identifier\br
+    \keyword{operator} user-defined-string-literal
+\end{bnf}
+
+\pnum
+The \removed{\grammarterm{unevaluated-string} or} \grammarterm{user-defined-string-literal}
+in a \grammarterm{literal-operator-id} shall have no
+\grammarterm{encoding-prefix} and shall contain no characters other than the
+implicit terminating \tcode{'\textbackslash 0'}.
+The \grammarterm{ud-suffix} of the \grammarterm{user-defined-string-literal} or
+the \grammarterm{identifier} in a \grammarterm{literal-operator-id} is called a
+\defnx{literal suffix identifier}{literal!suffix identifier}.
+Some literal suffix identifiers are reserved for future standardization;
+see~\ref{usrlit.suffix}.  A declaration whose \grammarterm{literal-operator-id} uses
+such a literal suffix identifier is ill-formed, no diagnostic required.
+
+
+
+
 \rSec1[cpp]{Preprocessing directives}%
 
-\rSec1[cpp.pre]{Preamble}
-
-\begin{bnf}
-    \nontermdef{preprocessing-file}\br
-    \opt{group}\br
-    module-file
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{module-file}\br
-    \opt{pp-global-module-fragment} pp-module \opt{group} \opt{pp-private-module-fragment}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{pp-global-module-fragment}\br
-    \keyword{module} \terminal{;} new-line \opt{group}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{pp-private-module-fragment}\br
-    \keyword{module} \terminal{:} \keyword{private} \terminal{;} new-line \opt{group}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{group}\br
-    group-part\br
-    group group-part
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{group-part}\br
-    control-line\br
-    if-section\br
-    text-line\br
-    \terminal{\#} conditionally-supported-directive
-\end{bnf}
-
-\begin{bnf}\obeyspaces
-    \nontermdef{control-line}\br
-    \terminal{\# include} pp-tokens new-line\br
-    pp-import\br
-    \terminal{\# define } identifier replacement-list new-line\br
-    \terminal{\# define } identifier lparen \opt{identifier-list} \terminal{)} replacement-list new-line\br
-    \terminal{\# define } identifier lparen \terminal{... )} replacement-list new-line\br
-    \terminal{\# define } identifier lparen identifier-list \terminal{, ... )} replacement-list new-line\br
-    \terminal{\# undef  } identifier new-line\br
-    \terminal{\# line   } pp-tokens new-line\br
-    \terminal{\# error  } \opt{pp-tokens} new-line\br
-    \terminal{\# pragma } \opt{pp-tokens} new-line\br
-    \terminal{\# }new-line
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{if-section}\br
-    if-group \opt{elif-groups} \opt{else-group} endif-line
-\end{bnf}
-
-\begin{bnf}\obeyspaces
-    \nontermdef{if-group}\br
-    \terminal{\# if     } constant-expression new-line \opt{group}\br
-    \terminal{\# ifdef  } identifier new-line \opt{group}\br
-    \terminal{\# ifndef } identifier new-line \opt{group}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{elif-groups}\br
-    elif-group\br
-    elif-groups elif-group
-\end{bnf}
-
-\begin{bnf}\obeyspaces
-    \nontermdef{elif-group}\br
-    \terminal{\# elif   } constant-expression new-line \opt{group}
-\end{bnf}
-
-\begin{bnf}\obeyspaces
-    \nontermdef{else-group}\br
-    \terminal{\# else   } new-line \opt{group}
-\end{bnf}
-
-\begin{bnf}\obeyspaces
-    \nontermdef{endif-line}\br
-    \terminal{\# endif  } new-line
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{text-line}\br
-    \opt{pp-tokens} new-line
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{conditionally-supported-directive}\br
-    pp-tokens new-line
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{lparen}\br
-    \descr{a \terminal{(} character not immediately preceded by whitespace}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{identifier-list}\br
-    identifier\br
-    identifier-list \terminal{,} identifier
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{replacement-list}\br
-    \opt{pp-tokens}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{pp-tokens}\br
-    preprocessing-token\br
-    pp-tokens preprocessing-token
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{new-line}\br
-    \descr{the new-line character}
-\end{bnf}
-
-\pnum
-A \defn{preprocessing directive} consists of a sequence of preprocessing tokens
-that satisfies the following constraints:
-At the start of translation phase 4,
-the first token in the sequence,
-referred to as a \defnadj{directive-introducing}{token},
-begins with the first character in the source file
-(optionally after whitespace containing no new-line characters) or
-follows whitespace containing at least one new-line character,
-and is
-
-\begin{itemize}
-    \item
-    a \tcode{\#} preprocessing token, or
-
-    \item
-    an \keyword{import} preprocessing token
-    immediately followed on the same logical line by a
-    \grammarterm{header-name},
-    \tcode{<},
-    \grammarterm{identifier},
-    \grammarterm{\added{unevaluated-}string-literal}, or
-    \tcode{:}
-    preprocessing token, or
-
-    \item
-    a \keyword{module} preprocessing token
-    immediately followed on the same logical line by an
-    \grammarterm{identifier},
-    \tcode{:}, or
-    \tcode{;}
-    preprocessing token, or
-
-    \item
-    an \keyword{export} preprocessing token
-    immediately followed on the same logical line by
-    one of the two preceding forms.
-\end{itemize}
-
-The last token in the sequence is the first token within the sequence that
-is immediately followed by whitespace containing a new-line character.
-\begin{footnote}
-    Thus,
-    preprocessing directives are commonly called ``lines''.
-    These ``lines'' have no other syntactic significance,
-    as all whitespace is equivalent except in certain situations
-    during preprocessing (see the
-    \tcode{\#}
-    character string literal creation operator in~\ref{cpp.stringize}, for example).
-\end{footnote}
-\begin{note}
-    A new-line character ends the preprocessing directive even if it occurs
-    within what would otherwise be an invocation of a function-like macro.
-\end{note}
-
-\begin{example}
-    \begin{codeblock}
-        #                       // preprocessing directive
-        module ;                // preprocessing directive
-        export module leftpad;  // preprocessing directive
-        import <string>;        // preprocessing directive
-        export import "squee";  // preprocessing directive
-        import rightpad;        // preprocessing directive
-        import :part;           // preprocessing directive
-
-        module                  // not a preprocessing directive
-        ;                       // not a preprocessing directive
-
-        export                  // not a preprocessing directive
-        import                  // not a preprocessing directive
-        foo;                    // not a preprocessing directive
-
-        export                  // not a preprocessing directive
-        import foo;             // preprocessing directive (ill-formed at phase 7)
-
-        import ::               // not a preprocessing directive
-        import ->               // not a preprocessing directive
-    \end{codeblock}
-\end{example}
-
-\pnum
-A sequence of preprocessing tokens is only a \grammarterm{text-line}
-if it does not begin with a directive-introducing token.
-A sequence of preprocessing tokens is only a \grammarterm{conditionally-supported-directive}
-if it does not begin with any of the directive names
-appearing after a \tcode{\#} in the syntax.
-A \grammarterm{conditionally-supported-directive} is
-conditionally-supported with
-\impldef{additional supported forms of preprocessing directive}
-semantics.
-
-\pnum
-At the start of phase 4 of translation,
-the \grammarterm{group} of a \grammarterm{pp-global-module-fragment} shall
-contain neither a \grammarterm{text-line} nor a \grammarterm{pp-import}.
-
-\pnum
-When in a group that is skipped\iref{cpp.cond}, the directive
-syntax is relaxed to allow any sequence of preprocessing tokens to occur between
-the directive name and the following new-line character.
-
-\pnum
-The only whitespace characters that shall appear
-between preprocessing tokens
-within a preprocessing directive
-(from just after the directive-introducing token
-through just before the terminating new-line character)
-are space and horizontal-tab
-(including spaces that have replaced comments
-or possibly other whitespace characters
-in translation phase 3).
-
-\pnum
-The implementation can
-process and skip sections of source files conditionally,
-include other source files,
-import macros from header units,
-and replace macros.
-These capabilities are called
-\defn{preprocessing},
-because conceptually they occur
-before translation of the resulting translation unit.
-
-\pnum
-The preprocessing tokens within a preprocessing directive
-are not subject to macro expansion unless otherwise stated.
-
-\begin{example}
-    In:
-    \begin{codeblock}
-        #define EMPTY
-        EMPTY   #   include <file.h>
-    \end{codeblock}
-    the sequence of preprocessing tokens on the second line is \textit{not}
-    a preprocessing directive, because it does not begin with a \tcode{\#} at the start of
-    translation phase 4, even though it will do so after the macro \tcode{EMPTY}
-    has been replaced.
-\end{example}
-
-\rSec1[cpp.cond]{Conditional inclusion}%
-\indextext{preprocessing directive!conditional inclusion}%
-\indextext{inclusion!conditional|see{preprocessing directive, conditional inclusion}}
-
-\indextext{\idxcode{defined}}%
-\begin{bnf}
-    \nontermdef{defined-macro-expression}\br
-    \terminal{defined} identifier\br
-    \terminal{defined (} identifier \terminal{)}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{h-preprocessing-token}\br
-    \textnormal{any \grammarterm{preprocessing-token} other than \terminal{>}}
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{h-pp-tokens}\br
-    h-preprocessing-token\br
-    h-pp-tokens h-preprocessing-token
-\end{bnf}
-
-\begin{bnf}
-    \nontermdef{header-name-tokens}\br
-    \added{unevaluated-}string-literal\br
-    \terminal{<} h-pp-tokens \terminal{>}
-\end{bnf}
-
-\indextext{\idxxname{has_include}}%
-\begin{bnf}
-    \nontermdef{has-include-expression}\br
-    \terminal{\xname{has_include}} \terminal{(} header-name \terminal{)}\br
-    \terminal{\xname{has_include}} \terminal{(} header-name-tokens \terminal{)}
-\end{bnf}
-
-\indextext{\idxxname{has_cpp_attribute}}%
-\begin{bnf}
-    \nontermdef{has-attribute-expression}\br
-    \terminal{\xname{has_cpp_attribute} (} pp-tokens \terminal{)}
-\end{bnf}
-
-\pnum
-The expression that controls conditional inclusion
-shall be an integral constant expression except that
-identifiers
-(including those lexically identical to keywords)
-are interpreted as described below
-\begin{footnote}
-    Because the controlling constant expression is evaluated
-    during translation phase 4,
-    all identifiers either are or are not macro names ---
-    there simply are no keywords, enumeration constants, etc.
-\end{footnote}
-and it may contain zero or more \grammarterm{defined-macro-expression}{s} and/or
-\grammarterm{has-include-expression}{s} and/or
-\grammarterm{has-attribute-expression}{s} as unary operator expressions.
-
-\pnum
-A \grammarterm{defined-macro-expression} evaluates to \tcode{1}
-if the identifier is currently defined
-as a macro name
-(that is, if it is predefined
-or if it has one or more active macro definitions\iref{cpp.import},
-for example because
-it has been the subject of a
-\tcode{\#define}
-preprocessing directive
-without an intervening
-\tcode{\#undef}
-directive with the same subject identifier), \tcode{0} if it is not.
-
-\pnum
-The second form of \grammarterm{has-include-expression}
-is considered only if the first form does not match,
-in which case the preprocessing tokens are processed just as in normal text.
+[...]
 
 
 \rSec1[cpp.line]{Line control}%
@@ -980,11 +789,11 @@ in which case the preprocessing tokens are processed just as in normal text.
 \indextext{\idxcode{\#line}|see{preprocessing directive, line control}}
 
 \pnum
-\removed{The \grammarterm{string-literal} of a
+The \grammarterm{string-literal} of a
 \tcode{\#line}
 directive, if present,
-shall be a character string literal.
-}
+shall \changed{be a character string literal}{satisfy the semantic constraints of an \grammarterm{unevaluated-string} [lex.string.unevaluated]}.
+
 \pnum
 The
 \defn{line number}
@@ -1010,12 +819,12 @@ the behavior is undefined.
 A preprocessing directive of the form
 
 \begin{ncsimplebnf}
-    \terminal{\# line} digit-sequence \changed{\terminal{"} \opt{s-char-sequence} \terminal{"}}{unevaluated-string-literal} new-line
+    \terminal{\# line} digit-sequence \changed{\terminal{"} \opt{s-char-sequence} \terminal{"}}{string-literal} new-line
 \end{ncsimplebnf}
 
 sets the presumed line number similarly and changes the
 presumed name of the source file to be the contents
-of the character string literal.
+of the \removed{character} string literal.
 
 \pnum
 A preprocessing directive of the form
@@ -1039,14 +848,19 @@ otherwise, the result is processed as appropriate.
 \indextext{macro!pragma operator}%
 \indextext{operator!pragma|see{macro, pragma operator}}
 
+\begin{addedblock}
+The \grammarterm{string-literal} of a Pragma operator shall satisfy the semantic constraints of an \grammarterm{unevaluated-string} [lex.string.unevaluated].
+\end{addedblock}
+
 \pnum
 A unary operator expression of the form:
 
 \begin{ncbnf}
-    \terminal{_Pragma} \terminal{(} \added{unevaluated-}string-literal \terminal{)}
+    \terminal{_Pragma} \terminal{(} string-literal \terminal{)}
 \end{ncbnf}
 
-is processed as follows: The \grammarterm{\added{unevaluated-}string-literal} is \defnx{destringized}{destringization} by
+is processed as follows: The \grammarterm{string-literal} 
+is \defnx{destringized}{destringization} by
 \removed{deleting the \tcode{L} prefix, if present,} deleting the leading and trailing
 double-quotes \removed{,replacing each escape sequence \tcode{\textbackslash"} by a double-quote, and
 replacing each escape sequence \tcode{\textbackslash\textbackslash} by a single
@@ -1077,10 +891,8 @@ as shown, or results from macro replacement, as in:
 
 \section{Acknowledgments}
 
-Thank you to Peter Brett who offered valuable feedback on this paper!
+Thank you to Masayoshi Kanke and Peter Brett who offered valuable feedback on this paper!
 
-
-\section{References}
 
 \bibliographystyle{plain}
 \bibliography{wg21}

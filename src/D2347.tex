@@ -20,8 +20,8 @@
 \newcommand{\UnicodeLetter}[1]{\textbf{\textcolor{BrickRed}{\Large\tcode{#1}}}}
 
 
-\title{Type deduction for non-trailing parameter packs}
-\docnumber{P2347R0}
+\title{Argument type deduction for non-trailing parameter packs}
+\docnumber{D2347R2}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Bruno Manganelli}{bruno.manga95@gmail.com}
@@ -31,13 +31,41 @@
 
 \section{Abstract}
 
-We propose that, during function template argument deduction, a single non-trailing parameters pack be deduced solely based on the arity of the list of arguments.
+We propose that, during template argument deduction, a single non-trailing parameters pack be deduced solely based on the arity of the list of arguments.
+This paper proposes the mechanism for function calls, but a generalization is explored.
+
+
+\section{Revisions}
+
+\subsection{Revision 2}
+
+Exploration and implementation experience of argument deduction in more contexts (class, function address, aliases, partial specialization).
+
+\subsection*{Revision 1}
+Fix many typos in the wording, remove incorrect wording examples.
+
+
+\section{Status and target vehicle}
+
+The proposal has been implemented, and we propose some wording, although that wording is only for function calls,
+and is insufficient.
+As requested by EWG, the paper also explores non-trailing pack deduction for type deduction outside of function calls,
+and this has been implemented too, but there are some open questions, some risks (the authors are not sure they covered all the bases),
+and no wording.
+
+We can either:
+\begin{itemize}
+\item Target the whole proposal at C++26
+\item Try to ship type deduction for function calls in C++23, as this covers the original \tcode{source_location} use case and generalize later.
+\end{itemize}
+
+This is a scenario where incremental improvements are possible.
 
 \section{Motivation}
 
 \subsection{\tcode{source_location}}
 
-Our main motivation for this change is to improve the usability of \tcode{source_location}.
+Our primary motivation for this change is to improve the usability of \tcode{source_location}.
 Many loggers, especially those using fmt, such as \tcode{spdlog} offer a log function of the following form:
 
 \begin{colorblock}
@@ -52,8 +80,8 @@ void log(string_view formatString, auto&&...args, source_location loc = source_l
 \end{colorblock}
 
 Unfortunately, this is not possible because non-trailing packs cannot be deduced!
-Folks on \href{https://stackoverflow.com/questions/57547273/how-to-use-source-location-in-a-variadic-template-function}{Stackoverflow} have found a number of clever workarounds, all of which involves using extra types or templates.
-So, even if the use case can be somewhat covered, it relies on somewhat arcane solutions that are worse for diagnostics, compile-time, etc.
+Folks on \href{https://stackoverflow.com/questions/57547273/how-to-use-source-location-in-a-variadic-template-function}{Stackoverflow} have found several clever workarounds, all of which involves using extra types or templates.
+So, even if the use case can be somewhat covered, it relies on rather arcane solutions that are worse for diagnostics, compile-time, etc.
 
 \subsection{Accessing the last argument of a pack}
 
@@ -116,6 +144,18 @@ We would also argue that \tcode{visit} would be more intuitive if the variants w
 
 Lifting the limitations on where a parameter pack can appear gives more flexibility in API design and usage.
 
+\subsection{keys-value interfaces}
+
+Another great use, suggested by the author of sol2, is an interface that takes a number of keys (corresponding to a path or a nested addressing scheme of some sort) and a value.
+Users' expectations and logic would dictate that the value would be the last parameter. This proposal, therefore, allows for less surprising APIs.
+
+\begin{colorblock}
+// given a lua table (or json doccument, or something of that nature), set("a", "b", "c", 42)
+// table["a"]["b"]["c"] becomes 42
+void set_value_in_lua_table(auto&& table, auto... keys, auto value);
+\end{colorblock}
+
+
 \section{Design}
 
 We propose that if there is one (and only one) parameter pack in a function,
@@ -147,7 +187,7 @@ Unlike \paper{P0478R0}, we do not propose that the compiler should try to deduce
 a more clever logic.
 This proposal is based solely on the arity of the arguments.
 This is why we consider this paper lifts a restriction rather than introducing a new feature.
-We do not propose any changes to overload resolution nor to the ordering of function templates.
+We do not propose any changes to overload resolution nor the ordering of function templates.
 
 As such, a limitation of this proposal is that if a parameter pack is immediately followed by a parameter P with a default value,
 it is not possible for the caller to provide a value for P.
@@ -178,13 +218,170 @@ requires (!(std::same_as<T, source_location>||...));
 void f(auto&&... args, source_location loc);
 \end{colorblock}
 
+
+\section{Interesting and breaking changes}
+
+\subsection{Non-trailing packs in function are no longer non-deduced}
+
+\begin{colorblock}
+void ambiguous(auto..., auto);    // #1
+void ambiguous(auto, auto...);    // #2
+void ambiguous(auto..., auto...); // #3
+
+ambiguous(1, 2);
+
+\end{colorblock}
+
+In C++20, \#1 and \#3 have undeduced packs, so the only viable candidate after overload resolution is \#2.
+With this proposal, all arguments of both \#1 and \#2 can be deduced. None of the arguments of \#3 can be deduced (multiple packs are never deduced),
+and after overload resolution, both  \#1 and \#2 are viable overloads, and the call is ambiguous.
+A program that was well-formed in C++20 would be ill-formed with this proposal.
+
+Note that in that scenario, it is not possible to resolve the ambiguity with a cast, for example.
+This is not a new problem; functions with undeduced packs cannot be explicitly named when there are ambiguities in C++20.
+
+\subsection{Multi levels templates}
+
+The implementation in clang revealed this interesting case.
+
+\begin{colorblock}
+template<typename...T>
+struct S {
+    template<typename...U>
+    void g(U &&...u, T &&...t) {}
+};
+
+void test_nested_packs() {
+    S<int>().g(0, 1);  // #1
+}
+\end{colorblock}
+After instantiation of \tcode{S}, \tcode{g} is
+\begin{colorblock}
+template<typename...U>
+void g(U &&...u, int);
+\end{colorblock}
+
+In C++20, \tcode{U...} is an undeduced context, so \#1 is ill-formed.
+With is proposal, \tcode{U} can be deduced to \tcode{int} and the program is well-formed.
+
+
+\section{Deduction in other contexts: Implementation and use cases}
+
+In addition to function calls, type deduction (where a pack can appear) can occur when
+\begin{itemize}
+    \item Instantiating template classes
+    \item Taking the address of a function template
+    \item Partial ordering
+\end{itemize}
+
+EWG asked that these things are explored.
+This section is a report on that exploration.
+\textbf{Note that type deduction for function arguments could be standardized independently of everything else and would provide benefits for users
+of \tcode{source_location} in the C++23 time frame.}
+The exploration shows that this can be expanded later with a consistent design.
+
+
+\subsection{Type deduction during class instantiation}
+
+A motivating use case is a meta-type that expand to the last argument of a template.
+\begin{colorblock}
+template <typename...>
+struct mp_list{};
+
+// Extracting the last element in a type list is made much easier
+template<class L>
+struct pop_back_impl{};
+template<template<class...> class L, class... T, class Last>
+struct pop_back_impl<L<T..., Last>> {
+    using type = L<T...>;
+};
+
+template<class L>
+using pop_back = typename pop_back_impl<L>::type;
+\end{colorblock}
+
+This has been implemented in \href{https://godbolt.org/z/9zs3KEWWx}{Compiler Explorer}.
+Note that currently, non-trailing parameter packs in class template heads are ill-formed, whereas they are only non-deduced for function calls.
+Unlike function calls, this has, therefore, no risk of affecting existing code.
+
+This works exactly like for function calls.
+Each time deduction happens, we compare a list of arguments to a list of parameters, and so we can deduce the size of a single pack
+from the arity of a single pack.
+There cannot be multiple packs for this to work \href{https://godbolt.org/z/rTjhdYrY6}{Compiler Explorer}.
+This is one of the reasons this paper does not replace \paper{P1858R2}.
+
+The same logic would apply anywhere a type or an alias is instanciated, for example:
+
+\begin{colorblock}
+template<class..., class T>
+using  Last = T;
+static_assert(std::same_as<Last<int, int, float>, float>);
+\end{colorblock}
+
+\subsection{Function address}
+
+The address of a function template can be deduced in the same way as being only a special case of argument deduction,
+where the list of arguments is extracted from the type of the LHS declaration.
+[\href{https://godbolt.org/z/d68bxfPWT}{Compiler Explorer}]
+
+\begin{colorblock}
+auto f(auto... a, int x = 0) {
+    return(a +...) * x;
+}
+int g() {
+    using F = int(int, int, int);
+    F& func = f;
+
+    return func(20, 1, 2);
+}
+\end{colorblock}
+
+
+\subsection{Partial specialization}
+
+Partial specialization also follows regular type deduction rules
+[\href{https://godbolt.org/z/18znK877c}{Compiler Explorer}].
+
+\subsection{CTAD}
+
+Class Template Arguments Deduction also follows naturally from the same rule.
+Nothing specific had to be modified in Clang to make this work [\href{https://godbolt.org/z/hMEav8z7j }{Compiler Explorer}]
+
+CTAD for aggregate has not been explored.
+
+\subsection{Defaulted template parameters}
+
+There is a design question of whether to allow template heads of the form
+\begin{colorblock}
+template <typename...T, typename U = void>
+\end{colorblock}
+
+It might be useful SFINAE tricks or to declare verbose types used subsequently in the declaration,
+but like non-trailing defaulted parameters, they could never be deduced and would always have their default value.
+The two design choices are
+\begin{itemize}
+\item Ill-formed (this is what the implementation is doing)
+\item Well-formed and always hold the default value.
+\end{itemize}
+
 \section{Previous works}
 
-\paper{P0478R0} was first presented in Issaquah, and offered a more complicated approach to some of the problems presented here.
-Concerns were expressed mostly because \paper{P0478R0} proposed to modify rules around overload resolution, which the current paper does not,
-it is therefore a lot more simpler.
+\paper{P0478R0} was first presented in Issaquah and offered a more complicated approach to some of the problems presented here.
+Concerns were expressed mostly because \paper{P0478R0} proposed to modify rules around overload resolution, which the current paper does not. It is, therefore, a lot simpler.
 
 We also consider that \tcode{source_location} demands that this question be revisited.
+
+\subsection{State of the implementation}
+
+There was no major issue implementing what is covered in this paper in clang; although I didn't probably cover all scenarios, this is very much a prototype.
+I am hoping that the existence of that prototype might let us uncover scenarios that we might think about.
+There is probably nothing worth reporting on the implementation.
+It was probably a week worth of work, which tells more about how bad a compiler writer I am than it does about
+the actual amount of work required for this feature.
+
+It was necessary for clang to keep track of the index of the template parameter each argument was expanded to.
+Some work went into properly handling explicit template arguments.
+
 
 \section{Alternatives and future evolutions}
 
@@ -196,7 +393,7 @@ However, neither of these could address the \tcode{source_location} issue (which
 
 \subsection{Pack separators}
 
-Circle provides a syntax to denotes the end of a pack, which allows separating a pack from subsequents defaulted arguments,
+Circle provides a syntax to denotes the end of a pack, which allows separating a pack from subsequent defaulted arguments,
 and also to support the deduction of multiple packs \href{https://github.com/seanbaxter/QDA/blob/master/README.md#parameter-packs} as described in the {Circle documentation}. We are not proposing a similar feature, but it is something that we could consider in the future in a backward-compatible manner.
 
 \subsection{Injecting multiple overloads for different combinations of defaulted parameters}
@@ -204,35 +401,434 @@ and also to support the deduction of multiple packs \href{https://github.com/sea
 This is discussed in a previous section, and it is a direction we rejected because of its cost and complexity.
 It is important to note that adopting such a feature in the future would be a breaking change in regard to this paper.
 
-\subsection{Non-trailing template parameters of class and alias template}
-
-Similar restrictions on the positioning of parameter packs exist for class templates and alias.
-We could lift these restrictions using the same heuristic - aka using the number of template arguments
-to deduce the size of a single non-trailing parameter pack.
-
-\begin{colorblock}
-template <typename... T, typename> // ill-formed
-struct S;
-\end{colorblock}
-
-This is not proposed in this paper.
+%\subsection{Non-trailing template parameters of class and alias template}
+%
+%Similar restrictions on the positioning of parameter packs exist for class templates and alias.
+%We could lift these restrictions using the same heuristic - aka using the number of template arguments
+%to deduce the size of a single non-trailing parameter pack.
+%
+%\begin{colorblock}
+%template <typename... T, typename> // ill-formed
+%struct S;
+%\end{colorblock}
+%
+%This is not proposed in this paper.
 
 \section{Implementation}
-    
-Both this paper and \paper{P0478R0} have been implemented in clang with no difficulties.
-In particular, this proposal required a very small amount of work.
 
-\section{Wording}
+%Both this paper and \paper{P0478R0} have been implemented in clang with no difficulties.
+% In particular, this proposal required a very small amount of work.
+
+\section{Wording (For function templates ONLY!)}
+
+\rSec2[temp.deduct]{Template argument deduction}
+
+%\rSec3[temp.deduct.general]{General}
+%
+%\pnum
+%When a
+%function template
+%specialization is referenced, all of the
+%template arguments shall have values.
+%The values can be
+%explicitly specified or, in some cases, be deduced from the use
+%or obtained from default
+%\grammarterm{template-argument}{s}.
+%\begin{example}
+%    \begin{codeblock}
+%        void f(Array<dcomplex>& cv, Array<int>& ci) {
+%            sort(cv);                     // calls \tcode{sort(Array<dcomplex>\&)}
+%            sort(ci);                     // calls \tcode{sort(Array<int>\&)}
+%        }
+%    \end{codeblock}
+%    and
+%    \begin{codeblock}
+%        void g(double d) {
+%            int i = convert<int>(d);      // calls \tcode{convert<int,double>(double)}
+%            int c = convert<char>(d);     // calls \tcode{convert<char,double>(double)}
+%        }
+%    \end{codeblock}
+%\end{example}
+%
+%\pnum
+%When an explicit template argument list is specified, if the
+%given \grammarterm{template-id} is not valid\iref{temp.names},
+%type deduction fails.
+%Otherwise, the specified template argument values are substituted for the
+%corresponding template parameters as specified below.
+%
+%\pnum
+%After this substitution is performed, the function parameter type
+%adjustments described in~\ref{dcl.fct} are performed.
+%\begin{example}
+%    A parameter type of ``\tcode{void (const int, int[5])}'' becomes
+%    ``\tcode{void(*)(int,int*)}''.
+%\end{example}
+%\begin{note}
+%    A top-level qualifier in a function parameter declaration does not affect
+%    the function type but still affects the type of the function parameter
+%    variable within the function.
+%\end{note}
+%\begin{example}
+%    \begin{codeblock}
+%        template <class T> void f(T t);
+%        template <class X> void g(const X x);
+%        template <class Z> void h(Z, Z*);
+%
+%        int main() {
+%            // \#1: function type is \tcode{f(int)}, \tcode{t} is non \tcode{const}
+%            f<int>(1);
+%
+%            // \#2: function type is \tcode{f(int)}, \tcode{t} is \tcode{const}
+%            f<const int>(1);
+%
+%            // \#3: function type is \tcode{g(int)}, \tcode{x} is \tcode{const}
+%            g<int>(1);
+%
+%            // \#4: function type is \tcode{g(int)}, \tcode{x} is \tcode{const}
+%            g<const int>(1);
+%
+%            // \#5: function type is \tcode{h(int, const int*)}
+%            h<const int>(1,0);
+%        }
+%    \end{codeblock}
+%\end{example}
+%
+%\pnum
+%\begin{note}
+%    \tcode{f<int>(1)} and \tcode{f<const int>(1)} call distinct functions
+%    even though both of the functions called have the same function type.
+%\end{note}
+%
+%\pnum
+%The resulting substituted and adjusted function type is used as
+%the type of the function template for template argument
+%deduction.  If a template argument has not been deduced and its
+%corresponding template parameter has a default argument, the
+%template argument is determined by substituting the template
+%arguments determined for preceding template parameters into the
+%default argument. If the substitution results in an invalid type,
+%as described above, type deduction fails.
+%
+%\begin{example}
+%    \begin{codeblock}
+%        template <class T, class U = double>
+%        void f(T t = 0, U u = 0);
+%
+%        void g() {
+%            f(1, 'c');        // \tcode{f<int,char>(1,'c')}
+%            f(1);             // \tcode{f<int,double>(1,0)}
+%            f();              // error: \tcode{T} cannot be deduced
+%            f<int>();         // \tcode{f<int,double>(0,0)}
+%            f<int,char>();    // \tcode{f<int,char>(0,0)}
+%        }
+%    \end{codeblock}
+%\end{example}
+%
+%When all template arguments have been deduced or obtained from
+%default template arguments, all uses of template parameters in
+%the template parameter list of the template
+%are replaced with the corresponding deduced
+%or default argument values. If the substitution results in an
+%invalid type, as described above, type deduction fails.
+%If the function template has associated constraints\iref{temp.constr.decl},
+%those constraints are checked for satisfaction\iref{temp.constr.constr}.
+%If the constraints are not satisfied, type deduction fails.
+%In the context of a function call, if type deduction has not yet failed, then
+%for those function parameters for which the function call has arguments,
+%Each function parameter with a type that was non-dependent
+%before substitution of any explicitly-specified template arguments
+%is checked against its corresponding argument;
+%if the corresponding argument cannot be implicitly converted
+%to the parameter type, type deduction fails.
+%\begin{note}
+%    Overload resolution will check the other parameters, including
+%    parameters with dependent types in which
+%    no template parameters participate in template argument deduction and
+%    parameters that became non-dependent due to substitution of
+%    explicitly-specified template arguments.
+%\end{note}
+%If type deduction has not yet failed, then
+%all uses of template parameters in the function type are
+%replaced with the corresponding deduced or default argument values.
+%If the substitution results in an invalid type, as described above,
+%type deduction fails.
+%\begin{example}
+%    \begin{codeblock}
+%        template <class T> struct Z {
+%            typedef typename T::x xx;
+%        };
+%        template <class T> concept C = requires { typename T::A; };
+%        template <C T> typename Z<T>::xx f(void *, T);          // \#1
+%        template <class T> void f(int, T);                      // \#2
+%        struct A {} a;
+%        struct ZZ {
+%            template <class T, class = typename Z<T>::xx> operator T *();
+%            operator int();
+%        };
+%        int main() {
+%            ZZ zz;
+%            f(1, a);              // OK, deduction fails for \#1 because there is no conversion from \tcode{int} to \tcode{void*}
+%            f(zz, 42);            // OK, deduction fails for \#1 because \tcode{C<int>} is not satisfied
+%        }
+%    \end{codeblock}
+%\end{example}
+%
+%\pnum
+%At certain points in the template argument deduction process it is necessary
+%to take a function type that makes use of template parameters and replace those
+%template parameters with the corresponding template arguments. This is done at
+%the beginning of template argument deduction when any explicitly specified
+%template arguments are substituted into the function type, and again at the end
+%of template argument deduction when any template arguments that were deduced or
+%obtained from default arguments are substituted.
+%
+%\pnum
+%The substitution occurs in all types and expressions that are used in the function
+%type and in template parameter declarations. The expressions include not only
+%constant expressions such as those that appear in array bounds or as nontype
+%template arguments but also general expressions (i.e., non-constant expressions)
+%inside \tcode{sizeof}, \tcode{decltype}, and other contexts that allow non-constant
+%expressions. The substitution proceeds in lexical order and stops when
+%a condition that causes deduction to fail is encountered.
+%If substitution into different declarations of the same function template would
+%cause template instantiations to occur in a different order or not at all,
+%the program is ill-formed; no diagnostic required.
+%\begin{note}
+%    The equivalent substitution in exception specifications is
+%    done only when the \grammarterm{noexcept-specifier} is instantiated,
+%    at which point a program is ill-formed
+%    if the substitution results in an invalid type or expression.
+%\end{note}
+%\begin{example}
+%    \begin{codeblock}
+%        template <class T> struct A { using X = typename T::X; };
+%        template <class T> typename T::X f(typename A<T>::X);
+%        template <class T> void f(...) { }
+%        template <class T> auto g(typename A<T>::X) -> typename T::X;
+%        template <class T> void g(...) { }
+%        template <class T> typename T::X h(typename A<T>::X);
+%        template <class T> auto h(typename A<T>::X) -> typename T::X;   // redeclaration
+%        template <class T> void h(...) { }
+%
+%        void x() {
+%            f<int>(0);        // OK, substituting return type causes deduction to fail
+%            g<int>(0);        // error, substituting parameter type instantiates \tcode{A<int>}
+%            h<int>(0);        // ill-formed, no diagnostic required
+%        }
+%    \end{codeblock}
+%\end{example}
+%
+%\pnum
+%If a substitution results in an invalid type or expression, type deduction fails. An
+%invalid type or expression is one that would be ill-formed, with a diagnostic
+%required, if written using the substituted arguments.
+%\begin{note}
+%    If no
+%    diagnostic is required, the program is still ill-formed. Access checking is done
+%    as part of the substitution
+%    process.
+%\end{note}
+%Only invalid types and expressions in the immediate context of
+%the function type,
+%its template parameter types,
+%and its \grammarterm{explicit-specifier}
+%can result in a deduction failure.
+%\begin{note}
+%    The substitution into types and expressions can result
+%    in effects such as the instantiation of class template specializations and/or
+%    function template specializations, the generation of implicitly-defined functions,
+%    etc. Such effects are not in the ``immediate context'' and can result in the
+%    program being ill-formed.
+%\end{note}
+%
+%\pnum
+%A \grammarterm{lambda-expression} appearing in a function type
+%or a template parameter is not considered part of the immediate context
+%for the purposes of template argument deduction.
+%\begin{note}
+%    The intent is to avoid requiring implementations to deal with
+%    substitution failure involving arbitrary statements.
+%    \begin{example}
+%        \begin{codeblock}
+%            template <class T>
+%            auto f(T) -> decltype([]() { T::invalid; } ());
+%            void f(...);
+%            f(0);               // error: invalid expression not part of the immediate context
+%
+%            template <class T, std::size_t = sizeof([]() { T::invalid; })>
+%            void g(T);
+%            void g(...);
+%            g(0);               // error: invalid expression not part of the immediate context
+%
+%            template <class T>
+%            auto h(T) -> decltype([x = T::invalid]() { });
+%            void h(...);
+%            h(0);               // error: invalid expression not part of the immediate context
+%
+%            template <class T>
+%            auto i(T) -> decltype([]() -> typename T::invalid { });
+%            void i(...);
+%            i(0);               // error: invalid expression not part of the immediate context
+%
+%            template <class T>
+%            auto j(T t) -> decltype([](auto x) -> decltype(x.invalid) { } (t));   // \#1
+%            void j(...);                                                            // \#2
+%            j(0);               // deduction fails on \#1, calls \#2
+%        \end{codeblock}
+%    \end{example}
+%\end{note}
+%
+%\pnum
+%\begin{example}
+%    \begin{codeblock}
+%        struct X { };
+%        struct Y {
+%            Y(X) {}
+%        };
+%
+%        template <class T> auto f(T t1, T t2) -> decltype(t1 + t2);     // \#1
+%        X f(Y, Y);                                                      // \#2
+%
+%        X x1, x2;
+%        X x3 = f(x1, x2);   // deduction fails on \#1 (cannot add \tcode{X+X}), calls \#2
+%    \end{codeblock}
+%\end{example}
+%
+%\pnum
+%\begin{note}
+%    Type deduction can fail for the following reasons:
+%    \begin{itemize}
+%        \item Attempting to instantiate a pack expansion containing multiple packs of differing lengths.
+%        \item
+%        Attempting to create an array with an element type that is \tcode{void}, a
+%        function type, or a reference type, or attempting
+%        to create an array with a size that is zero or negative.
+%        \begin{example}
+%            \begin{codeblock}
+%                template <class T> int f(T[5]);
+%                int I = f<int>(0);
+%                int j = f<void>(0);             // invalid array
+%            \end{codeblock}
+%        \end{example}
+%        \item
+%        Attempting to use a type that is not a class or enumeration type in a qualified name.
+%        \begin{example}
+%            \begin{codeblock}
+%                template <class T> int f(typename T::B*);
+%                int i = f<int>(0);
+%            \end{codeblock}
+%        \end{example}
+%        \item
+%        Attempting to use a type in a \grammarterm{nested-name-specifier} of a
+%        \grammarterm{qualified-id} when
+%        that type does not contain the specified member, or
+%        \begin{itemize}
+%            \item
+%            the specified member is not a type where a type is required, or
+%            \item
+%            the specified member is not a template where a template is required, or
+%            \item
+%            the specified member is not a non-type where a non-type is required.
+%        \end{itemize}
+%        \begin{example}
+%            \begin{codeblock}
+%                template <int I> struct X { };
+%                template <template <class T> class> struct Z { };
+%                template <class T> void f(typename T::Y*) {}
+%                template <class T> void g(X<T::N>*) {}
+%                template <class T> void h(Z<T::TT>*) {}
+%                struct A {};
+%                struct B { int Y; };
+%                struct C {
+%                    typedef int N;
+%                };
+%                struct D {
+%                    typedef int TT;
+%                };
+%
+%                int main() {
+%                    // Deduction fails in each of these cases:
+%                    f<A>(0);          // \tcode{A} does not contain a member \tcode{Y}
+%                    f<B>(0);          // The \tcode{Y} member of \tcode{B} is not a type
+%                    g<C>(0);          // The \tcode{N} member of \tcode{C} is not a non-type
+%                    h<D>(0);          // The \tcode{TT} member of \tcode{D} is not a template
+%                }
+%            \end{codeblock}
+%        \end{example}
+%        \item
+%        Attempting to create a pointer to reference type.
+%        \item
+%        Attempting to create a reference to \tcode{void}.
+%        \item
+%        Attempting to create ``pointer to member of \tcode{T}'' when \tcode{T} is not a
+%        class type.
+%        \begin{example}
+%            \begin{codeblock}
+%                template <class T> int f(int T::*);
+%                int i = f<int>(0);
+%            \end{codeblock}
+%        \end{example}
+%        \item
+%        Attempting to give an invalid type to a non-type template parameter.
+%        \begin{example}
+%            \begin{codeblock}
+%                template <class T, T> struct S {};
+%                template <class T> int f(S<T, T()>*);
+%                struct X {};
+%                int i0 = f<X>(0);
+%            \end{codeblock}
+%        \end{example}
+%
+%        \item
+%        Attempting to perform an invalid conversion in either a template
+%        argument expression, or an expression used in the function
+%        declaration.
+%        \begin{example}
+%            \begin{codeblock}
+%                template <class T, T*> int f(int);
+%                int i2 = f<int,1>(0);           // can't conv \tcode{1} to \tcode{int*}
+%            \end{codeblock}
+%        \end{example}
+%
+%        \item
+%        Attempting to create a function type in which a parameter has a type
+%        of \tcode{void}, or in which the return type is a function type
+%        or array type.
+%    \end{itemize}
+%\end{note}
+%
+%\pnum
+%\begin{example}
+%    In the following example,
+%    assuming a \tcode{signed char}
+%    cannot represent the value 1000,
+%    a narrowing conversion\iref{dcl.init.list}
+%    would be required
+%    to convert the \grammarterm{template-argument}
+%    of type \tcode{int} to \tcode{signed char},
+%    therefore substitution fails for the
+%    second template\iref{temp.arg.nontype}.
+%
+%    \begin{codeblock}
+%        template <int> int f(int);
+%        template <signed char> int f(int);
+%        int i1 = f<1000>(0);            // OK
+%        int i2 = f<1>(0);               // ambiguous; not narrowing
+%    \end{codeblock}
+%\end{example}
+
 
 \rSec3[temp.deduct.call]{Deducing template arguments from a function call}
 
 //...
 
-\added{Let N be the number of remaining non-defaulted template function parameters and K be the number of remaining arguments of the call.}
-
 For a function parameter pack \removed{that occurs at the end
-of the \grammarterm{parameter-declaration-list}},
-deduction is performed for \changed{each remaining}{the next K-N} argument of the call,
+of the \grammarterm{parameter-declaration-list}},\added{the size of the pack \tcode{N} is deduced to be
+the number of arguments in the call, minus the number of arguments preceding \tcode{A},
+and minus one for each function template parameter following P that has no default argument.}
+
+\changed{d}{D}eduction is performed for \changed{each remaining}{the next N} argument\added{s} of the call,
 taking the type \tcode{P}
 of the \grammarterm{declarator-id} of the function parameter pack
 as the corresponding function template parameter type.
@@ -241,6 +837,22 @@ the template parameter packs expanded by the function parameter pack.
 When a function parameter pack appears in a non-deduced
 context\iref{temp.deduct.type}, the type of that pack is
 never deduced.
+
+
+%\added{Let N be the number of remaining non-defaulted function template parameters, and K be the number of remaining arguments of the call.}
+%
+%For a function parameter pack \removed{that occurs at the end
+%    of the \grammarterm{parameter-declaration-list}},
+%deduction is performed for \changed{each remaining}{the next K-N} argument\added{s} of the call,
+%taking the type \tcode{P}
+%of the \grammarterm{declarator-id} of the function parameter pack
+%as the corresponding function template parameter type.
+%Each deduction deduces template arguments for subsequent positions in
+%the template parameter packs expanded by the function parameter pack.
+%When a function parameter pack appears in a non-deduced
+%context\iref{temp.deduct.type}, the type of that pack is
+%never deduced.
+
 \begin{example}
 \begin{removedblock}
 \begin{codeblock}
@@ -284,49 +896,232 @@ void h(int x, float& y) {
 \rSec3[temp.deduct.partial]{Deducing template arguments during partial ordering}
 
 \pnum
+Two sets of types are used to determine the partial ordering.  For each of
+the templates involved there is the original function type and the
+transformed function type.
+\begin{note}
+    The creation of the transformed type is described in [temp.func.order].
+\end{note}
+The deduction process uses the
+transformed type as the argument template and the original type of the
+other template as the parameter template.  This process is done twice
+for each type involved in the partial ordering comparison: once using
+the transformed template-1 as the argument template and template-2 as
+the parameter template and again using the transformed template-2 as
+the argument template and template-1 as the parameter template.
+
+\pnum
+The types used to determine the ordering depend on the context in which
+the partial ordering is done:
+
+\begin{itemize}
+    \item
+    In the context of a function call, the types used are those function parameter types
+    for which the function call has arguments.
+    \item
+    In the context of a call to a conversion function, the return types of
+    the conversion function templates are used.
+    \item
+    In other contexts\iref{temp.func.order} the function template's function
+    type is used.
+\end{itemize}
+
+\pnum
+Each type nominated above from the parameter template and the corresponding \added{$i^\text{th}$} type from the
+argument template are used as the types of \tcode{P} and \tcode{A}.
+\begin{addedblock}
+Let \tcode{PCount} be the numbers of types of the parameter template, and \tcode{ACount} be the numbers of type of the argument template.
+\end{addedblock}
+
+Before the partial ordering is done, certain transformations are performed
+on the types used for partial ordering:
+
+\begin{itemize}
+    \item
+    If
+    \tcode{P}
+    is a reference type,
+    \tcode{P}
+    is replaced by the type referred to.
+    \item
+    If
+    \tcode{A}
+    is a reference type,
+    \tcode{A}
+    is replaced by the type referred to.
+\end{itemize}
+
+\pnum
+If both
+\tcode{P}
+and
+\tcode{A}
+were reference types (before being replaced with the type referred to
+above), determine which of the two types (if any) is more cv-qualified
+than the other; otherwise the types are considered to be equally
+cv-qualified for partial ordering purposes. The result of this
+determination will be used below.
+
+\pnum
+Remove any top-level cv-qualifiers:
+\begin{itemize}
+    \item
+    If
+    \tcode{P}
+    is a cv-qualified type,
+    \tcode{P}
+    is replaced by the cv-unqualified version of
+    \tcode{P}.
+    \item
+    If
+    \tcode{A}
+    is a cv-qualified type,
+    \tcode{A}
+    is replaced by the cv-unqualified version of
+    \tcode{A}.
+\end{itemize}
+
+\pnum
 Using the resulting types
 \tcode{P}
 and
 \tcode{A},
-the deduction is then done as described in [temp.deduct.type].
-
-\begin{addedblock}
-Let N be the number of remaining non-defaulted template function parameters and K be the number of remaining arguments of the call.
-\end{addedblock}
-
-If \tcode{P} is a function parameter pack,
-the type \tcode{A} of each \changed{remaining}{of the the next {K-N}}
-parameter types of the argument template is compared with the type \tcode{P} of
+the deduction is then done as described in~\ref{temp.deduct.type}.
+If \tcode{P} is a function parameter pack, the type \tcode{A} of \changed{each remaining}{The next $ACount-Pcount-i$}
+parameter type\added{s} of the argument template is compared with the type \tcode{P} of
 the \grammarterm{declarator-id} of the function parameter pack. Each comparison
 deduces template arguments for subsequent positions in the template parameter
 packs expanded by the function parameter pack.
-Similarly, if \tcode{A} was ed from a function parameter pack,
-it is compared with each  \changed{remaining}{of the the next {N-K}} parameter type of the parameter template.
-\begin{addedblock}
-\begin{example}
-\begin{codeblock}
-template<class Args.., class TLast> void f(Args.., int i = 42);
-f(0); // sizeof...(Args) == 1
-f(0, 0); // sizeof...(Args) == 2
-\end{codeblock}
-\end{example}
-\end{addedblock}
-
-
+Similarly, if \tcode{A} was transformed from a function parameter pack,
+it is compared with \changed{each remaining}{The next $ACount-Pcount-i$} parameter types of the parameter template.
 If deduction succeeds for a given type,
 the type from the argument template is considered to be at least as specialized
 as the type from the parameter template.
 \begin{example}
     \begin{codeblock}
+    template<class... Args>           void f(Args... args);         // \#1
+    template<class T1, class... Args> void f(T1 a1, Args... args);  // \#2
+    template<class T1, class T2>      void f(T1 a1, T2 a2);         // \#3
+
+    f();                // calls \#1
+    f(1, 2, 3);         // calls \#2
+    f(1, 2);            // calls \#3; non-variadic template \#3 is more specialized
+    // than the variadic templates \#1 and \#2
+    \end{codeblock}
+\end{example}
+
+
+%\begin{addedblock}
+%    Let N be the number of remaining non-defaulted function template parameters and K be the number of remaining parameter types.
+%\end{addedblock}
+%
+%If \tcode{P} is a function parameter pack,
+%the type \tcode{A} of each \changed{remaining}{of the next {K-N}}
+%parameter types of the argument template is compared with the type \tcode{P} of
+%the \grammarterm{declarator-id} of the function parameter pack. Each comparison
+%deduces template arguments for subsequent positions in the template parameter
+%packs expanded by the function parameter pack.
+%Similarly, if \tcode{A} was transformed from a function parameter pack,
+%it is compared with each  \changed{remaining}{of the next {K-N}} parameter type of the parameter template.
+%
+%
+%If deduction succeeds for a given type,
+%the type from the argument template is considered to be at least as specialized
+%as the type from the parameter template.
+
+
+\begin{example}
+    \begin{codeblock}
         template<class... Args>              void f(Args... args);        // \#1
         template<class T1, class... Args>    void f(T1 a1, Args... args); // \#2
         template<class T1, class T2>         void f(T1 a1, T2 a2);        // \#3
-        template<class Args.., class TLast>  void g(Args.., int i = 42); //  \#4
 
         f();                // calls \#1
         f(1, 2, 3);         // calls \#2
         f(1, 2);            // calls \#3; non-variadic template \#3 is more specialized
         // than the variadic templates \#1 and \#2
+    \end{codeblock}
+\end{example}
+
+If, for a given type, the
+types are identical after the transformations above
+and both \tcode{P} and \tcode{A} were reference types (before being replaced with the
+type referred to above):
+\begin{itemize}
+    \item if the type from the argument template was an lvalue reference and the type
+    from the parameter template was not,
+    the parameter type is not considered to be
+    at least as specialized as the argument type; otherwise,
+    \item if the type from
+    the argument template is more cv-qualified than the type from the
+    parameter template (as described above),
+    the parameter type is not considered to be
+    at least as specialized as the argument type.
+\end{itemize}
+
+\pnum
+\indextext{at least as specialized as|see{more specialized}}%
+Function template \tcode{F}
+is \defnx{at least as specialized as}{more specialized}
+function template \tcode{G} if,
+for each pair of types used to determine the ordering,
+the type from \tcode{F}
+is at least as specialized as
+the type from \tcode{G}.
+\tcode{F}
+is \defnx{more specialized than}{more specialized!function template}
+\tcode{G} if
+\tcode{F}
+is at least as specialized as
+\tcode{G} and
+\tcode{G}
+is not at least as specialized as
+\tcode{F}.
+
+\pnum
+If, after considering the above, function template \tcode{F}
+is at least as specialized as function template \tcode{G} and vice-versa, and
+if \tcode{G} has a \removed{trailing} function parameter pack
+for which \tcode{F} does not have a corresponding parameter, and
+if \tcode{F} does not have a \removed{trailing} function parameter pack,
+then \tcode{F} is more specialized than \tcode{G}.
+
+\pnum
+In most cases,
+deduction fails if not all template parameters have values,
+but for partial ordering purposes a template
+parameter may remain without a value provided it is not used in the
+types being used for partial ordering.
+\begin{note}
+    A template parameter used in a non-deduced context is considered used.
+\end{note}
+\begin{example}
+    \begin{codeblock}
+        template <class T> T f(int);            // \#1
+        template <class T, class U> T f(U);     // \#2
+        void g() {
+            f<int>(1);                            // calls \#1
+        }
+    \end{codeblock}
+\end{example}
+
+\pnum
+\begin{note}
+    Partial ordering of function templates containing
+    template parameter packs is independent of the number of deduced arguments
+    for those template parameter packs.
+\end{note}
+\begin{example}
+    \begin{codeblock}
+        template<class ...> struct Tuple { };
+        template<class ... Types> void g(Tuple<Types ...>);                 // \#1
+        template<class T1, class ... Types> void g(Tuple<T1, Types ...>);   // \#2
+        template<class T1, class ... Types> void g(Tuple<T1, Types& ...>);  // \#3
+
+        g(Tuple<>());                   // calls \#1
+        g(Tuple<int, float>());         // calls \#2
+        g(Tuple<int, float&>());        // calls \#3
+        g(Tuple<int>());                // calls \#3
     \end{codeblock}
 \end{example}
 
@@ -425,7 +1220,7 @@ a type for which deduction from an initializer list is specified\iref{temp.deduc
 \section{Acknowledgments}
 
 Thanks to Sy Brand and Michael Wong for their work on P0478 and encouragements.
-Tony Van Eerd and Ólafur Waage for proofreading this paper and offering their feedbacks.
+Tony Van Eerd and Ólafur Waage for proofreading this paper and offering their feedbacks, and Jens Maurer for reviewing the wording.
 
 
 \bibliographystyle{plain}
