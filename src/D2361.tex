@@ -13,7 +13,7 @@
 \setmainfont{Noto Sans}
 
 \title{Unevaluated strings}
-\docnumber{P2361R3}
+\docnumber{P2361R4}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Aaron Ballman}{aaron.ballman@gmail.com}
@@ -48,6 +48,11 @@ This proposal aim to identify contexts in which strings are not evaluated so tha
 
 \section{Revisions}
 
+\subsection{R4}
+\begin{itemize}
+    \item Rebase the wording and wording tweaks.
+\end{itemize}
+
 \subsection{R3}
 \begin{itemize}
     \item Improve wording by not making \grammarterm{unevaluated-string} preprocessing token as preprocessing tokens should not be context dependent. Fix the wording of \tcode{\#line} and \tcode{\_Pragma} accordingly.
@@ -56,7 +61,6 @@ This proposal aim to identify contexts in which strings are not evaluated so tha
     \item Adapt the wording of \tcode{extern} to clarify that the likage specification denotes unicode characters.
     \item Allow numeric escape sequences in asm statements.
 \end{itemize}
-
 \subsection{R2}
 \begin{itemize}
     \item \grammarterm{unevaluated-string-literal} to \grammarterm{unevaluated-string}.
@@ -173,7 +177,6 @@ static_assert(false, "Your code is on @\emoji{1F525}@");
 '\u00A5' cannot be represented in the current code page (20127)
 <source>(1): error C2338: ????
 
-
 static_assert(false, u8"Your code is on @\emoji{1F525}@");
 <source>(1): error C2002: invalid wide-character constant
 \end{codeblock}
@@ -224,19 +227,6 @@ Not being literal, and not being expressions, \grammarterm{unevaluated-string} d
 from the basic characters are displayed in diagnostic messages, which was not implementable.
 
 \section{Wording}
-
-\ednote{The wording is relative to N4885 + \paper{P2314R2} applied}
-
-
-\rSec1[lex.phases]{Phases of translation}%
-
-\ednote{Modify "[lex.phases]/p1.6" as follow}
-
-\begin{enumerate}
-\setcounter{enumi}{5}
-\item Adjacent \grammarterm{string-literal}{s} are concatenated \removed{and a null character is appended to the result as specified in [lex.string]}.
-%\added{Adjacent \grammarterm{unevaluated-string}s are concatenated}.
-\end{enumerate}
 
 %\rSec1[lex.charset]{Character sets}
 
@@ -312,208 +302,6 @@ from the basic characters are displayed in diagnostic messages, which was not im
 %between the quotation characters in a character literal or
 %string literal..
 
-
-\rSec2[lex.string]{String literals}
-
-\ednote{Modify "[lex.string]" as follow}
-
-%\begin{bnf}
-%    \nontermdef{string-literal}\br
-%    \opt{encoding-prefix} \terminal{"} \opt{s-char-sequence} \terminal{"}\br
-%    \opt{encoding-prefix} \terminal{R} raw-string
-%\end{bnf}
-%
-%%\begin{addedblock}
-%%\begin{bnf}
-%%    \nontermdef{unevaluated-string}\br
-%%    \terminal{"} \opt{s-char-sequence} \terminal{"}\br
-%%    \terminal{R} raw-string
-%%\end{bnf}
-%%\end{addedblock}
-%
-%\begin{bnf}
-%    \nontermdef{s-char-sequence}\br
-%    s-char\br
-%    s-char-sequence s-char
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{s-char}\br
-%    basic-s-char\br
-%    escape-sequence\br
-%    universal-character-name
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{basic-s-char}\br
-%    \textnormal{any member of the basic source character set except the double-quote \terminal{"}, backslash \terminal{\textbackslash}, or new-line character}
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{raw-string}\br
-%    \terminal{"} \opt{d-char-sequence} \terminal{(} \opt{r-char-sequence} \terminal{)} \opt{d-char-sequence} \terminal{"}
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{r-char-sequence}\br
-%    r-char\br
-%    r-char-sequence r-char
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{r-char}\br
-%    \textnormal{any member of the source character set, except a right parenthesis \terminal{)} followed by}\br
-%    \bnfindent\textnormal{the initial \grammarterm{d-char-sequence} (which may be empty) followed by a double quote \terminal{"}.}
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{d-char-sequence}\br
-%    d-char\br
-%    d-char-sequence d-char
-%\end{bnf}
-%
-%\begin{bnf}
-%    \nontermdef{d-char}\br
-%    \textnormal{any member of the basic source character set except:}\br
-%    \bnfindent\textnormal{space, the left parenthesis \terminal{(}, the right parenthesis \terminal{)}, the backslash \terminal{\textbackslash}, and the control characters}\br
-%    \bnfindent\textnormal{representing horizontal tab, vertical tab, form feed, and newline.}
-%\end{bnf}
-%
-%[...]
-%
-%\pnum
-%\indextext{literal!string!raw}%
-%A \grammarterm{string-literal}
-%%\added{or an \grammarterm{unevaluated-string} } 
-%that has an \tcode{R}
-%\indextext{prefix!\idxcode{R}}%
-%in the prefix is a \defn{raw string literal}. The
-%\grammarterm{d-char-sequence} serves as a delimiter. The terminating
-%\grammarterm{d-char-sequence} of a \grammarterm{raw-string} is the same sequence of
-%characters as the initial \grammarterm{d-char-sequence}. A \grammarterm{d-char-sequence}
-%shall consist of at most 16 characters.
-%
-%\pnum
-%\indextext{concatenation!string}%
-%In translation phase 6\iref{lex.phases}, adjacent \grammarterm{string-literal}{s} are concatenated. If
-%both \grammarterm{string-literal}{s} have the same \grammarterm{encoding-prefix}, the resulting concatenated \grammarterm{string-literal} has
-%that \grammarterm{encoding-prefix}. If one \grammarterm{string-literal} has no \grammarterm{encoding-prefix}, it is treated as a \grammarterm{string-literal} of
-%the same \grammarterm{encoding-prefix} as the other operand. If a UTF-8 string literal token is adjacent to a
-%wide string literal token, the program is ill-formed. Any other concatenations are
-%conditionally-supported with \impldef{concatenation of some types of \grammarterm{string-literal}s}
-%behavior.
-%%\added{Adjacent \grammarterm{unevaluated-string}{s} are concatenated}.
-%
-%\begin{note}
-%    This concatenation is an interpretation, not a conversion.
-%    Because the interpretation happens in translation phase 6
-%    (after the string literal contents have been encoded in
-%    the \grammarterm{string-literal}'s associated character encoding),
-%    a \grammarterm{string-literal}'s initial rawness
-%    has no effect on the interpretation or well-formedness of the concatenation.
-%\end{note}
-
-[...]
-
-\indextext{\idxcode{0}|seealso{zero, null}}%
-\indextext{\idxcode{0}!string terminator}%
-\indextext{\idxcode{0}!null character|see {character, null}}%
-
-\removed{
-In translation phase 6 [lex.phases],
-after adjacent \grammarterm{string-literal}{s} are concatenated,
-a null character is appended to the result.
-}
-
-\pnum
-Evaluating a \grammarterm{string-literal} results in a string literal object
-with static storage duration\iref{basic.stc}.
-\indextext{string!distinct}%
-Whether all \grammarterm{string-literal}{s} are distinct (that is, are stored in
-nonoverlapping objects) and whether successive evaluations of a
-\grammarterm{string-literal} yield the same or a different object is
-unspecified.
-\begin{note}
-    \indextext{literal!string!undefined change to}%
-    The effect of attempting to modify a \grammarterm{string-literal} is undefined.
-\end{note}
-
-\pnum
-String literal objects are initialized with
-the sequence of code unit values
-corresponding to the \grammarterm{string-literal}'s sequence of
-\grammarterm{s-char}s (for a non-raw string literal) and
-\grammarterm{r-char}s (for a raw string literal)
-in order as follows:
-\begin{itemize}
-    \item
-    The sequence of characters denoted by each contiguous sequence of
-    \grammarterm{basic-s-char}s,
-    \grammarterm{r-char}s,
-    \grammarterm{simple-escape-sequence}s\iref{lex.ccon}, and
-    \grammarterm{universal-character-name}s\iref{lex.charset}
-    is encoded to a code unit sequence
-    using the \grammarterm{string-literal}'s associated character encoding.
-    If a character lacks representation in the associated character encoding, then:
-    \begin{itemize}
-        \item
-        If the \grammarterm{string-literal}'s \grammarterm{encoding-prefix}
-        is absent or \tcode{L},
-        then the \grammarterm{string-literal} is conditionally-supported and
-        an
-        \impldef{code unit sequence for non-representable \grammarterm{string-literal}}
-        code unit sequence is encoded.
-        \item
-        Otherwise, the \grammarterm{string-literal} is ill-formed.
-    \end{itemize}
-    When encoding a stateful character encoding,
-    implementations should encode the first such sequence
-    beginning with the initial encoding state and
-    encode subsequent sequences
-    beginning with the final encoding state of the prior sequence.
-    \begin{note}
-        The encoded code unit sequence can differ from
-        the sequence of code units that would be obtained by
-        encoding each character independently.
-    \end{note}
-    \item
-    Each \grammarterm{numeric-escape-sequence}\iref{lex.ccon}
-    that specifies an integer value $v$
-    contributes a single code unit with a value as follows:
-    \begin{itemize}
-        \item
-        If $v$ does not exceed the range of representable values of
-        the \grammarterm{string-literal}'s array element type,
-        then the value is $v$.
-        \item
-        Otherwise,
-        if the \grammarterm{string-literal}'s \grammarterm{encoding-prefix}
-        is absent or \tcode{L}, and
-        $v$ does not exceed the range of representable values of
-        the corresponding unsigned type for the underlying type of
-        the \grammarterm{string-literal}'s array element type,
-        then the value is the unique value of
-        the \grammarterm{string-literal}'s array element type \tcode{T}
-        that is congruent to $v$ modulo $2^N$, where $N$ is the width of \tcode{T}.
-        \item
-        Otherwise, the \grammarterm{string-literal} is ill-formed.
-    \end{itemize}
-    When encoding a stateful character encoding,
-    these sequences should have no effect on encoding state.
-    \item
-    Each \grammarterm{conditional-escape-sequence}\iref{lex.ccon}
-    contributes an
-    \impldef{code unit sequence for \grammarterm{conditional-escape-sequence}}
-    code unit sequence.
-    When encoding a stateful character encoding,
-    it is
-    \impldef{effect of \grammarterm{conditional-escape-sequence} on encoding state}
-    what effect these sequences have on encoding state.
-    \begin{addedblock}
-        \item A code unit of value 0 (representing the NULL character) is appened to the result.
-    \end{addedblock}
-\end{itemize}
-
 \ednote{Add after "[lex.string]/p10"}
 
 \begin{addedblock}
@@ -527,7 +315,7 @@ in order as follows:
 
 An \grammarterm{unevaluated-string} shall have no  \grammarterm{encoding-prefix}.
 
-Each \grammarterm{universal-character-name} and each \grammarterm{simple-escape-sequence} in an \grammarterm{unevaluated-string} is replaced by the member of the translation set it denotes.
+Each \grammarterm{universal-character-name} and each \grammarterm{simple-escape-sequence} in an \grammarterm{unevaluated-string} is replaced by the member of the translation character set it denotes.
 An \grammarterm{unevaluated-string} which contains a \grammarterm{numeric-escape-sequence}
 or a \grammarterm{conditional-escape-sequence} is ill-formed.
 
@@ -591,7 +379,7 @@ An \tcode{asm} declaration has the form
 The \tcode{asm} declaration is conditionally-supported; its meaning is
 \impldef{meaning of \tcode{asm} declaration}.
 \begin{addedblock}
-The encoding prefix of the \grammarterm{string-literal} shall be absent.
+The \grammarterm{encoding-prefix} of the \grammarterm{string-literal} shall be absent.
 \end{addedblock}
 The optional \grammarterm{attribute-specifier-seq} in
 an \grammarterm{asm-declaration} appertains to the \tcode{asm} declaration.
@@ -632,11 +420,18 @@ be achieved using a \grammarterm{linkage-specification}:
     \keyword{extern} \added{unevaluated-}string\removed{-literal} declaration
 \end{bnf}
 
-The \grammarterm{\added{unevaluated-}string\removed{-literal}} indicates the required language linkage \added{as a sequence of translation set characters}.
+The \grammarterm{\added{unevaluated-}string\removed{-literal}} indicates the required language linkage
+\begin{addedblock}
+\begin{note}
+Escape sequences and \grammarterm{universal-character-name}{s} have been replaced in [lex.string.unevaluated]
+\end{note}
+\end{addedblock}
+.
+%\added{as a sequence of translation set characters}.
 
 This document specifies the semantics for the
-\changed{\grammarterm{string-literal}{s}}{language linkages} \tcode{"C"} and \tcode{"C++"}. Use of a
-\changed{\grammarterm{string-literal}}{language linkage} other than \tcode{"C"} or \tcode{"C++"} is
+\added{unevaluated-}string\removed{-literal} \tcode{"C"} and \tcode{"C++"}. Use of a
+\added{unevaluated-}string\removed{-literal} other than \tcode{"C"} or \tcode{"C++"} is
 conditionally-supported, with \impldef{semantics of linkage specifiers} semantics.
 \begin{note}
     Therefore, a linkage-specification with a \changed{\grammarterm{string-literal}}{language linkage} that
@@ -765,7 +560,7 @@ as the rationale for why the result should not be discarded.
 \end{bnf}
 
 \pnum
-The \removed{\grammarterm{unevaluated-string} or} \grammarterm{user-defined-string-literal}
+The \removed{\grammarterm{string-literal} or} \grammarterm{user-defined-string-literal}
 in a \grammarterm{literal-operator-id} shall have no
 \grammarterm{encoding-prefix} and shall contain no characters other than the
 implicit terminating \tcode{'\textbackslash 0'}.
@@ -794,6 +589,11 @@ The \grammarterm{string-literal} of a
 directive, if present,
 shall \changed{be a character string literal}{satisfy the semantic constraints of an \grammarterm{unevaluated-string} [lex.string.unevaluated]}.
 
+\ednote {
+\grammarterm{string-literal} is prexisting wording, but the grammar refers to a quoted sequence of s-char. This is arguably a bug that CWG may want to address
+as a drive-by when processing this paper.
+}
+
 \pnum
 The
 \defn{line number}
@@ -819,7 +619,7 @@ the behavior is undefined.
 A preprocessing directive of the form
 
 \begin{ncsimplebnf}
-    \terminal{\# line} digit-sequence \changed{\terminal{"} \opt{s-char-sequence} \terminal{"}}{string-literal} new-line
+    \terminal{\# line} digit-sequence \terminal{"} \opt{s-char-sequence} \terminal{"} new-line
 \end{ncsimplebnf}
 
 sets the presumed line number similarly and changes the
@@ -862,9 +662,9 @@ A unary operator expression of the form:
 is processed as follows: The \grammarterm{string-literal} 
 is \defnx{destringized}{destringization} by
 \removed{deleting the \tcode{L} prefix, if present,} deleting the leading and trailing
-double-quotes \removed{,replacing each escape sequence \tcode{\textbackslash"} by a double-quote, and
+double-quotes,replacing each escape sequence \tcode{\textbackslash"} by a double-quote, and
 replacing each escape sequence \tcode{\textbackslash\textbackslash} by a single
-backslash}. The resulting sequence of characters is processed through translation phase 3
+backslash. The resulting sequence of characters is processed through translation phase 3
 to produce preprocessing tokens that are executed as if they were the
 \grammarterm{pp-tokens} in a pragma directive. The original four preprocessing
 tokens in the unary operator expression are removed.

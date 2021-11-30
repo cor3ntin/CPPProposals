@@ -4,7 +4,7 @@
 \documentclass{wg21}
 
 \title{Naming Text Encodings to Demystify Them}
-\docnumber{D1885R8}
+\docnumber{D1885R9}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Peter Brett}{pbrett@cadence.com}
@@ -26,7 +26,7 @@ C++23
 For historical reasons, all text encodings mentioned in the standard are derived from
 a locale object, which does not necessarily match the reality of how programs and systems interact.
 
-This model works poorly with modern understanding of text, ie the Unicode model separates encoding
+This model works poorly with modern understanding of text, i.e., the Unicode model separates encoding
 from locales which are purely rules for formatting and text transformations but do not affect
 which characters are represented by a sequence of code units.
 
@@ -115,7 +115,7 @@ A more complex implementation may support more encodings, such as iso-8859-1.
 \subsection{Asserting a specific encoding is set}
 
 On POSIX, matching encodings is done by name, which pulls the entire database.
-To avoid that we propose a method to asserting that the environment encoding is as expected.
+To avoid that, we propose a method to asserting that the environment encoding is as expected.
 such method mixed to only pull in the strings associated with this encoding:
 
 \begin{colorblock}
@@ -160,27 +160,37 @@ assert(wtf8 == text_encoding("___wtf8__"));
 
 \section{Revisions}
 
+\subsection*{Revision 9}
+\begin{itemize}
+\item Wording fixes
+\item Mandates CHAR_BIT == 8
+\item Add some prose clarifying that the intent is that UCS2/UCS4 are valid return values on platforms with little and big endianess. 
+\end{itemize}
+
 \subsection*{Revision 8}
 \begin{itemize}
-    \item Add some prose to explain the expected behavior of the \tcode{wide_environment} methods, especially that it does not aim to return encodings always suitabke for use with the wide character functions. This is accompanied by wording notes.
-    \item Add some wording to clarify that the way an implementation maps an encoding to a \tcode{registered-character-set} is implementation defined.
-    This is for example to allow implementations to return the Big5 encoding, as the name as registered may actually describe slightly different characters sets. But there are existing practices to respect and we do not want to constrain implementation too much.
-    In general while most registered character encodings do describe a very specific set of characters and mapping, some do not. This blanket wording allows an implementation to offer a behavior that matches existing expectations.
+    \item Add some prose to explain the expected behavior of the \tcode{wide_environment} methods, especially that it does not aim to return encodings always suitable for use with the wide-character functions. This is accompanied by wording notes.
+    \item Add some wording to clarify that the way an implementation maps an encoding to a \tcode{registered-character-set} is implementation-defined.
+    This is, for example, to allow implementations to return the Big5 encoding, as the name as registered may actually describe slightly different characters sets. Nevertheless, there are existing practices to respect, and we do not want to constrain implementation too much.
+    In general, while most registered character encodings do describe a very specific set of characters and mapping, some do not. This blanket wording allows an implementation to offer a behavior that matches existing expectations.
     \item Add more recommended practices in the wording
+    \item Specify that the encoding of literals is that of the object representation.
+    \item Specify that the encodings are encoding schemes. 
+    \item Always map UTF16-LE/BE to UTF-16 (and add prose to explain why).
     \item Fix an example, which while correct was not representative of desired recommended practices.
     \item Many wording fixes.
-    
+
 \end{itemize}
 
 
 \subsection*{Revision 7}
 \begin{itemize}
     \item Improve the wording of \tcode{aliases()}. Make its return type part of the API. \tcode{aliases_view}. The value_type of that view is \tcode{const char*}. it was \tcode{string_view} in previous versions by mistake. This view is \tcode{borrowed_trange}, and \tcode{random_access_range} at LEWG's request. We inherit from \tcode{view_interface} for greater usuability. All of that has been implemented.
-    Note that this view is not \tcode{common_range} because it can be implemented more efficiently without that requierement and, being copyable it can be adapted into one.
+    Note that this view is not \tcode{common_range} because it can be implemented more efficiently without that requirement, and, being copyable, it can be adapted into one.
     \item Modify the wording of \tcode{text_encoding::environment} to account for the fact locale-related environment variables can be changed at runtime. Therefore, it is not possible to enforce that the value returned by \tcode{text_encoding::environment} is not affected by variable locale changes.
     However, it is implementable on some systems (We provide an implementation for Windows, FreeBSD, Linux, OSX), and on these systems, we recommend, but not mandate that changing the environment variables do not affect the value returned by \tcode{text_encoding::environment}. To account for that, the environment() functions are no longer \tcode{noexcept}.
     \item Clarify how the names returned by \tcode{name()} and \tcode{aliases()} relate. In particular, modify the wording to call \tcode{aliases().front()}        \defn{primary name} rather than \tcode{prefered name} as to avoid confusion.
-    \item Clarify that \tcode{name()} can be \tcode{nullptr}.\\ 
+    \item Clarify that \tcode{name()} can be \tcode{nullptr}.\\
           For example, consider \tcode{text_encoding\{text_encoding::id::unknown\}.name()}.
     \item Many wording tweaks and correction
 \end{itemize}
@@ -253,7 +263,7 @@ The current facility is \emph{just} a fancy name.
 
 \section{The many text encodings of a C++ environment}
 
-Text in a technical sense is a sequence of bytes to which is virtually attached an encoding.
+Text, in a technical sense, is a sequence of bytes to which is virtually attached an encoding.
 Without encoding, a blob of data simply cannot be interpreted as text.
 
 In many cases, the encoding used to encode a string is not communicated along with that string and its
@@ -274,9 +284,9 @@ In the purview of the standard, text I/O text originates from
     \item Environment variables and command-line arguments intended to be interpreted as text.
 \end{itemize}
 
-Locales provide text transformation and conversion facilities and as such, in the current model have an encoding attached to them.
+Locales provide text transformation and conversion facilities and, as such, in the current model, have an encoding attached to them.
 
-There are therefore 3 sets of encodings of primary interest:
+There are, therefore, three sets of encodings of primary interest:
 
 \begin{itemize}
     \item The encoding of narrow and wide characters and string literals
@@ -290,21 +300,21 @@ There are therefore 3 sets of encodings of primary interest:
 
 \note A program may have to deal with more encoding - for example, on Windows, the encoding of the console attached to \tcode{cout} may be different from the environment encoding.
 
-Likewise depending on the platform, paths may or may not have an encoding attached to them, and that encoding may either be a property of the platform or the filesystem itself.
+Likewise, depending on the platform, paths may or may not have an encoding attached to them, and that encoding may either be a property of the platform or the filesystem itself.
 \endnote
 
 
 The standard only has the notion of execution character sets (which implies the existence of execution encodings), whose definitions are locale-specific.
 That implies that the standard assumes that string literals are encoded in a subset of the encoding of the locale encoding.
 
-This has to hold notably because it is not generally possible to differentiate runtime strings from compile-time literals at runtime.
+This has to hold because it is not generally possible to differentiate runtime strings from compile-time literals at runtime.
 
 This model does, however, present some shortcomings:
 
-First, in practice, C++ softwares are often no longer compiled in the same environment as the one on which they are run and the entity providing the program may not have control over the environment on which it is run.
+First, in practice, C++ software is often no longer compiled in the same environment as the one on which they are run, and the entity providing the program may not have control over the environment on which it is run.
 
-Both POSIX and C++ derives the encoding from the locale. Which is an unfortunate artifact of an era when 255 characters or less ought to be enough for anyone.
-Sadly, the locale can change at runtime, which means the encoding which is used by ctype and conversion functions can change at runtime.
+Both POSIX and C++ derive the encoding from the locale, which is an unfortunate artifact of an era when 255 characters or less ought to be enough for anyone.
+Sadly, the locale can change at runtime, which means the encoding which is used by \tcode{<ctype>} and conversion functions can change at runtime.
 However, this encoding ought to be an immutable property as it is dictated by the environment (often the parent process).
 In the general case, it is not for a program to change the encoding expected by its environment.
 A C++ program sets the locale to "C" (see \cite{N2346}, 7.11.1.1.4) during initialization, further losing information.
@@ -313,16 +323,16 @@ A C++ program sets the locale to "C" (see \cite{N2346}, 7.11.1.1.4) during initi
 Many text transformations can be done in a locale-agnostic manner yet require the encoding to be known - as no text transformation can ever be applied without
 prior knowledge of what the encoding of that text is.
 
-More importantly, it is difficult or impossible for a developer to diagnose an incompatibility between the locale-derived, encoding, the environment-assumed encoding and
+More importantly, it is difficult or impossible for a developer to diagnose an incompatibility between the locale-derived encoding, the environment-assumed encoding and
 the encoding of string literals.
 
 Exposing the different encodings would let developers verify that that the environment is compatible with the implementation-defined encoding of string literals, aka that the encoding and character set used to encode string literals are a strict subset of the encoding of the environment.
 
 \section{Identifying Encodings}
 
-To be able to expose the encoding to developers we need to be able to synthesize that information.
-The challenge, of course, is that there exist many encodings (hundreds), and many names to refer to each one.
-Fortunately there exist a database of registered encoding covering almost all encodings supported by operating systems and compilers.
+To be able to expose the encoding to developers, we need to be able to synthesize that information.
+The challenge, of course, is that there exist many encodings (hundreds) and many names to refer to each one.
+Fortunately, there exists a database of registered encoding covering almost all encodings supported by operating systems and compilers.
 This database is maintained by IANA through a process described by \cite{rfc2978}.
 
 This database lists over 250 registered character encodings and for each:
@@ -343,24 +353,25 @@ The following proposal is mostly independent of locales so that the relevant par
 is not available, as well as to make sure we can transition \tcode{std::locale} to be more compatible with Unicode.
 
 \subsection{Naming}
-SG-16 is looking at rewording the terminology associated with text and encoding throughout the standard, this paper does not yet reflect that effort.
 
-However "environment encoding" and "literal encoding" are descriptive terms. In particular, "environment" is illustrative of the
-fact that a C++ program has, in the general case, no control over the encoding it is expected to produce and consume.
+We use the term \tcode{literal} to match the core wording.
+"Environment encoding" is a descriptive term illustrative of the
+fact that a C++ program has, in the general case, no control over the encoding it is expected to produce and consume. It is also purposefully
+distinct from the term "execution encoding" which is tied to locales.
 
 \subsection{MIBEnum}
 
 We provide a \tcode{text_encoding::id} enum with the MIBEnum value of a few often used encodings for convenience.
 Because there is a rather large number of encodings and because this list may evolve faster than the standard, it was pointed out during early review that it would be detrimental to attempt to provide a complete list.
 \begin{note}
-MIB stands for Management Information Base, which is IANA nomenclature, the name has no particular interest besides a desire not to deviate from the existing standards and practices.
+MIB stands for Management Information Base, which is IANA nomenclature. The name has no particular interest besides a desire not to deviate from the existing standards and practices.
 \end{note}
 
 
 The enumerators \tcode{unknown} and \tcode{other}and their corresponding values, are specified in \cite{ianacharset-mib}:
 
 \begin{itemize}
-	\item \tcode{other} designate an encoding not registered in the IANA Database, such that 2 encodings with the \tcode{other} mib are identical if their names compare equal.
+	\item \tcode{other} designate an encoding not registered in the IANA Database, such that two encodings with the \tcode{other} mib are identical if their names compare equal.
 	\item \tcode{unknown} is used when the encoding could not be determined. Under the current proposal,  only default constructing a \tcode{text_encoding} object can produce that value. The encoding associated with the locale or environment is always known.
 \end{itemize}
 
@@ -380,25 +391,25 @@ Integer32 type.
 
 The INTEGER type (but not the Integer32 type) may also be used to
 represent integer-valued information as named-number enumerations.
-In this case, only those named-numbers so enumerated may be present
+In this case, only those named numbers so enumerated may be present
 as a value.  Note that although it is recommended that enumerated
 values start at 1 and be numbered contiguously, any valid value for
 Integer32 is allowed for an enumerated value and, further, enumerated
 values needn't be contiguously assigned.
-\end{quoteblock} 
+\end{quoteblock}
 
 \subsection{Name and aliases}
 
 The proposed API offers both a name and aliases.
 The \tcode{name} method reflects the name with which the \tcode{text_encoding} object was created, when applicable.
-This is notably important when the encoding is not registered, or its name differs from the IANA name.
+This is notably important when the encoding is not registered or its name differs from the IANA name.
 
 name and aliases work as follow:
 
 \begin{itemize}
 \item When constructed from the \tcode{string_view} constructor, \tcode{name()} returns the name passed to the constructor
 \item When constructed from a mib, \tcode{name()} returns an implementation defined name that exists in the list of aliases
-\item When constructed per the implementation, \tcode{name()} returns an implementation defined-value 
+\item When constructed per the implementation, \tcode{name()} returns an implementation defined-value
 \end{itemize}
 
 In addition, \tcode{aliases.front()} is defined to return the primary name, as defined by IANA
@@ -407,16 +418,16 @@ In addition, \tcode{aliases.front()} is defined to return the primary name, as d
 
 The IANA database intends that the name refers to a specific set of characters.
 However, for historical reasons, there exist some names (like Shift-JIS) which describes several slightly different encoding.
-The intent of this proposal is that the names refer to the character ecodings as described by IANA.
+The intent of this proposal is that the names refer to the character encodings as described by IANA.
 Further differentiation can be made in the application through out-of-band information such as the provenance of the text to which the encoding is associated. RFC2978 mandates that all names and aliases are unique.
 
 \subsection{Implementation flexibility}
 
-This proposal aims to be implementable on all platforms as such, it supports encodings not registered with IANA, does not impose that
+This proposal aims to be implementable on all platforms. It supports encodings not registered with IANA, does not impose that
 a freestanding implementation is aware of all registered encodings, and it lets implementers provide their aliases for IANA-registered encoding.
 Because the process for registering encodings is documented \cite{rfc2978} implementations can (but are not required to) provide
 registered encodings not defined in \cite{ianacharset-mib} - in the case that document is updated out of sync with the standard.
-However, \cite{ianacharset-mib} is not frequently updated. It was updated once in 2021 and previously in 2011. 
+However, \cite{ianacharset-mib} is not frequently updated. It was updated once in 2021 and previously in 2011.
 As the world converges to UTF-8, new encodings are less likely to be registered.
 Until 2004 this document was maintained in \cite{rfc3808}.
 
@@ -428,19 +439,18 @@ A primary use case is to enable people to write their own conversion functions.
 Unfortunately, most APIs expect NULL-terminated strings, which is why we return a \tcode{const char*}.
 This is \href{https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98576#c2}{requested by users} and consistent with \tcode{source_location},
 \tcode{stacktrace}, ...
-We would have consider a null-terminated \tcode{string_view} as proposed in \paper{P1402R0} if such thing was available.
+We would have considered a null-terminated \tcode{string_view} as proposed in \paper{P1402R0} if such a thing was available.
 
 \textbf{When constructed from the unknown mib, \tcode{name} returns a \tcode{nullptr} rather than an empty string.}
 
 \subsection{Freestanding}
 
-For this class to be compatible with free-standing environments, care has been taken to avoid
+For this class to be compatible with freestanding environments, care has been taken to avoid
 allocation and exceptions.
 As such, we put an upper bound on the length of the name of encodings passed to \tcode{text_encoding} constructor of 63+1 characters.
 Per rfc2978, the names must not exceed 40 characters.
-There is however a name of 45 characters in the database. 
-64 has been arbitrarily chosen being the smallest power of 2 number that would fit all the name with some extra space
-for future-proofing
+There is, however, a name of 45 characters in the database.
+64 has been arbitrarily chosen, being the smallest power of 2 number that would fit all the names with some extra space for future-proofing (there are ABI concerns here).
 
 However, no wording for freestanding is provided as there are currently missing pieces (notably string_view).
 We propose that making this facility freestanding can be bundled with the wider work by Ben Craig.
@@ -451,13 +461,13 @@ Names and aliases are compared ignoring case and non-alphanumeric characters, in
 \href{https://www.unicode.org/reports/tr22/tr22-8.html#Charset_Alias_Matching}{Unicode recommendations}
 
 This leads to a couple of ambiguities ("iso-ir-9-1" and "iso-ir-9-2" match "iso-ir-91" and "iso-ir-92", respectively).
-The 2 problematics encodings have been excluded from our proposal entirely.
+The two problematics encodings have been excluded from our proposal entirely.
 They were designed in 1975 for use in newspapers in Norway and are no longer in use. Supporting them would either require a perfect match, even though we know from experience that users will find 20 creative ways to spell UTF-8, or to perform in sequence a perfect match and a loose match; we do not this is a reasonable cost to pay for algorithms that fell into disuse long ago:
 
 
 Reference: \href{https://www.itscj.ipsj.or.jp/iso-ir/009-1.pdf}{iso-ir-9-1} \href{https://www.itscj.ipsj.or.jp/iso-ir/009-2.pdf}{iso-ir-9-2}
 
-Note these are different from ISO646-NO2 which is the long obsoleted Norwegian ancestor to ISO 8859-1
+Note that these are different from ISO646-NO2 which is the long obsoleted Norwegian ancestor to ISO 8859-1
 
 
 \section{Implementation}
@@ -485,7 +495,7 @@ On POSIX, the environment encoding is derived from the default locale \tcode{""}
 itself is derived from the value of the environment variables \tcode{LC_CTYPE}, \tcode{LC_ALL} and \tcode{LANG}
 (in that order).
 Which means a call to \tcode{setenv} might affect the value returned by \tcode{text_encoding::environmemt()}.
-While this would be conforming, it would more helpful if the implementation was impervious to such modification of the environment.
+While this would be conforming, it would be more helpful if the implementation was impervious to such modification of the environment.
 We can achieve that by:
 \begin{itemize}
 \item On Linux and freebsd, parsing \tcode{/proc/self/environ} to use these values instead off the one returned by \tcode{getenv}
@@ -493,28 +503,27 @@ We can achieve that by:
 \item On Windows, \tcode{GetACP} is not affected by this issue.
 \end{itemize}
 
-On implementations where the implementers also control the libc, better stategies may be available.
+On implementations where the implementers also control the libc, better strategies may be available.
 
-It useful to get the locale of the environment as this represents the encoding that command-line arguments, 
-environment variables, and non-redirected standard streams are likely to use.
+It is useful to get the locale of the environment as this represents the encoding that command-line arguments,
+environment variables and non-redirected standard streams are likely to use.
 
-The encoding of the current locale, may be different - because the global locale is initially set to "C", and users can set an arbitrary global locale,
-and therefore that global locale-associated encoding may be different from the environment encoding.
+The encoding of the current locale may be different - because the global locale is initially set to "C", and users can set an arbitrary global locale, and therefore, that global locale-associated encoding may be different from the environment encoding.
 
 The global locale associated encoding can be queried with \tcode{locale().encoding()}.
 
 It would be hard for users to implement this function as it is not portably implementable.
-Of course on some platforms the recommended behavior may not be implementable, in which case implementations could return
+Of course, on some platforms, the recommended behavior may not be implementable, in which case implementations could return
 the encoding using the values of LC_ at the point of call.
 
 \subsection{Storing aliases}
 
 We found that aliases can be efficiently stored and looked up in a sorted list of alias/mib pairs.
 Making a \tcode{common_range} of \tcode{aliases_view} would force an implementation to find the end of the list
-of aliases for a particular encoding, which is slightly efficient that what is possible so this is not proposed.
-But mostly we found little uses for it to be a \tcode{common_range}.
+of aliases for a particular encoding, which is slightly efficient than what is possible, so this is not proposed.
+Mostly, we found little use for it to be a \tcode{common_range}.
 
-\section{Compatibility with 3rd party systems}
+\section{Compatibility with third-party systems}
 
 \subsection{Qt}
 
@@ -548,7 +557,7 @@ bool compatibleWithenvironmentEncoding(UConverter* converter)
 \begin{colorblock}
 // Convert from UTF-8 to the environment encoding, transliterating if necessary
 iconv_t converter
-    = iconv_open(std::format("{}//TRANSLIT", std::text_encoding::literal()).c_str(), "utf-8");
+    = iconv_open(std::format("{}//TRANSLIT", std::text_encoding::literal().name()).c_str(), "utf-8");
 \end{colorblock}
 
 
@@ -556,24 +565,23 @@ iconv_t converter
 
 \subsection{Why rely on the IANA registry ?}
 
-The IANA registry has been picked for several reasons
+The IANA registry has been picked for several reasons:
 
 \begin{itemize}
 \item It can be referenced through an RFC in the standard
 \item It has wide vendor buy-in
-\item It is used as a primary source for many tools including ICU and iconv, and many programming languages and libraries.
+\item It is used as a primary source for many tools, including ICU and iconv, and many programming languages and libraries.
 \item It has an extensive number of entries which makes it uniquely suitable for the wide portability requirements of C++. Notably, it supports IBM codepages.
 \item It provides stable enum values designed for efficient and portable comparison in programming languages
 \item There is a well-specified support for unregistered encodings
 \item There is a well-specified process to register new encodings
 \end{itemize}
 
-We also considered the WHATWG Encoding specification. But this specification is designed specifically for the web
-and has no provision for EBCDIC encodings, provides no numerical values, etc.
+We also considered the WHATWG Encoding specification. But this specification is designed specifically for the web and has no provision for EBCDIC encodings, provides no numerical values, etc.
 
 Annex A provides a comparative list of IANA and WHATWG lists.
 
-Extensive research didn't found any other registry worth considering.
+Extensive research did not found any other registry worth considering.
 It would be possible to maintain our own list in the standard, but this would put an undue burden on the committee and
 risks reducing portability with existing tools, libraries, and other languages.
 
@@ -589,11 +597,11 @@ which is sufficient to support all encodings we are aware of (registered or not)
 
 \subsection{It seems like names and mib are separate concerns?}
 
-Not all encodings are registered (even if most are), it is therefore not possible to identify all encoding uniquely by mib.
+Not all encodings are registered (even if most are). It is therefore not possible to identify all encoding uniquely by mib.
 Encodings may have many names, but some platforms will have a preferred name.
 
 The combination of a name + a mib covers 100\% of use cases. Aliases further help with integration with third-party libraries or to develop
-tools that need encoding names.
+tools which need encoding names.
 
 \subsection{Why can't there be vendor provided MIBs?}
 
@@ -612,8 +620,7 @@ It does not prevent the support of unregistered encodings:
 
 Same reason, if users are allowed to construct text_encoding from registered names or names otherwise
 unknown from the implementation with an arbitrary mib, it becomes impossible to maintain the invariant of the class
-(the relation between mib and name), which would make the interface much harder to use, without providing
-any functionality.
+(the relation between mib and name), which would make the interface much harder to use without providing any functionality.
 
 \subsection{I just want to check that my platform is utf-8 without paying for all these other encodings?}
 
@@ -639,19 +646,20 @@ My crude implementation pulls in 30Ki of data when calling aliases or the name c
 \subsection{Why do \tcode{name()} and \tcode{aliases()} return \tcode{const char*} rather than \tcode{string_view}?}
 
 One of the design goals is to be compatible with widely deployed libraries such as ICU and iconv, which are, on most platforms, the defacto standards for text transformations, classification, and transcoding.
-These are C APIs which expect null-terminated string.
+These are C APIs that expect null-terminated strings.
 Returning a null-terminated string_view of which end() is dereferenced would be UB.
-Returning a \tcode{string} and hopping that SBO kicks in would add complexity for little reason, and would preclude the name function to be provided in free standing implementations.
-LEWG previously elected to use const char* in source_location, stacktrace, etc
+Returning a \tcode{string} and hopping that SBO kicks in would add complexity for little reason and would preclude the name function from being provided in freestanding implementations.
+LEWG previously elected to use const char* in source_location, stack trace, etc
 
 
-\subsection{wide methods}
+\subsection{Wide functions}
 
 The standard mandates that \tcode{wchar_t} encodes all characters of its associated encoding as a single code unit.
 This, for example, precludes that wchar_t associated encoding is UTF-16.
 However, this does not match existing practices. Namely, on windows, the associated encoding of \tcode{wchar_t} is always UTF-16.
+This is addressed by \href{https://wg21.link/P2460R0}{P2460R0}.
 
-As such, to be helpful, the paper intends for implementation to return the encoding they expect,
+In any case, to be helpful, the paper intends for implementation to return the encoding they expect,
 rather than trying to abide by other standard-mandated constraints.
 
 More generally, there is no constraint that the encoding returns by the environment be suitable for use by the c standard "character functions"
@@ -659,27 +667,29 @@ although this will generally be the case.
 
 There is also no relation between the returned encodings and the nature of character types. For example, on Linux, \tcode{wchar_t} may be two bytes, but the wide environment encoding might still be UTF-32.
 
-Further work is needed for the standard to reflect the reality of existing, widely deployed implementations.
-
 Because there is no standard interface to get to the wide environment encoding, that method might return \tcode{unknown} on many non-windows/non-POSIX platforms,
 although the author hopes that implementations that do not use UTF-16 or UTF-32 as the wide encoding will expose that information.
 In addition, it is worth pointing out that many wide encodings in use are currently either not registered or have no name.
+This stems from the fact that wide encodings are mostly a C and C++ invention.
 
-The following registered encodings are wide
+The following registered encodings are wide:
 
 \begin{itemize}
     \item UTF-32, UTF-16 and similar, UCS2, UCS4
     \item Extended_UNIX_Code_Fixed_Width_for_Japanese
 \end{itemize}
 
+FreeBSD, IBM implementations, and others use unregistered double bytes encodings, although the information on those.
+Some information on wide EBCDIC encodings can be found in \href{https://www.ibm.com/docs/en/zos/2.4.0?topic=ccsids-encoding-scheme}{IBM's documentation}.
+
 Therefore the wide methods are less useful than the narrow ones. Still, we think they are worth providing for consistency, encouraging improvements in this area, and differentiating the UTF-16/UTF-32 cases from other scenarios.
 
 \subsection{0-padded wide encoding}
 
-Similarly, it is left as implementation whether a narrow encoding extended to 2 bytes to represent a wide encoding, is still that encoding.
-In the general case, the size of code units of individual encodings is not exposed by IANA, but most encoding are sufficiently defined to understand 0-padded forms as not being that encoding.
+Similarly, it is left as implementation whether a narrow encoding extended to 2 bytes to represent a wide encoding is still that encoding.
+In the general case, the size of code units of individual encodings is not exposed by IANA, but most encodings are sufficiently defined to understand 0-padded forms as not being that encoding: IANA encodings should be understood to describe encoding schemes whose endianness is not part of the \tcode{text_encoding} object.
 
-For example, the specificatio of UTF-8 reads
+For example, the specification of UTF-8 reads:
 
 \begin{quoteblock}
  UTF-8 is a variable-width encoding form, using 8-bit code units.
@@ -688,15 +698,70 @@ For example, the specificatio of UTF-8 reads
 A good implementation strategy for the wide methods is to return \tcode{unknown} or some form of custom scheme like x-utf-8 for these scenarios that a library like \tcode{iconv} could not make sense of.
 An implementation strategy is to maintain a list of encodings known-to-be-wide and return either a custom name or unknown for other situations.
 
+For implementations that do not have use for wide-encodings outside of the standard libraries, such that users never have to handle wide characters directly, it is possible to return \tcode{unknown} even for the wide literal encoding, if using a custom naming scheme would prove impractical.
+
 \subsection{NATS-DANO and NATS-DANO-ADD}
 
-Both these ISO 646 characters encodings have aliases that conflict with other aliases under COMP_NAME and are excluded, as they felt into disuse a long time ago.
+Both these ISO 646 characters encodings have aliases that conflict with other aliases under \tcode{COMP_NAME} and are excluded, as they fell into disuse a long time ago.
 This was necessary to allow compatibility with the Unicode-recommended name matching.
 
 
-\section{Polls}
+\section{UTF-16 vs UTF16-LE/UTF-16BE}
 
-\subsection{SG-16 - 6 octoober 2021}
+Unicode provides UTF-16, UTF-16LE and UTF-16BE (same for UTF-32).
+UTF-16 designates both the encoding form and an alias for UTF-16LE/BE depending on the presence of a BOM and "higher level protocol"
+This is a distinction that is not necessary to make in a context where the endianness of encodings is known (as is the case for C++ string outside of serialization), nor is it a distinction that most users understand or find useful.
+
+At the same time, SG16 wanted a predictable, consistent answer.
+We therefore decided that the satic methods of \tcode{text_encoding} should always return \tcode{UTF-16} rather than \tcode{UTF-16LE/BE}, which matches existing practices.
+
+We should note that some APIs, notably \tcode{iconv}, when given
+"UTF-16" rather than "UTF-16LE" string will look for a BOM,
+before defaulting to the platform endianness.
+
+We also note that the ISO 10646 definition of "UTF16" does not allow an implementation-defined interpretation of the endianness
+of a UTF-16 string without BOM, contradicting Unicode and existing practices.
+The wording assumes a Unicode definition while avoiding contradicting ISO 10646.
+
+
+Relevant passages from the Unicode 13 standard:
+
+\begin{quoteblock}
+The UTF-16 encoding scheme may or may not begin with a BOM. However,
+when there is no BOM, and in the absence of a higher-level protocol, the byte
+order of the UTF-16 encoding scheme is big-endian.
+\end{quoteblock}
+
+\begin{quoteblock}
+Where the byte order is explicitly specified, such as in UTF-16BE or UTF-16LE, then all
+U+FEFF characters—even at the very beginning of the text—are to be interpreted as zero
+width no-break spaces. Similarly, where Unicode text has known byte order, initial U+FEFF
+characters are not required, but for backward compatibility are to be interpreted as zero-width no-break spaces. For example, for strings in an API, the memory architecture of the
+processor provides the explicit byte order. For databases and similar structures, it is much
+more efficient and robust to use a uniform byte order for the same field (if not the entire
+database), thereby avoiding use of the byte order mark.
+\end{quoteblock}
+
+Relevant passages from ISO 10646:
+
+\begin{quoteblock}
+The UTF-16 encoding scheme serializes a UTF-16 code unit sequence by ordering octets in a way that either the
+less significant octet precedes or follows the more significant octet.
+In the UTF-16 encoding scheme, the initial signature read as <FE FF> indicates that the more significant octet
+precedes the less significant octet, and <FF FE> the reverse. The signature is not part of the textual data.
+In the absence of signature, the octet order of the UTF-16 encoding scheme is that the more significant octet precedes the less significant octet.
+\end{quoteblock}
+
+\subsection{CHAR_BIT}
+SG-16 had unresolved questions about how notably UTF-16 should be encoded on a platform where CHAR_BIT is 16 bits or more.
+Tom Honermann did some research, and there does not seem to exist such scenario, to the best of our knowledge, based on public information.
+The author has no use cases for using P1885 on DSPs system.
+We would also like to point out that P1885 is designed to be freestasnding in the future, but it is currenly none, and there is seemingly no non-8 bits
+non-freestandiung system.
+As such, the wording mandates \tcode{CHAR_BIT == 8}, so that the wording doesn't have to account for hypotheticals.
+If the need to relax this limitation emerges, it should be driven by people with expert knowledge of such environment.
+
+\subsection{SG-16 Polls - 6 october 2021}
 
 \begin{quoteblock}
 SG16 POLL: The values returned by the literal() and wide_literal()
@@ -731,11 +796,38 @@ may consume a BOM if present.
 \end{tabular}
 \end{quoteblock}
 
+\subsection{UCS2 and UCS4}
+
+The endianness of wide encodings needs to be specified
+IANA says:
+\begin{quoteblock}
+the 2-octet Basic Multilingual Plane, aka Unicode this needs to specify network byte order: the standard does not specify (it is a 16-bit integer space)
+\end{quoteblock}
+
+The intent of the authors is that an implementation should be able to return UCS2 on big and little endian systems alike.
+
+Same goes for UCS4.
+
+\section{Wording strategy}
+
+The followings were important points of discussions for the elaboration of the wording:
+\begin{itemize}
+\item \tcode{text_encoding} is described as holding an encooding \emph{scheme},
+\item \tcode{text_encoding::literal} and \tcode{text_encoding::wide_literal} describe the encoding scheme of the object representation.
+\item In particular, an encoding scheme is a sequence of octets (independently of\tcode{CHAR_BIT}), the general idea being that reinterpreting an encoded string as a \tcode{char*}, along with the encoding name should be decodable by \tcode{iconv}, assuming the encoding name is known of \tcode{iconv}.
+\item Because ISO 10646 definition of UTF16 is not consistent with that of Unicode, and because SG16 prefers UTF-16 to be returned over UTF-16LE, for example, we introduce a wording mechanism to substitute UTF16-LE by UTF16. The goal is to provide a consistent, useful result to users while conforming to ISO.
+\item The determination of what the encoding schemes are is implementation-defined, but we provide recommended practices.
+\item Naming of non-registered encoding is implementation-defined with no recommended practice as these are not portable and should remain at the discretion of implementations.
+\item Further wording concerns with \tcode{CHAR_BIT != 8}. and specifically \tcode{CHAR_BIT > 16} led the authors to mandate \tcode{CHAR_BIT == 8}.
+The intent is for the static functions to be delected on such system.
+\end{itemize}
+
+
 \section{Future work}
 
 Exposing the notion of text encoding in the core and library language gives us the tools to solve some problems in the standard.
 
-Notably, it offers a sensible way to do locale-independent, encoding-aware padding in \tcode{std::format} as in described in \cite{P1868}.
+Notably, it offers a sensible way to do locale-independent, encoding-aware padding in \tcode{std::format} as described in \cite{P1868}.
 
 \section{Proposed wording}
 
@@ -1073,7 +1165,7 @@ template<> struct hash<text_encoding>;
 
 \begin{addedblock}
 
-\pnum A \defn{registered character encoding} is a character encoding form in the IANA Character Sets registry.
+\pnum A \defn{registered character encoding} is a character encoding scheme in the IANA Character Sets registry.
 \begin{note}
     The IANA Character Sets registry refers to character sets rather than character encodings.
 \end{note}
@@ -1104,29 +1196,28 @@ For each encoding, the corresponding enumerator is derived from the alias beginn
     \end{itemize}
 \end{note}
 
-How a \tcode{text_encoding} object is determined to be representative of a character encoding implemented in the translation or execution environment is implementation-defined.
+How a \tcode{text_encoding} object is determined to be representative of a character encoding scheme implemented in the translation or execution environment is implementation-defined.
+
+An object \tcode{e} of type \tcode{text_encoding} maintains the following invariants:
+\begin{itemize}
+\item \tcode{e.name() == nullptr} is \tcode{true} if and only if \tcode{e.mib() == text_encoding::id::unknown} is \tcode{true}.
+\item \tcode{e.mib() == text_encoding(e.name()).mib()} is \tcode{true} if \tcode{e.mib() == text_encoding::id::other} is \tcode{true}.
+\end{itemize}
 
 \recommended
 \begin{itemize}
 \item Implementations should not consider registered encodings to be interchangeable [Example:Shift_JIS and Windows-31J denote different encodings].
 \item Implementations should not refer to a registered encoding to describe another similar yet different non-registered encoding unless there is a precedent on that implementation (Example: Big5).
-\item The encodings returned from \tcode{wide_literal} and \tcode{wide_environments} should describe encodings in the native endianness.
+% \item The encodings returned from \tcode{wide_literal} and \tcode{wide_environments} should describe encodings in the native endianness.
 \item The encodings returned from \tcode{wide_literal} and \tcode{wide_environments} should describe encodings whose code unit types is represented by \tcode{sizeof(wchar_t)} octets.
-\end{itemize} 
+\end{itemize}
 
 
 \pnum Let \tcode{bool \emph{COMP_NAME}(string_view a, string_view b)} be a function that returns \tcode{true} if the two strings a and b encoded in the ordinary literal encoding are equal ignoring, from left-to-right,
 \begin{itemize}
     \item all elements which are not digits or letters [character.seq.general],
     \item character case, and
-    \item any sequence of one or more '0' character not immediately preceded by a sequence consisting of a digit in the range [1-9] optionally followed by one or more elements which are not digits or letters. 
-\end{itemize}
-
-\pnum Given a \tcode{text_encoding} object \tcode{E}, let \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}} denote
-\begin{itemize}
-    \item an implementation-defined \tcode{text_encoding} object \tcode{n} such as \tcode{n == text_encoding::id::UTF16} is \tcode{true}  if \tcode{E == text_encoding::id::UTF16LE || E == text_encoding::id::UTF16BE} is \tcode{true},
-    \item otherwise if \tcode{e == text_encoding::id::UTF132LE || e == text_encoding::id::UTF32BE} is \tcode{true}, an implementation-defined \tcode{text_encoding} \tcode{n} such as \tcode{n == text_encoding::id::UTF32} is \tcode{true},
-    \item otherwise \tcode{E}.
+    \item any sequence of one or more '0' character not immediately preceded by a sequence consisting of a digit in the range [1-9] optionally followed by one or more elements which are not digits or letters.
 \end{itemize}
 
 \begin{note}
@@ -1142,22 +1233,30 @@ How a \tcode{text_encoding} object is determined to be representative of a chara
 \end{codeblock}
 \end{example}
 
+\pnum Given a \tcode{text_encoding} object \tcode{E}, let \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}} denote
+\begin{itemize}
+    \item an implementation-defined \tcode{text_encoding} object \tcode{n} such as \tcode{n == text_encoding::id::UTF16} is \tcode{true}  if \tcode{E == text_encoding::id::UTF16LE || E == text_encoding::id::UTF16BE} is \tcode{true},
+    \item otherwise if \tcode{e == text_encoding::id::UTF132LE || e == text_encoding::id::UTF32BE} is \tcode{true}, an implementation-defined \tcode{text_encoding} \tcode{n} such as \tcode{n == text_encoding::id::UTF32} is \tcode{true},
+    \item otherwise \tcode{E}.
+\end{itemize}
+
+
 \begin{itemdecl}
 constexpr explicit text_encoding(string_view name) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-    \preconditions 
+    \preconditions
     \begin{itemize}
         \item \tcode{name} represents a string in the ordinary literal encoding,
         \item all elements in \tcode{name} are in the basic source character set,
         \item \tcode{name.size() <= max_name_length} is \tcode{true}, and
         \item \tcode{name.contains('\textbackslash 0')} is \tcode{false}.
     \end{itemize}
-    \postconditions    
+    \postconditions
     \begin{itemize}
          \item If there exists a primary name or alias \tcode{a} of a known registered character encoding such that \tcode{\emph{COMP_NAME}(a, name)} is \tcode{true}, \tcode{mib_} has the value of the enumerator of \tcode{id} associated with that registered character encoding. Otherwise, \tcode{mib_ == id::other} is \tcode{true}.
-         \item  \tcode{name.compare(name_) == 0} is \tcode{true} 
+         \item  \tcode{name.compare(name_) == 0} is \tcode{true}
     \end{itemize}
 \end{itemdescr}
 
@@ -1167,14 +1266,14 @@ constexpr text_encoding(id mib) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-    \preconditions  
+    \preconditions
     \tcode{mib} has the value of one of the enumerators of \tcode{id}.
-       
+
     \postcondition
     \begin{itemize}
        \item  \tcode{mib_ == mib} is true.
        \item  If \tcode{(mib_ == id::unknown || mib_ == id::other)} is true, \tcode{strlen(name_) == 0} is \tcode{true}. Otherwise,
-       \tcode{ranges::find(aliases, string_view(name_)) != aliases().end()}. 
+       \tcode{ranges::find(aliases, string_view(name_)) != aliases().end()}.
     \end{itemize}
 \end{itemdescr}
 
@@ -1230,9 +1329,11 @@ The order of elements in \tcode{r} is unspecified.
 \begin{itemdecl}
 static consteval text_encoding literal() noexcept;
 \end{itemdecl}
-
 \begin{itemdescr}
-Let \tcode{E} be \returns a \tcode{text_encoding} object representing the encoding scheme of the object representation of ordinary string literals [lex.charset].
+ 
+\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.   
+    
+Let \tcode{E} be a \tcode{text_encoding} object representing the encoding scheme associated with the object representation of ordinary string literals [lex.charset].
 
 \returns \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}}.
 \end{itemdescr}
@@ -1242,12 +1343,15 @@ static consteval text_encoding wide_literal() noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-Let \tcode{E} be \returns a \tcode{text_encoding} object representing the encoding scheme of the object representation of wide string literals [lex.charset].
+
+\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.    
+    
+Let \tcode{E} be a \tcode{text_encoding} object representing the encoding scheme associated with the object representation of wide string literals [lex.charset].
 
 \returns \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}}.
 
 \begin{note}
-    The encoding represented by the returned value of this function, if any, is not required to meet the preconditions of all the standard wide character functions.
+    The encoding represented by the returned value of this function, if any, is not required to meet the preconditions of all the standard wide-character functions.
 \end{note}
 
 % \recommended Implementations should return a value that represents an encoding whose code unit size matches the size of a single \tcode{wchar_t}.
@@ -1260,18 +1364,20 @@ static text_encoding environment();
 
 
 \begin{itemdescr}
-Let \tcode{E} be a \tcode{text_encoding} object representing the implementation-defined character encoding of the environment.
-On a POSIX implementation, this is the encoding associated with the POSIX locale denoted by the empty string \tcode{""}.
+
+\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.    
+ 
+Let \tcode{E} be a \tcode{text_encoding} object representing the implementation-defined character encoding scheme of the environment.
+On a POSIX implementation, this is the encoding scheme associated with the POSIX locale denoted by the empty string \tcode{""}.
 
 \returns \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}}.
 
 \begin{note}
     This function is not affected by calls to \tcode{setlocale}.
-    It is unspecified whether this function is affected by changes to environment variables
-    during the lifetime of the program.
+    It is unspecified whether this function is affected by changes to environment variables during the lifetime of the program.
 \end{note}
 
-\recommended Implementations should return a value that is not affected by calls to the POSIX functions \tcode{setenv} 
+\recommended Implementations should return a value that is not affected by calls to the POSIX function \tcode{setenv}
 and other functions which can modify the environment [support.runtime].
 
 \end{itemdescr}
@@ -1281,18 +1387,18 @@ static text_encoding wide_environment();
 \end{itemdecl}
 
 \begin{itemdescr}
-Let \tcode{E} be a \tcode{text_encoding} object representing the implementation-defined wide character encoding of the environment.
-On a POSIX implementation, this is the encoding associated with the POSIX locale denoted by the empty string \tcode{""}.
+
+\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.   
+    
+Let \tcode{E} be a \tcode{text_encoding} object representing the implementation-defined wide character encoding scheme of the environment.
+On a POSIX implementation, this is the wide encoding scheme associated with the POSIX locale denoted by the empty string \tcode{""}.
 
 \returns \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}}.
 
-On a POSIX implementation, this is the wide encoding associated with the POSIX locale denoted by the empty string \tcode{""}.
-
 \begin{note}
     This function is not affected by calls to \tcode{setlocale}.
-    It is unspecified whether this function is affected by changes to environment variables
-    during the lifetime of the program.
-    The encoding represented by the returned value of this function, if any, is not required to meet the preconditions of all the standard wide character functions.
+    It is unspecified whether this function is affected by changes to environment variables during the lifetime of the program.
+    The encoding represented by the returned value of this function, if any, is not required to meet the preconditions of all the standard wide-character functions.
 \end{note}
 
 % \recommended Implementations should return a value that represents an encoding whose code unit size matches the size of a single \tcode{wchar_t}.
@@ -1347,7 +1453,7 @@ Both \tcode{ranges::range_value_t<text_encoding::aliases_view>} and \tcode{range
 %constexpr sentinel end() const;
 %\end{itemdecl}
 %\begin{itemdescr}
-%\returns an iterator representing the end of the range of aliases for the encoding the view was constructed from.   
+%\returns an iterator representing the end of the range of aliases for the encoding the view was constructed from.
 %\end{itemdescr}
 
 
@@ -1359,11 +1465,11 @@ Both \tcode{ranges::range_value_t<text_encoding::aliases_view>} and \tcode{range
 
 \begin{itemdescr}
     \returns
-    
+
     If \tcode{a.mib_ == id::other \&\& b.mib_ == id::other} is true, then \tcode{\emph{COMP_NAME}(a.name_, b.name_)}.
-    
+
     Otherwise, \tcode{a.mib_ == b.mib_}.
-    
+
 \end{itemdescr}
 
 \begin{itemdecl}
@@ -1372,8 +1478,8 @@ Both \tcode{ranges::range_value_t<text_encoding::aliases_view>} and \tcode{range
 
 \begin{itemdescr}
     \returns \tcode{encoding.mib_ == mib}.
-    
-    \remarks This operator induces an equivalence relation on its arguments\\ 
+
+    \remarks This operator induces an equivalence relation on its arguments\\
     if and only if \tcode{i != id::other} is \tcode{true}.
 \end{itemdescr}
 
@@ -1385,7 +1491,7 @@ template<> struct hash<text_encoding>;
 \end{itemdecl}
 
 \begin{itemdescr}
-The specialization is enabled ([unord.hash]). 
+The specialization is enabled ([unord.hash]).
 \end{itemdescr}
 
 \end{addedblock}
@@ -1435,7 +1541,12 @@ text_encoding encoding() const;
 \end{itemdecl}
 
 \begin{itemdescr}
-  \returns The execution encoding associated with the locale \tcode{*this}.
+
+\mandates \tcode{CHAR_BIT == 8} is \tcode{true}. 
+    
+Let \tcode{E} be a \tcode{text_encoding} object representing the implementation-defined encoding scheme associated with the locale \tcode{*this}.
+
+\returns \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}}.
 \end{itemdescr}
 
 \begin{itemdecl}
@@ -1443,7 +1554,12 @@ text_encoding wide_encoding() const;
 \end{itemdecl}
 
 \begin{itemdescr}
-  \returns The wide execution encoding associated with the locale \tcode{*this}.
+   
+\mandates \tcode{CHAR_BIT == 8} is \tcode{true}. 
+    
+Let \tcode{E} be a \tcode{text_encoding} object representing the implementation-defined wide encoding scheme associated with the locale \tcode{*this}.
+ 
+\returns \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}}.
 \end{itemdescr}
 \end{addedblock}
 
@@ -1474,7 +1590,7 @@ text_encoding wide_encoding() const;
     \item
     IANA Character Sets Database.\\
     Available from: \url{https://www.iana.org/assignments/character-sets/}, 2021-04-01
-    
+
     \item
     \doccite{Unicode Character Mapping Markup Language} [online].
     Edited by Mark Davis and Markus Scherer. Revision 5.0.1; 2017-05-31
@@ -1504,8 +1620,7 @@ called \defn{LIA-1} in this document.
 
 \section{Acknowledgments}
 
-Many thanks to Victor Zverovich, Thiago Macieira, Jens Maurer, Tom Honermann, Tomasz Kamiński, Hubert Tong, 
-and others for reviewing this work and providing valuable feedback.
+Many thanks to Victor Zverovich, Thiago Macieira, Jens Maurer, Tom Honermann, Tomasz Kamiński, Hubert Tong,  and others for reviewing this work and providing valuable feedback.
 
 
 \section{Annex: Registered encodings}
@@ -1776,7 +1891,7 @@ windows-874 & windows-874\\ \hline
 
 Lists of encoding known to some platforms but not registered to IANA.
 This might be incomplete as generating the list proved challenging.
-These might still be supported through the \tcode{other} mib, but are not
+These might still be supported through the \tcode{other} mib but are not
 suitable for interexchange.
 
 \subsection{Windows}
