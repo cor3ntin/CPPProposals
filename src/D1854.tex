@@ -7,7 +7,7 @@
 \setmainjfont{Noto Sans CJK KR}
 
 \title{Conversion to literal encoding should not lead to loss of meaning}
-\docnumber{D1854R2}
+\docnumber{D1854R3}
 \audience{SG-16}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -26,9 +26,17 @@
     \section{Abstract}
     
     This paper makes non-encodable characters (characters that cannot be represented in the literal encoding) in character and string literals ill-formed. 
-    We also restrict the valid characters in a multicharacter literal to avoid visual ambiguity caused by graphemes constituted of multiple codepoints.
+    We also restrict the valid characters in a multicharacter literal to avoid visual ambiguity caused by graphemes constituted of multiple code points.
+    
+    Both proposed changes are unrelated but proposed in the same paper as their wording is co-located.
+    The overarching motivation is to make lexing less suprising in the presence of non-latin1 characters in the source.
     
     \section{Revisions}
+    \subsection{R3}
+    \begin{itemize}
+        \item Fix spelling of code point
+        \item Make it clearer than both proposals are independant, but the wording is jumbled together.
+    \end{itemize}
     
     \subsection{R2}
     \begin{itemize}
@@ -120,9 +128,9 @@
     This has two benefits
     \begin{itemize}
         \item It excludes all combining characters or characters that do not constitute a full grapheme. That takes care of the visual ambiguity.
-        \item It makes multi-characters literals slightly less confusing as it is difficult to imagine how multiple codepoints over 0x80 could be stuffed into an \tcode{int} in any sensible way.
+        \item It makes multi-characters literals slightly less confusing as it is difficult to imagine how multiple code points over 0x80 could be stuffed into an \tcode{int} in any sensible way.
     \end{itemize}
-    And indeed, the documentation of GCC shows that codepoints that do not fit in a single byte are not preserved but instead truncated.
+    And indeed, the documentation of GCC shows that code points that do not fit in a single byte are not preserved but instead truncated.
     \begin{quoteblock}
         The compiler evaluates a multicharacter character constant a character at a time, shifting the previous value left by the number of bits per target character and then or-ing in the bit-pattern of the new character truncated to the width of a target character. The final bit-pattern is given type int, and is therefore signed, regardless of whether single characters are signed or not. If there are more characters in the constant than would fit in the target int the compiler issues a warning, and the excess leading characters are ignored.
         
@@ -190,7 +198,7 @@
     more than one \grammarterm{c-char}.
     \begin{addedblock}
         A multicharacter literal shall not have an \grammarterm{encoding-prefix}.
-        If a multicharacter literal contains a \grammarterm{basic-c-char} representing a codepoint that is not encodable as a single code unit in the ordinary literal encoding, the program is ill-formed.
+        If a multicharacter literal contains a \grammarterm{basic-c-char} representing a code point that is not encodable as a single code unit in the ordinary literal encoding, the program is ill-formed.
     \end{addedblock}
     
     \begin{removedblock}
