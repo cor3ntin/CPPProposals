@@ -465,8 +465,8 @@
 \newcommand{\requires}{\Fundesc{Requires}}
 \newcommand{\mandates}{\Fundesc{Mandates}}
 \newcommand{\constraints}{\Fundesc{Constraints}}
-\newcommand{\expects}{\Fundesc{Expects}}
-\newcommand{\ensures}{\Fundesc{Ensures}}
+\newcommand{\expects}{\Fundesc{Preconditions}}
+\newcommand{\ensures}{\Fundesc{Postconditions}}
 \newcommand{\effects}{\Fundesc{Effects}}
 \newcommand{\postconditions}{\Fundesc{Postconditions}}
 \newcommand{\postcondition}{\Fundesc{Postcondition}}
