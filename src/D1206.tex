@@ -691,7 +691,7 @@ The complexities of the expressions are sequence dependent.
     \tcode{\added{X(from_range, range)}}    &
     &
     \begin{addedblock}
-    \expects \tcode{T} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{T}.
+    \expects \tcode{T} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{*ranges::begin(range)}.
     For \tcode{vector}, if \tcode{R} models neither \libconcept{sized_range}\iref{range.sized}
     nor \libconcept{forward_range}\iref{range.refinements},
     \tcode{T} is also \oldconcept{MoveInsertable} into \tcode{X}.\br
@@ -757,7 +757,8 @@ The complexities of the expressions are sequence dependent.
     \tcode{\added{a.insert_range(p, range)}}    &
     \added{\tcode{iterator}} &
     \begin{addedblock}
-        \expects For \tcode{vector} and \tcode{deque}, \tcode{T} is
+        \expects \tcode{T} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{*ranges::begin(range)}.
+        For \tcode{vector} and \tcode{deque}, \tcode{T} is also
         \oldconcept{MoveInsertable} into \tcode{X}, \oldconcept{MoveConstructible}, \oldconcept{MoveAssignable},
         and swappable\iref{swappable.requirements}.
         \tcode{range} and \tcode{a} do not overlap.\br
@@ -811,8 +812,15 @@ The complexities of the expressions are sequence dependent.
     \tcode{\added{a.assign_range(range)}}    &
     \added{\tcode{void}} &
     \begin{addedblock}
-        \expects \tcode{range} and \tcode{a} do not overlap.\br
-         \effects
+        \expects
+        \tcode{T} is \oldconcept{EmplaceConstructible} into \tcode{X}
+        from \tcode{*ranges::begin(range)} and
+        assignable from \tcode{*ranges::begin(range)}.
+        For \tcode{vector}, if \tcode{R} models
+        neither \libconcept{sized_range} nor \libconcept{forward_range},
+        \tcode{T} is also \oldconcept{MoveInsertable} into \tcode{X}.
+        \tcode{range} and \tcode{a} do not overlap.\br
+        \effects
         Replaces elements in \tcode{a} with a copy of each element in \tcode{range}.
         Invalidates all references, pointers and iterators
         referring to the elements of \tcode{a}.
@@ -1024,11 +1032,12 @@ time.
     \begin{addedblock}\tcode{a.prepend_range(range)}\end{addedblock} &
     \added{\keyword{void}}          &
     \begin{addedblock}
-         \effects Inserts copies of elements in \tcode{range} before \tcode{begin()}.
-        Each iterator in the range \tcode{range} shall be dereferenced exactly once. \begin{note}The order of elements in \tcode{range}
-        is not reversed\end{note}.
         \expects \tcode{T} is
-        \oldconcept{CopyInsertable} into \tcode{X}.
+        \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{*ranges::begin(range)}.\br
+         \effects Inserts copies of elements in \tcode{range} before \tcode{begin()}.
+        Each iterator in the range \tcode{range} is dereferenced exactly once. \begin{note}
+        The order of elements in \tcode{range} is not reversed.
+        \end{note}
     \end{addedblock}
     &
     \added{
@@ -1066,10 +1075,10 @@ time.
     \begin{addedblock}\tcode{a.append_range(range)}\end{addedblock} &
     \added{\keyword{void}}          &
     \begin{addedblock}
+        \expects \tcode{T} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{*ranges::begin(range)}. For \tcode{vector}, \tcode{T} is also
+        \oldconcept{MoveInsertable} into \tcode{X}.
         \effects Inserts copies of elements in \tcode{range} before \tcode{end()}.
         Each iterator in the range \tcode{range} shall be dereferenced exactly once.
-        \expects \tcode{T} is
-        \oldconcept{CopyInsertable} into \tcode{X}.
     \end{addedblock}
     &
     \added{
@@ -1341,6 +1350,7 @@ In \tref{container.assoc.req},
     \tcode{\added{X(from_range, range, c)}}    &
     &
     \begin{addedblock}
+        \expects \tcode{value_type} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{*ranges::begin(range)}.\br
         \effects Constructs an empty container and insert each element from \tcode{range} into it.
         Uses \tcode{c} as the comparison object.
     \end{addedblock}  &
@@ -1355,6 +1365,7 @@ In \tref{container.assoc.req},
     &
     \begin{addedblock}
         \expects \tcode{key_compare} meets the \oldconcept{DefaultConstructible} requirements.
+        \tcode{value_type} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{*ranges::begin(range)}.\br
         \effects Constructs an empty container and insert each element from \tcode{range} into it.
         Uses \tcode{Compare()} as the comparison object.
     \end{addedblock}
@@ -1398,7 +1409,7 @@ In \tref{container.assoc.req},
    \added{\tcode{a.insert\char`_range(range)}}         &
    \linebreak \added{\tcode{void}}                   &
    \begin{addedblock}
-   \expects \tcode{value_type} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{range_reference_t<R>}.
+   \expects \tcode{value_type} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{*ranges::begin(range)}.
    \tcode{range} and \tcode{a} do not overlap.\br
    \effects Inserts each element from \tcode{range} if and only if there
    is no element with key equivalent to the key of that element in containers
@@ -1642,7 +1653,7 @@ In \tref{container.hash.req},
     \end{addedblock}
     &
     \begin{addedblock}
-    \expects \tcode{value_type} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{range_reference_t<R>}.\br
+    \expects \tcode{value_type} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{*ranges::begin(range)}.\br
     \effects\ Constructs an empty container with at least \tcode{n} buckets,
     using \tcode{hf} as the hash function and \tcode{eq} as the key
     equality predicate, and inserts each element from \tcode{range} into it.
@@ -1664,7 +1675,7 @@ In \tref{container.hash.req},
     &
     \begin{addedblock}
     \expects \tcode{key_equal} meets the \oldconcept{DefaultConstructible} requirements.
-    \tcode{value_type} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{range_reference_t<R>}.\br
+    \tcode{value_type} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{*ranges::begin(range)}.\br
     \effects\ Constructs an empty container with at least \tcode{n} buckets,
     using \tcode{hf} as the hash function and \tcode{key_equal()} as the key
     equality predicate, and inserts elements from \tcode{range} into it.
@@ -1683,7 +1694,7 @@ In \tref{container.hash.req},
     &
     \begin{addedblock}
     \expects \tcode{hasher} and \tcode{key_equal} meet the \oldconcept{DefaultConstructible} requirements.
-    \tcode{value_type} is \oldconcept{EmplaceConstructible} into \tcode{X} from  \tcode{range_reference_t<R>}.\br
+    \tcode{value_type} is \oldconcept{EmplaceConstructible} into \tcode{X} from  \tcode{*ranges::begin(range)}.\br
     \effects\ Constructs an empty container with at least \tcode{n} buckets,
     using \tcode{hasher()} as the hash function and \tcode{key_equal()}
     as the key equality predicate, and inserts elements from \tcode{range}
@@ -1705,7 +1716,7 @@ In \tref{container.hash.req},
     &
     \begin{addedblock}
     \expects \tcode{hasher} and \tcode{key_equal} meet the \oldconcept{DefaultConstructible} requirements.
-    \tcode{value_type} is \oldconcept{EmplaceConstructible} into \tcode{X} from  \tcode{range_reference_t<R>}.\br
+    \tcode{value_type} is \oldconcept{EmplaceConstructible} into \tcode{X} from  \tcode{*ranges::begin(range)}.\br
     \effects\ Constructs an empty container with an unspecified number of
     buckets, using \tcode{hasher()} as the hash function and
     \tcode{key_equal()} as the key equality predicate, and inserts elements
@@ -1783,7 +1794,7 @@ In \tref{container.hash.req},
     &   \linebreak \added{\tcode{void}}
     &
     \begin{addedblock}
-    \expects \tcode{value_type} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{range_reference_t<R>}.
+    \expects \tcode{value_type} is \oldconcept{EmplaceConstructible} into \tcode{X} from \tcode{*ranges::begin(range)}.
     \tcode{range} and \tcode{a} do not overlap.\br
     \effects Equivalent to \tcode{a.insert(t)} for each element \tcode{t} in \tcode{range}.%
     \end{addedblock}
