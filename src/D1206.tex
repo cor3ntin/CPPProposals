@@ -38,6 +38,8 @@ Wording changes
     \item Constrain \tcode{ranges::to} and container \tcode{from_range_t} overload with \tcode{convertible_to} consistently. The concern was that
     if \tcode{ranges::to} is not properly constrained, it might try to construct improperly constrained non-standard types.
     \item Remove unnecessary constraints from \tcode{basic_string::assign_range}
+    \item Add missing \tcode{constexpr} in a few places in \tcode{vector}
+    \item Add missing \tcode{std::forward} in a few places
 \end{itemize}
 
 \subsection*{Revision 6}
@@ -1997,7 +1999,7 @@ deque(from_range_t, R&& rg, const Allocator& = Allocator());
 
     \pnum
     \complexity
-    Linear in \tcode{ranges::distance(r)}.
+    Linear in \tcode{ranges::distance(rg)}.
 \end{itemdescr}
 \end{addedblock}
 
@@ -2150,7 +2152,7 @@ namespace std {
 
 \begin{addedblock}
 \begin{itemdecl}
-template<@\placeholder{container-compatible-range}<T>@ R>}
+template<@\placeholder{container-compatible-range}<T>@ R>
 forward_list(from_range_t, R&& rg, const Allocator& = Allocator());
 \end{itemdecl}
 
@@ -2161,7 +2163,7 @@ Constructs a \tcode{forward_list} object with the elements of the range \tcode{r
 
 \pnum
 \complexity
-Linear in \tcode{ranges::distance(r)}.
+Linear in \tcode{ranges::distance(rr)}.
 \end{itemdescr}
 
 \end{addedblock}
@@ -2221,8 +2223,8 @@ The order of elements is not reversed.
 
 \begin{addedblock}
 \begin{itemdecl}
-template<@\placeholder{container-compatible-range}<T>@ R>}
-iterator insert_range_after(const_iterator position, R&& rg);}
+template<@\placeholder{container-compatible-range}<T>@ R>
+iterator insert_range_after(const_iterator position, R&& rg);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -2234,7 +2236,7 @@ iterator insert_range_after(const_iterator position, R&& rg);}
 
     \pnum
     \effects
-    Inserts copies of elements in the range \range{rg} after \tcode{position}.
+    Inserts copies of elements in the range \tcode{rg} after \tcode{position}.
 
     \pnum
     \returns
@@ -2353,7 +2355,7 @@ namespace std {
 
 \begin{addedblock}
 \begin{itemdecl}
-template<@\placeholder{container-compatible-range}<T>@ R>}
+template<@\placeholder{container-compatible-range}<T>@ R>
 list(from_range_t, R&& rg, const Allocator& = Allocator());
 \end{itemdecl}
 
@@ -2547,8 +2549,8 @@ namespace std {
 
 \begin{addedblock}
 \begin{itemdecl}
-template<@\placeholder{container-compatible-range}<T>@ R>}
-vector(from_range_t, R&& rg, const Allocator& = Allocator());
+template<@\placeholder{container-compatible-range}<T>@ R>
+constexpr vector(from_range_t, R&& rg, const Allocator& = Allocator());
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -2578,7 +2580,7 @@ vector(from_range_t, R&& rg, const Allocator& = Allocator());
     template<class InputIterator>
     constexpr iterator insert(const_iterator position, InputIterator first, InputIterator last);
     @\added{template<\placeholder{container-compatible-range}<T> R>}@
-    @\added{iterator insert_range(const_iterator position, R\&\& rg);}@
+    @\added{constexpr iterator insert_range(const_iterator position, R\&\& rg);}@
     constexpr iterator insert(const_iterator position, initializer_list<T>);
     template<class... Args> constexpr reference emplace_back(Args&&... args);
     template<class... Args> constexpr iterator emplace(const_iterator position, Args&&... args);
@@ -2815,7 +2817,7 @@ is \tcode{last - first}.
 
 \begin{addedblock}
 \begin{itemdecl}
-template<@\placeholder{container-compatible-range}<value_type>@ R>}
+template<@\placeholder{container-compatible-range}<value_type>@ R>
 map(from_range_t, R&& rg, const Compare& comp = Compare(), const Allocator& = Allocator());
 \end{itemdecl}
 
@@ -2832,7 +2834,7 @@ map(from_range_t, R&& rg, const Compare& comp = Compare(), const Allocator& = Al
     \complexity
     Linear in $N$ if \tcode{rg} is already sorted using \tcode{comp}
     and otherwise $N \log N$, where $N$
-    is \tcode{ranges::distance(first, last)}.
+    is \tcode{ranges::distance(rg)}.
 \end{itemdescr}.
 \end{addedblock}
 
@@ -2974,7 +2976,7 @@ multimap(initializer_list<pair<Key, T>>, Allocator)
 
 \begin{addedblock}
 \begin{itemdecl}
-template<@\placeholder{container-compatible-range}<value_type>@ R>}
+template<@\placeholder{container-compatible-range}<value_type>@ R>
 multimap(from_range_t, R&& rg, const Compare& comp = Compare(), const Allocator& = Allocator());
 \end{itemdecl}
 
@@ -2991,7 +2993,7 @@ multimap(from_range_t, R&& rg, const Compare& comp = Compare(), const Allocator&
     \complexity
     Linear in $N$ if \tcode{rg} is already sorted using \tcode{comp}
     and otherwise $N \log N$, where $N$
-    is \tcode{ranges::distance(first, last)}.
+    is \tcode{ranges::distance(rg)}.
 \end{itemdescr}.
 \end{addedblock}
 
@@ -3120,7 +3122,7 @@ namespace std {
 
 \begin{addedblock}
 \begin{itemdecl}
-template<@\placeholder{container-compatible-range}<value_type>@ R>}
+template<@\placeholder{container-compatible-range}<value_type>@ R>
 set(from_range_t, R&& rg, const Compare& comp = Compare(), const Allocator& = Allocator());
 \end{itemdecl}
 
@@ -3137,7 +3139,7 @@ and inserts elements from the range
 \complexity
 Linear in $N$ if \tcode{rg} is already sorted using \tcode{comp}
 and otherwise $N \log N$, where $N$
-is \tcode{ranges::distance(first, last)}.
+is \tcode{ranges::distance(rg)}.
 \end{itemdescr}.
 \end{addedblock}
 
@@ -3265,7 +3267,7 @@ multiset(initializer_list<Key>, Allocator) -> multiset<Key, less<Key>, Allocator
 
 \begin{addedblock}
 \begin{itemdecl}
-template<@\placeholder{container-compatible-range}<value_type>@ R>}
+template<@\placeholder{container-compatible-range}<value_type>@ R>
 set(from_range_t, R&& rg, const Compare& comp = Compare(), const Allocator& = Allocator());
 \end{itemdecl}
 
@@ -3282,7 +3284,7 @@ and inserts elements from the range
 \complexity
 Linear in $N$ if \tcode{rg} is already sorted using \tcode{comp}
 and otherwise $N \log N$, where $N$
-is \tcode{ranges::distance(first, last)}.
+is \tcode{ranges::distance(rg)}.
 \end{itemdescr}.
 \end{addedblock}
 
@@ -4329,7 +4331,7 @@ void push_range(R&& rg);
     Equivalent to \tcode{c.append_range(std::forward<R>(rg))} if that is a valid expression,
     otherwise:
     \begin{codeblock}
-        ranges::copy(rg, std::back_inserter(c));
+        ranges::copy(std::forward<R>(rg), std::back_inserter(c));
     \end{codeblock}
 \end{itemdescr}
 \end{addedblock}
@@ -4690,12 +4692,11 @@ void push_range(R&& rg);
     \effects
     As if by:
     \begin{codeblock}
-        if constexpr(requires {c.append_range(std::forward<R>(rg));})
-        {
+        if constexpr(requires {c.append_range(std::forward<R>(rg));}) {
              c.append_range(std::forward<R>(rg));
         }
         else {
-            ranges::copy(rg, std::back_inserter(c));
+            ranges::copy(std::forward<R>(rg), std::back_inserter(c));
         }
         push_heap(c.begin(), c.end(), comp);
     \end{codeblock}
@@ -4915,7 +4916,7 @@ void push_range(R&& rg);
     Equivalent to \tcode{c.append_range(std::forward<R>(rg))} if that is a valid expression,
     otherwise:
     \begin{codeblock}
-        ranges::copy(rg, std::back_inserter(c));
+        ranges::copy(std::forward<R>(rg), std::back_inserter(c));
     \end{codeblock}
 \end{itemdescr}
 \end{addedblock}
@@ -4948,7 +4949,7 @@ namespace std {
         template<class InputIterator>
         constexpr basic_string(InputIterator begin, InputIterator end, const Allocator& a = Allocator());
 
-        @\added{template<\placeholder{container-compatible-range}<charT> R}@
+        @\added{template<\placeholder{container-compatible-range}<charT> R>}@
         @\added{constexpr basic_string(from_range_t, R\&\& rg, const Allocator\& a = Allocator());}@
 
         constexpr basic_string(initializer_list<charT>, const Allocator& = Allocator());
@@ -4975,7 +4976,7 @@ namespace std {
         template<class InputIterator>
         constexpr basic_string& append(InputIterator first, InputIterator last);
 
-        @\added{template<\placeholder{container-compatible-range}<charT> R}@
+        @\added{template<\placeholder{container-compatible-range}<charT> R}>@
         @\added{constexpr basic_string\& append_range(R\&\& rg);}@
 
         constexpr basic_string& append(initializer_list<charT>);
@@ -4999,7 +5000,7 @@ namespace std {
         template<class InputIterator>
         constexpr basic_string& assign(InputIterator first, InputIterator last);
 
-        @\added{template<\placeholder{container-compatible-range}<charT> R}@
+        @\added{template<\placeholder{container-compatible-range}<charT> R>}@
         @\added{constexpr basic_string\& assign_range(R\&\& rg);}@
 
         constexpr basic_string& assign(initializer_list<charT>);
@@ -5020,7 +5021,7 @@ namespace std {
         template<class InputIterator>
         constexpr iterator insert(const_iterator p, InputIterator first, InputIterator last);
 
-        @\added{template<\placeholder{container-compatible-range}<charT> R}@
+        @\added{template<\placeholder{container-compatible-range}<charT> R>}@
         @\added{constexpr iterator insert_range(const_iterator p, R\&\& rg);}@
 
         constexpr iterator insert(const_iterator p, initializer_list<charT>);
@@ -5050,7 +5051,7 @@ namespace std {
         constexpr basic_string& replace(const_iterator i1, const_iterator i2,
             InputIterator j1, InputIterator j2);
 
-        @\added{template<\placeholder{container-compatible-range}<charT> R}@
+        @\added{template<\placeholder{container-compatible-range}<charT> R>}@
         @\added{constexpr  basic_string\& replace_with_range(const_iterator i1, const_iterator i2, R\&\& rg);}@
 
         constexpr basic_string& replace(const_iterator, const_iterator, initializer_list<charT>);
@@ -5109,7 +5110,7 @@ namespace std {
 \begin{addedblock}
     \begin{itemdecl}
 template<@\placeholder{container-compatible-range}<charT>@ R>
-basic_string(from_range_t, R&& rg, const Allocator& = Allocator());
+constexpr basic_string(from_range_t, R&& rg, const Allocator& = Allocator());
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -5150,8 +5151,8 @@ constexpr basic_string& append_range(R&& rg);
     \pnum
     \constraints
     \begin{itemize}
-       \item \tcode{is_convertible_v<R, const CharT*>} is \tcode{false}, and
-       \item \tcode{is_convertible_v<R, basic_string_view<CharT, Traits>>} is \tcode{false}.
+       \item \tcode{is_convertible_v<R, const charT*>} is \tcode{false}, and
+       \item \tcode{is_convertible_v<R, basic_string_view<charT, Traits>>} is \tcode{false}.
     \end{itemize}
 
     \effects
@@ -5312,8 +5313,8 @@ constexpr basic_string& assign_range(R&& rg);
     \constraints
 
     \begin{itemize}
-        \item \tcode{is_convertible_v<R, const CharT*>} is \tcode{false}, and
-        \item \tcode{is_convertible_v<R, basic_string_view<CharT, Traits>>} is \tcode{false}.
+        \item \tcode{is_convertible_v<R, const charT*>} is \tcode{false}, and
+        \item \tcode{is_convertible_v<R, basic_string_view<charT, Traits>>} is \tcode{false}.
     \end{itemize}
 
     \effects
@@ -5457,7 +5458,7 @@ Let \placeholder{container-insertable} be defined as follow:
     template<class Container, class Ref>
     concept @\placeholder{container-insertabler}@ =  // \expos
         requires(Container& c, Ref&& ref) {
-            requires requires{ c.push_back(ref); } || requires{ c.insert(std::end(c), ref); };
+            requires requires{ c.push_back(std::forward<Ref>(ref)); } || requires{ c.insert(std::end(c), std::forward<Ref>(ref)); };
     };
 };
 \end{codeblock}
@@ -5582,7 +5583,7 @@ Let \placeholder{DEDUCE_TYPE(D)} be defined as follows:
 \end{itemize}
 \effects
 \begin{itemize}
-\item Expression-equivalent to \tcode{ranges::to<\placeholder{DEDUCE_TYPE}(R)>(r, args...)}.
+\item Expression-equivalent to \tcode{ranges::to<\placeholder{DEDUCE_TYPE}(R)>(std::forward<R>(r), std::forward<Args>(args)...)}.
 \end{itemize}
 
 \end{itemdescr}
