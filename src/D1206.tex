@@ -2161,7 +2161,7 @@ Constructs a \tcode{forward_list} object with the elements of the range \tcode{r
 
 \pnum
 \complexity
-Linear in \tcode{ranges::distance(rr)}.
+Linear in \tcode{ranges::distance(rg)}.
 \end{itemdescr}
 
 \end{addedblock}
@@ -5428,15 +5428,15 @@ Let \placeholder{reservable-container} be defined as follow:
       ranges::sized_range<Container> &&
       requires(Container& c) {
         c.reserve(ranges::size(c));
-        {c.capacity()} -> std::same_as<decltype(ranges::size(c))>;
-        {c.max_size()} -> std::same_as<decltype(ranges::size(c))>;
+        {c.capacity()} -> same_as<decltype(ranges::size(c))>;
+        {c.max_size()} -> same_as<decltype(ranges::size(c))>;
     };
 \end{codeblock}
 
 Let \placeholder{container-insertable} be defined as follow:
 \begin{codeblock}
     template<class Container, class Ref>
-    concept @\placeholder{container-insertabler}@ =  // \expos
+    concept @\placeholder{container-insertable}@ =  // \expos
         requires(Container& c, Ref&& ref) {
             requires requires { c.push_back(std::forward<Ref>(ref)); } || 
                      requires { c.insert(std::end(c), std::forward<Ref>(ref)); };
@@ -5448,11 +5448,11 @@ Let \placeholder{container-inserter} be defined as follow:
 
     \begin{codeblock}
     auto @\placeholder{container-inserter}@ = []<typename Ref>(C & c ){
-        if constexpr (requires { c.push_back(std::declval<Ref>()); }) {
+        if constexpr (requires { c.push_back(declval<Ref>()); }) {
             return back_inserter(c);
         }
         else  {
-            return inserter(c, c.end());
+            return inserter(c, std::end(c));
         }
     };
     \end{codeblock}
