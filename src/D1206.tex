@@ -266,7 +266,6 @@ The following methods and constructors are added to all sequence containers (\tc
 \item \tcode{basic_string\& assign_range(Range\&\&);}
 \item \tcode{basic_string\& replace_range(const_iterator, const_iterator, Range\&\&);}
 \item \tcode{basic_string\& append_range(Range\&\&);}
-\item \tcode{void append_range(Range\&\&);}
 \end{itemize}
 
 The following methods and constructors are added to associative containers (\tcode{set, multiset, map, multimap})
@@ -1695,7 +1694,7 @@ In \tref{container.hash.req},
     \end{addedblock}
     &
     \begin{addedblock}
-    Average case \bigoh{N} ($N$ is \tcode{distance(rg)}), worst case
+    Average case \bigoh{N} ($N$ is \tcode{ranges::distance(rg)}), worst case
     \bigoh{N^2}
     \end{addedblock}
     \\ \rowsep
@@ -2192,7 +2191,7 @@ void prepend_range(R&& rg);
 \begin{itemdescr}
 \pnum
 \effects
-Inserts a copy of each element of \tcode{range} at the beginning of the list. \begin{note}
+Inserts a copy of each element of \tcode{rg} at the beginning of the list. \begin{note}
 The order of elements is not reversed.
 \end{note}
 \end{itemdescr}
@@ -2232,7 +2231,7 @@ iterator insert_range_after(const_iterator position, R&& rg);
     \expects
     \tcode{position} is \tcode{before_begin()} or is a dereferenceable
     iterator in the range \range{begin()}{end()}.
-    \tcode{ranges::begin(rg)} is not an iterator in \tcode{*this}.
+    \tcode{rg} and \tcode{*this} do not overlap.
 
     \pnum
     \effects
@@ -2366,7 +2365,7 @@ list(from_range_t, R&& rg, const Allocator& = Allocator());
 
     \pnum
     \complexity
-    Linear in \tcode{ranges::distance(r)}.
+    Linear in \tcode{ranges::distance(rg)}.
 \end{itemdescr}
 \end{addedblock}
 
@@ -2664,7 +2663,7 @@ namespace std {
         template<class... Args> constexpr reference emplace_back(Args&&... args);
         constexpr void push_back(const bool& x);
         @\added{template<\placeholder{container-compatible-range}<bool> R>}@
-        @\added{void append_range(R\&\& rg);}@
+        @\added{constexpr void append_range(R\&\& rg);}@
         constexpr void pop_back();
         template<class... Args> constexpr iterator emplace(const_iterator position, Args&&... args);
         constexpr iterator insert(const_iterator position, const bool& x);
@@ -4331,7 +4330,7 @@ void push_range(R&& rg);
     Equivalent to \tcode{c.append_range(std::forward<R>(rg))} if that is a valid expression,
     otherwise:
     \begin{codeblock}
-        ranges::copy(std::forward<R>(rg), std::back_inserter(c));
+        ranges::copy(rg, back_inserter(c));
     \end{codeblock}
 \end{itemdescr}
 \end{addedblock}
@@ -4632,7 +4631,7 @@ priority_queue(from_range_t, R&& rg, const Compare& compare, const Alloc& a);
       \pnum
     \effects
     initializes \tcode{comp} with \tcode{compare} and
-    \tcode{c} with \tcode{ranges::to<Container>(std::forward<R>(rg, a))}
+    \tcode{c} with \tcode{ranges::to<Container>(std::forward<R>(rg), a)}
     ; calls \tcode{make_heap(c.begin(), c.end(), comp)}.
 \end{itemdescr}
 
@@ -4644,7 +4643,7 @@ priority_queue(from_range_t, R&& rg, const Alloc& a);
 \begin{itemdescr}
     \pnum
     \effects
-    Initializes \tcode{c} with \tcode{ranges::to<Container>(std::forward<R>(rg, a))}
+    Initializes \tcode{c} with \tcode{ranges::to<Container>(std::forward<R>(rg), a)}
     ; calls \tcode{make_heap(c.begin(), c.end(), comp)}.
 \end{itemdescr}
 \end{addedblock}
@@ -4696,7 +4695,7 @@ void push_range(R&& rg);
              c.append_range(std::forward<R>(rg));
         }
         else {
-            ranges::copy(rg, std::back_inserter(c));
+            ranges::copy(rg, back_inserter(c));
         }
         push_heap(c.begin(), c.end(), comp);
     \end{codeblock}
@@ -4916,7 +4915,7 @@ void push_range(R&& rg);
     Equivalent to \tcode{c.append_range(std::forward<R>(rg))} if that is a valid expression,
     otherwise:
     \begin{codeblock}
-        ranges::copy(rg, std::back_inserter(c));
+        ranges::copy(rg, back_inserter(c));
     \end{codeblock}
 \end{itemdescr}
 \end{addedblock}
@@ -4975,15 +4974,11 @@ namespace std {
         constexpr basic_string& append(size_type n, charT c);
         template<class InputIterator>
         constexpr basic_string& append(InputIterator first, InputIterator last);
-
-        @\added{template<\placeholder{container-compatible-range}<charT> R>}@
-        @\added{constexpr basic_string\& append_range(R\&\& rg);}@
-
         constexpr basic_string& append(initializer_list<charT>);
 
         constexpr void push_back(charT c);
         @\added{template<\placeholder{container-compatible-range}<charT> R>}@
-        @\added{constexpr void append_range(R\&\& rg);}@
+        @\added{constexpr basic_string\& append_range(R\&\& rg);}@
 
         constexpr basic_string& assign(const basic_string& str);
         constexpr basic_string& assign(basic_string&& str)
@@ -5172,20 +5167,6 @@ constexpr basic_string& append_range(R&& rg);
     Equivalent to
     \tcode{append(size_type\{1\}, c)}.
 \end{itemdescr}
-
-\begin{addedblock}
-\begin{itemdecl}
-template<@\placeholder{container-compatible-range}@<charT> R>
-constexpr void append_range(R&& rg);
-\end{itemdecl}
-
-\begin{itemdescr}
-    \pnum
-    \effects
-    Equivalent to
-    \tcode{append(std::forward<R>(rg))}.
-\end{itemdescr}
-\end{addedblock}
 
 
 \rSec3[string.assign]{\tcode{basic_string::assign}}
@@ -5458,7 +5439,8 @@ Let \placeholder{container-insertable} be defined as follow:
     template<class Container, class Ref>
     concept @\placeholder{container-insertabler}@ =  // \expos
         requires(Container& c, Ref&& ref) {
-            requires requires{ c.push_back(std::forward<Ref>(ref)); } || requires{ c.insert(std::end(c), std::forward<Ref>(ref)); };
+            requires requires { c.push_back(std::forward<Ref>(ref)); } || 
+                     requires { c.insert(std::end(c), std::forward<Ref>(ref)); };
     };
 };
 \end{codeblock}
