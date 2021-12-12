@@ -273,10 +273,6 @@ It can be resolved by casting either expression to the type of the other.
 
 Similar expressions such as \tcode{true ? std::tuple\{0.\} : std::tuple\{0\}} are ill-formed in C++20 because they are ambiguous.
 
-\subsection{ABI}
-
-This paper removes the existing \tcode{pair} overloads in \tcode{tuple}, and modify other overloads.
-They can be kept by an implementation for mangling purposes if necessary.
 
 \subsection{Implementation}
 
@@ -290,12 +286,19 @@ Tuple comparison operators are good candidates for hidden friends.
 
 
 \rSec2[tuple.syn]{Header \tcode{<tuple>} synopsis}
+\begin{codeblock}
+#include <compare>              // see \ref{compare.syn}
 
-\ednote{The wording directly below is relative to P2321R1}
+namespace std {
+// \ref{tuple.tuple}, class template \tcode{tuple}
+template<class... Types>
+class tuple;
 
+\end{codeblock}
 \begin{removedblock}
 \begin{codeblock}
-template<class... TTypes, class... UTypes, template<class> class TQual, template<class> class UQual>
+template<class... TTypes, class... UTypes, template<class> class TQual,
+template<class> class UQual>
 requires requires { typename tuple<common_reference_t<TQual<TTypes>, UQual<UTypes>>...>; }
 struct basic_common_reference<tuple<TTypes...>, tuple<UTypes...>, TQual, UQual> {
     using type = tuple<common_reference_t<TQual<TTypes>, UQual<UTypes>>...>;
@@ -303,7 +306,7 @@ struct basic_common_reference<tuple<TTypes...>, tuple<UTypes...>, TQual, UQual> 
 
 template<class... TTypes, class... UTypes>
 requires requires { typename tuple<common_type_t<TTypes, UTypes>...>; }
-truct common_type<tuple<TTypes...>, tuple<UTypes...>> {
+struct common_type<tuple<TTypes...>, tuple<UTypes...>> {
     using type = tuple<common_type_t<TTypes, UTypes>...>;
 };
 \end{codeblock}
@@ -319,8 +322,32 @@ struct basic_common_type<TTuple, UTuple, TQual, UQual>;
 \end{codeblock}
 \end{addedblock}
 \begin{codeblock}
-[...]
 
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template <typename T, std::size_t N>
+concept  @\placeholder{is-tuple-element}@ = requires (T t) {  // \expos
+    typename std::tuple_element_t<N, std::remove_const_t<T>>;
+    { @\textbf{std::}@get<N>(t) } -> std::convertible_to<std::tuple_element_t<N, T>&>;
+};
+
+
+template <typename T>
+concept @\placeholder{tuple-like}@ // \expos
+= !is_reference_v<T> && requires  {
+    typename tuple_size<T>::type;
+    requires same_as<decltype(tuple_size_v<T>), size_t>;
+} && []<std::size_t... I>(std::index_sequence<I...>)
+{ return (@\placeholder{is-tuple-element}@<T, I> && ..); }(std::make_index_sequence<tuple_size_v<T>>{});
+
+template <typename T>
+concept @\placeholder{pair-like}@ // \expos
+= @\placeholder{tuple-like}@<T> && std::tuple_size_v<T> == 2;
+    
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
 
 // \ref{tuple.creation}, tuple creation functions
 inline constexpr @\unspec@ ignore;
@@ -350,57 +377,75 @@ template<class T> struct tuple_size<const T>;
 
 template<class... Types> struct tuple_size<tuple<Types...>>;
 
-[...]
+template<size_t I, class T> struct tuple_element;     // \notdef
+template<size_t I, class T> struct tuple_element<I, const T>;
 
+template<size_t I, class... Types>
+struct tuple_element<I, tuple<Types...>>;
+
+template<size_t I, class T>
+using tuple_element_t = typename tuple_element<I, T>::type;
+
+// \ref{tuple.elem}, element access
+template<size_t I, class... Types>
+constexpr tuple_element_t<I, tuple<Types...>>& get(tuple<Types...>&) noexcept;
+template<size_t I, class... Types>
+constexpr tuple_element_t<I, tuple<Types...>>&& get(tuple<Types...>&&) noexcept;
+template<size_t I, class... Types>
+constexpr const tuple_element_t<I, tuple<Types...>>& get(const tuple<Types...>&) noexcept;
+template<size_t I, class... Types>
+constexpr const tuple_element_t<I, tuple<Types...>>&& get(const tuple<Types...>&&) noexcept;
+template<class T, class... Types>
+constexpr T& get(tuple<Types...>& t) noexcept;
+template<class T, class... Types>
+constexpr T&& get(tuple<Types...>&& t) noexcept;
 template<class T, class... Types>
 constexpr const T& get(const tuple<Types...>& t) noexcept;
 template<class T, class... Types>
 constexpr const T&& get(const tuple<Types...>&& t) noexcept;
-\end{codeblock}
 
+// [tuple.rel], relational operators
+template<class... TTypes, class... UTypes>
+constexpr bool operator==(const tuple<TTypes...>&, const UTuple&);\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+template<class... TTypes, @\placeholder{tuple-like}@ UTuple>
+constexpr bool operator==(const tuple<TTypes...>&, const UTuple&);
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+template<class... TTypes, class... UTypes>
+constexpr common_comparison_category_t<@\placeholder{synth-three-way-result}@<TTypes, UTypes...>
+operator<=>(const tuple<TTypes...>&, const tuple<UTypes...>&);\end{codeblock}
 \begin{addedblock}
 \begin{codeblock}
 
-template <typename T, std::size_t N>
-concept  @\placeholder{is-tuple-element}@ = requires (T t) {  // \expos
-    typename std::tuple_element_t<N, std::remove_const_t<T>>;
-    { @\textbf{std::}@get<N>(t) } -> std::convertible_to<std::tuple_element_t<N, T>&>;
-};
-
-
-template <typename T>
-concept @\placeholder{tuple-like}@ // \expos
-    = !is_reference_v<T> && requires  {
-    typename tuple_size<T>::type;
-    requires same_as<decltype(tuple_size_v<T>), size_t>;
-} && []<std::size_t... I>(std::index_sequence<I...>)
-    { return (@\placeholder{is-tuple-element}@<T, I> && ..); }(std::make_index_sequence<tuple_size_v<T>>{});
-
-template <typename T>
-concept @\placeholder{pair-like}@ // \expos
-    = @\placeholder{tuple-like}@<T> && std::tuple_size_v<T> == 2;
-
+template<class... TTypes, @\placeholder{tuple-like}@ UTuple>
+constexpr common_comparison_category_t<@\placeholder{synth-three-way-result}@<TTypes, @\seebelow@...>
+operator<=>(const tuple<TTypes...>&, const UTuple&);
 \end{codeblock}
 \end{addedblock}
-
-
 \begin{codeblock}
-// [tuple.rel], relational operators
-template<class... TTypes, @\changed{class... UTypes}{\placeholder{tuple-like} UTuple}@>
-constexpr bool operator==(const tuple<TTypes...>&, const @\changed{tuple<UTypes...>}{UTuple}@&);
 
-template<class... TTypes, @\changed{class... UTypes}{\placeholder{tuple-like} UTuple}@>
-constexpr common_comparison_category_t<@\placeholder{synth-three-way-result}@<TTypes, @\changed{UTypes}{\seebelow>}@...>
-operator<=>(const tuple<TTypes...>&, const @\changed{tuple<UTypes...>}{UTuple}@&);
-
-// [tuple.traits], allocator-related traits
+// \ref{tuple.traits}, allocator-related traits
 template<class... Types, class Alloc>
 struct uses_allocator<tuple<Types...>, Alloc>;
 
+// \ref{tuple.special}, specialized algorithms
+template<class... Types>
+constexpr void swap(tuple<Types...>& x, tuple<Types...>& y) noexcept(@\seebelow@);
+template<class... Types>
+constexpr void swap(const tuple<Types...>& x, const tuple<Types...>& y) noexcept(@\seebelow@);
+
+// \ref{tuple.helper}, tuple helper classes
+template<class T>
+inline constexpr size_t tuple_size_v = tuple_size<T>::value;
 }
 \end{codeblock}
 
-
+\rSec2[tuple.tuple]{Class template \tcode{tuple}}
+\indexlibraryglobal{tuple}%
 
 \begin{codeblock}
 namespace std {
@@ -409,32 +454,44 @@ class tuple {
     public:
     // \ref{tuple.cnstr}, \tcode{tuple} construction
     constexpr explicit(@\seebelow@) tuple();
-    constexpr explicit(@\seebelow@) tuple(const Types&...);
-     // only if \tcode{sizeof...(Types) >= 1}
+    constexpr explicit(@\seebelow@) tuple(const Types&...); // only if \tcode{sizeof...(Types) >= 1}
     template<class... UTypes>
-    constexpr explicit(@\seebelow@) tuple(UTypes&&...);
-    // only if \tcode{sizeof...(Types) >= 1}
-
+    constexpr explicit(@\seebelow@) tuple(UTypes&&...); // only if \tcode{sizeof...(Types) >= 1}
+    
     tuple(const tuple&) = default;
     tuple(tuple&&) = default;
-
+    
+    template<class... UTypes>
+    constexpr explicit(@\seebelow@) tuple(tuple<UTypes...>&);
     template<class... UTypes>
     constexpr explicit(@\seebelow@) tuple(const tuple<UTypes...>&);
     template<class... UTypes>
     constexpr explicit(@\seebelow@) tuple(tuple<UTypes...>&&);
-    
-    @\added{template<\placeholder{tuple-like} UTuple>}@
-    @\added{constexpr explicit(\seebelow) tuple(const tuple<UTypes...>\&);}@
-    @\added{template<\placeholder{tuple-like} UTuple>}@
-    @\added{constexpr explicit(\seebelow) tuple(tuple<UTypes...>\&\&);}@
+    template<class... UTypes>
+    constexpr explicit(@\seebelow@) tuple(const tuple<UTypes...>&&);
     
     template<class U1, class U2>
-    constexpr explicit(@\seebelow@)
-    tuple(const pair<U1, U2>&);   // only if \tcode{sizeof...(Types) == 2}
+    constexpr explicit(@\seebelow@) tuple(pair<U1, U2>&);  // only if \tcode{sizeof...(Types) == 2}
     template<class U1, class U2>
-    constexpr explicit(@\seebelow@)
-    tuple(pair<U1, U2>&&);        // only if \tcode{sizeof...(Types) == 2}
-
+    constexpr explicit(@\seebelow@) tuple(const pair<U1, U2>&); // only if \tcode{sizeof...(Types) == 2}
+    template<class U1, class U2>
+    constexpr explicit(@\seebelow@) tuple(pair<U1, U2>&&);   // only if \tcode{sizeof...(Types) == 2}
+    template<class U1, class U2>
+    constexpr explicit(@\seebelow@) tuple(const pair<U1, U2>&&); // only if \tcode{sizeof...(Types) == 2}
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+    template<@\placeholder{tuple-like}@ UTuple>
+    constexpr explicit(@\seebelow@) tuple(UTuple&);
+    template<@\placeholder{tuple-like}@ UTuple>
+    constexpr explicit(@\seebelow@) tuple(const UTuple&);
+    template<@\placeholder{tuple-like}@ UTuple>
+    constexpr explicit(@\seebelow@) tuple(UTuple&&);
+    template<@\placeholder{tuple-like}@ UTuple>
+    constexpr explicit(@\seebelow@) tuple(UTuple&&);
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
     // allocator-extended constructors
     template<class Alloc>
     constexpr explicit(@\seebelow@)
@@ -449,68 +506,101 @@ class tuple {
     constexpr tuple(allocator_arg_t, const Alloc& a, const tuple&);
     template<class Alloc>
     constexpr tuple(allocator_arg_t, const Alloc& a, tuple&&);
-
+    template<class Alloc, class... UTypes>
+    constexpr explicit(@\seebelow@)
+    tuple(allocator_arg_t, const Alloc& a, tuple<UTypes...>&);
     template<class Alloc, class... UTypes>
     constexpr explicit(@\seebelow@)
     tuple(allocator_arg_t, const Alloc& a, const tuple<UTypes...>&);
-
     template<class Alloc, class... UTypes>
     constexpr explicit(@\seebelow@)
     tuple(allocator_arg_t, const Alloc& a, tuple<UTypes...>&&);
-    
-    @\added{template<\placeholder{tuple-like} UTuple>}@
-    @\added{constexpr explicit(\seebelow) tuple(allocator_arg_t, const Alloc\& a, const tuple<UTypes...>\&);}@
-    @\added{template<\placeholder{tuple-like} UTuple>}@
-    @\added{constexpr explicit(\seebelow) tuple(allocator_arg_t, const Alloc\& a, tuple<UTypes...>\&\&);}@
-    
+    template<class Alloc, class... UTypes>
+    constexpr explicit(@\seebelow@)
+    tuple(allocator_arg_t, const Alloc& a, const tuple<UTypes...>&&);
+    template<class Alloc, class U1, class U2>
+    constexpr explicit(@\seebelow@)
+    tuple(allocator_arg_t, const Alloc& a, pair<U1, U2>&);
     template<class Alloc, class U1, class U2>
     constexpr explicit(@\seebelow@)
     tuple(allocator_arg_t, const Alloc& a, const pair<U1, U2>&);
     template<class Alloc, class U1, class U2>
     constexpr explicit(@\seebelow@)
     tuple(allocator_arg_t, const Alloc& a, pair<U1, U2>&&);
-
+    template<class Alloc, class U1, class U2>
+    constexpr explicit(@\seebelow@)
+    tuple(allocator_arg_t, const Alloc& a, const pair<U1, U2>&&);
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+    template<class Alloc, @\placeholder{tuple-like}@ UTuple>
+    constexpr explicit(@\seebelow@) tuple(allocator_arg_t, const Alloc& a, UTuple&);
+    template<class Alloc, @\placeholder{tuple-like}@ UTuple>
+    constexpr explicit(@\seebelow@) tuple(allocator_arg_t, const Alloc& a, const UTuple&);
+    template<class Alloc, @\placeholder{tuple-like}@ UTuple>
+    constexpr explicit(@\seebelow@) tuple(allocator_arg_t, const Alloc& a, UTuple&&);
+    template<class Alloc, @\placeholder{tuple-like}@ UTuple>
+    constexpr explicit(@\seebelow@) tuple(allocator_arg_t, const Alloc& a, const UTuple&&);
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
     // \ref{tuple.assign}, \tcode{tuple} assignment
     constexpr tuple& operator=(const tuple&);
+    constexpr const tuple& operator=(const tuple&) const;
     constexpr tuple& operator=(tuple&&) noexcept(@\seebelow@);
-
+    constexpr const tuple& operator=(tuple&&) const;
+    
     template<class... UTypes>
-    constexpr tuple& operator=(tuple<UTypes...>&);
+    constexpr tuple& operator=(const tuple<UTypes...>&);
+    template<class... UTypes>
+    constexpr const tuple& operator=(const tuple<UTypes...>&) const;
     template<class... UTypes>
     constexpr tuple& operator=(tuple<UTypes...>&&);
-
-    @\added{template<\placeholder{tuple-like} UTuple>}@
-    @\added{constexpr tuple\& operator=(const UTuple\&);}@
-    @\added{template<\placeholder{tuple-like} UTuple>}@
-    @\added{constexpr tuple\& operator=(UTuple\&\&)};@
-
+    template<class... UTypes>
+    constexpr const tuple& operator=(tuple<UTypes...>&&) const;
+    
     template<class U1, class U2>
-    constexpr tuple& operator=(const pair<U1, U2>&);
-     // only if \tcode{sizeof...(Types) == 2}
+    constexpr tuple& operator=(const pair<U1, U2>&);          // only if \tcode{sizeof...(Types) == 2}
     template<class U1, class U2>
-    constexpr tuple& operator=(pair<U1, U2>&&);
+    constexpr const tuple& operator=(const pair<U1, U2>&) const;
     // only if \tcode{sizeof...(Types) == 2}
-
+    template<class U1, class U2>
+    constexpr tuple& operator=(pair<U1, U2>&&);               // only if \tcode{sizeof...(Types) == 2}
+    template<class U1, class U2>
+    constexpr const tuple& operator=(pair<U1, U2>&&) const;   // only if \tcode{sizeof...(Types) == 2}
+    
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+    template<@\placeholder{tuple-like}@ UTuple>
+    constexpr tuple& operator=(UTuple&);
+    template<@\placeholder{tuple-like}@ UTuple>
+    constexpr const tuple& operator=(UTuple&) const;
+    template<@\placeholder{tuple-like}@ UTuple>
+    constexpr tuple& operator=(UTuple&&);
+    template<@\placeholder{tuple-like}@ UTuple>
+    constexpr const tuple& operator=(UTuple&&) const;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+    
     // \ref{tuple.swap}, \tcode{tuple} swap
     constexpr void swap(tuple&) noexcept(@\seebelow@);
+    constexpr void swap(const tuple&) const noexcept(@\seebelow@);
 };
 
-
+template<class... UTypes>
+tuple(UTypes...) -> tuple<UTypes...>;
+template<class T1, class T2>
+tuple(pair<T1, T2>) -> tuple<T1, T2>;
+template<class Alloc, class... UTypes>
+tuple(allocator_arg_t, Alloc, UTypes...) -> tuple<UTypes...>;
+template<class Alloc, class T1, class T2>
+tuple(allocator_arg_t, Alloc, pair<T1, T2>) -> tuple<T1, T2>;
+template<class Alloc, class... UTypes>
+tuple(allocator_arg_t, Alloc, tuple<UTypes...>) -> tuple<UTypes...>;
+}
 \end{codeblock}
-
-%template<class... UTypes>
-%tuple(UTypes...) -> tuple<UTypes...>;
-%template<@\changed{class T1, class T2}{typename... Utypes, template<typename...> typename T}@>
-%@\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
-%tuple(@\changed{pair<T1, T2>}{T<UTypes..>}@) -> tuple<@\changed{T1, T2}{UTypes...}@>;
-%template<class Alloc, class... UTypes>
-%tuple(allocator_arg_t, Alloc, UTypes...) -> tuple<UTypes...>;
-%@\removed{template<class Alloc, class T1, class T2>}@
-%@\removed{tuple(allocator_arg_t, Alloc, pair<T1, T2>) -> tuple<T1, T2>;}@
-%template<class Alloc, class... UTypes@\added{, template<typename...> typename T}@>
-%@\added{requires \placeholder{tuple-like}<T<UTypes...>>}@
-%tuple(allocator_arg_t, Alloc, @\changed{tuple}{T}@<UTypes...>) -> tuple<UTypes...>;
-%}
 
 \rSec3[tuple.cnstr]{Construction}
 
@@ -518,146 +608,281 @@ class tuple {
 In the descriptions that follow, let $i$ be in the range
 \range{0}{sizeof...(Types)} in order, $\tcode{T}_i$
 be the $i^\text{th}$ type in \tcode{Types}, and
-$\tcode{U}_i$ be \changed{the $i^\text{th}$ type in a template parameter pack named \tcode{UTypes}, where indexing
-is zero-based}{the type denoted by \tcode{tuple\char`_element\char`_t<$i$, UTuple>} of a template parameter named \tcode{UTuple} satisfying \placeholder{tuple-like}. \tcode{UTypes} denotes a pack formed of the sequence of $\tcode{U}_i$}.
+$\tcode{U}_i$ be the $i^\text{th}$ type in a template parameter pack named \tcode{UTypes}, where indexing
+is zero-based.
 
 \pnum
 For each \tcode{tuple} constructor, an exception is thrown only if the construction of
 one of the types in \tcode{Types} throws an exception.
 
-[...]
+\pnum
+The defaulted move and copy constructor, respectively, of
+\tcode{tuple} is a constexpr function if and only if all
+required element-wise initializations for move and copy, respectively,
+would satisfy the requirements for a constexpr function. The
+defaulted move and copy constructor of \tcode{tuple<>} are
+constexpr functions.
 
+\pnum
+If \tcode{is_trivially_destructible_v<$\tcode{T}_i$>} is \tcode{true} for all $\tcode{T}_i$,
+then the destructor of \tcode{tuple} is trivial.
+
+\pnum
+The default constructor of \tcode{tuple<>} is trivial.
 
 \indexlibraryctor{tuple}%
 \begin{itemdecl}
-template<class... UTypes>
-constexpr explicit(@\seebelow@) tuple(const tuple<UTypes>& u);
-@\added{template<\placeholder{tuple-like} UTuple>}@
-@\added{constexpr explicit(\seebelow) tuple(const UTuple\& u);}@
+    constexpr explicit(@\seebelow@) tuple();
 \end{itemdecl}
 
 \begin{itemdescr}
     \pnum
     \constraints
-    \begin{itemize}
-        \item
-        \tcode{sizeof...(Types)} equals \changed{\tcode{sizeof...(UTypes)}}{\tcode{tuple\char`_size\char`_v<UTuple>}} and
-
-        \item
-        \tcode{is_constructible_v<$\tcode{T}_i$, const $\tcode{U}_i$\&>} is \tcode{true} for all $i$, and
-
-        \item
-        either
-        \tcode{sizeof...(Types)} is not 1, or
-        (when \tcode{Types...} expands to \tcode{T} and \tcode{UTypes...} expands to \tcode{U})
-        \tcode{is_convertible_v<const tuple<U>\&, T>}, \tcode{is_constructible_v<T, const tuple<U>\&>}, and \tcode{is_same_v<T, U>} are all \tcode{false}.
-    \end{itemize}
-
+    \tcode{is_default_constructible_v<$\tcode{T}_i$>} is \tcode{true} for all $i$.
+    
     \pnum
     \effects
-    Initializes each element of \tcode{*this}
-    with the corresponding element of \tcode{u}.
-
+    Value-initializes each element.
+    
     \pnum
     \remarks
-    The expression inside \tcode{explicit} is equivalent to:
+    The expression inside \keyword{explicit} evaluates to \tcode{true}
+    if and only if $\tcode{T}_i$ is not
+    copy-list-initializable from an empty list
+    for at least one $i$.
+    \begin{note}
+        This behavior can be implemented with a trait that checks whether
+        a \tcode{const $\tcode{T}_i$\&} can be initialized with \tcode{\{\}}.
+    \end{note}
+\end{itemdescr}
+
+\indexlibraryctor{tuple}%
+\begin{itemdecl}
+    constexpr explicit(@\seebelow@) tuple(const Types&...);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    $\tcode{sizeof...(Types)} \geq 1$ and
+    \tcode{is_copy_constructible_v<$\tcode{T}_i$>} is \tcode{true} for all $i$.
+    
+    \pnum
+    \effects
+    Initializes each element with the value of the
+    corresponding parameter.
+    
+    \pnum
+    \remarks
+    The expression inside \keyword{explicit} is equivalent to:
     \begin{codeblock}
-        !conjunction_v<is_convertible<const UTypes&, Types>...>
+        !conjunction_v<is_convertible<const Types&, Types>...>
     \end{codeblock}
 \end{itemdescr}
 
 \indexlibraryctor{tuple}%
 \begin{itemdecl}
-template<@\changed{class... UTypes}{\placeholder{tuple-like} UTuple}@>
-constexpr explicit(@\seebelow@) tuple(@\changed{tuple<UTypes...>}{UTuple}@&& u);
+    template<class... UTypes> constexpr explicit(@\seebelow@) tuple(UTypes&&... u);
 \end{itemdecl}
 
 \begin{itemdescr}
     \pnum
+    Let \exposid{disambiguating-constraint} be:
+    \begin{itemize}
+        \item
+        \tcode{negation<is_same<remove_cvref_t<$\tcode{U}_0$>, tuple>>}
+        if \tcode{sizeof...(Types)} is 1;
+        \item
+        otherwise,
+        \tcode{bool_constant<!is_same_v<remove_cvref_t<$\tcode{U}_0$>, allocator_arg_t> ||
+            is_-\newline{}same_v<remove_cvref_t<$\tcode{T}_0$>, allocator_arg_t>>}
+        if \tcode{sizeof...(Types)} is 2 or 3;
+        \item
+        otherwise, \tcode{true_type}.
+    \end{itemize}
+    
+    \pnum
     \constraints
     \begin{itemize}
         \item
-        \tcode{sizeof...(Types)} equals \changed{\tcode{sizeof...(UTypes)}}{\tcode{tuple\char`_size\char`_v<UTuple>}}, and
-
+        \tcode{sizeof...(Types)} equals \tcode{sizeof...(UTypes)},
         \item
-        \tcode{is_constructible_v<$\tcode{T}_i$, $\tcode{U}_i$>} is \tcode{true} for all $i$, and
-
+        $\tcode{sizeof...(Types)} \geq 1$, and
         \item
-        either
-        \tcode{sizeof...(Types)} is not 1, or
-        (when \tcode{Types...} expands to \tcode{T} and \tcode{UTypes...} expands to \tcode{U})
-        \tcode{is_convertible_v<\changed{tuple<U>}{UTuple}, T>}, \tcode{is_constructible_v<T, \changed{tuple<U>}{UTuple}>},
-        and \tcode{is_same_v<T, U>} are all \tcode{false}.
+        \tcode{conjunction_v<\exposid{disambiguating-constraint},
+            is_constructible<Types, UTypes>...>} is\newline \tcode{true}.
     \end{itemize}
-
+    
     \pnum
     \effects
-    For all $i$,
-    initializes the $i^\text{th}$ element of \tcode{*this} with
-    \tcode{std::forward<$\tcode{U}_i$>(get<$i$>(u))}.
-
+    Initializes the elements in the tuple with the
+    corresponding value in \tcode{std::forward<UTypes>(u)}.
+    
     \pnum
     \remarks
-    The expression inside \tcode{explicit} is equivalent to:
+    The expression inside \keyword{explicit} is equivalent to:
     \begin{codeblock}
         !conjunction_v<is_convertible<UTypes, Types>...>
     \end{codeblock}
 \end{itemdescr}
 
 \indexlibraryctor{tuple}%
-\indexlibraryglobal{pair}%
 \begin{itemdecl}
-template<class U1, class U2> constexpr explicit(@\seebelow@) tuple(const pair<U1, U2>& u);
+    tuple(const tuple& u) = default;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \mandates
+    \tcode{is_copy_constructible_v<$\tcode{T}_i$>} is \tcode{true} for all $i$.
+    
+    \pnum
+    \effects
+    Initializes each element of \tcode{*this} with the
+    corresponding element of \tcode{u}.
+\end{itemdescr}
+
+\indexlibraryctor{tuple}%
+\begin{itemdecl}
+    tuple(tuple&& u) = default;
 \end{itemdecl}
 
 \begin{itemdescr}
     \pnum
     \constraints
-    \begin{itemize}
-        \item \tcode{sizeof...(Types)} is 2,
-        \item \tcode{is_constructible_v<$\tcode{T}_0$, const U1\&>} is \tcode{true}, and
-        \item \tcode{is_constructible_v<$\tcode{T}_1$, const U2\&>} is \tcode{true}.
-    \end{itemize}
-
+    \tcode{is_move_constructible_v<$\tcode{T}_i$>} is \tcode{true} for all $i$.
+    
     \pnum
     \effects
-    Initializes the first element with \tcode{u.first} and the
-    second element with \tcode{u.second}.
+    For all $i$, initializes the $i^\text{th}$ element of \tcode{*this} with
+    \tcode{std::forward<$\tcode{T}_i$>(get<$i$>(u))}.
+\end{itemdescr}
 
+\indexlibraryctor{tuple}%
+\begin{itemdecl}
+    template<class... UTypes> constexpr explicit(@\seebelow@) tuple(tuple<UTypes...>& u);
+    template<class... UTypes> constexpr explicit(@\seebelow@) tuple(const tuple<UTypes...>& u);
+    template<class... UTypes> constexpr explicit(@\seebelow@) tuple(tuple<UTypes...>&& u);
+    template<class... UTypes> constexpr explicit(@\seebelow@) tuple(const tuple<UTypes...>&& u);
+\end{itemdecl}
+
+\begin{itemdescr}
     \pnum
-    The expression inside \tcode{explicit} is equivalent to:
+    Let \tcode{I} be the pack \tcode{0, 1, ..., (sizeof...(Types) - 1)}.\newline
+    Let \tcode{\exposid{FWD}(u)} be \tcode{static_cast<decltype(u)>(u)}.
+    
+    \pnum
+    \constraints
+    \begin{itemize}
+        \item
+        \tcode{sizeof...(Types)} equals \tcode{sizeof...(UTypes)}, and
+        \item
+        \tcode{(is_constructible_v<Types, decltype(get<I>(\exposid{FWD}(u)))> \&\& ...)}
+        is \tcode{true}, and
+        \item
+        either \tcode{sizeof...(Types)} is not 1, or
+        (when \tcode{Types...} expands to \tcode{T} and
+        \tcode{UTypes...} expands to \tcode{U})
+        \tcode{is_convertible_v<decltype(u), T>},
+        \tcode{is_constructible_v<T, decltype(u)>}, and
+        \tcode{is_same_v<T, U>} are all \tcode{false}.
+    \end{itemize}
+    
+    \pnum
+    \effects
+    For all $i$, initializes the $i^\textrm{th}$ element of \tcode{*this}
+    with \tcode{get<$i$>(\exposid{FWD}(u))}.
+    
+    \pnum
+    \remarks
+    The expression inside \keyword{explicit} is equivalent to:
     \begin{codeblock}
-        !is_convertible_v<const U1&, @$\tcode{T}_0$@> || !is_convertible_v<const U2&, @$\tcode{T}_1$@>
+        !(is_convertible_v<decltype(get<I>(@\exposid{FWD}@(u))), Types> && ...)
     \end{codeblock}
 \end{itemdescr}
 
 \indexlibraryctor{tuple}%
-\indexlibraryglobal{pair}%
 \begin{itemdecl}
+    template<class U1, class U2> constexpr explicit(@\seebelow@) tuple(pair<U1, U2>& u);
+    template<class U1, class U2> constexpr explicit(@\seebelow@) tuple(const pair<U1, U2>& u);
     template<class U1, class U2> constexpr explicit(@\seebelow@) tuple(pair<U1, U2>&& u);
+    template<class U1, class U2> constexpr explicit(@\seebelow@) tuple(const pair<U1, U2>&& u);
 \end{itemdecl}
 
 \begin{itemdescr}
     \pnum
+    Let \tcode{\exposid{FWD}(u)} be \tcode{static_cast<decltype(u)>(u)}.
+    
+    \pnum
     \constraints
     \begin{itemize}
-        \item \tcode{sizeof...(Types)} is 2,
-        \item \tcode{is_constructible_v<$\tcode{T}_0$, U1>} is \tcode{true}, and
-        \item \tcode{is_constructible_v<$\tcode{T}_1$, U2>} is \tcode{true}.
+        \item
+        \tcode{sizeof...(Types)} is 2,
+        \item
+        \tcode{is_constructible_v<$\tcode{T}_0$, decltype(get<0>(\exposid{FWD}(u)))>} is \tcode{true}, and
+        \item
+        \tcode{is_constructible_v<$\tcode{T}_1$, decltype(get<1>(\exposid{FWD}(u)))>} is \tcode{true}.
     \end{itemize}
-
+    
     \pnum
     \effects
-    Initializes the first element with
-    \tcode{std::forward<U1>(u.first)} and the
-    second element with \tcode{std::forward<U2>(u.second)}.
-
+    Initializes the first element with \tcode{get<0>(\exposid{FWD}(u))} and
+    the second element with \tcode{get<1>(\exposid{FWD}(\brk{}u))}.
+    
     \pnum
+    \remarks
     The expression inside \tcode{explicit} is equivalent to:
     \begin{codeblock}
-        !is_convertible_v<U1, @$\tcode{T}_0$@> || !is_convertible_v<U2, @$\tcode{T}_1$@>
+        !is_convertible_v<decltype(get<0>(@\exposid{FWD}@(u))), @$\tcode{T}_0$@> ||
+        !is_convertible_v<decltype(get<1>(@\exposid{FWD}@(u))), @$\tcode{T}_1$@>
     \end{codeblock}
 \end{itemdescr}
+
+\begin{addedblock}
+\indexlibraryctor{tuple}%
+\begin{itemdecl}
+    template<@\placeholder{tuple-like}@ UTuple> constexpr explicit(@\seebelow@) tuple(UTuple & u);
+    template<@\placeholder{tuple-like}@ UTuple> constexpr explicit(@\seebelow@) tuple(const UTuple & u);
+    template<@\placeholder{tuple-like}@ UTuple> constexpr explicit(@\seebelow@) tuple(UTuple&& u);
+    template<@\placeholder{tuple-like}@ UTuple> constexpr explicit(@\seebelow@) tuple(const UTuple&& u);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{I} be the pack \tcode{0, 1, ..., (sizeof...(Types) - 1)}.\newline
+Let \tcode{UTypes} be the pack \tcode{tuple_element_t<0, UTuple>, tuple_element_t<0, UTuple>, ..., tuple_element_t<tuple_size_v<UTuple> -1, UTuple>}.\newline
+Let \tcode{\exposid{FWD}(u)} be \tcode{static_cast<decltype(u)>(u)}.
+
+\pnum
+\constraints
+\begin{itemize}
+    \item
+    \tcode{sizeof...(Types)} equals \tcode{tuple_size_v<UTuple>}, and
+    \item
+    \tcode{(is_constructible_v<Types, decltype(get<I>(\exposid{FWD}(u)))> \&\& ...)}
+    is \tcode{true}, and
+    \item
+    either \tcode{sizeof...(Types)} is not 1, or
+    (when \tcode{Types...} expands to \tcode{T} and
+    \tcode{UTypes...} expands to \tcode{U})
+    \tcode{is_convertible_v<decltype(u), T>},
+    \tcode{is_constructible_v<T, decltype(u)>}, and
+    \tcode{is_same_v<T, U>} are all \tcode{false}.
+\end{itemize}
+
+\pnum
+\effects
+For all $i$, initializes the $i^\textrm{th}$ element of \tcode{*this}
+with \tcode{get<$i$>(\exposid{FWD}(u))}.
+
+\pnum
+\remarks
+The expression inside \keyword{explicit} is equivalent to:
+\begin{codeblock}
+    !(is_convertible_v<decltype(get<I>(@\exposid{FWD}@(u))), Types> && ...)
+\end{codeblock}
+\end{itemdescr}
+\end{addedblock}
 
 \indexlibraryctor{tuple}%
 \begin{itemdecl}
@@ -674,31 +899,46 @@ template<class U1, class U2> constexpr explicit(@\seebelow@) tuple(const pair<U1
     constexpr tuple(allocator_arg_t, const Alloc& a, const tuple&);
     template<class Alloc>
     constexpr tuple(allocator_arg_t, const Alloc& a, tuple&&);
-    template<class Alloc, @\changed{class... UTypes}{\placeholder{tuple-like} UTuple}@>
+    template<class Alloc, class... UTypes>
     constexpr explicit(@\seebelow@)
-    tuple(allocator_arg_t, const Alloc& a, const @\changed{tuple<UTypes...>}{UTuple}@&);
-    template<class Alloc,  @\changed{class... UTypes}{\placeholder{tuple-like} UTuple}@>
+    tuple(allocator_arg_t, const Alloc& a, tuple<UTypes...>&);
+    template<class Alloc, class... UTypes>
     constexpr explicit(@\seebelow@)
-    tuple(allocator_arg_t, const Alloc& a,@\changed{tuple<UTypes...>}{UTuple}@&&);
-
-\end{itemdecl}
-\begin{removedblock}
-\begin{itemdecl}
+    tuple(allocator_arg_t, const Alloc& a, const tuple<UTypes...>&);
+    template<class Alloc, class... UTypes>
+    constexpr explicit(@\seebelow@)
+    tuple(allocator_arg_t, const Alloc& a, tuple<UTypes...>&&);
+    template<class Alloc, class... UTypes>
+    constexpr explicit(@\seebelow@)
+    tuple(allocator_arg_t, const Alloc& a, const tuple<UTypes...>&&);
+    template<class Alloc, class U1, class U2>
+    constexpr explicit(@\seebelow@)
+    tuple(allocator_arg_t, const Alloc& a, pair<U1, U2>&);
     template<class Alloc, class U1, class U2>
     constexpr explicit(@\seebelow@)
     tuple(allocator_arg_t, const Alloc& a, const pair<U1, U2>&);
     template<class Alloc, class U1, class U2>
     constexpr explicit(@\seebelow@)
     tuple(allocator_arg_t, const Alloc& a, pair<U1, U2>&&);
+    template<class Alloc, class U1, class U2>
+    constexpr explicit(@\seebelow@)
+    tuple(allocator_arg_t, const Alloc& a, const pair<U1, U2>&&);
+    @\added{template<class Alloc, \placeholder{tuple-like} UTuple>}@
+    @\added{constexpr explicit(\seebelow) tuple(allocator_arg_t, const Alloc\& a, UTuple\&);}@
+    @\added{template<class Alloc, \placeholder{tuple-like} UTuple>}@
+    @\added{constexpr explicit(\seebelow) tuple(allocator_arg_t, const Alloc\& a, const UTuple\&);}@
+    @\added{template<class Alloc, \placeholder{tuple-like} UTuple>}@
+    @\added{constexpr explicit(\seebelow) tuple(allocator_arg_t, const Alloc\& a, UTuple\&\&);}@
+    @\added{template<class Alloc, \placeholder{tuple-like} UTuple>}@
+    @\added{constexpr explicit(\seebelow) tuple(allocator_arg_t, const Alloc\& a, const UTuple\&\&);}@
 \end{itemdecl}
-\end{removedblock}
 
 \begin{itemdescr}
     \pnum
     \expects
     \tcode{Alloc} meets the
     \oldconcept{Allocator} requirements (\tref{cpp17.allocator}).
-
+    
     \pnum
     \effects
     Equivalent to the preceding constructors except that each element is constructed with
@@ -712,8 +952,8 @@ For each \tcode{tuple} assignment operator, an exception is thrown only if the
 assignment of one of the types in \tcode{Types} throws an exception.
 In the function descriptions that follow, let $i$ be in the range \range{0}{sizeof...\brk{}(Types)}
 in order, $\tcode{T}_i$ be the $i^\text{th}$ type in \tcode{Types},
-and $\tcode{U}_i$ be \changed{the $i^\text{th}$ type in a template parameter pack named \tcode{UTypes}, where indexing
-is zero-based}{the type denoted by \tcode{tuple\char`_element\char`_t<$i$, UTuple>} of a template parameter named \tcode{UTuple} satisfying \placeholder{tuple-like}. \tcode{UTypes} denotes a pack formed of the sequence of $\tcode{U}_i$}.
+and $\tcode{U}_i$ be the $i^\text{th}$ type in a
+template parameter pack named \tcode{UTypes}, where indexing is zero-based.
 
 \indexlibrarymember{operator=}{tuple}%
 \begin{itemdecl}
@@ -725,12 +965,31 @@ is zero-based}{the type denoted by \tcode{tuple\char`_element\char`_t<$i$, UTupl
     \effects
     Assigns each element of \tcode{u} to the corresponding
     element of \tcode{*this}.
-
+    
+    \pnum
+    \returns
+    \tcode{*this}.
+    
     \pnum
     \remarks
     This operator is defined as deleted unless
     \tcode{is_copy_assignable_v<$\tcode{T}_i$>} is \tcode{true} for all $i$.
+\end{itemdescr}
 
+\indexlibrarymember{operator=}{tuple}%
+\begin{itemdecl}
+    constexpr const tuple& operator=(const tuple& u) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \tcode{(is_copy_assignable_v<const Types> \&\& ...)} is \tcode{true}.
+    
+    \pnum
+    \effects
+    Assigns each element of \tcode{u} to the corresponding element of \tcode{*this}.
+    
     \pnum
     \returns
     \tcode{*this}.
@@ -745,22 +1004,42 @@ is zero-based}{the type denoted by \tcode{tuple\char`_element\char`_t<$i$, UTupl
     \pnum
     \constraints
     \tcode{is_move_assignable_v<$\tcode{T}_i$>} is \tcode{true} for all $i$.
-
+    
     \pnum
     \effects
     For all $i$, assigns \tcode{std::forward<$\tcode{T}_i$>(get<$i$>(u))} to
     \tcode{get<$i$>(*this)}.
-
+    
+    \pnum
+    \returns
+    \tcode{*this}.
+    
     \pnum
     \remarks
-    The expression inside \tcode{noexcept} is equivalent to the logical \textsc{and} of the
+    The exception specification is equivalent to the logical \tcode{AND} of the
     following expressions:
-
+    
     \begin{codeblock}
         is_nothrow_move_assignable_v<@$\mathtt{T}_i$@>
     \end{codeblock}
     where $\mathtt{T}_i$ is the $i^\text{th}$ type in \tcode{Types}.
+\end{itemdescr}
 
+\indexlibrarymember{operator=}{tuple}%
+\begin{itemdecl}
+    constexpr const tuple& operator=(tuple&& u) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \tcode{(is_assignable_v<const Types\&, Types> \&\& ...)} is \tcode{true}.
+    
+    \pnum
+    \effects
+    For all $i$,
+    assigns \tcode{std::forward<T$_i$>(get<$i$>(u))} to \tcode{get<$i$>(*this)}.
+    
     \pnum
     \returns
     \tcode{*this}.
@@ -768,23 +1047,22 @@ is zero-based}{the type denoted by \tcode{tuple\char`_element\char`_t<$i$, UTupl
 
 \indexlibrarymember{operator=}{tuple}%
 \begin{itemdecl}
-    template<@\changed{class... UTypes}{\placeholder{tuple-like} UTuple}@>
-    constexpr tuple& operator=(const @\changed{tuple<UTypes...>}{UTuple}@& u);
+    template<class... UTypes> constexpr tuple& operator=(const tuple<UTypes...>& u);
 \end{itemdecl}
 
 \begin{itemdescr}
     \pnum
     \constraints
     \begin{itemize}
-        \item \tcode{sizeof...(Types)} equals \changed{\tcode{sizeof...(UTypes)}}{\tcode{tuple\char`_size\char`_v<UTuple>}} and
+        \item \tcode{sizeof...(Types)} equals \tcode{sizeof...(UTypes)} and
         \item \tcode{is_assignable_v<$\tcode{T}_i$\&, const $\tcode{U}_i$\&>} is \tcode{true} for all $i$.
     \end{itemize}
-
+    
     \pnum
     \effects
     Assigns each element of \tcode{u} to the corresponding element
     of \tcode{*this}.
-
+    
     \pnum
     \returns
     \tcode{*this}.
@@ -792,29 +1070,75 @@ is zero-based}{the type denoted by \tcode{tuple\char`_element\char`_t<$i$, UTupl
 
 \indexlibrarymember{operator=}{tuple}%
 \begin{itemdecl}
-    template<@\changed{class... UTypes}{\placeholder{tuple-like} UTuple}@>
-    constexpr tuple& operator=(@\changed{tuple<UTypes...>}{UTuple}@&& u);
+    template<class... UTypes> constexpr const tuple& operator=(const tuple<UTypes...>& u) const;
 \end{itemdecl}
 
 \begin{itemdescr}
     \pnum
     \constraints
     \begin{itemize}
-        \item \tcode{sizeof...(Types)} equals \changed{\tcode{sizeof...(UTypes)}}{\tcode{tuple\char`_size\char`_v<UTuple>}} and
-        \item \tcode{is_assignable_v<$\tcode{T}_i$\&, $\tcode{U}_i$>} is \tcode{true} for all $i$.
+        \item
+        \tcode{sizeof...(Types)} equals \tcode{sizeof...(UTypes)} and
+        \item
+        \tcode{(is_assignable_v<const Types\&, const UTypes\&> \&\& ...)} is \tcode{true}.
     \end{itemize}
-
+    
     \pnum
     \effects
-    For all $i$, assigns \tcode{std::forward<$\tcode{U}_i$>(get<$i$>(u))} to
-    \tcode{get<$i$>(*this)}.
-
+    Assigns each element of \tcode{u} to the corresponding element of \tcode{*this}.
+    
     \pnum
     \returns
     \tcode{*this}.
 \end{itemdescr}
 
-\begin{removedblock}
+\indexlibrarymember{operator=}{tuple}%
+\begin{itemdecl}
+    template<class... UTypes> constexpr tuple& operator=(tuple<UTypes...>&& u);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \begin{itemize}
+        \item \tcode{sizeof...(Types)} equals \tcode{sizeof...(UTypes)} and
+        \item \tcode{is_assignable_v<$\tcode{T}_i$\&, $\tcode{U}_i$>} is \tcode{true} for all $i$.
+    \end{itemize}
+    
+    \pnum
+    \effects
+    For all $i$, assigns \tcode{std::forward<$\tcode{U}_i$>(get<$i$>(u))} to
+    \tcode{get<$i$>(*this)}.
+    
+    \pnum
+    \returns
+    \tcode{*this}.
+\end{itemdescr}
+
+\indexlibrarymember{operator=}{tuple}%
+\begin{itemdecl}
+    template<class... UTypes> constexpr const tuple& operator=(tuple<UTypes...>&& u) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \begin{itemize}
+        \item
+        \tcode{sizeof...(Types)} equals \tcode{sizeof...(UTypes)} and
+        \item
+        \tcode{(is_assignable_v<const Types\&, UTypes> \&\& ...)} is \tcode{true}.
+    \end{itemize}
+    
+    \pnum
+    \effects
+    For all $i$,
+    assigns \tcode{std::forward<U$_i$>(get<$i$>(u))} to \tcode{get<$i$>(*this)}.
+    
+    \pnum
+    \returns
+    \tcode{*this}.
+\end{itemdescr}
 
 \indexlibrarymember{operator=}{tuple}%
 \indexlibraryglobal{pair}%
@@ -830,12 +1154,39 @@ is zero-based}{the type denoted by \tcode{tuple\char`_element\char`_t<$i$, UTupl
         \item \tcode{is_assignable_v<$\tcode{T}_0$\&, const U1\&>} is \tcode{true}, and
         \item \tcode{is_assignable_v<$\tcode{T}_1$\&, const U2\&>} is \tcode{true}.
     \end{itemize}
-
+    
     \pnum
     \effects
     Assigns \tcode{u.first} to the first element of \tcode{*this}
     and \tcode{u.second} to the second element of \tcode{*this}.
+    
+    \pnum
+    \returns
+    \tcode{*this}.
+\end{itemdescr}
 
+\indexlibrarymember{operator=}{tuple}%
+\begin{itemdecl}
+    template<class U1, class U2> constexpr const tuple& operator=(const pair<U1, U2>& u) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \begin{itemize}
+        \item
+        \tcode{sizeof...(Types)} is 2,
+        \item
+        \tcode{is_assignable_v<const $\tcode{T}_0$\&, const U1\&>} is \tcode{true}, and
+        \item
+        \tcode{is_assignable_v<const $\tcode{T}_1$\&, const U2\&>} is \tcode{true}.
+    \end{itemize}
+    
+    \pnum
+    \effects
+    Assigns \tcode{u.first} to the first element and
+    \tcode{u.second} to the second element.
+    
     \pnum
     \returns
     \tcode{*this}.
@@ -855,87 +1206,331 @@ is zero-based}{the type denoted by \tcode{tuple\char`_element\char`_t<$i$, UTupl
         \item \tcode{is_assignable_v<$\tcode{T}_0$\&, U1>} is \tcode{true}, and
         \item \tcode{is_assignable_v<$\tcode{T}_1$\&, U2>} is \tcode{true}.
     \end{itemize}
-
+    
     \pnum
     \effects
     Assigns \tcode{std::forward<U1>(u.first)} to the first
     element of \tcode{*this} and\\ \tcode{std::forward<U2>(u.second)} to the
     second element of \tcode{*this}.
-
+    
     \pnum
     \returns
     \tcode{*this}.
 \end{itemdescr}
 
-\end{removedblock}
-
-\rSec2[tuple.creation]{Tuple creation functions}
-
-
-\indexlibraryglobal{tuple_cat}
+\indexlibrarymember{operator=}{tuple}%
 \begin{itemdecl}
-template<@\changed{class}{\placeholder{tuple-like}}@... Tuples>
-constexpr tuple<CTypes...> tuple_cat(Tuples&&... tpls);
+    template<class U1, class U2> constexpr const tuple& operator=(pair<U1, U2>&& u) const;
 \end{itemdecl}
 
 \begin{itemdescr}
-\pnum
-In the following paragraphs, let $\tcode{T}_i$ be the $i^\text{th}$ type in \tcode{Tuples},
-$\tcode{U}_i$ be \tcode{remove_reference_t<T$_i$>}, and $\tcode{tp}_i$ be the $i^\text{th}$
-parameter in the function parameter pack \tcode{tpls}, where all indexing is
-zero-based.
+    \pnum
+    \constraints
+    \begin{itemize}
+        \item
+        \tcode{sizeof...(Types)} is 2,
+        \item
+        \tcode{is_assignable_v<const $\tcode{T}_0$\&, U1>} is \tcode{true}, and
+        \item
+        \tcode{is_assignable_v<const $\tcode{T}_1$\&, U2>} is \tcode{true}.
+    \end{itemize}
+    
+    \pnum
+    \effects
+    Assigns \tcode{std::forward<U1>(u.first)} to the first element and\\
+    \tcode{std::forward<U2>(u.second)} to the second element.
+    
+    \pnum
+    \returns
+    \tcode{*this}.
+\end{itemdescr}
 
-\pnum
-\expects
-For all $i$, $\tcode{U}_i$ is the type
-$\cv_i$ \tcode{tuple<$\tcode{Args}_i$...>}, where $\cv_i$ is the (possibly empty) $i^\text{th}$
-\grammarterm{cv-qualifier-seq} and $\tcode{Args}_i$ is the template parameter pack representing the element
-types in $\tcode{U}_i$. Let $\tcode{A}_{ik}$ be the ${k}^\text{th}$ type in $\tcode{Args}_i$. For all
-$\tcode{A}_{ik}$ the following requirements are met:
+\begin{addedblock}
+\indexlibrarymember{operator=}{tuple}%
+\begin{itemdecl}
+    template<@\placeholder{tuple-like}@ UTuple> 
+    constexpr tuple& operator=(const UTuple& u);
+\end{itemdecl}
 
-\ednote{Is "the template parameter pack representing the element types in $\tcode{U}_i$" clear enough?}
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \begin{itemize}
+        \item \tcode{sizeof...(Types)} equals \tcode{tuple_size_v<UTuple>} and
+        \item \tcode{is_assignable_v<$\tcode{T}_i$\&, const std::element_t<$i$, UTuple>\&>} is \tcode{true} for all $i$.
+    \end{itemize}
+    
+    \pnum
+    \effects
+    Assigns each element of \tcode{u} to the corresponding element
+    of \tcode{*this}.
+    
+    \pnum
+    \returns
+    \tcode{*this}.
+\end{itemdescr}
 
-\begin{itemize}
-    \item If $\tcode{T}_i$ is deduced as an lvalue reference type, then
-    \tcode{is_constructible_v<$\tcode{A}_{ik}$, $\cv{}_i\;\tcode{A}_{ik}$\&> == true}, otherwise
-    \item \tcode{is_constructible_v<$\tcode{A}_{ik}$, $\cv{}_i\;\tcode{A}_{ik}$\&\&> == true}.
-\end{itemize}
+\indexlibrarymember{operator=}{tuple}%
+\begin{itemdecl}
+    template<@\placeholder{tuple-like}@ UTuple> 
+    constexpr const tuple& operator=(const UTuple& u) const;
+\end{itemdecl}
 
-\pnum
-\remarks
-The types in \tcode{CTypes} are equal to the ordered
-sequence of the extended types
-\tcode{$\tcode{Args}_0$..., $\tcode{Args}_1$..., $\dotsc$, $\tcode{Args}_{n-1}$...},
-where $n$ is
-equal to \tcode{sizeof...(Tuples)}. Let \tcode{$\tcode{e}_i$...} be the $i^\text{th}$
-ordered sequence of tuple elements of the resulting \tcode{tuple} object
-corresponding to the type sequence $\tcode{Args}_i$.
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \begin{itemize}
+        \item
+        \tcode{sizeof...(Types)} equals \tcode{tuple_size_v<UTuple>} and
+        \item \tcode{is_assignable_v<$\tcode{T}_i$\&, const std::element_t<$i$, UTuple>\&>} is \tcode{true} for all $i$.
+    \end{itemize}
+    
+    \pnum
+    \effects
+    Assigns each element of \tcode{u} to the corresponding element of \tcode{*this}.
+    
+    \pnum
+    \returns
+    \tcode{*this}.
+\end{itemdescr}
 
-\pnum
-\returns
-A \tcode{tuple} object constructed by initializing the ${k_i}^\text{th}$
-type element $\tcode{e}_{ik}$ in \tcode{$\tcode{e}_i$...} with
-\begin{codeblock}
-    get<@$k_i$@>(std::forward<@$\tcode{T}_i$@>(@$\tcode{tp}_i$@))
-\end{codeblock}
-for each valid $k_i$ and each group $\tcode{e}_i$ in order.
+\indexlibrarymember{operator=}{tuple}%
+\begin{itemdecl}
+    template<@\placeholder{tuple-like}@ UTuple>
+    constexpr tuple& operator=(UTuple&& u);
+\end{itemdecl}
 
-\pnum
-\begin{removedblock}
-\begin{note}
-    An implementation may support additional types in the template parameter
-    pack \tcode{Tuples} that support the \tcode{tuple}-like protocol, such as
-    \tcode{pair} and \tcode{array}.
-\end{note}
-\end{removedblock}
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \begin{itemize}
+        \item \tcode{sizeof...(Types)} equals \tcode{tuple_size_v<UTuple>} and
+        \item \tcode{is_assignable_v<$\tcode{T}_i$\&, std::element_t<$i$, UTuple>>} is \tcode{true} for all $i$..
+    \end{itemize}
+    
+    \pnum
+    \effects
+    For all $i$, assigns \tcode{std::forward<$\tcode{U}_i$>(get<$i$>(u))} to
+    \tcode{get<$i$>(*this)}.
+    
+    \pnum
+    \returns
+    \tcode{*this}.
+\end{itemdescr}
+
+\indexlibrarymember{operator=}{tuple}%
+\begin{itemdecl}
+    template<@\placeholder{tuple-like}@ UTuple>
+    constexpr const tuple& operator=(UTuple&& u) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \begin{itemize}
+        \item
+        \tcode{sizeof...(Types)} equals \tcode{tuple_size_v<UTuple>} and
+        \item \tcode{is_assignable_v<const $\tcode{T}_i$\&, std::element_t<$i$, UTuple>\&\&>} is \tcode{true} for all $i$.
+    \end{itemize}
+    
+    \pnum
+    \effects
+    For all $i$,
+    assigns \tcode{std::forward<U$_i$>(get<$i$>(u))} to \tcode{get<$i$>(*this)}.
+    
+    \pnum
+    \returns
+    \tcode{*this}.
+\end{itemdescr}
+\end{addedblock}
+
+\rSec3[tuple.swap]{\tcode{swap}}
+
+\indexlibrarymember{swap}{tuple}%
+\begin{itemdecl}
+    constexpr void swap(tuple& rhs) noexcept(@\seebelow@);
+    constexpr void swap(const tuple& rhs) const noexcept(@\seebelow@);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \mandates
+    \begin{itemize}
+        \item
+        For the first overload,
+        \tcode{(is_swappable_v<Types> \&\& ...)} is \tcode{true}.
+        \item
+        For the second overload,
+        \tcode{(is_swappable_v<const Types> \&\& ...)} is \tcode{true}.
+    \end{itemize}
+    
+    \pnum
+    \expects
+    Each element in \tcode{*this} is swappable with\iref{swappable.requirements}
+    the corresponding element in \tcode{rhs}.
+    
+    \pnum
+    \effects
+    Calls \tcode{swap} for each element in \tcode{*this} and its
+    corresponding element in \tcode{rhs}.
+    
+    \pnum
+    \throws
+    Nothing unless one of the element-wise \tcode{swap} calls throws an exception.
+    
+    \pnum
+    \remarks
+    The exception specification is equivalent to
+    \begin{itemize}
+        \item
+        \tcode{(is_nothrow_swappable_v<Types> \&\& ...)} for the first overload and
+        \item
+        \tcode{(is_nothrow_swappable_v<const Types> \&\& ...)} for the second overload.
+    \end{itemize}
+\end{itemdescr}
+
+\rSec2[tuple.creation]{Tuple creation functions}
+
+\indexlibraryglobal{make_tuple}%
+\indexlibrarymember{tuple}{make_tuple}%
+\begin{itemdecl}
+    template<class... TTypes>
+    constexpr tuple<unwrap_ref_decay_t<TTypes>...> make_tuple(TTypes&&... t);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \returns
+    \tcode{tuple<unwrap_ref_decay_t<TTypes>...>(std::forward<TTypes>(t)...)}.
+    
+    \pnum
+    \begin{example}
+        \begin{codeblock}
+            int i; float j;
+            make_tuple(1, ref(i), cref(j))
+        \end{codeblock}
+        creates a tuple of type \tcode{tuple<int, int\&, const float\&>}.
+    \end{example}
+\end{itemdescr}
+
+\indexlibraryglobal{forward_as_tuple}%
+\indexlibrarymember{tuple}{forward_as_tuple}%
+\begin{itemdecl}
+    template<class... TTypes>
+    constexpr tuple<TTypes&&...> forward_as_tuple(TTypes&&... t) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs a tuple of references to the arguments in \tcode{t} suitable
+    for forwarding as arguments to a function. Because the result may contain references
+    to temporary objects, a program shall ensure that the return value of this
+    function does not outlive any of its arguments (e.g., the program should typically
+    not store the result in a named variable).
+    
+    \pnum
+    \returns
+    \tcode{tuple<TTypes\&\&...>(std::forward<TTypes>(t)...)}.
+\end{itemdescr}
+
+\indexlibraryglobal{tie}%
+\indexlibraryglobal{ignore}%
+\indexlibrarymember{tuple}{tie}%
+\begin{itemdecl}
+    template<class... TTypes>
+    constexpr tuple<TTypes&...> tie(TTypes&... t) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \returns
+    \tcode{tuple<TTypes\&...>(t...)}.  When an
+    argument in \tcode{t} is \tcode{ignore}, assigning
+    any value to the corresponding tuple element has no effect.
+    
+    \pnum
+    \begin{example}
+        \tcode{tie} functions allow one to create tuples that unpack
+        tuples into variables. \tcode{ignore} can be used for elements that
+        are not needed:
+        \begin{codeblock}
+            int i; std::string s;
+            tie(i, ignore, s) = make_tuple(42, 3.14, "C++");
+            // \tcode{i == 42}, \tcode{s == "C++"}
+        \end{codeblock}
+    \end{example}
+\end{itemdescr}
+
+\indexlibraryglobal{tuple_cat}
+\begin{itemdecl}
+    template<@\changed{class}{\placeholder{tuple-like}}@... Tuples>
+    constexpr tuple<CTypes...> tuple_cat(Tuples&&... tpls);
+\end{itemdecl}
+
+\begin{itemdescr}  % NOCHECK: order
+    \pnum
+    In the following paragraphs, let $\tcode{T}_i$ be the $i^\text{th}$ type in \tcode{Tuples},
+    $\tcode{U}_i$ be \tcode{remove_reference_t<T$_i$>}, and $\tcode{tp}_i$ be the $i^\text{th}$
+    parameter in the function parameter pack \tcode{tpls}, where all indexing is
+    zero-based.
+    
+    \pnum
+    \expects
+    For all $i$, $\tcode{U}_i$ is the type
+    $\cv_i$ \tcode{tuple<$\tcode{Args}_i$...>}, where $\cv_i$ is the (possibly empty) $i^\text{th}$
+    \grammarterm{cv-qualifier-seq} and $\tcode{Args}_i$ is the template parameter pack representing the element
+    types in $\tcode{U}_i$. Let $\tcode{A}_{ik}$ be the ${k}^\text{th}$ type in $\tcode{Args}_i$. For all
+    $\tcode{A}_{ik}$ the following requirements are met:
+    
+    \ednote{Is "the template parameter pack representing the element types in $\tcode{U}_i$" clear enough?}
+    
+    
+    \begin{itemize}
+        \item If $\tcode{T}_i$ is deduced as an lvalue reference type, then
+        \tcode{is_constructible_v<$\tcode{A}_{ik}$, $\cv{}_i\;\tcode{A}_{ik}$\&> == true}, otherwise
+        \item \tcode{is_constructible_v<$\tcode{A}_{ik}$, $\cv{}_i\;\tcode{A}_{ik}$\&\&> == true}.
+    \end{itemize}
+    
+    \pnum
+    \remarks
+    The types in \tcode{CTypes} are equal to the ordered
+    sequence of the extended types
+    \tcode{$\tcode{Args}_0$..., $\tcode{Args}_1$..., $\dotsc$, $\tcode{Args}_{n-1}$...},
+    where $n$ is
+    equal to \tcode{sizeof...(Tuples)}. Let \tcode{$\tcode{e}_i$...} be the $i^\text{th}$
+    ordered sequence of tuple elements of the resulting \tcode{tuple} object
+    corresponding to the type sequence $\tcode{Args}_i$.
+    
+    \pnum
+    \returns
+    A \tcode{tuple} object constructed by initializing the ${k_i}^\text{th}$
+    type element $\tcode{e}_{ik}$ in \tcode{$\tcode{e}_i$...} with
+    \begin{codeblock}
+        get<@$k_i$@>(std::forward<@$\tcode{T}_i$@>(@$\tcode{tp}_i$@))
+    \end{codeblock}
+    for each valid $k_i$ and each group $\tcode{e}_i$ in order.
+    
+    \begin{removedblock}
+    \begin{note}
+        An implementation can support additional types in the template parameter
+        pack \tcode{Tuples} that support the \tcode{tuple}-like protocol, such as
+        \tcode{pair} and \tcode{array}.
+    \end{note}        
+    
+    \end{removedblock}
+
+    
+\end{itemdescr}
+
 
 
 \rSec2[tuple.apply]{Calling a function with a \tcode{tuple} of arguments}
 
 \indexlibraryglobal{apply}%
 \begin{itemdecl}
-template<class F, @\changed{class}{\placeholder{tuple-like}}@ Tuple>
-constexpr decltype(auto) apply(F&& f, Tuple&& t);
+    template<class F, @\changed{class}{\placeholder{tuple-like}}@ Tuple>
+    constexpr decltype(auto) apply(F&& f, Tuple&& t);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -943,11 +1538,13 @@ constexpr decltype(auto) apply(F&& f, Tuple&& t);
 \effects
 Given the exposition-only function:
 \begin{codeblock}
-    template<class F, class Tuple, size_t... I>
+namespace std {
+    template<class F, @\changed{class}{\placeholder{tuple-like}}@ Tuple, size_t... I>
     constexpr decltype(auto) @\placeholdernc{apply-impl}@(F&& f, Tuple&& t, index_sequence<I...>) {
         // \expos
-        return @\placeholdernc{INVOKE}@(std::forward<F>(f), std::get<I>(std::forward<Tuple>(t))...);  // see \ref{func.require}
+        return @\placeholdernc{INVOKE}@(std::forward<F>(f), get<I>(std::forward<Tuple>(t))...);     // see \ref{func.require}
     }
+}
 \end{codeblock}
 Equivalent to:
 \begin{codeblock}
@@ -956,11 +1553,10 @@ Equivalent to:
 \end{codeblock}
 \end{itemdescr}
 
-
 \indexlibraryglobal{make_from_tuple}%
 \begin{itemdecl}
     template<class T, @\changed{class}{\placeholder{tuple-like}}@ Tuple>
-    constexpr T make_from_tuple(Tuple&& t);
+    constexpr T make_from_tuple(@\changed{class}{\placeholder{tuple-like}}@&& t);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -968,11 +1564,13 @@ Equivalent to:
 \effects
 Given the exposition-only function:
 \begin{codeblock}
-    template<class T, class Tuple, size_t... I>
+namespace std {
+    template<class T, @\changed{class}{\placeholder{tuple-like}}@ Tuple, size_t... I>
     requires is_constructible_v<T, decltype(get<I>(declval<Tuple>()))...>
-    constexpr T @\placeholdernc{make-from-tuple-impl}@(Tuple&& t, index_sequence<I...>) {     // \expos
+    constexpr T @\placeholdernc{make-from-tuple-impl}@(Tuple&& t, index_sequence<I...>) {   // \expos
         return T(get<I>(std::forward<Tuple>(t))...);
     }
+}
 \end{codeblock}
 Equivalent to:
 \begin{codeblock}
@@ -987,13 +1585,19 @@ Equivalent to:
 \end{note}
 \end{itemdescr}
 
-\end{itemdescr}
 \rSec2[tuple.rel]{Relational operators}
 
+\indexlibrarymember{operator==}{tuple}%
 \begin{itemdecl}
-template<class... TTypes, @\changed{class... UTypes}{\placeholder{tuple-like} UTuple}@>
-constexpr bool operator==(const tuple<TTypes...>& t, @\changed{tuple<UTypes...>}{UTuple}@& u);
+template<class... TTypes, class... UTypes>
+constexpr bool operator==(const tuple<TTypes...>& t, const tuple<UTypes...>& u);
 \end{itemdecl}
+\begin{addedblock}
+\begin{itemdecl}
+template<class... TTypes, @\placeholder{tuple-like}@ UTuple>
+constexpr bool operator==(const tuple<TTypes...>& t, const UTuple& u);
+\end{itemdecl}
+\end{addedblock}
 
 \begin{itemdescr}
     \pnum
@@ -1003,33 +1607,35 @@ constexpr bool operator==(const tuple<TTypes...>& t, @\changed{tuple<UTypes...>}
     \tcode{get<i>(t) == get<i>(u)} is a valid expression
     returning a type that is convertible to \tcode{bool}.
     \tcode{sizeof...(TTypes)} equals
-    \changed{\tcode{sizeof...(UTypes)}}{\tcode{tuple\char`_size\char`_v<UTuple>}}.
-
+    \tcode{\changed{sizeof...(UTypes)}{tuple_size_v<std::remove_cvref_t<decltype(u)>>}}.
+    
     \pnum
     \returns
     \tcode{true} if \tcode{get<i>(t) == get<i>(u)} for all
     \tcode{i}, otherwise \tcode{false}.
     For any two zero-length tuples \tcode{e} and \tcode{f}, \tcode{e == f} returns \tcode{true}.
-
+    
     \pnum
-    \effects
-    The elementary comparisons are performed in order from the zeroth index upwards.  No comparisons or element accesses are
+    \remarks
+    The elementary comparisons are performed in order from the
+    zeroth index upwards.  No comparisons or element accesses are
     performed after the first equality comparison that evaluates to
     \tcode{false}.
 \end{itemdescr}
 
-\begin{addedblock}
-In the description that follow, let $i$ be in the range
-\range{0}{\tcode{tuple\char`_size\char`_v<UTuple>}} in order, $\tcode{U}_i$ {the type denoted by \tcode{tuple\char`_element\char`_t<$i$, UTuple>} of a template parameter named \tcode{UTuple} satisfying \placeholder{tuple-like}. \tcode{UTypes} denotes a pack formed of the sequence of $\tcode{U}_i$}.
-\end{addedblock}
-
-
 \indexlibrarymember{operator<=>}{tuple}%
 \begin{itemdecl}
-template<class... TTypes, @\changed{class... UTypes}{\placeholder{tuple-like} UTuple}@>
+template<class... TTypes, class... UTypes>
 constexpr common_comparison_category_t<@\placeholder{synth-three-way-result}@<TTypes, UTypes>...>
-operator<=>(const tuple<TTypes...>& t, const @\changed{tuple<UTypes...>}{UTuple}@& u);
+operator<=>(const tuple<TTypes...>& t, const tuple<UTypes...>& u);
 \end{itemdecl}
+\begin{addedblock}
+\begin{itemdecl}
+template<class... TTypes, @\placeholder{tuple-like}@ UTuple>
+constexpr common_comparison_category_t<@\placeholder{synth-three-way-result}@<TTypes, UTypes>...>
+operator<=>(const tuple<TTypes...>& t, const UTuple& u);
+\end{itemdecl}
+\end{addedblock}
 
 \begin{itemdescr}
     \pnum
@@ -1049,65 +1655,63 @@ operator<=>(const tuple<TTypes...>& t, const @\changed{tuple<UTypes...>}{UTuple}
 \pnum
 \begin{note}
     The above definition does not require \tcode{t$_{\mathrm{tail}}$}
-    (or \tcode{u$_{\mathrm{tail}}$}) to be constructed. It may not
+    (or \tcode{u$_{\mathrm{tail}}$}) to be constructed. It might not
     even be possible, as \tcode{t} and \tcode{u} are not required to be copy
-    constructible. Also, all comparison functions are short circuited;
+    constructible. Also, all comparison operator functions are short circuited;
     they do not perform element accesses beyond what is required to determine the
     result of the comparison.
 \end{note}
 
-[...]
 
 \begin{addedblock}
 \rSec2[tuple.common_ref]{common_reference specialization}
 
 \begin{addedblock}
-In the description that follow, let $i$ be in the range
-\range{0}{\tcode{tuple\char`_size\char`_v<TTuple>}} in order.
-
-Let $\tcode{T}_i$ be the type denoted by \tcode{tuple\char`_element\char`_t<$i$, TTuple> of a template parameter named \tcode{TTuple} satisfying \placeholder{tuple-like}. \tcode{TTypes} denotes a pack formed of the sequence of $\tcode{T}_i$}.
-
-Let $\tcode{U}_i$ be the type denoted by \tcode{tuple\char`_element\char`_t<$i$, UTuple> of of a template parameter named \tcode{UTuple} satisfying \placeholder{tuple-like}. \tcode{UTypes} denotes a pack formed of the sequence of $\tcode{U}_i$}.
+    In the description that follow, let $i$ be in the range
+    \range{0}{\tcode{tuple\char`_size\char`_v<TTuple>}} in order.
+    
+    Let $\tcode{T}_i$ be the type denoted by \tcode{tuple\char`_element\char`_t<$i$, TTuple> of a template parameter named \tcode{TTuple} satisfying \placeholder{tuple-like}. \tcode{TTypes} denotes a pack formed by the sequence of $\tcode{T}_i$}.
+    
+    Let $\tcode{U}_i$ be the type denoted by \tcode{tuple\char`_element\char`_t<$i$, UTuple> of of a template parameter named \tcode{UTuple} satisfying \placeholder{tuple-like}. \tcode{UTypes} denotes a pack formed by the sequence of $\tcode{U}_i$}.
 \end{addedblock}
 
 \begin{itemdecl}
-template<@\placeholder{tuple-like}@ TTuple, @\placeholder{tuple-like}@ UTuple, template<class> class TQual, template<class> class UQual>
-struct basic_common_reference<TTuple, UTuple, TQual, UQual> {
-    using type = @\seebelow@;
-};
+    template<@\placeholder{tuple-like}@ TTuple, @\placeholder{tuple-like}@ UTuple, template<class> class TQual, template<class> class UQual>
+    struct basic_common_reference<TTuple, UTuple, TQual, UQual> {
+        using type = @\seebelow@;
+    };
 \end{itemdecl}
 
 \begin{itemdescr}
-\constraints
-\begin{itemize}
-\item \tcode{TTuple} is a specialization of \tcode{tuple} or \tcode{UTuple} is a specialization of \tcode{tuple},
-\item \tcode{tuple_size_v<TTuple> == tuple_size_v<UTuple>} is \tcode{true} and,
-\item \tcode{tuple<common_reference_t<TQual<TTypes>, UQual<UTypes>>...>} denotes a type.
-\end{itemize}
-
-\tcode{type} denotes the type \tcode{tuple<common_reference_t<TQual<TTypes>, UQual<UTypes>>...>}.
-
+    \constraints
+    \begin{itemize}
+        \item \tcode{TTuple} is a specialization of \tcode{tuple} or \tcode{UTuple} is a specialization of \tcode{tuple},
+        \item \tcode{tuple<common_reference_t<TQual<TTypes>, UQual<UTypes>>...>} denotes a type.
+    \end{itemize}
+    
+    \tcode{type} denotes the type \tcode{tuple<common_reference_t<TQual<TTypes>, UQual<UTypes>>...>}.
+    
 \end{itemdescr}
 
 \begin{itemdecl}
-template<@\placeholder{tuple-like}@ TTuple, @\placeholder{tuple-like}@ UTuple>
-struct basic_common_type<TTuple, UTuple, TQual, UQual> {
-    using type = @\seebelow@;
-};
+    template<@\placeholder{tuple-like}@ TTuple, @\placeholder{tuple-like}@ UTuple>
+    struct basic_common_type<TTuple, UTuple, TQual, UQual> {
+        using type = @\seebelow@;
+    };
 \end{itemdecl}
 
 \begin{itemdescr}
-\constraints
-\begin{itemize}
-    \item \tcode{TTuple} is a specialization of \tcode{tuple} or \tcode{UTuple} is a specialization of \tcode{tuple},
-    \item \tcode{tuple_size_v<TTuple> == tuple_size_v<UTuple>} is \tcode{true} and,
-    \item \tcode{tuple<common_type_t_t<TTypes, UTypes>...>} denotes a type.
-\end{itemize}
-
-\tcode{type} denotes the type \tcode{tuple<common_type_t_t<TTypes, UTypes>...>}.
-
+    \constraints
+    \begin{itemize}
+        \item \tcode{TTuple} is a specialization of \tcode{tuple} or \tcode{UTuple} is a specialization of \tcode{tuple},
+        \item \tcode{tuple<common_type_t<TTypes, UTypes>...>} denotes a type.
+    \end{itemize}
+    
+    \tcode{type} denotes the type \tcode{tuple<common_type_t<TTypes, UTypes>...>}.
+    
 \end{itemdescr}
 \end{addedblock}
+
 
 \rSec1[pairs]{Pairs}
 
@@ -1127,113 +1731,224 @@ and~\ref{tuple.elem}).%
 
 \indexlibraryglobal{pair}%
 \begin{codeblock}
-    namespace std {
-        template<class T1, class T2>
-        struct pair {
-            using first_type  = T1;
-            using second_type = T2;
-
-            T1 first;
-            T2 second;
-
-            pair(const pair&) = default;
-            pair(pair&&) = default;
-            constexpr explicit(@\seebelow@) pair();
-            constexpr explicit(@\seebelow@) pair(const T1& x, const T2& y);
-            template<class U1, class U2>
-            constexpr explicit(@\seebelow@) pair(U1&& x, U2&& y);
-            template<@\changed{class U1, class U2}{\placeholder{pair-like} U}@>
-            constexpr explicit(@\seebelow@) pair(const @\changed{pair<U1, U2>}{U}@& p);
-            template<@\changed{class U1, class U2}{\placeholder{pair-like} U}@>
-            constexpr explicit(@\seebelow@) pair(@\changed{pair<U1, U2>}{U}@&& p);
-            template<class... Args1, class... Args2>
-            constexpr pair(piecewise_construct_t,
-            tuple<Args1...> first_args, tuple<Args2...> second_args);
-
-            constexpr pair& operator=(const pair& p);
-            template<@\changed{class U1, class U2}{\placeholder{pair-like} U}@>
-            constexpr pair& operator=(const @\changed{pair<U1, U2>}{U}@& p);
-            constexpr pair& operator=(pair&& p) noexcept(@\seebelow@);
-            template<@\changed{class U1, class U2}{\placeholder{pair-like} U}@>
-            constexpr pair& operator=(@\changed{pair<U1, U2>}{U}@&& p);
-
-            constexpr void swap(pair& p) noexcept(@\seebelow@);
-        };
-
-        template<class T1, class T2>
-        pair(T1, T2) -> pair<T1, T2>;
-    }
+namespace std {
+    template<class T1, class T2>
+    struct pair {
+        using first_type  = T1;
+        using second_type = T2;
+        
+        T1 first;
+        T2 second;
+        
+        pair(const pair&) = default;
+        pair(pair&&) = default;
+        constexpr explicit(@\seebelow@) pair();
+        constexpr explicit(@\seebelow@) pair(const T1& x, const T2& y);
+        template<class U1 = T1, class U2 = T2>
+        constexpr explicit(@\seebelow@) pair(U1&& x, U2&& y);
+        template<class U1, class U2>
+        constexpr explicit(@\seebelow@) pair(pair<U1, U2>& p);
+        template<class U1, class U2>
+        constexpr explicit(@\seebelow@) pair(const pair<U1, U2>& p);
+        template<class U1, class U2>
+        constexpr explicit(@\seebelow@) pair(pair<U1, U2>&& p);
+        template<class U1, class U2>
+        constexpr explicit(@\seebelow@) pair(const pair<U1, U2>&& p);\end{codeblock}
+        \begin{addedblock}
+        \begin{codeblock}
+        template<@\placeholder{pair-like}@ P>
+        constexpr explicit(@\seebelow@) pair(P& p);
+        template<@\placeholder{pair-like}@ P>
+        constexpr explicit(@\seebelow@) pair(const P& p);
+        template<@\placeholder{pair-like}@ P>
+        constexpr explicit(@\seebelow@) pair(P&& p);
+        template<@\placeholder{pair-like}@ P>
+        constexpr explicit(@\seebelow@) pair(const P&& p);
+        \end{codeblock}
+        \end{addedblock}
+        \begin{codeblock}
+        template<class... Args1, class... Args2>
+        constexpr pair(piecewise_construct_t,
+        tuple<Args1...> first_args, tuple<Args2...> second_args);
+        
+        constexpr pair& operator=(const pair& p);
+        constexpr const pair& operator=(const pair& p) const;
+        template<class U1, class U2>
+        constexpr pair& operator=(const pair<U1, U2>& p);
+        template<class U1, class U2>
+        constexpr const pair& operator=(const pair<U1, U2>& p) const;
+        constexpr pair& operator=(pair&& p) noexcept(@\seebelow@);
+        constexpr const pair& operator=(pair&& p) const;
+        template<class U1, class U2>
+        constexpr pair& operator=(pair<U1, U2>&& p);
+        template<class U1, class U2>
+        constexpr const pair& operator=(pair<U1, U2>&& p) const;\end{codeblock}
+        \begin{addedblock}
+        \begin{codeblock}
+        template<@\placeholder{pair-like}@ P>
+        constexpr const pair& operator= pair(const P& p) const;
+        template<@\placeholder{pair-like}@ P>
+        constexpr pair& operator=(const P& p);
+        template<@\placeholder{pair-like}@ P>
+        constexpr pair& operator=(@\seebelow@) pair(P&& p);
+        template<@\placeholder{pair-like}@ P>
+        constexpr const pair& operator= pair(P&& p) const;
+        \end{codeblock}
+        \end{addedblock}
+        \begin{codeblock}
+        constexpr void swap(pair& p) noexcept(@\seebelow@);
+        constexpr void swap(const pair& p) const noexcept(@\seebelow@);
+    };
+    
+    template<class T1, class T2>
+    pair(T1, T2) -> pair<T1, T2>;
+}
 \end{codeblock}
 
-[....]
+\pnum
+Constructors and member functions of \tcode{pair} do not throw exceptions unless one of
+the element-wise operations specified to be called for that operation
+throws an exception.
 
+\pnum
+The defaulted move and copy constructor, respectively, of \tcode{pair}
+is a constexpr function if and only if all required element-wise
+initializations for move and copy, respectively, would satisfy the
+requirements for a constexpr function.
+
+\pnum
+If \tcode{(is_trivially_destructible_v<T1> \&\& is_trivially_destructible_v<T2>)}
+is \tcode{true}, then the destructor of \tcode{pair} is trivial.
+
+\pnum
+\tcode{pair<T, U>} is a structural type\iref{temp.param}
+if \tcode{T} and \tcode{U} are both structural types.
+Two values \tcode{p1} and \tcode{p2} of type \tcode{pair<T, U>}
+are template-argument-equivalent\iref{temp.type} if and only if
+\tcode{p1.first} and \tcode{p2.first} are template-argument-equivalent and
+\tcode{p1.second} and \tcode{p2.second} are template-argument-equivalent.
 
 \indexlibraryctor{pair}%
 \begin{itemdecl}
-    template<@\changed{class U1, class U2}{\placeholder{pair-like} U}@>
-    constexpr explicit(@\seebelow@) pair(const @\changed{pair<U1, U2>}{U}@& p);
+    constexpr explicit(@\seebelow@) pair();
 \end{itemdecl}
 
 \begin{itemdescr}
     \pnum
     \constraints
     \begin{itemize}
-        \item \tcode{is_constructible_v<first_type, const \changed{U1}{tuple_element_t<0, remove_cvref_t<U>>}\&>} is \tcode{true} and
-        \item \tcode{is_constructible_v<second_type, const \changed{U2}{tuple_element_t<1, remove_cvref_t<U>>}\&>} is \tcode{true}.
+        \item \tcode{is_default_constructible_v<T1>} is \tcode{true} and
+        \item \tcode{is_default_constructible_v<T2>} is \tcode{true}.
     \end{itemize}
-
+    
     \pnum
     \effects
-    \removed{Initializes members from the corresponding members of the argument}.
-
-    \begin{addedblock}
-        Initializes \tcode{first} with \tcode{get<0>(p)}
-        and \tcode{second} with \tcode{\tcode{get<1>(p)}}.
-    \end{addedblock}
-
+    Value-initializes \tcode{first} and \tcode{second}.
+    
     \pnum
     \remarks
-    The expression inside \tcode{explicit} is equivalent to:
+    The expression inside \keyword{explicit} evaluates to \tcode{true}
+    if and only if either \tcode{T1} or
+    \tcode{T2} is not implicitly default-constructible.
+    \begin{note}
+        This behavior can be implemented with a trait that checks
+        whether a \tcode{const T1\&} or a \tcode{const T2\&}
+        can be initialized with \tcode{\{\}}.
+    \end{note}
+\end{itemdescr}
+
+\indexlibraryctor{pair}%
+\begin{itemdecl}
+    constexpr explicit(@\seebelow@) pair(const T1& x, const T2& y);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \begin{itemize}
+        \item \tcode{is_copy_constructible_v<T1>} is \tcode{true} and
+        \item \tcode{is_copy_constructible_v<T2>} is \tcode{true}.
+    \end{itemize}
+    
+    \pnum
+    \effects
+    Initializes \tcode{first} with \tcode{x} and \tcode{second} with \tcode{y}.
+    
+    \pnum
+    \remarks
+    The expression inside \keyword{explicit} is equivalent to:
     \begin{codeblock}
-        !is_convertible_v<const @\changed{U1}{tuple_element_t<0, remove_cvref_t<U>>}@&, first_type>
-        || !is_convertible_v<const @\changed{U2}{tuple_element_t<1, remove_cvref_t<U>>}@&, second_type>
+        !is_convertible_v<const T1&, T1> || !is_convertible_v<const T2&, T2>
     \end{codeblock}
 \end{itemdescr}
 
 \indexlibraryctor{pair}%
 \begin{itemdecl}
-    template<@\changed{class U1, class U2}{\placeholder{pair-like} U}@>
-    constexpr explicit(@\seebelow@) pair( @\changed{pair<U1, U2>}{U}@&& p);
+    template<class U1 = T1, class U2 = T2> constexpr explicit(@\seebelow@) pair(U1&& x, U2&& y);
 \end{itemdecl}
 
 \begin{itemdescr}
     \pnum
     \constraints
     \begin{itemize}
-        \item \tcode{is_constructible_v<first_type, \changed{U1}{tuple_element_t<0, remove_cvref_t<U>>}>} is \tcode{true} and
-        \item \tcode{is_constructible_v<second_type,\changed{U2}{tuple_element_t<1, remove_cvref_t<U>>}>} is \tcode{true}.
+        \item \tcode{is_constructible_v<T1, U1>} is \tcode{true} and
+        \item \tcode{is_constructible_v<T2, U2>} is \tcode{true}.
     \end{itemize}
-
+    
     \pnum
     \effects
-    \begin{removedblock}
-        Initializes \tcode{first} with
-        \tcode{std::forward<U1>(p.first)}\\
-        and \tcode{second} with
-        \tcode{std::forward<U2>(\brk{}p.second)}.
-    \end{removedblock}
-
-    \begin{addedblock}
-        Initializes \tcode{first} with \tcode{get<0>(std::forward<U>(p))}\\
-        and \tcode{second} with \tcode{\tcode{get<1>(std::forward<U>(p))}}.
-    \end{addedblock}
-
+    Initializes \tcode{first} with
+    \tcode{std::forward<U1>(x)} and \tcode{second}
+    with \tcode{std::forward<U2>(y)}.
+    
     \pnum
     \remarks
-    The expression inside \tcode{explicit} is equivalent to:
+    The expression inside \keyword{explicit} is equivalent to:
     \begin{codeblock}
-        !is_convertible_v<@\changed{U1}{tuple_element_t<0, remove_cvref_t<U>>}@, first_type>
-        || !is_convertible_v<@\changed{U2}{tuple_element_t<1, remove_cvref_t<U>>}@, second_type>
+        !is_convertible_v<U1, T1> || !is_convertible_v<U2, T2>
+    \end{codeblock}
+\end{itemdescr}
+
+\indexlibraryctor{pair}%
+\begin{itemdecl}
+    template<class U1, class U2> constexpr explicit(@\seebelow@) pair(pair<U1, U2>& p);
+    template<class U1, class U2> constexpr explicit(@\seebelow@) pair(const pair<U1, U2>& p);
+    template<class U1, class U2> constexpr explicit(@\seebelow@) pair(pair<U1, U2>&& p);
+    template<class U1, class U2> constexpr explicit(@\seebelow@) pair(const pair<U1, U2>&& p);
+\end{itemdecl}\begin{addedblock}\begin{itemdecl}
+    template<@\placeholder{pair-like}@ P> constexpr explicit(@\seebelow@) pair(P& p);
+    template<@\placeholder{pair-like}@ P> constexpr explicit(@\seebelow@) pair(const P& p);
+    template<@\placeholder{pair-like}@ P> constexpr explicit(@\seebelow@) pair(P&& p);
+    template<@\placeholder{pair-like}@ P> constexpr explicit(@\seebelow@) pair(const P&& p);
+\end{itemdecl}
+\end{addedblock}
+
+\begin{itemdescr}
+    \pnum
+    Let \tcode{\exposid{FWD}(u)} be \tcode{static_cast<decltype(u)>(u)}.
+    
+    \pnum
+    \constraints
+    \begin{itemize}
+        \item
+        \tcode{is_constructible_v<T1, decltype(get<0>(\exposid{FWD}(p)))>}
+        is \tcode{true} and
+        \item
+        \tcode{is_constructible_v<T2, decltype(get<1>(\exposid{FWD}(p)))>}
+        is \tcode{true}.
+    \end{itemize}
+    
+    \pnum
+    \effects
+    Initializes \tcode{first} with \tcode{get<0>(\exposid{FWD}(p))} and
+    \tcode{second} with \tcode{get<1>(\exposid{FWD}(p))}.
+    
+    \pnum
+    \remarks
+    The expression inside \keyword{explicit} is equivalent to:
+    \begin{codeblock}
+        !is_convertible_v<decltype(get<0>(@\exposid{FWD}@(p))), T1> ||
+        !is_convertible_v<decltype(get<1>(@\exposid{FWD}@(p))), T2>
     \end{codeblock}
 \end{itemdescr}
 
@@ -1248,10 +1963,10 @@ and~\ref{tuple.elem}).%
     \pnum
     \mandates
     \begin{itemize}
-        \item \tcode{is_constructible_v<first_type, Args1...>} is \tcode{true} and
-        \item \tcode{is_constructible_v<second_type, Args2...>} is \tcode{true}.
+        \item \tcode{is_constructible_v<T1, Args1...>} is \tcode{true} and
+        \item \tcode{is_constructible_v<T2, Args2...>} is \tcode{true}.
     \end{itemize}
-
+    
     \pnum
     \effects
     Initializes \tcode{first} with arguments of types
@@ -1273,37 +1988,94 @@ and~\ref{tuple.elem}).%
     \pnum
     \effects
     Assigns \tcode{p.first} to \tcode{first} and \tcode{p.second} to \tcode{second}.
-
+    
     \pnum
     \returns
     \tcode{*this}.
-
+    
     \pnum
     \remarks
     This operator is defined as deleted unless
-    \tcode{is_copy_assignable_v<first_type>} is \tcode{true} and
-    \tcode{is_copy_assignable_v<second_type>} is \tcode{true}.
+    \tcode{is_copy_assignable_v<T1>} is \tcode{true} and
+    \tcode{is_copy_assignable_v<T2>} is \tcode{true}.
 \end{itemdescr}
 
 \indexlibrarymember{operator=}{pair}%
 \begin{itemdecl}
-    template<<@\changed{class U1, class U2}{\placeholder{pair-like} U}@>
-    constexpr pair& operator=(const @\changed{pair<U1, U2>}{U}@>& p);
+    constexpr const pair& operator=(const pair& p) const;
 \end{itemdecl}
 
 \begin{itemdescr}
     \pnum
     \constraints
     \begin{itemize}
-        \item \tcode{is_assignable_v<first_type\&, const \changed{U1}{tuple_element_t<0, remove_cvref_t<U>>}\&>} is \tcode{true} and
-        \item \tcode{is_assignable_v<second_type\&, const \changed{U2}{tuple_element_t<1, remove_cvref_t<U>>}\&>} is \tcode{true}.
+        \item
+        \tcode{is_copy_assignable<const T1>} is \tcode{true} and
+        \item
+        \tcode{is_copy_assignable<const T2>} is \tcode{true}.
     \end{itemize}
-
+    
     \pnum
     \effects
-    Assigns \changed{\tcode{p.first}}{\tcode{get<0>(p)}} to \tcode{first} \\
-    and \changed{\tcode{p.second}}{\tcode{get<1>(p)}} to \tcode{second}.
+    Assigns \tcode{p.first} to \tcode{first} and \tcode{p.second} to \tcode{second}.
+    
+    \pnum
+    \returns
+    \tcode{*this}.
+\end{itemdescr}
 
+\indexlibrarymember{operator=}{pair}%
+\begin{itemdecl}
+template<class U1, class U2> 
+constexpr pair& operator=(const pair<U1, U2>& p);
+@\added{template<\placeholder{pair-like} P> constexpr pair\& operator=(const P\& p);}
+\end{itemdecl}
+
+\begin{itemdescr}
+    \added{Let \tcode{Type} be \tcode{remove\char`_cvref\char`_t<decltype(p)>}.}
+
+    \pnum
+    \constraints
+    \begin{itemize}
+        \item \tcode{is_assignable_v<T1\&, const \changed{U1}{tuple_element_t<0, Type>}\&>} is \tcode{true} and
+        \item \tcode{is_assignable_v<T2\&, const \changed{U2}{tuple_element_t<1, Type>}\&>} is \tcode{true}.
+    \end{itemize}
+    
+    \pnum
+    \effects
+    Assigns \tcode{\changed{p.first}{std::get<0>(p)}} to \tcode{first} and 
+    \tcode{\changed{p.second}{std::get<1>(p)}} to \tcode{second}.
+    
+    \pnum
+    \returns
+    \tcode{*this}.
+\end{itemdescr}
+
+\indexlibrarymember{operator=}{pair}%
+\begin{itemdecl}
+template<class U1, class U2> constexpr const pair& operator=(const pair<U1, U2>& p) const;
+@\added{template<\placeholder{pair-like} P> constexpr const pair\& operator=(const P\& p) const;}
+\end{itemdecl}
+
+\begin{itemdescr}
+    \added{Let \tcode{Type} be \tcode{remove\char`_cvref\char`_t<decltype(p)>}.}
+    
+    
+    \pnum
+    \constraints
+    \begin{itemize}
+        \item
+        \tcode{is_assignable_v<const T1\&, const \changed{U1}{tuple_element_t<0, Type>}\&>} is \tcode{true}, and
+        \item
+        \tcode{is_assignable_v<const T2\&, const \changed{U2}{tuple_element_t<1, Type>}\&>} is \tcode{true}.
+    \end{itemize}
+    
+    \pnum
+    \effects
+    
+    Assigns \tcode{\changed{p.first}{std::get<0>(p)}} to \tcode{first} and
+    \tcode{\changed{p.second}{std::get<1>(p)}} to \tcode{second}.
+    
     \pnum
     \returns
     \tcode{*this}.
@@ -1318,19 +2090,19 @@ and~\ref{tuple.elem}).%
     \pnum
     \constraints
     \begin{itemize}
-        \item \tcode{is_move_assignable_v<first_type>} is \tcode{true} and
-        \item \tcode{is_move_assignable_v<second_type>} is \tcode{true}.
+        \item \tcode{is_move_assignable_v<T1>} is \tcode{true} and
+        \item \tcode{is_move_assignable_v<T2>} is \tcode{true}.
     \end{itemize}
-
+    
     \pnum
     \effects
-    Assigns to \tcode{first} with \tcode{std::forward<first_type>(p.first)}
-    and to \tcode{second} with\\ \tcode{std::forward<second_type>(p.second)}.
-
+    Assigns to \tcode{first} with \tcode{std::forward<T1>(p.first)}
+    and to \tcode{second} with \tcode{std::forward<T2>(\brk{}p.second)}.
+    
     \pnum
     \returns
     \tcode{*this}.
-
+    
     \pnum
     \remarks
     The exception specification is equivalent to:
@@ -1341,83 +2113,127 @@ and~\ref{tuple.elem}).%
 
 \indexlibrarymember{operator=}{pair}%
 \begin{itemdecl}
-    template<<@\changed{class U1, class U2}{\placeholder{pair-like} U}@>
-    constexpr pair& operator=(@\changed{pair<U1, U2>}{U}@&& p);
+    constexpr const pair& operator=(pair&& p) const;
 \end{itemdecl}
 
 \begin{itemdescr}
     \pnum
     \constraints
     \begin{itemize}
-        \item \tcode{is_assignable_v<first_type\&, \changed{U1}{tuple_element_t<0, remove_cvref_t<U>>}>} is \tcode{true} and
-        \item \tcode{is_assignable_v<second_type\&, \changed{U2}{tuple_element_t<1, remove_cvref_t<U>>}>} is \tcode{true}.
+        \item
+        \tcode{is_assignable<const T1\&, T1>} is \tcode{true} and
+        \item
+        \tcode{is_assignable<const T2\&, T2>} is \tcode{true}.
     \end{itemize}
-
+    
     \pnum
     \effects
-    Assigns to \tcode{first} with \changed{\tcode{std::forward<U1>(p.first)}}{\tcode{get<0>(std::forward<U>(p))}}
-    and to \tcode{second} with\\ \changed{\tcode{std::forward<U2>(p.second)}}{\tcode{get<1>(std::forward<U>(p))}}.
-
+    Assigns \tcode{std::forward<T1>(p.first)} to \tcode{first} and
+    \tcode{std::forward<T2>(p.second)} to \tcode{second}.
+    
     \pnum
     \returns
     \tcode{*this}.
 \end{itemdescr}
 
-\indexlibrarymember{swap}{pair}%
+\indexlibrarymember{operator=}{pair}%
 \begin{itemdecl}
-    constexpr void swap(pair& p) noexcept(@\seebelow@);
+    template<class U1, class U2> constexpr pair& operator=(pair<U1, U2>&& p);
+    @\added{template<\placeholder{pair-like} P> constexpr pair\& operator=(P\&\& p);}
 \end{itemdecl}
 
 \begin{itemdescr}
+     \added{Let \tcode{Type} be \tcode{remove\char`_cvref\char`_t<decltype(p)>}.}
+    
     \pnum
-    \expects
-    \tcode{first} is swappable with\iref{swappable.requirements} \tcode{p.first} and
-    \tcode{second} is swappable with \tcode{p.second}.
-
+    \constraints
+    \begin{itemize}
+        \item \tcode{is_assignable_v<T1\&, \changed{U1}{tuple_element_t<0, Type>}>} is \tcode{true} and
+        \item \tcode{is_assignable_v<T2\&, \changed{U2}{tuple_element_t<1, Type>}>} is \tcode{true}.
+    \end{itemize}
+    
     \pnum
     \effects
-    Swaps
-    \tcode{first} with \tcode{p.first} and
-    \tcode{second} with \tcode{p.second}.
-
+   Assigns \tcode{\changed{std::forward<U1>(p.first)}{std::get<0>(std::forward<decltype(p)>(p))}} to \tcode{first} and
+   \tcode{\changed{std::forward<U2>(p.second)}{std::get<1>(std::forward<decltype(p)>(p))}} to \tcode{second}.
+    
     \pnum
-    \remarks
-    The exception specification is equivalent to:
-    \begin{codeblock}
-        is_nothrow_swappable_v<first_type> && is_nothrow_swappable_v<second_type>
-    \end{codeblock}
+    \returns
+    \tcode{*this}.
 \end{itemdescr}
+
+\indexlibrarymember{operator=}{pair}%
+\begin{itemdecl}
+    template<class U1, class U2> constexpr const pair& operator=(pair<U1, U2>&& p) const;
+    @\added{template<\placeholder{pair-like} P> constexpr const pair\& operator=(P\&\& p) const;}
+\end{itemdecl}
+
+\begin{itemdescr}
+     \added{Let \tcode{Type} be \tcode{remove\char`_cvref\char`_t<decltype(p)>}.}
+    
+    \pnum
+    \constraints
+    \begin{itemize}
+        \item
+        \tcode{is_assignable_v<const T1\&, \changed{U1}{tuple_element_t<0, Type>}>} is \tcode{true}, and
+        \item
+        \tcode{is_assignable_v<const T2\&, \changed{U2}{tuple_element_t<1, Type>}>} is \tcode{true}.
+    \end{itemize}
+    
+    \effects
+    Assigns \tcode{\changed{std::forward<U1>(p.first)}{std::get<0>(std::forward<decltype(p)>(p))}} to \tcode{first} and
+    \tcode{\changed{std::forward<U2>(p.second)}{std::get<1>(std::forward<decltype(p)>(p))}} to \tcode{second}.
+    
+    \pnum
+    \returns
+    \tcode{*this}.
+\end{itemdescr}
+
+\rSec2[pairs.spec]{Specialized algorithms}
 
 \rSec2[pairs.spec]{Specialized algorithms}
 
 \indexlibrarymember{operator==}{pair}%
 \begin{itemdecl}
-    template<class T1, class T2>
-    constexpr bool operator==(const pair<T1, T2>& x, const pair<T1, T2>& y);
+template<class T1, class T2>
+constexpr bool operator==(const pair<T1, T2>& x, const pair<T1, T2>& y);
 \end{itemdecl}
+\begin{addedblock}
+\begin{itemdecl}
+template<class T1, class T2, @\placeholder{pair-like}@ Pair>
+requires same_as<T1, tuple_element_t<0, Pair>> && same_as<T2, tuple_element_t<1, Pair>
+constexpr bool operator==(const pair<T1, T2>& x, const Pair& y);
+\end{itemdecl}
+\end{addedblock}
 
 \begin{itemdescr}
     \pnum
     \returns
-    \tcode{x.first == y.first \&\& x.second == y.second}.
+    \tcode{x.first == \changed{y.first}{std::get<0>(y)} \&\& x.second == \changed{y.second}{std::get<1>(y)}}.
 \end{itemdescr}
 
 \indexlibrarymember{operator<=>}{pair}%
 \begin{itemdecl}
-    template<class T1, class T2@\added{, \placeholder{pair-like} Pair}@>
-    @\added{requires same_as<T1, tuple_element_t<0, Pair>> \&\&  same_as<T2, tuple_element_t<1, Pair>}@
-    constexpr common_comparison_category_t<@\placeholder{synth-three-way-result}@<T1>,
-    @\placeholder{synth-three-way-result}@<T2>>
-    operator<=>(const pair<T1, T2>& x, const @\changed{pair<T1, T2>}{Pair}@& y);
+template<class T1, class T2>
+constexpr common_comparison_category_t<@\placeholder{synth-three-way-result}@<T1>, @\placeholder{synth-three-way-result}@<T2>>
+operator<=>(const pair<T1, T2>& x, const pair<T1, T2>& y);
 \end{itemdecl}
+\begin{addedblock}
+\begin{itemdecl}
+template<class T1, class T2, @\placeholder{pair-like}@ Pair>
+requires same_as<T1, tuple_element_t<0, Pair>> && same_as<T2, tuple_element_t<1, Pair>
+constexpr common_comparison_category_t<@\placeholder{synth-three-way-result}@<T1>, @\placeholder{synth-three-way-result}@<T2>>
+operator<=>(const pair<T1, T2>& x, const Pair& y);
+\end{itemdecl}
+\end{addedblock}
 
 \begin{itemdescr}
     \pnum
     \effects
     Equivalent to:
     \begin{codeblock}
-        if (auto c = @\placeholdernc{synth-three-way}@(x.first, @\changed{y.first}{get<0>(y)}@); c != 0) return c;
-        return @\placeholdernc{synth-three-way}@(x.second, @\changed{y.second}{get<1>(y)}@);
+        if (auto c = @\placeholdernc{synth-three-way}@(x.first, @\changed{y.first}{std::get<0>(y)}@); c != 0) return c;
+        return @\placeholdernc{synth-three-way}@(x.second, @\changed{y.second}{std::get<1>(y)}@);
     \end{codeblock}
 \end{itemdescr}
 
@@ -1487,6 +2303,28 @@ namespace std::ranges {
 @\removed{ \}; }@
 \end{codeblock}
 
+
+\rSec3[range.zip.view]{Class template \tcode{zip_view}}
+
+\ednote{Remove [range.zip.view]p1}
+
+\begin{removedblock}
+\pnum
+Given some pack of types \tcode{Ts},
+the alias template \exposid{tuple-or-pair} is defined as follows:
+\begin{itemize}
+    \item
+    If \tcode{sizeof...(Ts)} is 2,
+    \tcode{\exposid{tuple-or-pair}<Ts...>} denotes \tcode{pair<Ts...>}.
+    \item
+    Otherwise, \tcode{\exposid{tuple-or-pair}<Ts...>} denotes \tcode{tuple<Ts...>}.
+\end{itemize}
+\end{removedblock}
+
+\ednote{Replace all usages of \exposid{tuple-or-pair} by \tcode{tuple} in the range clause.
+This includes [range.zip], [range.adjacent.iterator] as well as [range.cartesian] if P2374 is adopted}
+
+
 \rSec1[containers]{Containers}
 
 \rSec1[associative]{Associative containers}
@@ -1527,43 +2365,7 @@ The following exposition-only alias templates may appear in deduction guides for
 
 \indexlibraryglobal{map}%
 \pnum
-A \tcode{map} is an associative container that
-supports unique keys (contains at most one of each key-value) and
-provides for fast retrieval of values of another type \tcode{T} based
-on the keys. The \tcode{map} class supports bidirectional iterators.
-
-\pnum
-A
-\tcode{map}
-meets all of the requirements of a container, of a reversible container\iref{container.requirements}, of
-an associative container\iref{associative.reqmts}, and of an allocator-aware container (\tref{container.alloc.req}).
-A
-\tcode{map}
-also provides most operations described in~\ref{associative.reqmts}
-for unique keys.
-This means that a
-\tcode{map}
-supports the
-\tcode{a_uniq}
-operations in~\ref{associative.reqmts}
-but not the
-\tcode{a_eq}
-operations.
-For a
-\tcode{map<Key,T>}
-the
-\tcode{key_type}
-is
-\tcode{Key}
-and the
-\tcode{value_type}
-is
-\tcode{pair<const Key,T>}.
-Descriptions are provided here only for operations on
-\tcode{map}
-that are not described in one of those tables
-or for operations where there is additional semantic information.
-
+[...]
 \indexlibrarymember{comp}{map::value_compare}%
 \indexlibrarymember{operator()}{map::value_compare}%
 \begin{codeblock}
@@ -1614,13 +2416,13 @@ namespace std {
         map(const map&, const Allocator&);
         map(map&&, const Allocator&);
         @\added{template<\placeholder{pair-like} P = value_type>}@
-        @\added{requires is_constructible_v<value_type, P>}@
+        @\added{requires convertible_to<P, value_type>}@
         map(initializer_list<@\changed{value_type}{P}@>, const Compare& = Compare(), const Allocator& = Allocator());
         template<class InputIterator>
         map(InputIterator first, InputIterator last, const Allocator& a)
         : map(first, last, Compare(), a) { }
         @\added{template<\placeholder{pair-like} P = value_type>}@
-        @\added{requires is_constructible_v<value_type, P>}@
+        @\added{requires convertible_to<P, value_type>}@
         map(initializer_list<@\changed{value_type}{P}@> il, const Allocator& a)
         : map(il, Compare(), a) { }
         ~map();
@@ -1630,7 +2432,7 @@ namespace std {
         is_nothrow_move_assignable_v<Compare>);
 
         @\added{template<\placeholder{pair-like} P = value_type>}@
-        @\added{requires is_constructible_v<value_type, P>}@
+        @\added{requires convertible_to<P, value_type>}@
         map& operator=(initializer_list<@\changed{value_type}{P}@>);
         allocator_type get_allocator() const noexcept;
 
@@ -1673,7 +2475,10 @@ namespace std {
         iterator insert(const_iterator position, P&&);
         template<class InputIterator>
         void insert(InputIterator first, InputIterator last);
-        void insert(initializer_list<value_type>);
+        
+        @\added{template<\placeholder{pair-like} P = value_type>}@
+        @\added{requires convertible_to<P, value_type>}@
+        void insert(initializer_list<@\changed{value_type}{P}@>);
 
         node_type extract(const_iterator position);
         node_type extract(const key_type& x);
@@ -1755,7 +2560,7 @@ namespace std {
     -> map<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>, Compare, Allocator>;
 
     template<@\added{\placeholder{pair-like} T}@ @\removed{class Key, class T}@, class Compare = less<@\changed{Key}{tuple_element_t<0, T>}@>,
-    class Allocator = allocator<pair<const @\changed{Key}{tuple_element_t<0, T>}@, T>>>
+    class Allocator = allocator<pair<const @\changed{Key}{tuple_element_t<0, T>}@,  @\changed{T}{tuple_element_t<1, T>}@>>>
     map(initializer_list<@\changed{pair<Key, T>}{T}@>, Compare = Compare(), Allocator = Allocator())
     -> map<@\changed{Key}{tuple_element_t<0, T>}@, @\changed{T}{tuple_element_t<1, T>}@, Compare, Allocator>;
 
@@ -1765,29 +2570,572 @@ namespace std {
     less<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
 
     template<@\changed{class Key, class T}{\placeholder{pair-like} T}@, class Allocator>
-    map(initializer_list<<@\changed{pair<Key, T>}{T}@>, Allocator)
+    map(initializer_list<@\changed{pair<Key, T>}{T}@>, Allocator)
     -> map<@\changed{Key}{tuple_element_t<0, T>}@, @\changed{T}{tuple_element_t<1, T>}@, less<@\changed{Key}{tuple_element_t<0, T>}@>, Allocator>;
 }
 \end{codeblock}
 
 
-\ednote{TODO: \tcode{multimap}, \tcode{unordered_map}, \tcode{unordered_multimap}}
+\rSec2[multimap]{Class template \tcode{multimap}}
+
+\rSec3[multimap.overview]{Overview}
+
+\pnum
+\indexlibraryglobal{multimap}%
+A
+\tcode{multimap}
+is an associative container that supports equivalent keys (possibly containing multiple copies of
+the same key value) and provides for fast retrieval of values of another type
+\tcode{T}
+based on the keys.
+The
+\tcode{multimap}
+class
+supports bidirectional iterators.
+
+\pnum
+[...] 
+\begin{codeblock}
+namespace std {
+template<class Key, class T, class Compare = less<Key>,
+class Allocator = allocator<pair<const Key, T>>>
+class multimap {
+    public:
+    // types
+    using key_type               = Key;
+    using mapped_type            = T;
+    using value_type             = pair<const Key, T>;
+    using key_compare            = Compare;
+    using allocator_type         = Allocator;
+    using pointer                = typename allocator_traits<Allocator>::pointer;
+    using const_pointer          = typename allocator_traits<Allocator>::const_pointer;
+    using reference              = value_type&;
+    using const_reference        = const value_type&;
+    using size_type              = @\impdefx{type of \tcode{multimap::size_type}}@; // see \ref{container.requirements}
+    using difference_type        = @\impdefx{type of \tcode{multimap::difference_type}}@; // see \ref{container.requirements}
+    using iterator               = @\impdefx{type of \tcode{multimap::iterator}}@; // see \ref{container.requirements}
+    using const_iterator         = @\impdefx{type of \tcode{multimap::const_iterator}}@; // see \ref{container.requirements}
+    using reverse_iterator       = std::reverse_iterator<iterator>;
+    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+    using node_type              = @\unspec@;
+    
+    class value_compare {
+        friend class multimap;
+        protected:
+        Compare comp;
+        value_compare(Compare c) : comp(c) { }
+        public:
+        bool operator()(const value_type& x, const value_type& y) const {
+            return comp(x.first, y.first);
+        }
+    };
+    
+    // \ref{multimap.cons}, construct/copy/destroy
+    multimap() : multimap(Compare()) { }
+    explicit multimap(const Compare& comp, const Allocator& = Allocator());
+    template<class InputIterator>
+    multimap(InputIterator first, InputIterator last,
+    const Compare& comp = Compare(),
+    const Allocator& = Allocator());
+    multimap(const multimap& x);
+    multimap(multimap&& x);
+    explicit multimap(const Allocator&);
+    multimap(const multimap&, const type_identity_t<Allocator>&);
+    multimap(multimap&&, const type_identity_t<Allocator>&);
+    
+    @\added{template<\placeholder{pair-like} P = value_type>}@
+    @\added{requires convertible_to<P, value_type>}@
+    multimap(initializer_list<@\changed{value_type}{P}@>,
+        const Compare& = Compare(),
+        const Allocator& = Allocator());
+    template<class InputIterator>
+    multimap(InputIterator first, InputIterator last, const Allocator& a)
+    : multimap(first, last, Compare(), a) { }
+    @\added{template<\placeholder{pair-like} P = value_type>}@
+    @\added{requires convertible_to<P, value_type>}@
+    multimap(initializer_list<value_type> il, const Allocator& a)
+    : multimap(il, Compare(), a) { }
+    ~multimap();
+    multimap& operator=(const multimap& x);
+    multimap& operator=(multimap&& x)
+    noexcept(allocator_traits<Allocator>::is_always_equal::value &&
+    is_nothrow_move_assignable_v<Compare>);
+    @\added{template<\placeholder{pair-like} P = value_type>}@
+    @\added{requires convertible_to<P, value_type>}@
+    multimap& operator=(initializer_list<@\changed{value_type}{P}@>);
+    allocator_type get_allocator() const noexcept;
+    
+    // iterators
+    iterator               begin() noexcept;
+    const_iterator         begin() const noexcept;
+    iterator               end() noexcept;
+    const_iterator         end() const noexcept;
+    
+    reverse_iterator       rbegin() noexcept;
+    const_reverse_iterator rbegin() const noexcept;
+    reverse_iterator       rend() noexcept;
+    const_reverse_iterator rend() const noexcept;
+    
+    const_iterator         cbegin() const noexcept;
+    const_iterator         cend() const noexcept;
+    const_reverse_iterator crbegin() const noexcept;
+    const_reverse_iterator crend() const noexcept;
+    
+    // capacity
+    [[nodiscard]] bool empty() const noexcept;
+    size_type size() const noexcept;
+    size_type max_size() const noexcept;
+    
+    // \ref{multimap.modifiers}, modifiers
+    template<class... Args> iterator emplace(Args&&... args);
+    template<class... Args> iterator emplace_hint(const_iterator position, Args&&... args);
+    iterator insert(const value_type& x);
+    iterator insert(value_type&& x);
+    template<class P> iterator insert(P&& x);
+    iterator insert(const_iterator position, const value_type& x);
+    iterator insert(const_iterator position, value_type&& x);
+    template<class P> iterator insert(const_iterator position, P&& x);
+    template<class InputIterator>
+    void insert(InputIterator first, InputIterator last);
+    @\added{template<\placeholder{pair-like} P = value_type>}@
+    @\added{requires convertible_to<P, value_type>}@
+    void insert(initializer_list<@\changed{value_type}{P}@>);
+    
+    node_type extract(const_iterator position);
+    node_type extract(const key_type& x);
+    template<class K> node_type extract(K&& x);
+    iterator insert(node_type&& nh);
+    iterator insert(const_iterator hint, node_type&& nh);
+    
+    iterator  erase(iterator position);
+    iterator  erase(const_iterator position);
+    size_type erase(const key_type& x);
+    template<class K> size_type erase(K&& x);
+    iterator  erase(const_iterator first, const_iterator last);
+    void      swap(multimap&)
+    noexcept(allocator_traits<Allocator>::is_always_equal::value &&
+    is_nothrow_swappable_v<Compare>);
+    void      clear() noexcept;
+    
+    template<class C2>
+    void merge(multimap<Key, T, C2, Allocator>& source);
+    template<class C2>
+    void merge(multimap<Key, T, C2, Allocator>&& source);
+    template<class C2>
+    void merge(map<Key, T, C2, Allocator>& source);
+    template<class C2>
+    void merge(map<Key, T, C2, Allocator>&& source);
+    
+    // observers
+    key_compare key_comp() const;
+    value_compare value_comp() const;
+    
+    // map operations
+    iterator       find(const key_type& x);
+    const_iterator find(const key_type& x) const;
+    template<class K> iterator       find(const K& x);
+    template<class K> const_iterator find(const K& x) const;
+    
+    size_type      count(const key_type& x) const;
+    template<class K> size_type count(const K& x) const;
+    
+    bool           contains(const key_type& x) const;
+    template<class K> bool contains(const K& x) const;
+    
+    iterator       lower_bound(const key_type& x);
+    const_iterator lower_bound(const key_type& x) const;
+    template<class K> iterator       lower_bound(const K& x);
+    template<class K> const_iterator lower_bound(const K& x) const;
+    
+    iterator       upper_bound(const key_type& x);
+    const_iterator upper_bound(const key_type& x) const;
+    template<class K> iterator       upper_bound(const K& x);
+    template<class K> const_iterator upper_bound(const K& x) const;
+    
+    pair<iterator, iterator>               equal_range(const key_type& x);
+    pair<const_iterator, const_iterator>   equal_range(const key_type& x) const;
+    template<class K>
+    pair<iterator, iterator>             equal_range(const K& x);
+    template<class K>
+    pair<const_iterator, const_iterator> equal_range(const K& x) const;
+};
+
+template<class InputIterator, class Compare = less<@\placeholder{iter-key-type}@<InputIterator>>,
+class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<InputIterator>>>
+multimap(InputIterator, InputIterator, Compare = Compare(), Allocator = Allocator())
+-> multimap<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+Compare, Allocator>;
+
+template<@\added{\placeholder{pair-like} T}@ @\removed{class Key, class T}@, class Compare = less<@\changed{Key}{tuple_element_t<0, T>}@>,
+class Allocator = allocator<pair<const @\changed{Key}{tuple_element_t<0, T>}@,  @\changed{T}{tuple_element_t<1, T>}@>>>
+multimap(initializer_list<@\changed{pair<Key, T>}{T}@>, Compare = Compare(), Allocator = Allocator())
+-> multimap<@\changed{Key}{tuple_element_t<0, T>}@, @\changed{T}{tuple_element_t<1, T>}@, Compare, Allocator>;
+
+template<class InputIterator, class Allocator>
+multimap(InputIterator, InputIterator, Allocator)
+-> multimap<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+less<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+
+template<@\added{\placeholder{pair-like} T}@ @\removed{class Key, class T}@, class Allocator>
+multimap(initializer_list<@\changed{pair<Key, T>}{T}@>, Allocator)
+-> multimap<@\changed{Key}{tuple_element_t<0, T>}@, @\changed{T}{tuple_element_t<1, T>}@, less<@\changed{Key}{tuple_element_t<0, T>}@>, Allocator>;
+}
+\end{codeblock}%
+\indexlibrarymember{multimap}{operator==}%
+\indexlibrarymember{multimap}{operator<}
 
 
-\section{Impact on \tcode{zip} \& \tcode{carthesian_product} wordings}
+\rSec2[unord.map]{Class template \tcode{unordered_map}}%
+\indexlibraryglobal{unordered_map}
 
-In \paper{P2374R0} and \paper{P2321R1}
+[...]
+\indexlibraryglobal{unordered_map}%
+\begin{codeblock}
+namespace std {
+    template<class Key,
+    class T,
+    class Hash = hash<Key>,
+    class Pred = equal_to<Key>,
+    class Allocator = allocator<pair<const Key, T>>>
+    class unordered_map {
+        public:
+        // types
+        using key_type             = Key;
+        using mapped_type          = T;
+        using value_type           = pair<const Key, T>;
+        using hasher               = Hash;
+        using key_equal            = Pred;
+        using allocator_type       = Allocator;
+        using pointer              = typename allocator_traits<Allocator>::pointer;
+        using const_pointer        = typename allocator_traits<Allocator>::const_pointer;
+        using reference            = value_type&;
+        using const_reference      = const value_type&;
+        using size_type            = @\impdefx{type of \tcode{unordered_map::size_type}}@; // see \ref{container.requirements}
+        using difference_type      = @\impdefx{type of \tcode{unordered_map::difference_type}}@; // see \ref{container.requirements}
+        
+        using iterator             = @\impdefx{type of \tcode{unordered_map::iterator}}@; // see \ref{container.requirements}
+        using const_iterator       = @\impdefx{type of \tcode{unordered_map::const_iterator}}@; // see \ref{container.requirements}
+        using local_iterator       = @\impdefx{type of \tcode{unordered_map::local_iterator}}@; // see \ref{container.requirements}
+        using const_local_iterator = @\impdefx{type of \tcode{unordered_map::const_local_iterator}}@; // see \ref{container.requirements}
+        using node_type            = @\unspec@;
+        using insert_return_type   = @\placeholdernc{insert-return-type}@<iterator, node_type>;
+        
+        // \ref{unord.map.cnstr}, construct/copy/destroy
+        unordered_map();
+        explicit unordered_map(size_type n,
+        const hasher& hf = hasher(),
+        const key_equal& eql = key_equal(),
+        const allocator_type& a = allocator_type());
+        template<class InputIterator>
+        unordered_map(InputIterator f, InputIterator l,
+        size_type n = @\seebelow@,
+        const hasher& hf = hasher(),
+        const key_equal& eql = key_equal(),
+        const allocator_type& a = allocator_type());
+        unordered_map(const unordered_map&);
+        unordered_map(unordered_map&&);
+        explicit unordered_map(const Allocator&);
+        unordered_map(const unordered_map&, const type_identity_t<Allocator>&);
+        unordered_map(unordered_map&&, const type_identity_t<Allocator>&);
+        @\added{template<\placeholder{pair-like} P = value_type>}@
+        @\added{requires convertible_to<P, value_type>}@
+        unordered_map(initializer_list<@\changed{value_type}{P}@> il,
+        size_type n = @\seebelow@,
+        const hasher& hf = hasher(),
+        const key_equal& eql = key_equal(),
+        const allocator_type& a = allocator_type());
+        unordered_map(size_type n, const allocator_type& a)
+        : unordered_map(n, hasher(), key_equal(), a) { }
+        unordered_map(size_type n, const hasher& hf, const allocator_type& a)
+        : unordered_map(n, hf, key_equal(), a) { }
+        template<class InputIterator>
+        unordered_map(InputIterator f, InputIterator l, size_type n, const allocator_type& a)
+        : unordered_map(f, l, n, hasher(), key_equal(), a) { }
+        template<class InputIterator>
+        unordered_map(InputIterator f, InputIterator l, size_type n, const hasher& hf,
+        const allocator_type& a)
+        : unordered_map(f, l, n, hf, key_equal(), a) { }
+        @\added{template<\placeholder{pair-like} P = value_type>}@
+        @\added{requires convertible_to<P, value_type>}@
+        unordered_map(initializer_list<@\changed{value_type}{P}@> il, size_type n, const allocator_type& a)
+        : unordered_map(il, n, hasher(), key_equal(), a) { }
+        @\added{template<\placeholder{pair-like} P = value_type>}@
+        @\added{requires convertible_to<P, value_type>}@
+        unordered_map(initializer_list<@\changed{value_type}{P}@> il, size_type n, const hasher& hf,
+        const allocator_type& a)
+        : unordered_map(il, n, hf, key_equal(), a) { }
+        ~unordered_map();
+        unordered_map& operator=(const unordered_map&);
+        unordered_map& operator=(unordered_map&&)
+        noexcept(allocator_traits<Allocator>::is_always_equal::value &&
+        is_nothrow_move_assignable_v<Hash> &&
+        is_nothrow_move_assignable_v<Pred>);
+        @\added{template<\placeholder{pair-like} P = value_type>}@
+        @\added{requires convertible_to<P, value_type>}@
+        unordered_map& operator=(initializer_list<@\changed{value_type}{P}@>);
+        allocator_type get_allocator() const noexcept;
+        
+        // iterators
+        iterator       begin() noexcept;
+        const_iterator begin() const noexcept;
+        iterator       end() noexcept;
+        const_iterator end() const noexcept;
+        const_iterator cbegin() const noexcept;
+        const_iterator cend() const noexcept;
+        
+        // capacity
+        [[nodiscard]] bool empty() const noexcept;
+        size_type size() const noexcept;
+        size_type max_size() const noexcept;
+        
+        // \ref{unord.map.modifiers}, modifiers
+        template<class... Args> pair<iterator, bool> emplace(Args&&... args);
+        template<class... Args> iterator emplace_hint(const_iterator position, Args&&... args);
+        pair<iterator, bool> insert(const value_type& obj);
+        pair<iterator, bool> insert(value_type&& obj);
+        template<class P> pair<iterator, bool> insert(P&& obj);
+        iterator       insert(const_iterator hint, const value_type& obj);
+        iterator       insert(const_iterator hint, value_type&& obj);
+        template<class P> iterator insert(const_iterator hint, P&& obj);
+        template<class InputIterator> void insert(InputIterator first, InputIterator last);
+        @\added{template<\placeholder{pair-like} P = value_type>}@
+        @\added{requires convertible_to<P, value_type>}@
+        void insert(initializer_list<@\changed{value_type}{P}@>);
+        
+        node_type extract(const_iterator position);
+        node_type extract(const key_type& x);
+        template<class K> node_type extract(K&& x);
+        insert_return_type insert(node_type&& nh);
+        iterator           insert(const_iterator hint, node_type&& nh);
+        
+        //[..]
+    };
+    
+template<class InputIterator,
+class Hash = hash<@\placeholder{iter-key-type}@<InputIterator>>,
+class Pred = equal_to<@\placeholder{iter-key-type}@<InputIterator>>,
+class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<InputIterator>>>
+unordered_map(InputIterator, InputIterator, typename @\seebelow@::size_type = @\seebelow@,
+Hash = Hash(), Pred = Pred(), Allocator = Allocator())
+-> unordered_map<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>, Hash, Pred,
+Allocator>;
 
-\ednote{TODO: Write actual wording when these papers get merged}
+template<@\changed{class Key, class T}{\placeholder{pair-like} T}@, class Hash = hash<Key>,
+class Pred = equal_to<Key>, class Allocator = allocator<pair<const Key, T>>>
+unordered_map(initializer_list<@\changed{pair<Key, T>}{T}@>,
+typename @\seebelow@::size_type = @\seebelow@, Hash = Hash(),
+Pred = Pred(), Allocator = Allocator())
+-> unordered_map<@\changed{Key}{tuple_element_t<0, T>}@, @\changed{T}{tuple_element_t<1, T>}@, Hash, Pred, Allocator>;
 
-\begin{itemize}
-\item Remove the exposition-only \tcode{tuple-or-pair} declaration
-\item Replace all use of \tcode{tuple-or-pair} by \tcode{tuple}
-\end{itemize}
+template<class InputIterator, class Allocator>
+unordered_map(InputIterator, InputIterator, typename @\seebelow@::size_type, Allocator)
+-> unordered_map<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+hash<@\placeholder{iter-key-type}@<InputIterator>>,
+equal_to<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+
+template<class InputIterator, class Allocator>
+unordered_map(InputIterator, InputIterator, Allocator)
+-> unordered_map<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+hash<@\placeholder{iter-key-type}@<InputIterator>>,
+equal_to<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+
+template<class InputIterator, class Hash, class Allocator>
+unordered_map(InputIterator, InputIterator, typename @\seebelow@::size_type, Hash, Allocator)
+-> unordered_map<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>, Hash,
+equal_to<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+
+template<@\changed{class Key, class T}{\placeholder{pair-like} T}@, class Allocator>
+unordered_map(initializer_list<@\changed{pair<Key, T>}{T}@>, typename @\seebelow@::size_type,
+Allocator)
+-> unordered_map<@\changed{Key}{tuple_element_t<0, T>}@, @\changed{T}{tuple_element_t<1, T>}@, hash<@\changed{Key}{tuple_element_t<0, T>}@>, equal_to<@\changed{Key}{tuple_element_t<0, T>}@>, Allocator>;
+
+template<@\changed{class Key, class T}{\placeholder{pair-like} T}@, class Allocator>
+unordered_map(initializer_list<@\changed{pair<Key, T>}{T}@>, Allocator)
+-> unordered_map<@\changed{Key}{tuple_element_t<0, T>}@, @\changed{T}{tuple_element_t<1, T>}@, hash<@\changed{Key}{tuple_element_t<0, T>}@>, equal_to<@\changed{Key}{tuple_element_t<0, T>}@>, Allocator>;
+
+template<@\changed{class Key, class T}{\placeholder{pair-like} T}@, class Hash, class Allocator>
+unordered_map(initializer_list<@\changed{pair<Key, T>}{T}@>, typename @\seebelow@::size_type, Hash,
+Allocator)
+-> unordered_map<@\changed{Key}{tuple_element_t<0, T>}@, @\changed{T}{tuple_element_t<1, T>}@, Hash, equal_to<@\changed{Key}{tuple_element_t<0, T>}@>, Allocator>;
+}
+\end{codeblock}
+
+\rSec2[unord.multimap]{Class template \tcode{unordered_multimap}}%
+\indexlibraryglobal{unordered_multimap}
+
+\rSec3[unord.multimap.overview]{Overview}
+
+[...]
+
+\indexlibraryglobal{unordered_multimap}%
+\begin{codeblock}
+namespace std {
+    template<class Key,
+    class T,
+    class Hash = hash<Key>,
+    class Pred = equal_to<Key>,
+    class Allocator = allocator<pair<const Key, T>>>
+    class unordered_multimap {
+        public:
+        // types
+        using key_type             = Key;
+        using mapped_type          = T;
+        using value_type           = pair<const Key, T>;
+        using hasher               = Hash;
+        using key_equal            = Pred;
+        using allocator_type       = Allocator;
+        using pointer              = typename allocator_traits<Allocator>::pointer;
+        using const_pointer        = typename allocator_traits<Allocator>::const_pointer;
+        using reference            = value_type&;
+        using const_reference      = const value_type&;
+        using size_type            = @\impdefx{type of \tcode{unordered_multimap::size_type}}@; // see \ref{container.requirements}
+        using difference_type      = @\impdefx{type of \tcode{unordered_multimap::difference_type}}@; // see \ref{container.requirements}
+        
+        using iterator             = @\impdefx{type of \tcode{unordered_multimap::iterator}}@; // see \ref{container.requirements}
+        using const_iterator       = @\impdefx{type of \tcode{unordered_multimap::const_iterator}}@; // see \ref{container.requirements}
+        using local_iterator       = @\impdefx{type of \tcode{unordered_multimap::local_iterator}}@; // see \ref{container.requirements}
+        using const_local_iterator = @\impdefx{type of \tcode{unordered_multimap::const_local_it\-erator}}@; // see \ref{container.requirements}
+        using node_type            = @\unspec@;
+        
+        // \ref{unord.multimap.cnstr}, construct/copy/destroy
+        unordered_multimap();
+        explicit unordered_multimap(size_type n,
+        const hasher& hf = hasher(),
+        const key_equal& eql = key_equal(),
+        const allocator_type& a = allocator_type());
+        template<class InputIterator>
+        unordered_multimap(InputIterator f, InputIterator l,
+        size_type n = @\seebelow@,
+        const hasher& hf = hasher(),
+        const key_equal& eql = key_equal(),
+        const allocator_type& a = allocator_type());
+        unordered_multimap(const unordered_multimap&);
+        unordered_multimap(unordered_multimap&&);
+        explicit unordered_multimap(const Allocator&);
+        unordered_multimap(const unordered_multimap&, const type_identity_t<Allocator>&);
+        unordered_multimap(unordered_multimap&&, const type_identity_t<Allocator>&);
+        @\added{template<\placeholder{pair-like} P = value_type>}@
+        @\added{requires convertible_to<P, value_type>}@
+        unordered_multimap(initializer_list<@\changed{value_type}{P}@> il,
+        size_type n = @\seebelow@,
+        const hasher& hf = hasher(),
+        const key_equal& eql = key_equal(),
+        const allocator_type& a = allocator_type());
+        unordered_multimap(size_type n, const allocator_type& a)
+        : unordered_multimap(n, hasher(), key_equal(), a) { }
+        unordered_multimap(size_type n, const hasher& hf, const allocator_type& a)
+        : unordered_multimap(n, hf, key_equal(), a) { }
+        template<class InputIterator>
+        unordered_multimap(InputIterator f, InputIterator l, size_type n, const allocator_type& a)
+        : unordered_multimap(f, l, n, hasher(), key_equal(), a) { }
+        template<class InputIterator>
+        unordered_multimap(InputIterator f, InputIterator l, size_type n, const hasher& hf,
+        const allocator_type& a)
+        : unordered_multimap(f, l, n, hf, key_equal(), a) { }
+        @\added{template<\placeholder{pair-like} P = value_type>}@
+        @\added{requires convertible_to<P, value_type>}@
+        unordered_multimap(initializer_list<@\changed{value_type}{P}@> il, size_type n, const allocator_type& a)
+        : unordered_multimap(il, n, hasher(), key_equal(), a) { }
+        @\added{template<\placeholder{pair-like} P = value_type>}@
+        @\added{requires convertible_to<P, value_type>}@
+        unordered_multimap(initializer_list<@\changed{value_type}{P}@> il, size_type n, const hasher& hf,
+        const allocator_type& a)
+        : unordered_multimap(il, n, hf, key_equal(), a) { }
+        ~unordered_multimap();
+        unordered_multimap& operator=(const unordered_multimap&);
+        unordered_multimap& operator=(unordered_multimap&&)
+        noexcept(allocator_traits<Allocator>::is_always_equal::value &&
+        is_nothrow_move_assignable_v<Hash> &&
+        is_nothrow_move_assignable_v<Pred>);
+        @\added{template<\placeholder{pair-like} P = value_type>}@
+        @\added{requires convertible_to<P, value_type>}@
+        unordered_multimap& operator=(initializer_list<@\changed{value_type}{P}@>);
+        allocator_type get_allocator() const noexcept;
+        
+        // iterators
+        iterator       begin() noexcept;
+        const_iterator begin() const noexcept;
+        iterator       end() noexcept;
+        const_iterator end() const noexcept;
+        const_iterator cbegin() const noexcept;
+        const_iterator cend() const noexcept;
+        
+        // capacity
+        [[nodiscard]] bool empty() const noexcept;
+        size_type size() const noexcept;
+        size_type max_size() const noexcept;
+        
+        // \ref{unord.multimap.modifiers}, modifiers
+        template<class... Args> iterator emplace(Args&&... args);
+        template<class... Args> iterator emplace_hint(const_iterator position, Args&&... args);
+        iterator insert(const value_type& obj);
+        iterator insert(value_type&& obj);
+        template<class P> iterator insert(P&& obj);
+        iterator insert(const_iterator hint, const value_type& obj);
+        iterator insert(const_iterator hint, value_type&& obj);
+        template<class P> iterator insert(const_iterator hint, P&& obj);
+        template<class InputIterator> void insert(InputIterator first, InputIterator last);
+        @\added{template<\placeholder{pair-like} P = value_type>}@
+        @\added{requires convertible_to<P, value_type>}@
+        void insert(initializer_list<@\changed{value_type}{P}@>);
+        
+        // [...]
+    };
+    
+    template<class InputIterator,
+    class Hash = hash<@\placeholder{iter-key-type}@<InputIterator>>,
+    class Pred = equal_to<@\placeholder{iter-key-type}@<InputIterator>>,
+    class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<InputIterator>>>
+    unordered_multimap(InputIterator, InputIterator,
+    typename @\seebelow@::size_type = @\seebelow@,
+    Hash = Hash(), Pred = Pred(), Allocator = Allocator())
+    -> unordered_multimap<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+    Hash, Pred, Allocator>;
+    
+    template<@\changed{class Key, class T}{\placeholder{pair-like} T}@, class Hash = hash<Key>,
+    class Pred = equal_to<Key>, class Allocator = allocator<pair<const Key, T>>>
+    unordered_multimap(initializer_list<@\changed{pair<Key, T>}{T}@>,
+    typename @\seebelow@::size_type = @\seebelow@,
+    Hash = Hash(), Pred = Pred(), Allocator = Allocator())
+    -> unordered_multimap<@\changed{Key}{tuple_element_t<0, T>}@, @\changed{T}{tuple_element_t<1, T>}@, Hash, Pred, Allocator>;
+    
+    template<class InputIterator, class Allocator>
+    unordered_multimap(InputIterator, InputIterator, typename @\seebelow@::size_type, Allocator)
+    -> unordered_multimap<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+    hash<@\placeholder{iter-key-type}@<InputIterator>>,
+    equal_to<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+    
+    template<class InputIterator, class Allocator>
+    unordered_multimap(InputIterator, InputIterator, Allocator)
+    -> unordered_multimap<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>,
+    hash<@\placeholder{iter-key-type}@<InputIterator>>,
+    equal_to<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+    
+    template<class InputIterator, class Hash, class Allocator>
+    unordered_multimap(InputIterator, InputIterator, typename @\seebelow@::size_type, Hash,
+    Allocator)
+    -> unordered_multimap<@\placeholder{iter-key-type}@<InputIterator>, @\placeholder{iter-mapped-type}@<InputIterator>, Hash,
+    equal_to<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
+    
+    template<@\changed{class Key, class T}{\placeholder{pair-like} T}@, class Allocator>
+    unordered_multimap(initializer_list<@\changed{pair<Key, T>}{T}@>, typename @\seebelow@::size_type,
+    Allocator)
+    -> unordered_multimap<@\changed{Key}{tuple_element_t<0, T>}@, @\changed{T}{tuple_element_t<1, T>}@, hash<@\changed{Key}{tuple_element_t<0, T>}@>, equal_to<@\changed{Key}{tuple_element_t<0, T>}@>, Allocator>;
+    
+    template<@\changed{class Key, class T}{\placeholder{pair-like} T}@, class Allocator>
+    unordered_multimap(initializer_list<@\changed{pair<Key, T>}{T}@>, Allocator)
+    -> unordered_multimap<@\changed{Key}{tuple_element_t<0, T>}@, @\changed{T}{tuple_element_t<1, T>}@, hash<@\changed{Key}{tuple_element_t<0, T>}@>, equal_to<@\changed{Key}{tuple_element_t<0, T>}@>, Allocator>;
+    
+    template<@\changed{class Key, class T}{\placeholder{pair-like} T}@, class Hash, class Allocator>
+    unordered_multimap(initializer_list<@\changed{pair<Key, T>}{T}@>, typename @\seebelow@::size_type,
+    Hash, Allocator)
+    -> unordered_multimap<@\changed{Key}{tuple_element_t<0, T>}@, @\changed{T}{tuple_element_t<1, T>}@, Hash, equal_to<@\changed{Key}{tuple_element_t<0, T>}@>, Allocator>;
+}
+\end{codeblock}
 
 \section{Acknowledgments}
 
-Thanks to Alisdair Meredith, Christopher Di Bella and Tim Song for their invaluable feedbacks!
+Thanks to Casey Carter, Alisdair Meredith, Christopher Di Bella and Tim Song for their invaluable feedbacks!
 
 \section{References}
 \renewcommand{\section}[2]{}%
