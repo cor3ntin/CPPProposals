@@ -17,9 +17,25 @@
 
 \section{Abstract}
 
-We propose to make \tcode{pair}, \tcode{tuple}, \tcode{tuple_cat}, and associative containers more compatible with objects satisfying the tuple-protocol.
+We propose to make \tcode{pair} constructibke from \tcode{tuple} and \tcode{std::array}
+We mandate \tcode{tuple_cat} and friends to be compatible with these types, 
+and associative containers more compatible with them.
 
 \section{Revisions}
+
+\subsection{R3}
+
+Reduce the scope to types that have a \tcode{get} method in the \tcode{std::} namespace.
+In effect only \tcode{tuple}, \tcode{pair}, \tcode{array} and \tcode{ranges::subrange} are \tcode{tuple-like}
+with that definition.
+The intent is to extend to user-provided types later once \tcode{std::get} or equivalent is defined as a customization-point.
+Limiting to \tcode{std::get} allows to unconditionally use \tcode{std::tuple} as the reference type of \tcode{zip}, \tcode{cartesian_product} in C++23.
+
+\begin{itemize}
+\item Missing default template parameter types in added \tcode{std::map} constructor
+\end{itemize}
+
+
 
 \subsection{R2}
 
@@ -143,30 +159,30 @@ The authors of \paper{N2270}, circa 2007, observed:
 There is very little reason, other than history, for the library to contain both \tcode{pair<T, U>} and \tcode{tuple<T, U>}. If we do deprecate pair, then we should change all interfaces in the library that use it, including the associative containers, to use \tcode{tuple} instead. This will be a source-incompatible change, but it need not be ABI-breaking.
 \end{quoteblock}
 
-As \tcode{pair} will continue to exist, it should still be possible for users of the standard library to ignore its existence, which can be achieved by making sure pairs are constructible from tuple-like objects, and types that are currently constructible from \tcode{pair} can be constructed from another kind of \tcode{tuple}.
+As \tcode{pair} will continue to exist, it should still be possible for users of the standard library to ignore its existence, which can be achieved by making sure pairs are constructible from tuple, and types that are currently constructible from \tcode{pair} can be constructed from another kind of \tcode{tuple}.
 
 For example, associative containers deal in pairs, and they do not allow construction from sequences of tuples. This has forced ranges (\tcode{zip}: \paper{P2321R1}, \tcode{carthesian_product}: \paper{P2374R0}) to deal in \tcode{pair} when dealing with tuples of 2 elements.
 
 \tcode{view_of_tuples | to<map>} currently doesn't work, and we think it should.
 
-Lastly, while there is support for \tcode{enumerate} to have a reference type with named members, there is also a desire
-that \tcode{enumerate(container) | to<map>} should work.
-In general, it is ridiculously hard and costly to make simple structs that can be used as reference types of ranges.
-With the proposed changes, any named type that implements the tuple protocol shares a common reference with the corresponding tuple if the members themselves have a common reference.
+%Lastly, while there is support for \tcode{enumerate} to have a reference type with named members, there is also a desire
+%that \tcode{enumerate(container) | to<map>} should work.
+%In general, it is ridiculously hard and costly to make simple structs that can be used as reference types of ranges.
+%With the proposed changes, any named type that implements the tuple protocol shares a common reference with the corresponding tuple if the members themselves have a common reference.
 
-As such, only
-\begin{itemize}
-\item \tcode{tuple_element}
-\item \tcode{tuple_size}
-\item \tcode{get}
-\end{itemize}
-
-need to be provided for a range's reference's type to be any type, as long as the value type is a tuple.
-
-This paper takes care of providing a \tcode{basic_common_reference} and a \tcode{basic_common_type}
-between \tcode{tuple} and tuple-like entities.
-\paper{P1858R2} and \paper{P1096R0} explores ways to simplify further the tuple protocol.
-
+%As such, only
+%\begin{itemize}
+%\item \tcode{tuple_element}
+%\item \tcode{tuple_size}
+%\item \tcode{get}
+%\end{itemize}
+%
+%need to be provided for a range's reference's type to be any type, as long as the value type is a tuple.
+%
+%This paper takes care of providing a \tcode{basic_common_reference} and a \tcode{basic_common_type}
+%between \tcode{tuple} and tuple-like entities.
+%\paper{P1858R2} and \paper{P1096R0} explores ways to simplify further the tuple protocol.
+%
 Standard types supporting the tuple protocol include
 
 \begin{itemize}
@@ -175,22 +191,22 @@ Standard types supporting the tuple protocol include
 \item \tcode{array}
 \item \tcode{subrange}
 \item the proposed \tcode{enumerate}'s \tcode{reference} type.
-\item \tcode{span} of static extent- \textbf{prior to \paper{P2116R0} which removed that support}
+%\item \tcode{span} of static extent- \textbf{prior to \paper{P2116R0} which removed that support}
 \end{itemize}
 
-\subsection{C arrays and aggregate}
-
-C arrays and aggregate are supported by structured bindings, but this mechanism does not use the tuple protocol.
-As such, these types will not be convertible to \tcode{tuple} with this paper.
+%\subsection{C arrays and aggregate}
+%
+%C arrays and aggregate are supported by structured bindings, but this mechanism does not use the tuple protocol.
+%As such, these types will not be convertible to \tcode{tuple} with this paper.
 
 
 \section{Design}
 
 We introduce an exposition only concept \tcode{tuple-like} which can then be used in the definition of \tcode{tuple} and \tcode{pair} construction,
 comparison and assignment operators.
-A type satisfies \tcode{\placeholder{tuple-like}} if it implements the tuple protocol (\tcode{std::get, std::tuple_element, std::tuple_size}).
-
-The concept is a generalization of the \placeholder{pair-like} exposition-only concept used by \tcode{subrange} and \tcode{views::values}/\tcode{views::keys}.
+%A type satisfies \tcode{\placeholder{tuple-like}} if it implements the tuple protocol (\tcode{std::get, std::tuple_element, std::tuple_size}).
+%
+%The concept is a generalization of the \placeholder{pair-like} exposition-only concept used by \tcode{subrange} and \tcode{views::values}/\tcode{views::keys}.
 
 With that concept, we
 
@@ -201,7 +217,7 @@ With that concept, we
     Note that these containers already support insertion/ emplacement from types that their value types is constructible from, so only construction from \tcode{std::initializer_list},
     deduction guides and maybe iterator constructors need change.
     \item Can use \tcode{tuple} in \tcode{zip} and similar views consistently, in the 2 views case.
-    \item Can design \tcode{enumerate} as proposed by \paper{P2164R5}.
+    %\item Can design \tcode{enumerate} as proposed by \paper{P2164R5}.
 \end{itemize}
 
 \textbf{The intent of this paper is not to modify the behavior of tuple's and pair's members. In particular, it does not intend to change the behavior of well-formed existing code in regard
@@ -210,11 +226,12 @@ to the constraints, \tcode{noexcept} and \tcode{explicit} specifications placed 
 In comparisons, one of the 2 objects has to be a \tcode{tuple}, or a \tcode{pair}. This is done so that comparison operators can be made hidden friends, in order to avoid enormous overload sets.
 
 We also make \tcode{tuple_cat} support any \tcode{\placeholder{tuple-like}} parameter.
-This is conditionally supported by implementations already (but may be restricted to pair and array, we generalize that).
+This is conditionally supported by implementations already.
+% (but may be restricted to pair and array, we generalize that).
 
-\subsection{Questions For LEWG}
-
-Should \tcode{tuple-like} and \tcode{pair-like} be named concepts (as opposition to exposition only) ?
+%\subsection{Questions For LEWG}
+%
+%Should \tcode{tuple-like} and \tcode{pair-like} be named concepts (as opposition to exposition only) ?
 
 \subsection{CTAD issues}
 
@@ -347,7 +364,7 @@ constexpr const T&& get(const tuple<Types...>&& t) noexcept;
 template <typename T, std::size_t N>
 concept  @\placeholder{is-tuple-element}@ = requires (T t) {  // \expos
     typename std::tuple_element_t<N, std::remove_const_t<T>>;
-    { get<N>(t) } -> std::convertible_to<std::tuple_element_t<N, T>&>;
+    { @\textbf{std::}@get<N>(t) } -> std::convertible_to<std::tuple_element_t<N, T>&>;
 };
 
 
@@ -401,24 +418,22 @@ class tuple {
     tuple(const tuple&) = default;
     tuple(tuple&&) = default;
 
-    template<@\changed{class... UTypes}{\placeholder{tuple-like} UTuple}@>
-    constexpr explicit(@\seebelow@) tuple(const @\changed{tuple<UTypes...>}{UTuple}@&);
-    template<@\changed{class... UTypes}{\placeholder{tuple-like} UTuple}@>
-    constexpr explicit(@\seebelow@) tuple(@\changed{tuple<UTypes...>}{UTuple}@&&);
-\end{codeblock}
-
-
-\begin{removedblock}
-\begin{codeblock}
+    template<class... UTypes>
+    constexpr explicit(@\seebelow@) tuple(const tuple<UTypes...>&);
+    template<class... UTypes>
+    constexpr explicit(@\seebelow@) tuple(tuple<UTypes...>&&);
+    
+    @\added{template<\placeholder{tuple-like} UTuple>}@
+    @\added{constexpr explicit(\seebelow) tuple(const tuple<UTypes...>\&);}@
+    @\added{template<\placeholder{tuple-like} UTuple>}@
+    @\added{constexpr explicit(\seebelow) tuple(tuple<UTypes...>\&\&);}@
+    
     template<class U1, class U2>
     constexpr explicit(@\seebelow@)
     tuple(const pair<U1, U2>&);   // only if \tcode{sizeof...(Types) == 2}
     template<class U1, class U2>
     constexpr explicit(@\seebelow@)
     tuple(pair<U1, U2>&&);        // only if \tcode{sizeof...(Types) == 2}
-\end{codeblock}
-\end{removedblock}
-\begin{codeblock}
 
     // allocator-extended constructors
     template<class Alloc>
@@ -435,45 +450,46 @@ class tuple {
     template<class Alloc>
     constexpr tuple(allocator_arg_t, const Alloc& a, tuple&&);
 
-    template<class Alloc, @\changed{class... UTypes}{\placeholder{tuple-like} UTuple}@>
+    template<class Alloc, class... UTypes>
     constexpr explicit(@\seebelow@)
-    tuple(allocator_arg_t, const Alloc& a, const @\changed{tuple<UTypes...>}{UTuple}@&);
+    tuple(allocator_arg_t, const Alloc& a, const tuple<UTypes...>&);
 
-    template<class Alloc, @\changed{class... UTypes}{\placeholder{tuple-like} UTuple}@>
+    template<class Alloc, class... UTypes>
     constexpr explicit(@\seebelow@)
-    tuple(allocator_arg_t, const Alloc& a, @\changed{tuple<UTypes...>}{UTuple}@&&);
-\end{codeblock}
-\begin{removedblock}
-\begin{codeblock}
+    tuple(allocator_arg_t, const Alloc& a, tuple<UTypes...>&&);
+    
+    @\added{template<\placeholder{tuple-like} UTuple>}@
+    @\added{constexpr explicit(\seebelow) tuple(allocator_arg_t, const Alloc\& a, const tuple<UTypes...>\&);}@
+    @\added{template<\placeholder{tuple-like} UTuple>}@
+    @\added{constexpr explicit(\seebelow) tuple(allocator_arg_t, const Alloc\& a, tuple<UTypes...>\&\&);}@
+    
     template<class Alloc, class U1, class U2>
     constexpr explicit(@\seebelow@)
     tuple(allocator_arg_t, const Alloc& a, const pair<U1, U2>&);
     template<class Alloc, class U1, class U2>
     constexpr explicit(@\seebelow@)
     tuple(allocator_arg_t, const Alloc& a, pair<U1, U2>&&);
-\end{codeblock}
-\end{removedblock}
-\begin{codeblock}
+
     // \ref{tuple.assign}, \tcode{tuple} assignment
     constexpr tuple& operator=(const tuple&);
     constexpr tuple& operator=(tuple&&) noexcept(@\seebelow@);
 
-    template<@\changed{class... UTypes}{\placeholder{tuple-like} T}@>
-    constexpr tuple& operator=(const @\changed{tuple<UTypes...>}{T}@&);
-    template<@\changed{class... UTypes}{\placeholder{tuple-like} T}@>
-    constexpr tuple& operator=(@\changed{tuple<UTypes...>}{T}@&&);
-\end{codeblock}
-\begin{removedblock}
-\begin{codeblock}
+    template<class... UTypes>
+    constexpr tuple& operator=(tuple<UTypes...>&);
+    template<class... UTypes>
+    constexpr tuple& operator=(tuple<UTypes...>&&);
+
+    @\added{template<\placeholder{tuple-like} UTuple>}@
+    @\added{constexpr tuple\& operator=(const UTuple\&);}@
+    @\added{template<\placeholder{tuple-like} UTuple>}@
+    @\added{constexpr tuple\& operator=(UTuple\&\&)};@
+
     template<class U1, class U2>
     constexpr tuple& operator=(const pair<U1, U2>&);
      // only if \tcode{sizeof...(Types) == 2}
     template<class U1, class U2>
     constexpr tuple& operator=(pair<U1, U2>&&);
     // only if \tcode{sizeof...(Types) == 2}
-\end{codeblock}
-\end{removedblock}
-\begin{codeblock}
 
     // \ref{tuple.swap}, \tcode{tuple} swap
     constexpr void swap(tuple&) noexcept(@\seebelow@);
@@ -514,8 +530,10 @@ one of the types in \tcode{Types} throws an exception.
 
 \indexlibraryctor{tuple}%
 \begin{itemdecl}
-template<@\changed{class... UTypes}{\placeholder{tuple-like} UTuple}@>
-constexpr explicit(@\seebelow@) tuple(const @\changed{tuple<UTypes...>}{UTuple}@& u);
+template<class... UTypes>
+constexpr explicit(@\seebelow@) tuple(const tuple<UTypes>& u);
+@\added{template<\placeholder{tuple-like} UTuple>}@
+@\added{constexpr explicit(\seebelow) tuple(const UTuple\& u);}@
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -586,7 +604,6 @@ constexpr explicit(@\seebelow@) tuple(@\changed{tuple<UTypes...>}{UTuple}@&& u);
     \end{codeblock}
 \end{itemdescr}
 
-\begin{removedblock}
 \indexlibraryctor{tuple}%
 \indexlibraryglobal{pair}%
 \begin{itemdecl}
@@ -641,8 +658,6 @@ template<class U1, class U2> constexpr explicit(@\seebelow@) tuple(const pair<U1
         !is_convertible_v<U1, @$\tcode{T}_0$@> || !is_convertible_v<U2, @$\tcode{T}_1$@>
     \end{codeblock}
 \end{itemdescr}
-
-\end{removedblock}
 
 \indexlibraryctor{tuple}%
 \begin{itemdecl}
@@ -1598,13 +1613,13 @@ namespace std {
         explicit map(const Allocator&);
         map(const map&, const Allocator&);
         map(map&&, const Allocator&);
-        @\added{template<\placeholder{pair-like} P>}@
+        @\added{template<\placeholder{pair-like} P = value_type>}@
         @\added{requires is_constructible_v<value_type, P>}@
         map(initializer_list<@\changed{value_type}{P}@>, const Compare& = Compare(), const Allocator& = Allocator());
         template<class InputIterator>
         map(InputIterator first, InputIterator last, const Allocator& a)
         : map(first, last, Compare(), a) { }
-        @\added{template<\placeholder{pair-like} P>}@
+        @\added{template<\placeholder{pair-like} P = value_type>}@
         @\added{requires is_constructible_v<value_type, P>}@
         map(initializer_list<@\changed{value_type}{P}@> il, const Allocator& a)
         : map(il, Compare(), a) { }
@@ -1614,7 +1629,7 @@ namespace std {
         noexcept(allocator_traits<Allocator>::is_always_equal::value &&
         is_nothrow_move_assignable_v<Compare>);
 
-        @\added{template<\placeholder{pair-like} P>}@
+        @\added{template<\placeholder{pair-like} P = value_type>}@
         @\added{requires is_constructible_v<value_type, P>}@
         map& operator=(initializer_list<@\changed{value_type}{P}@>);
         allocator_type get_allocator() const noexcept;
