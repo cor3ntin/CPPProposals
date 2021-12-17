@@ -2711,8 +2711,7 @@ using @\placeholder{range-key-type}@ =
     remove_const_t<typename ranges::range_value_t<Range>::first_type>; // \expos
 
 template<ranges::input_range Range>
-using @\placeholder{range-mapped-type}@ = 
-    remove_const_t<typename ranges::range_value_t<Range>::second_type>; // \expos
+using @\placeholder{range-mapped-type}@ = typename ranges::range_value_t<Range>::second_type; // \expos
 
 template<ranges::input_range Range>
 using @\placeholder{range-to-alloc-type}@  =  
@@ -2791,7 +2790,7 @@ map(InputIterator, InputIterator, Compare = Compare(), Allocator = Allocator())
 \begin{codeblock}
 template<ranges::input_range R,
     class Compare = less<@\placeholder{range-key-type}@<R>,
-    class Allocator = allocator<@\placeholder{range-to-alloc-type}@<R>>
+    class Allocator = allocator<@\placeholder{range-to-alloc-type}@<R>>>
 map(from_range_t, R&&, Compare = Compare(), Allocator = Allocator())
     -> map<@\placeholder{range-key-type}@<R>, @\placeholder{range-mapped-type}@<R>, Compare, Allocator>;
 \end{codeblock}
@@ -2942,7 +2941,7 @@ Compare, Allocator>;
 \begin{codeblock}
 template<ranges::input_range R,
     class Compare = less<@\placeholder{range-key-type}@<R>>,
-    class Allocator = allocator<@\placeholder{range-to-alloc-type}@<R>>
+    class Allocator = allocator<@\placeholder{range-to-alloc-type}@<R>>>
 multimap(from_range_t, R&&, Compare = Compare(), Allocator = Allocator())
 -> multimap<@\placeholder{range-key-type}@<R>, @\placeholder{range-mapped-type}@<R>, Compare, Allocator>;
 \end{codeblock}
@@ -3522,7 +3521,7 @@ unordered_map(initializer_list<value_type> il,
     using at least \tcode{n} buckets. If \tcode{n} is not
     provided, the number of buckets is \impldef{default number of buckets in
         \tcode{unordered_map}}. Then
-    inserts elements from the range \range{f}{l} \changed{for the first form, or from the range \range{il.begin()}{il.end()} for the second form}{, \tcode{rg} or \tcode{il} respectively}.
+    inserts elements from the range \range{f}{l} \changed{for the first form, or from the range \range{il.begin()}{il.end()} for the second form}{, \tcode{rg}, or \tcode{il}, respectively}.
     \tcode{max_load_factor()} returns \tcode{1.0}.
 
     \pnum
@@ -3743,7 +3742,7 @@ unordered_multimap(initializer_list<value_type> il,
     using at least \tcode{n} buckets. If \tcode{n} is not
     provided, the number of buckets is \impldef{default number of buckets in
         \tcode{unordered_multimap}}. Then
-    inserts elements from the range \range{f}{l} \changed{for the first form, or from the range \range{il.begin()}{il.end()} for the second form}{, \tcode{rg} or \tcode{il} respectively}.
+    inserts elements from the range \range{f}{l} \changed{for the first form, or from the range \range{il.begin()}{il.end()} for the second form}{, \tcode{rg}, or \tcode{il}, respectively}.
     \tcode{max_load_factor()} returns \tcode{1.0}.
 
     \pnum
@@ -3853,7 +3852,7 @@ template<ranges::input_range R,
     class Allocator = allocator<ranges::range_value_t<R>>>
 unordered_set(from_range_t, R&&, typename @\seebelow@::size_type = @\seebelow@,
     Hash = Hash(), Pred = Pred(), Allocator = Allocator())
--> unordered_set<ranges::range_value_t<R>>, Hash, Pred, Allocator>;
+-> unordered_set<ranges::range_value_t<R>, Hash, Pred, Allocator>;
 \end{codeblock}
 \end{addedblock}
 \begin{codeblock}
@@ -3939,7 +3938,7 @@ unordered_set(initializer_list<value_type> il,
     using at least \tcode{n} buckets. If \tcode{n} is not
     provided, the number of buckets is \impldef{default number of buckets in
         \tcode{unordered_set}}. Then
-    inserts elements from the range \range{f}{l} \changed{for the first form, or from the range \range{il.begin()}{il.end()} for the second form}{, \tcode{rg} or \tcode{il} respectively}.
+    inserts elements from the range \range{f}{l} \changed{for the first form, or from the range \range{il.begin()}{il.end()} for the second form}{, \tcode{rg}, or \tcode{il}, respectively}.
     \tcode{max_load_factor()} returns \tcode{1.0}.
 
     \pnum
@@ -4047,7 +4046,7 @@ template<ranges::input_range R,
     class Allocator = allocator<ranges::range_value_t<R>>>
 unordered_multiset(from_range_t, R&&, typename @\seebelow@::size_type = @\seebelow@,
     Hash = Hash(), Pred = Pred(), Allocator = Allocator())
--> unordered_multiset<ranges::range_value_t<R>>, Hash, Pred, Allocator>;
+-> unordered_multiset<ranges::range_value_t<R>, Hash, Pred, Allocator>;
 \end{codeblock}
 \end{addedblock}
 \begin{codeblock}
@@ -4136,7 +4135,7 @@ unordered_multiset(initializer_list<value_type> il,
     using at least \tcode{n} buckets. If \tcode{n} is not
     provided, the number of buckets is \impldef{default number of buckets in
         \tcode{unordered_multiset}}. Then
-    inserts elements from the range \range{f}{l} \changed{for the first form, or from the range \range{il.begin()}{il.end()} for the second form}{, \tcode{rg} or \tcode{il} respectively}.
+    inserts elements from the range \range{f}{l} \changed{for the first form, or from the range \range{il.begin()}{il.end()} for the second form}{, \tcode{rg}, or \tcode{il}, respectively}.
     \tcode{max_load_factor()} returns \tcode{1.0}.
 
     \pnum
@@ -4635,7 +4634,7 @@ priority_queue(from_range_t, R&& rg, const Compare& compare, const Alloc& a);
 \begin{itemdescr}
       \pnum
     \effects
-    initializes \tcode{comp} with \tcode{compare} and
+    Initializes \tcode{comp} with \tcode{compare} and
     \tcode{c} with \tcode{ranges::to<Container>(std::forward<R>(rg), a)}
     ; calls \tcode{make_heap(c.begin(), c.end(), comp)}.
 \end{itemdescr}
@@ -4791,7 +4790,7 @@ namespace std {
 
     @\added{template<ranges::input_range R, class Allocator>}@
     @\added{stack(from_range_t, R\&\&, Allocator)}@
-    @\added{-> stack<ranges::range_value_t<R>, deque<ranges::range_value_t<R>, Allocator>;}@
+    @\added{-> stack<ranges::range_value_t<R>, deque<ranges::range_value_t<R>, Allocator>>;}@
 
 
     template<class T, class Container, class Alloc>
