@@ -2679,6 +2679,49 @@ namespace std {
 
 \rSec1[associative]{Associative containers}
 
+\rSec2[associative.general]{In general}
+
+\pnum
+The header map defines the class templates \tcode{map} and
+\tcode{multimap}; the header set defines the class templates
+\tcode{set} and \tcode{multiset}.
+
+\pnum
+The following exposition-only alias templates may appear in deduction guides for associative containers:
+\begin{codeblock}
+template<class InputIterator>
+using @\placeholder{iter-value-type}@ =
+typename iterator_traits<InputIterator>::value_type;                // \expos
+template<class InputIterator>
+using @\placeholder{iter-key-type}@ = remove_const_t<
+typename iterator_traits<InputIterator>::value_type::first_type>;   // \expos
+template<class InputIterator>
+using @\placeholder{iter-mapped-type}@ =
+typename iterator_traits<InputIterator>::value_type::second_type;   // \expos
+template<class InputIterator>
+using @\placeholder{iter-to-alloc-type}@ = pair<
+add_const_t<typename iterator_traits<InputIterator>::value_type::first_type>,
+typename iterator_traits<InputIterator>::value_type::second_type>;  // \expos
+\end{codeblock}
+
+\begin{addedblock}
+\begin{codeblock}
+template<ranges::input_range Range>
+using @\placeholder{range-key-type}@ = 
+    remove_const_t<typename ranges::range_value_t<Range>::first_type>; // \expos
+
+template<ranges::input_range Range>
+using @\placeholder{range-mapped-type}@ = 
+    remove_const_t<typename ranges::range_value_t<Range>::second_type>; // \expos
+
+template<ranges::input_range Range>
+using @\placeholder{range-to-alloc-type}@  =  
+    pair<add_const_t<typename ranges::range_value_t<Range>::first_type>, 
+         typename ranges::range_value_t<Range>::second_type>; // \expos
+
+\end{codeblock}
+\end{addedblock}
+
 \rSec2[map]{Class template \tcode{map}}
 
 \rSec3[map.overview]{Overview}
@@ -2747,12 +2790,10 @@ map(InputIterator, InputIterator, Compare = Compare(), Allocator = Allocator())
 \begin{addedblock}
 \begin{codeblock}
 template<ranges::input_range R,
-    class Compare = less<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>,
-    class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<ranges::iterator_t<R>>>
+    class Compare = less<@\placeholder{range-key-type}@<R>,
+    class Allocator = allocator<@\placeholder{range-to-alloc-type}@<R>>
 map(from_range_t, R&&, Compare = Compare(), Allocator = Allocator())
-    -> map<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,
-           @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>,
-           Compare, Allocator>;
+    -> map<@\placeholder{range-key-type}@<R>, @\placeholder{range-mapped-type}@<R>, Compare, Allocator>;
 \end{codeblock}
 \end{addedblock}
 
@@ -2773,9 +2814,7 @@ less<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
 \begin{codeblock}
 template<ranges::input_range R, class Allocator>
 map(from_range_t, R&&, Allocator)
--> map<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,
-    @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>,
-    less<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>, Allocator>;
+-> map<@\placeholder{range-key-type}@<R>, @\placeholder{range-mapped-type}@<R>, less<@\placeholder{range-key-type}@<R>>, Allocator>;
 \end{codeblock}
 \end{addedblock}
 \begin{codeblock}
@@ -2902,12 +2941,10 @@ Compare, Allocator>;
 \begin{addedblock}
 \begin{codeblock}
 template<ranges::input_range R,
-    class Compare = less<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>,
-    class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<ranges::iterator_t<R>>>
+    class Compare = less<@\placeholder{range-key-type}@<R>>,
+    class Allocator = allocator<@\placeholder{range-to-alloc-type}@<R>>
 multimap(from_range_t, R&&, Compare = Compare(), Allocator = Allocator())
--> multimap<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,
-    @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>,
-    Compare, Allocator>;
+-> multimap<@\placeholder{range-key-type}@<R>, @\placeholder{range-mapped-type}@<R>, Compare, Allocator>;
 \end{codeblock}
 \end{addedblock}
 
@@ -2928,9 +2965,7 @@ less<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
 \begin{codeblock}
 template<ranges::input_range R, class Allocator>
 multimap(from_range_t, R&&, Allocator)
--> multimap<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,
-    @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>,
-    less<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>, Allocator>;
+-> multimap<@\placeholder{range-key-type}@<R>, @\placeholder{range-mapped-type}@<R>, less<@\placeholder{range-key-type}@<R>>, Allocator>;
 \end{codeblock}
 \end{addedblock}
 \begin{codeblock}
@@ -3384,12 +3419,12 @@ Allocator>;
 \begin{addedblock}
 \begin{codeblock}
 template<ranges::input_range R,
-    class Hash = hash<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>,
-    class Pred = equal_to<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>,
-    class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<ranges::iterator_t<R>>>>
+    class Hash = hash<@\placeholder{range-key-type}@<R>>,
+    class Pred = equal_to<@\placeholder{range-key-type}@<R>>,
+    class Allocator = allocator<@\placeholder{range-to-alloc-type}@<R>>>
 unordered_map(from_range_t, R&&, typename @\seebelow@::size_type = @\seebelow@,
     Hash = Hash(), Pred = Pred(), Allocator = Allocator())
--> unordered_map<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>, @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>,
+-> unordered_map<@\placeholder{range-key-type}@<R>, @\placeholder{range-mapped-type}@<R>,
     Hash, Pred, Allocator>;
 \end{codeblock}
 \end{addedblock}
@@ -3424,26 +3459,20 @@ equal_to<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
 \begin{addedblock}
 \begin{codeblock}
 template<ranges::input_range R, class Allocator>
-unordered_map(from_range_t, R\&\&, typename @\seebelow@::size_type, Allocator)
--> unordered_map<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,
-        @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>,
-        hash<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>,
-        equal_to<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>, Allocator>;
+unordered_map(from_range_t, R&&, typename @\seebelow@::size_type, Allocator)
+-> unordered_map<@\placeholder{range-key-type}@<R>,
+        @\placeholder{range-mapped-type}@<R>, hash<@\placeholder{range-key-type}@<R>>,
+        equal_to<@\placeholder{range-key-type}@<R>>, Allocator>;
 
 
 template<ranges::input_range R, class Allocator>
-unordered_map(from_range_t, R\&\&, Allocator)
--> unordered_map<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,
-    @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>,
-    hash<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>,
-    equal_to<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>, Allocator>;
+unordered_map(from_range_t, R&&, Allocator)
+-> unordered_map<@\placeholder{range-key-type}@<R>,
+    @\placeholder{range-mapped-type}@<R>, hash<@\placeholder{range-key-type}@<R>>, equal_to<@\placeholder{range-key-type}@<R>>, Allocator>;
 
 template<ranges::input_range R, class Hash, class Allocator>
-unordered_map(from_range_t, R, typename @\seebelow@::size_type, Hash, Allocator)
--> unordered_map<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,
-    @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>,
-    Hash,
-    equal_to<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>, Allocator>;
+unordered_map(from_range_t, R&&, typename @\seebelow@::size_type, Hash, Allocator)
+-> unordered_map<@\placeholder{range-key-type}@<R>, @\placeholder{range-mapped-type}@<R>, Hash, equal_to<@\placeholder{range-key-type}@<R>>, Allocator>;
 \end{codeblock}
 \end{addedblock}
 \begin{codeblock}
@@ -3493,9 +3522,7 @@ unordered_map(initializer_list<value_type> il,
     using at least \tcode{n} buckets. If \tcode{n} is not
     provided, the number of buckets is \impldef{default number of buckets in
         \tcode{unordered_map}}. Then
-    inserts elements from the range \range{f}{l}
-for the first form, \added{or from the range \tcode{rg} from the second form}, or from the range
-\range{il.begin()}{il.end()} for the \changed{second}{third} form.
+    inserts elements from the range \range{f}{l} \changed{for the first form, or from the range \range{il.begin()}{il.end()} for the second form}{, \tcode{rg} or \tcode{il} respectively}.
     \tcode{max_load_factor()} returns \tcode{1.0}.
 
     \pnum
@@ -3603,13 +3630,13 @@ Hash, Pred, Allocator>;
 \begin{addedblock}
 \begin{codeblock}
 template<ranges::input_range R,
-    class Hash = hash<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>,
-    class Pred = equal_to<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>,
-    class Allocator = allocator<@\placeholder{iter-to-alloc-type}@<ranges::iterator_t<R>>>>
+    class Hash = hash<@\placeholder{range-key-type}@<R>>,
+    class Pred = equal_to<@\placeholder{range-key-type}@<R>>,
+    class Allocator = allocator<@\placeholder{range-to-alloc-type}@<R>>>
 unordered_multimap(from_range_t, R&&, typename @\seebelow@::size_type = @\seebelow@,
 Hash = Hash(), Pred = Pred(), Allocator = Allocator())
--> unordered_multimap<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,
-    @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>,
+-> unordered_multimap<@\placeholder{range-key-type}@<R>,
+    @\placeholder{range-mapped-type}@<R>,
     Hash, Pred, Allocator>;
 \end{codeblock}
 \end{addedblock}
@@ -3645,25 +3672,24 @@ equal_to<@\placeholder{iter-key-type}@<InputIterator>>, Allocator>;
 \begin{codeblock}
 template<ranges::input_range R, class Allocator>
 unordered_multimap(from_range_t, R&&, typename @\seebelow@::size_type, Allocator)
--> unordered_multimap<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,
-    @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>,
-    hash<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>,
-    equal_to<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>, Allocator>;
+-> unordered_multimap<@\placeholder{range-key-type}@<R>,
+    @\placeholder{range-mapped-type}@<R>,
+    hash<@\placeholder{range-key-type}@<R>>,
+    equal_to<@\placeholder{range-key-type}@<R>>, Allocator>;
 
 template<ranges::input_range R, class Allocator>
 unordered_multimap(from_range_t, R&&, Allocator)
--> unordered_multimap<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,
-    @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>,
-    hash<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>,
-    equal_to<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>, Allocator>;
-    template<ranges::input_range R, class Hash, class Allocator>
+-> unordered_multimap<@\placeholder{range-key-type}@<R>,
+    @\placeholder{range-mapped-type}@<R>,
+    hash<@\placeholder{range-key-type}@<R>>,
+    equal_to<@\placeholder{range-key-type}@<R>>, Allocator>;
 
 template<ranges::input_range R, class Hash, class Allocator>
 unordered_multimap(from_range_t, R&&, typename @\seebelow@::size_type, Hash, Allocator)
--> unordered_multimap<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>,
-    @\placeholder{iter-mapped-type}@<ranges::iterator_t<R>>,
+-> unordered_multimap<@\placeholder{range-key-type}@<R>,
+    @\placeholder{range-mapped-type}@<R>,
     Hash,
-    equal_to<@\placeholder{iter-key-type}@<ranges::iterator_t<R>>>, Allocator>;
+    equal_to<@\placeholder{range-key-type}@<R>>, Allocator>;
 \end{codeblock}
 \end{addedblock}
 \begin{codeblock}
@@ -3701,7 +3727,7 @@ unordered_multimap(InputIterator f, InputIterator l,
 @\added{template<\placeholder{container-compatible-range}<value_type> R>}@
 @\added{unordered_multimap(from_range_t, R\&\& rg, size_type n = \seebelow,}@
     @\added{const hasher\& hf = hasher(), const key_equal\& eql = key_equal(),}@
-    @\added{const allocator_type\& a = allocator_type();}@
+    @\added{const allocator_type\& a = allocator_type());}@
 unordered_multimap(initializer_list<value_type> il,
     size_type n = @\seebelow@,
     const hasher& hf = hasher(),
@@ -3717,9 +3743,7 @@ unordered_multimap(initializer_list<value_type> il,
     using at least \tcode{n} buckets. If \tcode{n} is not
     provided, the number of buckets is \impldef{default number of buckets in
         \tcode{unordered_multimap}}. Then
-    inserts elements from the range \range{f}{l}
-for the first form, \added{or from the range \tcode{rg} for the second form}, or from the range
-\range{il.begin()}{il.end()} for the \changed{second}{third} form.
+    inserts elements from the range \range{f}{l} \changed{for the first form, or from the range \range{il.begin()}{il.end()} for the second form}{, \tcode{rg} or \tcode{il} respectively}.
     \tcode{max_load_factor()} returns \tcode{1.0}.
 
     \pnum
@@ -3862,7 +3886,6 @@ unordered_set(from_range_t, R&&, typename @\seebelow@::size_type, Allocator)
 -> unordered_set<ranges::range_value_t<R>,
     hash<ranges::range_value_t<R>>,
     equal_to<ranges::range_value_t<R>>, Allocator>;
-    template<ranges::input_range R, class Allocator>
 
 template<ranges::input_range R, class Allocator>
 unordered_set(from_range_t, R&&, Allocator)
@@ -3916,9 +3939,7 @@ unordered_set(initializer_list<value_type> il,
     using at least \tcode{n} buckets. If \tcode{n} is not
     provided, the number of buckets is \impldef{default number of buckets in
         \tcode{unordered_set}}. Then
-    inserts elements from the range \range{f}{l}
-    for the first form, \added{or from the range \tcode{rg} from the second form}, or from the range
-    \range{il.begin()}{il.end()} for the \changed{second}{third} form.
+    inserts elements from the range \range{f}{l} \changed{for the first form, or from the range \range{il.begin()}{il.end()} for the second form}{, \tcode{rg} or \tcode{il} respectively}.
     \tcode{max_load_factor()} returns \tcode{1.0}.
 
     \pnum
@@ -4059,14 +4080,12 @@ unordered_multiset(from_range_t, R&&, typename @\seebelow@::size_type, Allocator
 -> unordered_multiset<ranges::range_value_t<R>,
     hash<ranges::range_value_t<R>>,
     equal_to<ranges::range_value_t<R>>, Allocator>;
-    template<ranges::input_range R, class Allocator>
 
 template<ranges::input_range R, class Allocator>
 unordered_multiset(from_range_t, R&&, Allocator)
 -> unordered_multiset<ranges::range_value_t<R>,
     hash<ranges::range_value_t<R>>,
     equal_to<ranges::range_value_t<R>>, Allocator>;
-    template<ranges::input_range R, class Hash, class Allocator>
 
 template<ranges::input_range R, class Hash, class Allocator>
 unordered_multiset(from_range_t, R&&, typename @\seebelow@::size_type, Hash, Allocator)
@@ -4117,9 +4136,7 @@ unordered_multiset(initializer_list<value_type> il,
     using at least \tcode{n} buckets. If \tcode{n} is not
     provided, the number of buckets is \impldef{default number of buckets in
         \tcode{unordered_multiset}}. Then
-    inserts elements from the range \range{f}{l}
-    for the first form, \added{or from the range \tcode{rg} from the second form} or from the range
-    \range{il.begin()}{il.end()} for the \changed{second}{third} form.
+    inserts elements from the range \range{f}{l} \changed{for the first form, or from the range \range{il.begin()}{il.end()} for the second form}{, \tcode{rg} or \tcode{il} respectively}.
     \tcode{max_load_factor()} returns \tcode{1.0}.
 
     \pnum
@@ -4203,9 +4220,9 @@ namespace std {
     queue(InputIterator, InputIterator, Allocator)
     -> queue<@\exposid{iter-value-type}@<InputIterator>, deque<@\exposid{iter-value-type}@<InputIterator>, Allocator>>;
 
-    @\added{template<ranges::input_range R, class Allocator = allocator<ranges::range_value_t<R>>>}@
+    @\added{template<ranges::input_range R, class Allocator>}@
     @\added{queue(from_range_t, R\&\&, Allocator)}@
-    @\added{-> queue<ranges::range_value_t<R>, Allocator>;}@
+    @\added{-> queue<ranges::range_value_t<R>, deque<ranges::range_value_t<R>, Allocator>>;}@
 
     template<class T, class Container>
     void swap(queue<T, Container>& x, queue<T, Container>& y) noexcept(noexcept(x.swap(y)));
@@ -4438,16 +4455,16 @@ priority_queue(Compare, Container, Allocator)
 -> priority_queue<typename Container::value_type, Container, Compare>;
 
 @\added{template<ranges::input_range R,}@
-@\added{    class Compare = less<ranges::range_value_t<R>,}@
-@\added{    class Allocator = allocator<ranges::range_value_t<R>>}@
+@\added{    class Compare,}@
+@\added{    class Allocator>}@
 @\added{priority_queue(from_range_t, R\&\&, Compare, Allocator)}@
 @\added{    -> priority_queue<ranges::range_value_t<R>, }@
 @\added{            vector<ranges::range_value_t<R>, Allocator>, Compare>;}@
 
-@\added{template<ranges::input_range R, class Allocator = allocator<ranges::range_value_t<R>>}@
+@\added{template<ranges::input_range R, class Allocator>}@
 @\added{priority_queue(from_range_t, R\&\&, Allocator)}@
 @\added{-> priority_queue<ranges::range_value_t<R>, }@
-@\added{        vector<ranges::range_value_t<R>, Allocator>, less<ranges::range_value_t<R>>;}@
+@\added{        vector<ranges::range_value_t<R>, Allocator>>;}@
 
 // no equality is provided
 
@@ -4675,18 +4692,9 @@ template<@\placeholder{container-compatible-range}@<T> R>
 void push_range(R&& rg);
 \end{itemdecl}
 \begin{itemdescr}
-    \pnum
-    \effects
-    As if by:
-    \begin{codeblock}
-        if constexpr(requires {c.append_range(std::forward<R>(rg));}) {
-             c.append_range(std::forward<R>(rg));
-        }
-        else {
-            ranges::copy(rg, back_inserter(c));
-        }
-        make_heap(c.begin(), c.end(), comp);
-    \end{codeblock}
+    \effects Insert all elements of \tcode{rg} in \tcode{c}.
+    
+    \postconditions \tcode{is_heap(c.begin(), c.end(), comp)} is \tcode{true}.
 \end{itemdescr}
 \end{addedblock}
 
@@ -4781,9 +4789,9 @@ namespace std {
     -> stack<@\exposid{iter-value-type}@<InputIterator>,
     stack<@\exposid{iter-value-type}@<InputIterator>, Allocator>>;
 
-    @\added{template<ranges::input_range R, class Allocator = allocator<ranges::range_value_t<R>>>}@
+    @\added{template<ranges::input_range R, class Allocator>}@
     @\added{stack(from_range_t, R\&\&, Allocator)}@
-    @\added{-> stack<ranges::range_value_t<R>, Allocator>;}@
+    @\added{-> stack<ranges::range_value_t<R>, deque<ranges::range_value_t<R>, Allocator>;}@
 
 
     template<class T, class Container, class Alloc>
@@ -4907,6 +4915,9 @@ void push_range(R&& rg);
     \end{codeblock}
 \end{itemdescr}
 \end{addedblock}
+
+\rSec1[strings]{Strings library}
+
 
 \rSec2[basic.string]{Class template \tcode{basic_string}}
 
