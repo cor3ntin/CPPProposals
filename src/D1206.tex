@@ -5,7 +5,9 @@
 
 \RequirePackage{luatex85}%
 
+
 \documentclass{wg21}
+\usepackage{tabto}    
 
 \title{Conversions from ranges to containers}
 \docnumber{D1206R7}
@@ -40,6 +42,11 @@ Wording changes
     \item Remove unnecessary constraints from \tcode{basic_string::assign_range}
     \item Add missing \tcode{constexpr} in a few places in \tcode{vector}
     \item Add missing \tcode{std::forward} in a few places
+    \item Remove unecessary constraints on basic_string::append_range/replace_with_range
+    \item simplify the reservable-container concept specification
+    \item make ranges::to concepts into constexpr variables to make it clearer no semantic constraints is expected
+    \item simplify and fix \tcode{ranges::to} wording and description
+    \item introduce \tcode{__cpp_lib_to} instead of bumping  \tcode{__cpp_lib_ranges}
 \end{itemize}
 
 \subsection*{Revision 6}
@@ -5142,12 +5149,6 @@ constexpr basic_string& append_range(R&& rg);
 
 \begin{itemdescr}
     \pnum
-    \constraints
-    \begin{itemize}
-       \item \tcode{is_convertible_v<R, const charT*>} is \tcode{false}, and
-       \item \tcode{is_convertible_v<R, basic_string_view<charT, Traits>>} is \tcode{false}.
-    \end{itemize}
-
     \effects
     Equivalent to: \tcode{return append(basic_string(from_range, std::forward<R>(rg), get_allocator()));}
 \end{itemdescr}
@@ -5289,12 +5290,6 @@ constexpr basic_string& assign_range(R&& rg);
 
 \begin{itemdescr}
     \pnum
-    \constraints
-
-    \begin{itemize}
-        \item \tcode{is_convertible_v<R, const charT*>} is \tcode{false}, and
-        \item \tcode{is_convertible_v<R, basic_string_view<charT, Traits>>} is \tcode{false}.
-    \end{itemize}
 
     \effects
     Equivalent to: \tcode{return replace(i1, i2, basic_string(from_range, std::forward<R>(rg), get_allocator()));}
@@ -5342,10 +5337,10 @@ namespace std::ranges {
 
     @\added{template<class C, class... Args>}@
     @\added{requires (!view<C>)}@
-    @\added{constexpr auto to(R\&\& r, Args\&\&... args)  -> \seebelow;}@
+    @\added{constexpr auto to(Args\&\&... args)  -> \seebelow;}@
 
     @\added{template<template<class...> class C, class... Args>}@
-    @\added{constexpr auto to( Args\&\&... args) -> \seebelow;}@
+    @\added{constexpr auto to(Args\&\&... args) -> \seebelow;}@
 }
 namespace std {
     namespace views = ranges::views;
@@ -5370,8 +5365,8 @@ namespace std {
         using type = S;
     };
 
-    @\added{struct from_range_t;}@
-    @\added{inline constexpr from_range_t from_range{};}@
+    @\added{struct from_range_t \{ explicit from_range_t() = default; \};}@
+    @\added{inline constexpr from_range_t from_range\{\};}@
 }
 
 \end{codeblock}
@@ -5382,189 +5377,153 @@ In [range.utility] Insert after section [range.dangling]
 
 \rSec2[range.utility.conversions]{Range conversions}
 
-\rSec3[range.utility.conversions.tag]{Range argument tag}
+The range conversion functions construct an object (usually a container) from
+a range, by using a constructor taking a range, a \tcode{from_range_t} tagged constructor,
+or a constructor taking a pair of iterators, or by inserting each element of the
+range into the default-constructed object.
 
-\begin{itemdecl}
-namespace std {
-    struct from_range_t { explicit from_range_t() = default; };
-    inline constexpr from_range_t from_range{};
-}
-\end{itemdecl}
+\tcode{ranges::to} is applied recursively, allowing the conversion of a range of ranges.
 
-\pnum
-The \tcode{from_range_t} struct is an empty class type used as a unique type to
-disambiguate constructor and function overloading. Specifically, several types, notably containers have constructors with \tcode{from_range_t} as the first argument>
-
-The range conversions functions efficiently construct an instance of type from a range.
-\tcode{ranges::to<C>(r, args)} returns an instance \tcode{c} of \tcode{C} constructed by the first valid method among the following:
-\begin{itemize}
-\item Construct \tcode{c} from r
-\item Construct \tcode{c} from r using the tagged ranged constructor (\tcode{from_range_t})
-\item Construct \tcode{c} from the pair of iterators \tcode{ranges::begin(r), ranges::end(r)}
-\item Construct \tcode{c}, then insert each element of \tcode{r} at the end of \tcode{c}.
-\item If \tcode{C} is a \tcode{range} whose value type is itself a \tcode{range} (and is not a \tcode{view}), and \tcode{r}'s value type is also a \tcode{range}, the application of \tcode{to<range_value_t<C>>} for each element of \tcode{r} is inserted
-at the end of c.
-\end{itemize}
-
-\rSec3[range.utility.conversions.adaptor]{\tcode{ranges::to}}
-
-When the instance \tcode{c} of \tcode{C} in constructed, the parameter pack \tcode{args} is forwarded as the trailing parameters of the selected
-constructor of \tcode{C}. This allows passing an allocator to the selected constructor.
-
-\begin{itemdecl}
-template<class C, input_range R, class... Args>
-requires (!view<C>)
-constexpr C to(R&& r, Args&&... args);
-\end{itemdecl}
-
-\begin{itemdescr}
+\begin{example}
+\begin{colorblock}
+    string_view str = "the quick brown fox";
+    auto words = views::split(str, ' ') | to<vector<string>>(); 
+    // returns vector<string>{"the", "quick", "brown", "fox"}
+\end{colorblock}\end{example}
 
 Let \placeholder{reservable-container} be defined as follow:
 
 \begin{codeblock}
     template<class Container>
-    concept @\placeholder{reservable-container}@ = // \expos
-      ranges::sized_range<Container> &&
-      requires(Container& c) {
-        c.reserve(ranges::size(c));
-        {c.capacity()} -> same_as<decltype(ranges::size(c))>;
-        {c.max_size()} -> same_as<decltype(ranges::size(c))>;
-    };
+    constexpr bool @\placeholder{reservable-container}@ = // \expos
+      sized_range<Container> &&
+      requires(Container& c, range_size_t<Container> n) {
+        c.reserve(n);
+        {c.capacity()} -> same_as<decltype(n)>;
+        {c.max_size()} -> same_as<decltype(n)>;
+      };
 \end{codeblock}
 
 Let \placeholder{container-insertable} be defined as follow:
 \begin{codeblock}
     template<class Container, class Ref>
-    concept @\placeholder{container-insertable}@ =  // \expos
+    constexpr bool @\placeholder{container-insertable}@ =  // \expos
         requires(Container& c, Ref&& ref) {
-            requires requires { c.push_back(std::forward<Ref>(ref)); } || 
-                     requires { c.insert(std::end(c), std::forward<Ref>(ref)); };
-    };
-};
+            requires (requires { c.push_back(std::forward<Ref>(ref)); } || 
+                      requires { c.insert(c.end(), std::forward<Ref>(ref)); });
+            };
 \end{codeblock}
 
 Let \placeholder{container-inserter} be defined as follow:
 
     \begin{codeblock}
-    auto @\placeholder{container-inserter}@ = []<typename Ref>(C & c ){
-        if constexpr (requires { c.push_back(declval<Ref>()); }) {
+    template <typename Ref>
+    auto @\placeholder{container-inserter}@(C & c){
+        if constexpr (requires { c.push_back(declval<Ref>()); })
             return back_inserter(c);
-        }
-        else  {
-            return inserter(c, std::end(c));
-        }
+        else
+            return inserter(c, c.end());
     };
     \end{codeblock}
 
-\effects
-Returns an instance \tcode{C} constructed from the elements of \tcode{r} in the following manner:
+
+\rSec2[range.utility.conversions.to]{\tcode{ranges::to}}
+
+\begin{itemdecl}
+    template<class C, input_range R, class... Args>
+    requires (!view<C>)
+    constexpr C to(R&& r, Args&&... args);
+\end{itemdecl}
+
+\begin{itemdescr}
+
+\returns An object of type \tcode{C} constructed from the elements of \tcode{r} in the following manner:
 
 \begin{itemize}
-\item If
+\item If \tcode{convertible_to<range_reference_t<R>, range_value_t<C>>} is \tcode{true}: 
 
 \begin{itemize}
-    \item \tcode{constructible_from<C, R, Args...>} is \tcode{true} and,
-    \item \tcode{convertible_to<ranges::range_reference_t<R>, ranges::range_value_t<C>>} is \tcode{true}
-\end{itemize}
+\item If  \tcode{constructible_from<C, R, Args...>} is \tcode{true}:
 
-equivalent to \tcode{C(std::forward<R>(r), std::forward<Args>(args)...)}.
+\quad\quad  \tcode{C(std::forward<R>(r), std::forward<Args>(args)...)}
 
-\item Otherwise, if
+\item Otherwise if \tcode{constructible_from<C, from_range_t, R, Args...>} is \tcode{true}:
 
-\begin{itemize}
-    \item \tcode{constructible_from<C, R, Args...>} is \tcode{true} and,
-    \item \tcode{constructible_from<C, from_range_t, R, Args...>} is \tcode{true}
-\end{itemize}
+\quad\quad  \tcode{C(from_range, std::forward<R>(r), std::forward<Args>(args)...)}
 
-equivalent to \tcode{C(from_range, std::forward<R>(r), std::forward<Args>(args)...)}.
-
-\item Otherwise, if
+\item Otherwise if
 \begin{itemize}
     \item \tcode{common_range<R>} is \tcode{true},
-    \item \tcode{ranges::iterator_t<R>} models \placeholder{Cpp17InputIterator},
-    \item \tcode{constructible_from<C, ranges::iterator_t<R>, ranges::sentinel_t<R>, Args...>} is \tcode{true}, and
-    \item \tcode{convertible_to<ranges::range_reference_t<R>, ranges::range_value_t<C>>} is \tcode{true}
+    \item \tcode{\placeholder{cpp17-input-iterator}<iterator_t<R>>} is \tcode{true}, and
+    \item \tcode{constructible_from<C, iterator_t<R>, sentinel_t<R>, Args...>} is \tcode{true}:
 \end{itemize}
 
-equivalent to:
+\quad\quad\quad  \tcode{C c(ranges::begin(r), ranges::end(r), std::forward<Args...>(args)...);}
+
+\item Otherwise if
+\begin{itemize}
+\item \tcode{constructible_from<C, Args...>} is \tcode{true}, and
+\item \tcode{\placeholder{container-insertable}<C, range_reference_t<R>>} is \tcode{true}:
+\end{itemize}
+
 \begin{codeblock}
-    C c(ranges::begin(r), ranges::end(r), std::forward<Args...>(args)...);
+        C c(std::forward<Args...>(args)...);
+        if constexpr (sized_range<R> && @\placeholder{reservable-container}@<C>)
+            c.reserve(ranges::size(r));
+        ranges::copy(r, @\placeholder{container-inserter}@<range_reference_t<R>>(c));
 \end{codeblock}
 
-
-
-\item Otherwise, if
-\begin{itemize}
-\item \tcode{constructible_from<C, Args...>} is \tcode{true},
-\item \tcode{\placeholder{container-insertable}<C,ranges::range_reference_t<R>>} is \tcode{true}, and
-\item \tcode{convertible_to<ranges::range_reference_t<R>, ranges::range_value_t<C>>} is \tcode{true}
 \end{itemize}
 
-equivalent to:
-\begin{codeblock}
-    C c(std::forward<Args...>(args)...);
-    if constexpr (ranges::sized_range<R> && @\placeholder{reservable-container}@<C>) {
-        c.reserve(ranges::size(r));
-    }
-    ranges::copy(r,
-        @\placeholder{container-inserter}@<range_reference_t<R>>(c);
-\end{codeblock}
-
-\item Otherwise, if:
-\begin{itemize}
-    \item \tcode{input_range<range_value_t<R>>} is \tcode{true},
-    \item \tcode{view<C>} is \tcode{false}, and
-    \item \tcode{to<range_value_t<C>>(declval<range_reference_t<R>>())} is a valid expression whose
-      type and value category models \tcode{convertible_to<range_value_t<C>>},
-\end{itemize}
-
-equivalent to:
+\item Otherwise if \tcode{input_range<range_reference_t<R>>} is \tcode{true}:
 
 \begin{codeblock}
-    to<C, Args...>(r | r::views::transform([](auto &&elem) {
-            return to<r::range_value_t<C>>(std::forward<decltype(elem)>(elem));
+        to<C>(r | views::transform([](auto &&elem) {
+                return to<range_value_t<C>>(std::forward<decltype(elem)>(elem));
         }), std::forward<Args>(args)...);
 \end{codeblock}
 
-\item Otherwise \tcode{ranges::to<C>(r, args)} is ill-formed.
-
+\item Otherwise the program is ill-formed.
 
 \end{itemize}
-
 \end{itemdescr}
 
 \begin{itemdecl}
 template<template<class...> class C, input_range R, class... Args>
-constexpr auto to(R&& r, Args&&... args) -> @\placeholder{DEDUCE_TYPE(R)}@;
+constexpr auto to(R&& r, Args&&... args);
 \end{itemdecl}
 \begin{itemdescr}
 
-Let \tcode{ITER(D)} be a type meeting the requirements of \tcode{Cpp17InputIterator} such that
+Let \placeholder{\tcode{input-iterator}} be an exposition-only type
+\begin{codeblock}
+struct @\tcode{\placeholder{input-iterator}}@ { //\expos
+    using iterator_category = input_iterator_tag;
+    using value_type = range_value_t<R>;
+    using difference_type = ptrdiff_t;
+    using pointer = add_pointer_t<range_reference_t<R>>;
+    using reference = range_reference_t<R>;    
+    reference operator*() const;
+    pointer operator->() const;
+    @\tcode{\placeholder{input-iterator}}@& operator++();
+    @\tcode{\placeholder{input-iterator}}@ operator++(int);
+    bool operator==(const @\tcode{\placeholder{input-iterator}}@&) const;
+};
+\end{codeblock}
+
+\begin{note}
+\placeholder{\tcode{input-iterator}} meets the syntactic requirements of \tcode{Cpp17InputIterator}.
+\end{note} 
+
+Let \placeholder{DEDUCE_EXPR} be defined as follows:
 \begin{itemize}
-\item \tcode{\placeholder{ITER(D)}::iterator_category} is \tcode{input_iterator_tag},
-\item \tcode{\placeholder{ITER(D)}::value_type} is \tcode{range_value_t<D>},
-\item \tcode{\placeholder{ITER(D)}::difference_type} is \tcode{range_difference_t<D>},
-\item \tcode{\placeholder{ITER(D)}::pointer} is \tcode{add_pointer_t<range_reference_t<D>>}, and
-\item \tcode{\placeholder{ITER(D)}::reference} is \tcode{range_reference_t<D>}.
+\item \tcode{C(declval<R>(), declval<Args>()...)} if that is a valid expression,
+\item otherwise, \tcode{C(from_range, declval<R>(), declval<Args>()...)} if that is a valid expression,
+\item otherwise, \tcode{C(declval<\placeholder{\tcode{input-iterator}}>(), declval<\placeholder{\tcode{input-iterator}}>(), declval<Args>()...)} if that is a valid expression,
+\item otherwise, the program is ill-formed.
 \end{itemize}
 
-Let \placeholder{DEDUCE_TYPE(D)} be defined as follows:
-\begin{itemize}
-\item \tcode{decltype(C(declval<D>(), declval<Args>()...))} if that is a valid expression,
-\item Otherwise, \tcode{decltype(C(from_range, declval<D>(), declval<Args>()...))} if that is a valid expression,
-\item Otherwise, \tcode{decltype(C(declval<\placeholder{ITER(D)}>(), declval<\placeholder{ITER(D)}>(), declval<Args>()...))} if that is a valid expression
-\item Otherwise, \tcode{\placeholder{DEDUCE_TYPE}(D)} is ill-formed.
-
-\end{itemize}
-
-\mandates
-\begin{itemize}
-\item \tcode{\placeholder{DEDUCE_TYPE}(R)} denotes a type.
-\end{itemize}
-\effects
-\begin{itemize}
-\item Expression-equivalent to \tcode{ranges::to<\placeholder{DEDUCE_TYPE}(R)>(std::forward<R>(r), std::forward<Args>(args)...)}.
-\end{itemize}
+\returns
+    \tcode{to<decltype(\placeholder{DEDUCE_EXPR})>(std::forward<R>(r), std::forward<Args>(args)...)}.
 
 \end{itemdescr}
 
@@ -5587,27 +5546,13 @@ constexpr auto to(Args&&... args);
 
 \begin{itemdescr}
 
-\returns A range adaptor closure object ([range.adaptor.object]) \tcode{f} that is a perfect forwarding call wrapper with the following properties
+\returns A range adaptor closure object ([range.adaptor.object]) \tcode{f} that is a perfect forwarding call wrapper ([func.require]) with the following properties:
 \begin{itemize}
 \item It has no target object.
-\item Its bound argument entities bound_args consist of object of types Args... direct-non-list-initialized with \tcode{std::forward<decltype((args))>(Args)...}, respectively.
-\item Its call pattern is \tcode{ranges::to<C>(r, bound_args...)}, where \tcode{r} is the argument used in a function call expression of f.
+\item Its bound argument entities bound_args consist of objects of types \tcode{decay_t<Args>...} direct-non-list-initialized with \tcode{std::forward<Args>(args)...}, respectively.
+\item Its call pattern is \tcode{to<C>(r, bound_args...)}, where \tcode{r} is the argument used in a function call expression of \tcode{f}.
 \end{itemize}
-
 \pnum
-\begin{example}
-\begin{colorblock}
-list<int> ints{0,1,2,3,4,5};
-
-auto v1 = ints | ranges::to<vector>();
-auto v2 = ints | ranges::to<vector<int>>();
-auto v3 = ranges::to<vector>(ints);
-auto v4 = ranges::to<vector<int>>(ints);
-
-assert(v1 == v2 && v2 == v3 && v3 == v4);
-
-\end{colorblock}
-\end{example}
 
 \end{itemdescr}
 
@@ -5617,12 +5562,13 @@ assert(v1 == v2 && v2 == v3 && v3 == v4);
 
 \section{Feature test macros}
 
-Bump the value of \tcode{__cpp_lib_ranges} to the date of adoption.
+Add a new macro in \tcode{<version>} \tcode{__cpp_lib_to} set to the date of adoption.
+The macro \tcode{__cpp_lib_to} is also present in <ranges>.
+
 
 Add a new macro in \tcode{<version>} \tcode{__cpp_lib_containers_ranges} set to the date of adoption.
-
 The macro \tcode{__cpp_lib_containers_ranges} is also present in
-<vector>, <list>, <forward_list> <map>, <set> <unordered_map>, <unordered_set>, <deque>, <queue>, <priority_queue>, <stack>, and <string>
+<vector>, <list>, <forward_list> <map>, <set> <unordered_map>, <unordered_set>, <deque>, <queue>, <priority_queue>, <stack>, and <string>.
 
 
 \section{Implementation Experience}
