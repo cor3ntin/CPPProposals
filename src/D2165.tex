@@ -6,8 +6,8 @@
 \documentclass{wg21}
 
 \title{Compatibility between \tcode{tuple}, \tcode{pair} and \placeholder{tuple-like} objects}
-\docnumber{D2165R3}
-\audience{LEWG, SG-9}
+\docnumber{P2165R3}
+\audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 \begin{document}
@@ -20,7 +20,7 @@
 We propose to make \tcode{pair} constructibke from \tcode{tuple} and \tcode{std::array}
 We mandate \tcode{tuple_cat} and friends to be compatible with these types,
 and associative containers more compatible with them.
-The changes proposed in this paper makes the use of std::pair unecessary in new code.
+The changes proposed in this paper make the use of std::pair unnecessary in new code.
 
 \section{Revisions}
 
@@ -32,9 +32,12 @@ with that definition.
 The intent is to extend to user-provided types later once \tcode{std::get} or equivalent is defined as a customization-point.
 Limiting to \tcode{std::get} allows to unconditionally use \tcode{std::tuple} as the reference type of \tcode{zip}, \tcode{cartesian_product} in C++23.
 \item Rebase the wording onto the latest draft, which contains significant changes (const assignment operators).
-\item Add the wording modification to zip and all associative containers.
-\item Remove the modification to associative containers
-\item Conserve the existing tuple and pair constructors, assignment, and comparison operators. The proposed changes to tuple and pair are now additions. This is both because implementers cannot remove them because of ABI, and because the proposed constructors are not foud for classes that inherit publicly from pair or tuple. This removes some concern for breaking changes.
+\item Add the wording modification to zip.
+\item Remove the modification to associative containers, with the intent to add these constructors in a later version of C++.
+\item Conserve the existing tuple and pair constructors, assignment, and comparison operators. The proposed changes to tuple and pair are now additions exclusively. This is both because implementers cannot remove them because of ABI, and because the proposed constructors are not foud for classes that inherit publicly from pair or tuple. This removes some concern for breaking changes.
+\item Add an overload to \tcode{uses_allocator_construction_args}.
+\item Add a feature test macro.
+\item Fix the tuple-like concept to support reference types.
 \end{itemize}
 
 \subsection{R2}
@@ -73,14 +76,6 @@ static_assert(@\textcolor{red}{p <=> t == 0}@);
 @\textcolor{red}{std::tuple<int,int> t = std::array \{1, 2\};}@
 
 
-
-
-std::map m{
-    std::pair{get<0>(t), get<1>(t)},
-    std::pair{get<0>(u), get<1>(u)}
-};
-
-
 static_assert(same_as<std::tuple<int>,
     range_value_t<decltype(views::zip(v))>>);
 
@@ -115,9 +110,6 @@ std::tuple<int,int> t = std::array {1, 2};
 // not the same size: ill-formed
 @\textcolor{red}{std::tuple<int> t = std::array \{1, 2\};}@
 
-std::map m{t, u};
-
-
 
 static_assert(<std::tuple<int>,
     range_value_t<decltype(views::zip(v))>>);
@@ -130,7 +122,7 @@ static_assert(same_as<std::tuple<int,int>,
 
 // Both types are interconvertible,
 // The expression is ambiguous an this is ill-formed
-@\textcolor{red}{auto x = true ?  tuple\{0,0\} : pair\{0,0\};}
+@\textcolor{red}{auto x = true ?  tuple\{0,0\} : pair\{0,0\};}@
 
 \end{colorblock}
 \end{minipage}
@@ -223,26 +215,31 @@ In comparisons, one of the 2 objects has to be a \tcode{tuple}, or a \tcode{pair
 We also make \tcode{tuple_cat} support any \tcode{\placeholder{tuple-like}} parameter.
 This is conditionally supported by implementations already.
 
-Associatives containers are already specified to be usable with elements convertible to their 
+\tcode{std::apply} and \tcode{std::make_from_tuple} are similarly constrained. There is currently non stated constraints on these functions but
+types that do not satisfy \tcode{tuple-like} do not satisfy the implicit requirements of implementations.
+Constraining them improves diagnostic quality.
+
+Associative containers are already specified to be usable with elements convertible to their
 \tcode{value_type}, so all constructors and methods can be used with \tcode{tuple-like}, except those taking an
-\tcode{initializer_list} as parameter.
+\tcode{initializer_list} as parameter. Changes to \tcode{initializer_list}  are not proposed in this revision of this paper as it is not strictly necessary to be done in 23. It could be considered as a future extension.
 
 
-\subsection{Open Questions}
+\subsection{\tcode{std::get}}
 
-\tcode{zip} added const assignement operators and to both \tcode{tuple} and \tcode{pair} for the benefits of views, which use tuple and pair as proxy types.
-With the present proposal, \tcode{pair} is no longer used by ranges. Do we want to keep its added assignment operators?
+I was initially under the misguided impression that get was designed to be found by unqualified lookup, which it is not.
+We do not have time to research and specify a CPO forget - which would probably require additional changes to the language (structured binding) and the library.
+As such, this paper offers the minimal changes necessary to make the standard types inter-compatible, with the express purpose to
+be able to use tuple in \tcode{zip} and \tcode{cartesian_product}.
 
+\begin{note}
+Because implementations should always called std::get qualified, it is not a potentially-breaking change to constrain the previously unconstrained \tcode{apply}, \tcode{tuple_cat} and \tcode{make_from_tuple}
+functions.
+\end{note}
 
-% (but may be restricted to pair and array, we generalize that).
-
-%\subsection{Questions For LEWG}
-%
-%Should \tcode{tuple-like} and \tcode{pair-like} be named concepts (as opposition to exposition only) ?
 
 \subsection{CTAD issues}
 
-A previous version of this paper modified the deduction guides to using the tuple-like constructors for tuple-like objects.
+A previous version of this paper modified the deduction guides to use the tuple-like constructors for tuple-like objects.
 
 But this would change the meaning of \tcode{tuple \{array<int, 2>\{\}\}}.
 The current version does not add or modify deduction guides.
@@ -264,6 +261,15 @@ While we could add a non-ambiguous guide for pair, we think it's better for \tco
 \textbf{We do not propose modifications to CTAD constructors}
 
 
+
+\subsection{Open Questions}
+
+\subsubsection{pair const assignement}
+
+\tcode{zip} added const assignement operators and to both \tcode{tuple} and \tcode{pair} for the benefits of views, which use tuple and pair as proxy types.
+With the present proposal, \tcode{pair} is no longer used by ranges. Do we want to keep its added assignment operators?
+
+
 \subsection{\textcolor{Red}{Breaking API changes}}
 
 Before this paper, \tcode{tuple} was constructible from \tcode{pair},
@@ -274,7 +280,7 @@ As such \tcode{expr ? apair : atuple} would resolve unambiguously to a tuple.
 Because this changes makes both \tcode{pair} and \tcode{tuple} constructible from each other,
 the expression is now ambiguous.
 
-This proposal is, therefore a breaking change.
+This proposal is, therefore, a breaking change.
 However, it is unlikely that this pattern exists in practice.
 It can be resolved by casting either expression to the type of the other.
 
@@ -283,14 +289,12 @@ Similar expressions such as \tcode{true ? std::tuple\{0.\} : std::tuple\{0\}} ar
 
 \subsection{Implementation}
 
-This proposal has been implemented in libstdc++ \href{https://github.com/cor3ntin/gcc/tree/tuple_pair2}{[Github]}.
-The implementation is only partial:
-\begin{itemize}
-    \item It is based on C++20, so the proposed changes to zip have not been made.
-    \item Pair and tuple constructors were modified (instead of having new ones)
-\end{itemize}
+This proposal has been fully implemented in libstdc++ \href{https://github.com/cor3ntin/gcc/tree/tuple_pair2}{[Github]},
+such that all existing tests pass, and new changes have been tested by the author. (The proposed changes to \tcode{zip} have not been made)
 
-I'm working on completing the implementation.
+\begin{note}
+And implementation can and probably should short-circuit the \tcode{tuple-like} concept-checking for known standard tuple-like types.
+\end{note}
 
 \section{Future work}
 
@@ -301,8 +305,8 @@ This requires future exploration. Tuple comparison operators are good candidates
 
 A previous version of this paper proposed to modify \tcode{\{unordered\char`_\}\{multi\}map} so that
 they could be constructed from an \tcode{initializer_list} of \tcode{tuple-like}.
-These changes were however broken, and are not necessary for C++23. I therefore elected to remove them from the paper.
-However, associatives containers are already specified to be usable with elements convertible to their 
+These changes were, however, broken and are not necessary for C++23. I, therefore, elected to remove them from the paper.
+However, associative containers are already specified to be usable with elements convertible to their
 \tcode{value_type}, so all constructors and methods can be used with \tcode{tuple-like}, except those taking an
 \tcode{initializer_list} as parameter.
 
@@ -365,14 +369,17 @@ concept  @\placeholder{is-tuple-element}@ = requires (T t) {  // \expos
     { @\textbf{std::}@get<N>(t) } -> convertible_to<tuple_element_t<N, T>&>;
 };
 
-
 template <typename T>
-concept @\placeholder{tuple-like}@ // \expos
-= !is_reference_v<T> && requires  {
+concept @\placeholder{tuple-like-impl}@ // \expos
+= requires  {
     typename tuple_size<T>::type;
     requires same_as<remove_cvref_t<decltype(tuple_size_v<T>)>, size_t>;
 } && []<size_t... I>(index_sequence<I...>)
 { return (@\placeholder{is-tuple-element}@<T, I> && ...); }(make_index_sequence<tuple_size_v<T>>{});
+
+template <typename T>
+concept @\placeholder{tuple-like}@ // \expos
+=  @\placeholder{tuple-like-impl}@<remove_cvref_t<T>>;
 
 template <typename T>
 concept @\placeholder{pair-like}@ // \expos
@@ -515,12 +522,6 @@ class tuple {
 \begin{addedblock}
 \begin{codeblock}
     template<@\placeholder{tuple-like}@ UTuple>
-    constexpr explicit(@\seebelow@) tuple(UTuple&);
-    template<@\placeholder{tuple-like}@ UTuple>
-    constexpr explicit(@\seebelow@) tuple(const UTuple&);
-    template<@\placeholder{tuple-like}@ UTuple>
-    constexpr explicit(@\seebelow@) tuple(UTuple&&);
-    template<@\placeholder{tuple-like}@ UTuple>
     constexpr explicit(@\seebelow@) tuple(UTuple&&);
 \end{codeblock}
 \end{addedblock}
@@ -567,13 +568,7 @@ class tuple {
 \begin{addedblock}
 \begin{codeblock}
     template<class Alloc, @\placeholder{tuple-like}@ UTuple>
-    constexpr explicit(@\seebelow@) tuple(allocator_arg_t, const Alloc& a, UTuple&);
-    template<class Alloc, @\placeholder{tuple-like}@ UTuple>
-    constexpr explicit(@\seebelow@) tuple(allocator_arg_t, const Alloc& a, const UTuple&);
-    template<class Alloc, @\placeholder{tuple-like}@ UTuple>
     constexpr explicit(@\seebelow@) tuple(allocator_arg_t, const Alloc& a, UTuple&&);
-    template<class Alloc, @\placeholder{tuple-like}@ UTuple>
-    constexpr explicit(@\seebelow@) tuple(allocator_arg_t, const Alloc& a, const UTuple&&);
 \end{codeblock}
 \end{addedblock}
 \begin{codeblock}
@@ -605,10 +600,6 @@ class tuple {
 \end{codeblock}
 \begin{addedblock}
 \begin{codeblock}
-    template<@\placeholder{tuple-like}@ UTuple>
-    constexpr tuple& operator=(UTuple&);
-    template<@\placeholder{tuple-like}@ UTuple>
-    constexpr const tuple& operator=(UTuple&) const;
     template<@\placeholder{tuple-like}@ UTuple>
     constexpr tuple& operator=(UTuple&&);
     template<@\placeholder{tuple-like}@ UTuple>
@@ -874,10 +865,7 @@ The default constructor of \tcode{tuple<>} is trivial.
 \begin{addedblock}
 \indexlibraryctor{tuple}%
 \begin{itemdecl}
-    template<@\placeholder{tuple-like}@ UTuple> constexpr explicit(@\seebelow@) tuple(UTuple & u);
-    template<@\placeholder{tuple-like}@ UTuple> constexpr explicit(@\seebelow@) tuple(const UTuple & u);
     template<@\placeholder{tuple-like}@ UTuple> constexpr explicit(@\seebelow@) tuple(UTuple&& u);
-    template<@\placeholder{tuple-like}@ UTuple> constexpr explicit(@\seebelow@) tuple(const UTuple&& u);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -957,13 +945,7 @@ The expression inside \keyword{explicit} is equivalent to:
     constexpr explicit(@\seebelow@)
     tuple(allocator_arg_t, const Alloc& a, const pair<U1, U2>&&);
     @\added{template<class Alloc, \placeholder{tuple-like} UTuple>}@
-    @\added{constexpr explicit(\seebelow) tuple(allocator_arg_t, const Alloc\& a, UTuple\&);}@
-    @\added{template<class Alloc, \placeholder{tuple-like} UTuple>}@
-    @\added{constexpr explicit(\seebelow) tuple(allocator_arg_t, const Alloc\& a, const UTuple\&);}@
-    @\added{template<class Alloc, \placeholder{tuple-like} UTuple>}@
     @\added{constexpr explicit(\seebelow) tuple(allocator_arg_t, const Alloc\& a, UTuple\&\&);}@
-    @\added{template<class Alloc, \placeholder{tuple-like} UTuple>}@
-    @\added{constexpr explicit(\seebelow) tuple(allocator_arg_t, const Alloc\& a, const UTuple\&\&);}@
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -1279,55 +1261,55 @@ template parameter pack named \tcode{UTypes}, where indexing is zero-based.
 \end{itemdescr}
 
 \begin{addedblock}
-\indexlibrarymember{operator=}{tuple}%
-\begin{itemdecl}
-    template<@\placeholder{tuple-like}@ UTuple>
-    constexpr tuple& operator=(const UTuple& u);
-\end{itemdecl}
-
-\begin{itemdescr}
-    \pnum
-    \constraints
-    \begin{itemize}
-        \item \tcode{sizeof...(Types)} equals \tcode{tuple_size_v<UTuple>} and
-        \item \tcode{is_assignable_v<$\tcode{T}_i$\&, const std::element_t<$i$, UTuple>\&>} is \tcode{true} for all $i$.
-    \end{itemize}
-
-    \pnum
-    \effects
-    Assigns each element of \tcode{u} to the corresponding element
-    of \tcode{*this}.
-
-    \pnum
-    \returns
-    \tcode{*this}.
-\end{itemdescr}
-
-\indexlibrarymember{operator=}{tuple}%
-\begin{itemdecl}
-    template<@\placeholder{tuple-like}@ UTuple>
-    constexpr const tuple& operator=(const UTuple& u) const;
-\end{itemdecl}
-
-\begin{itemdescr}
-    \pnum
-    \constraints
-    \begin{itemize}
-        \item
-        \tcode{sizeof...(Types)} equals \tcode{tuple_size_v<UTuple>} and
-        \item \tcode{is_assignable_v<$\tcode{T}_i$\&, const element_t<$i$, UTuple>\&>} is \tcode{true} for all $i$.
-    \end{itemize}
-
-    \pnum
-    \effects
-    Assigns each element of \tcode{u} to the corresponding element of \tcode{*this}.
-
-    \pnum
-    \returns
-    \tcode{*this}.
-\end{itemdescr}
-
-\indexlibrarymember{operator=}{tuple}%
+%\indexlibrarymember{operator=}{tuple}%
+%\begin{itemdecl}
+%    template<@\placeholder{tuple-like}@ UTuple>
+%    constexpr tuple& operator=(const UTuple& u);
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \constraints
+%    \begin{itemize}
+%        \item \tcode{sizeof...(Types)} equals \tcode{tuple_size_v<UTuple>} and
+%        \item \tcode{is_assignable_v<$\tcode{T}_i$\&, const std::element_t<$i$, UTuple>\&>} is \tcode{true} for all $i$.
+%    \end{itemize}
+%
+%    \pnum
+%    \effects
+%    Assigns each element of \tcode{u} to the corresponding element
+%    of \tcode{*this}.
+%
+%    \pnum
+%    \returns
+%    \tcode{*this}.
+%\end{itemdescr}
+%
+%\indexlibrarymember{operator=}{tuple}%
+%\begin{itemdecl}
+%    template<@\placeholder{tuple-like}@ UTuple>
+%    constexpr const tuple& operator=(const UTuple& u) const;
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \constraints
+%    \begin{itemize}
+%        \item
+%        \tcode{sizeof...(Types)} equals \tcode{tuple_size_v<UTuple>} and
+%        \item \tcode{is_assignable_v<$\tcode{T}_i$\&, const element_t<$i$, UTuple>\&>} is \tcode{true} for all $i$.
+%    \end{itemize}
+%
+%    \pnum
+%    \effects
+%    Assigns each element of \tcode{u} to the corresponding element of \tcode{*this}.
+%
+%    \pnum
+%    \returns
+%    \tcode{*this}.
+%\end{itemdescr}
+%
+%\indexlibrarymember{operator=}{tuple}%
 \begin{itemdecl}
     template<@\placeholder{tuple-like}@ UTuple>
     constexpr tuple& operator=(UTuple&& u);
@@ -1343,7 +1325,7 @@ template parameter pack named \tcode{UTypes}, where indexing is zero-based.
 
     \pnum
     \effects
-    For all $i$, assigns \tcode{std::forward<$\tcode{U}_i$>(get<$i$>(u))} to
+    For all $i$, assigns \tcode{std::forward<$\tcode{U}_i$>(std::get<$i$>(u))} to
     \tcode{get<$i$>(*this)}.
 
     \pnum
@@ -1369,7 +1351,7 @@ template parameter pack named \tcode{UTypes}, where indexing is zero-based.
     \pnum
     \effects
     For all $i$,
-    assigns \tcode{std::forward<U$_i$>(get<$i$>(u))} to \tcode{get<$i$>(*this)}.
+    assigns \tcode{std::forward<U$_i$>(std::get<$i$>(u))} to \tcode{std::get<$i$>(*this)}.
 
     \pnum
     \returns
@@ -1799,13 +1781,7 @@ namespace std {
         \begin{addedblock}
         \begin{codeblock}
         template<@\placeholder{pair-like}@ P>
-        constexpr explicit(@\seebelow@) pair(P& p);
-        template<@\placeholder{pair-like}@ P>
-        constexpr explicit(@\seebelow@) pair(const P& p);
-        template<@\placeholder{pair-like}@ P>
         constexpr explicit(@\seebelow@) pair(P&& p);
-        template<@\placeholder{pair-like}@ P>
-        constexpr explicit(@\seebelow@) pair(const P&& p);
         \end{codeblock}
         \end{addedblock}
         \begin{codeblock}
@@ -1828,11 +1804,7 @@ namespace std {
         \begin{addedblock}
         \begin{codeblock}
         template<@\placeholder{pair-like}@ P>
-        constexpr const pair& operator= pair(const P& p) const;
-        template<@\placeholder{pair-like}@ P>
-        constexpr pair& operator=(const P& p);
-        template<@\placeholder{pair-like}@ P>
-        constexpr pair& operator=(@\seebelow@) pair(P&& p);
+        constexpr pair& operator= pair(P&& p);
         template<@\placeholder{pair-like}@ P>
         constexpr const pair& operator= pair(P&& p) const;
         \end{codeblock}
@@ -1956,13 +1928,8 @@ are template-argument-equivalent\iref{temp.type} if and only if
     template<class U1, class U2> constexpr explicit(@\seebelow@) pair(pair<U1, U2>& p);
     template<class U1, class U2> constexpr explicit(@\seebelow@) pair(const pair<U1, U2>& p);
     template<class U1, class U2> constexpr explicit(@\seebelow@) pair(pair<U1, U2>&& p);
-    template<class U1, class U2> constexpr explicit(@\seebelow@) pair(const pair<U1, U2>&& p);
-\end{itemdecl}\begin{addedblock}\begin{itemdecl}
-    template<@\placeholder{pair-like}@ P> constexpr explicit(@\seebelow@) pair(P& p);
-    template<@\placeholder{pair-like}@ P> constexpr explicit(@\seebelow@) pair(const P& p);
-    template<@\placeholder{pair-like}@ P> constexpr explicit(@\seebelow@) pair(P&& p);
-    template<@\placeholder{pair-like}@ P> constexpr explicit(@\seebelow@) pair(const P&& p);
-\end{itemdecl}
+    template<class U1, class U2> constexpr explicit(@\seebelow@) pair(const pair<U1, U2>&& p); \end{itemdecl}\begin{addedblock}\begin{itemdecl}
+    template<@\placeholder{pair-like}@ P> constexpr explicit(@\seebelow@) pair(P&& p);\end{itemdecl}
 \end{addedblock}
 
 \begin{itemdescr}
@@ -2021,30 +1988,33 @@ are template-argument-equivalent\iref{temp.type} if and only if
     \tcode{tuple} object, is called \defn{piecewise construction}.
 \end{itemdescr}
 
-\indexlibrarymember{operator=}{pair}%
-\begin{itemdecl}
-    constexpr pair& operator=(const pair& p);
-\end{itemdecl}
+[...]
 
 \begin{itemdescr}
     \pnum
+    \constraints
+    \begin{itemize}
+        \item
+        \tcode{is_assignable_v<const T1\&, U1>} is \tcode{true}, and
+        \item
+        \tcode{is_assignable_v<const T2\&, U2>} is \tcode{true}.
+    \end{itemize}
+
     \effects
-    Assigns \tcode{p.first} to \tcode{first} and \tcode{p.second} to \tcode{second}.
+    Assigns \tcode{std::forward<U1>(p.first)} to \tcode{first} and
+    \tcode{std::forward<U2>(u.second)} to \tcode{second}.
 
     \pnum
     \returns
     \tcode{*this}.
-
-    \pnum
-    \remarks
-    This operator is defined as deleted unless
-    \tcode{is_copy_assignable_v<T1>} is \tcode{true} and
-    \tcode{is_copy_assignable_v<T2>} is \tcode{true}.
 \end{itemdescr}
 
+\begin{addedblock}
+
 \indexlibrarymember{operator=}{pair}%
+
 \begin{itemdecl}
-    constexpr const pair& operator=(const pair& p) const;
+    template<@\placeholder{pair-like}@ P> constexpr pair& operator=(P&& p);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -2052,110 +2022,22 @@ are template-argument-equivalent\iref{temp.type} if and only if
     \constraints
     \begin{itemize}
         \item
-        \tcode{is_copy_assignable<const T1>} is \tcode{true} and
+        \tcode{is_assignable_v<T1\&, decltype(std::get<0>(std::forward<P>(p)))>} is \tcode{true}, and
         \item
-        \tcode{is_copy_assignable<const T2>} is \tcode{true}.
+        \tcode{is_assignable_v<T2\&, decltype(std::get<1>(std::forward<P>(p)))>} is \tcode{true}.
     \end{itemize}
 
-    \pnum
     \effects
-    Assigns \tcode{p.first} to \tcode{first} and \tcode{p.second} to \tcode{second}.
+    Assigns \tcode{std::get<0>(std::forward<decltype(p)>(p))} to \tcode{first}\\ and
+    \tcode{std::get<1>(std::forward<decltype(p)>(p))} to \tcode{second}.
 
     \pnum
     \returns
     \tcode{*this}.
 \end{itemdescr}
 
-\indexlibrarymember{operator=}{pair}%
 \begin{itemdecl}
-template<class U1, class U2>
-constexpr pair& operator=(const pair<U1, U2>& p);
-@\added{template<\placeholder{pair-like} P> constexpr pair\& operator=(const P\& p);}
-\end{itemdecl}
-
-\begin{itemdescr}
-    \added{Let \tcode{Type} be \tcode{remove\char`_cvref\char`_t<decltype(p)>}.}
-
-    \pnum
-    \constraints
-    \begin{itemize}
-        \item \tcode{is_assignable_v<T1\&, const \changed{U1}{tuple_element_t<0, Type>}\&>} is \tcode{true} and
-        \item \tcode{is_assignable_v<T2\&, const \changed{U2}{tuple_element_t<1, Type>}\&>} is \tcode{true}.
-    \end{itemize}
-
-    \pnum
-    \effects
-    Assigns \tcode{\changed{p.first}{std::get<0>(p)}} to \tcode{first} and
-    \tcode{\changed{p.second}{std::get<1>(p)}} to \tcode{second}.
-
-    \pnum
-    \returns
-    \tcode{*this}.
-\end{itemdescr}
-
-\indexlibrarymember{operator=}{pair}%
-\begin{itemdecl}
-template<class U1, class U2> constexpr const pair& operator=(const pair<U1, U2>& p) const;
-@\added{template<\placeholder{pair-like} P> constexpr const pair\& operator=(const P\& p) const;}
-\end{itemdecl}
-
-\begin{itemdescr}
-    \added{Let \tcode{Type} be \tcode{remove\char`_cvref\char`_t<decltype(p)>}.}
-
-
-    \pnum
-    \constraints
-    \begin{itemize}
-        \item
-        \tcode{is_assignable_v<const T1\&, const \changed{U1}{tuple_element_t<0, Type>}\&>} is \tcode{true}, and
-        \item
-        \tcode{is_assignable_v<const T2\&, const \changed{U2}{tuple_element_t<1, Type>}\&>} is \tcode{true}.
-    \end{itemize}
-
-    \pnum
-    \effects
-
-    Assigns \tcode{\changed{p.first}{std::get<0>(p)}} to \tcode{first} and
-    \tcode{\changed{p.second}{std::get<1>(p)}} to \tcode{second}.
-
-    \pnum
-    \returns
-    \tcode{*this}.
-\end{itemdescr}
-
-\indexlibrarymember{operator=}{pair}%
-\begin{itemdecl}
-    constexpr pair& operator=(pair&& p) noexcept(@\seebelow@);
-\end{itemdecl}
-
-\begin{itemdescr}
-    \pnum
-    \constraints
-    \begin{itemize}
-        \item \tcode{is_move_assignable_v<T1>} is \tcode{true} and
-        \item \tcode{is_move_assignable_v<T2>} is \tcode{true}.
-    \end{itemize}
-
-    \pnum
-    \effects
-    Assigns to \tcode{first} with \tcode{std::forward<T1>(p.first)}
-    and to \tcode{second} with \tcode{std::forward<T2>(\brk{}p.second)}.
-
-    \pnum
-    \returns
-    \tcode{*this}.
-
-    \pnum
-    \remarks
-    The exception specification is equivalent to:
-    \begin{codeblock}
-        is_nothrow_move_assignable_v<T1> && is_nothrow_move_assignable_v<T2>
-    \end{codeblock}
-\end{itemdescr}
-
-\indexlibrarymember{operator=}{pair}%
-\begin{itemdecl}
-    constexpr const pair& operator=(pair&& p) const;
+    template<@\placeholder{pair-like}@ P> constexpr const pair& operator=(P&& p) const;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -2163,73 +2045,21 @@ template<class U1, class U2> constexpr const pair& operator=(const pair<U1, U2>&
     \constraints
     \begin{itemize}
         \item
-        \tcode{is_assignable<const T1\&, T1>} is \tcode{true} and
+        \tcode{is_assignable_v<const T1\&, decltype(std::get<0>(std::forward<P>(p)))>} is \tcode{true}, and
         \item
-        \tcode{is_assignable<const T2\&, T2>} is \tcode{true}.
+        \tcode{is_assignable_v<const T2\&, decltype(std::get<1>(std::forward<P>(p)))>} is \tcode{true}.
     \end{itemize}
 
-    \pnum
     \effects
-    Assigns \tcode{std::forward<T1>(p.first)} to \tcode{first} and
-    \tcode{std::forward<T2>(p.second)} to \tcode{second}.
+    Assigns \tcode{std::get<0>(std::forward<decltype(p)>(p))} to \tcode{first}\\ and
+    \tcode{std::get<1>(std::forward<decltype(p)>(p))} to \tcode{second}.
 
     \pnum
     \returns
     \tcode{*this}.
 \end{itemdescr}
+\end{addedblock}
 
-\indexlibrarymember{operator=}{pair}%
-\begin{itemdecl}
-    template<class U1, class U2> constexpr pair& operator=(pair<U1, U2>&& p);
-    @\added{template<\placeholder{pair-like} P> constexpr pair\& operator=(P\&\& p);}
-\end{itemdecl}
-
-\begin{itemdescr}
-     \added{Let \tcode{Type} be \tcode{remove\char`_cvref\char`_t<decltype(p)>}.}
-
-    \pnum
-    \constraints
-    \begin{itemize}
-        \item \tcode{is_assignable_v<T1\&, \changed{U1}{tuple_element_t<0, Type>}>} is \tcode{true} and
-        \item \tcode{is_assignable_v<T2\&, \changed{U2}{tuple_element_t<1, Type>}>} is \tcode{true}.
-    \end{itemize}
-
-    \pnum
-    \effects
-   Assigns \tcode{\changed{std::forward<U1>(p.first)}{std::get<0>(std::forward<decltype(p)>(p))}} to \tcode{first} and
-   \tcode{\changed{std::forward<U2>(p.second)}{std::get<1>(std::forward<decltype(p)>(p))}} to \tcode{second}.
-
-    \pnum
-    \returns
-    \tcode{*this}.
-\end{itemdescr}
-
-\indexlibrarymember{operator=}{pair}%
-\begin{itemdecl}
-    template<class U1, class U2> constexpr const pair& operator=(pair<U1, U2>&& p) const;
-    @\added{template<\placeholder{pair-like} P> constexpr const pair\& operator=(P\&\& p) const;}
-\end{itemdecl}
-
-\begin{itemdescr}
-     \added{Let \tcode{Type} be \tcode{remove\char`_cvref\char`_t<decltype(p)>}.}
-
-    \pnum
-    \constraints
-    \begin{itemize}
-        \item
-        \tcode{is_assignable_v<const T1\&, \changed{U1}{tuple_element_t<0, Type>}>} is \tcode{true}, and
-        \item
-        \tcode{is_assignable_v<const T2\&, \changed{U2}{tuple_element_t<1, Type>}>} is \tcode{true}.
-    \end{itemize}
-
-    \effects
-    Assigns \tcode{\changed{std::forward<U1>(p.first)}{std::get<0>(std::forward<decltype(p)>(p))}} to \tcode{first} and
-    \tcode{\changed{std::forward<U2>(p.second)}{std::get<1>(std::forward<decltype(p)>(p))}} to \tcode{second}.
-
-    \pnum
-    \returns
-    \tcode{*this}.
-\end{itemdescr}
 
 \rSec2[pairs.spec]{Specialized algorithms}
 
@@ -2278,6 +2108,166 @@ operator<=>(const pair<T1, T2>& x, const Pair& y);
         return @\placeholdernc{synth-three-way}@(x.second, @\changed{y.second}{std::get<1>(y)}@);
     \end{codeblock}
 \end{itemdescr}
+
+
+\rSec1[memory]{Memory}
+
+\rSec2[memory.general]{In general}
+
+\pnum
+Subclause~\ref{memory} describes the contents of the header
+
+\rSec2[memory.syn]{Header \tcode{<memory>} synopsis}
+
+\begin{codeblock}
+    namespace std {
+
+        // \ref{allocator.uses.construction}, uses-allocator construction
+        template<class T, class Alloc, class... Args>
+        constexpr auto uses_allocator_construction_args(const Alloc& alloc,
+        Args&&... args) noexcept;
+        template<class T, class Alloc, class Tuple1, class Tuple2>
+        constexpr auto uses_allocator_construction_args(const Alloc& alloc, piecewise_construct_t,
+        Tuple1&& x, Tuple2&& y) noexcept;
+        template<class T, class Alloc>
+        constexpr auto uses_allocator_construction_args(const Alloc& alloc) noexcept;
+        template<class T, class Alloc, class U, class V>
+        constexpr auto uses_allocator_construction_args(const Alloc& alloc,
+        U&& u, V&& v) noexcept;
+        template<class T, class Alloc, class U, class V>
+        constexpr auto uses_allocator_construction_args(const Alloc& alloc,
+        pair<U, V>& pr) noexcept;
+        template<class T, class Alloc, class U, class V>
+        constexpr auto uses_allocator_construction_args(const Alloc& alloc,
+        const pair<U, V>& pr) noexcept;
+        template<class T, class Alloc, class U, class V>
+        constexpr auto uses_allocator_construction_args(const Alloc& alloc,
+        pair<U, V>&& pr) noexcept;
+        template<class T, class Alloc, class U, class V>
+        constexpr auto uses_allocator_construction_args(const Alloc& alloc,
+        const pair<U, V>&& pr) noexcept;
+        @\added{template<class T, class Alloc, \placeholder{pair-like} Pair>}@
+        @\added{constexpr auto uses_allocator_construction_args(const Alloc\& alloc, Pair\&\& pr) noexcept;}@
+        template<class T, class Alloc, class... Args>
+        constexpr T make_obj_using_allocator(const Alloc& alloc, Args&&... args);
+        template<class T, class Alloc, class... Args>
+        constexpr T* uninitialized_construct_using_allocator(T* p, const Alloc& alloc,
+        Args&&... args);
+    }
+\end{codeblock}
+
+[....]
+
+\rSec3[allocator.uses.construction]{Uses-allocator construction}
+
+[...]
+
+\indexlibraryglobal{uses_allocator_construction_args}%
+\begin{itemdecl}
+    template<class T, class Alloc>
+    constexpr auto uses_allocator_construction_args(const Alloc& alloc) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \tcode{T} is a specialization of \tcode{pair}.
+
+    \pnum
+    \effects
+    Equivalent to:
+    \begin{codeblock}
+        return uses_allocator_construction_args<T>(alloc, piecewise_construct,
+        tuple<>{}, tuple<>{});
+    \end{codeblock}
+\end{itemdescr}
+
+\indexlibraryglobal{uses_allocator_construction_args}%
+\begin{itemdecl}
+    template<class T, class Alloc, class U, class V>
+    constexpr auto uses_allocator_construction_args(const Alloc& alloc,
+    U&& u, V&& v) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \tcode{T} is a specialization of \tcode{pair}.
+
+    \pnum
+    \effects
+    Equivalent to:
+    \begin{codeblock}
+        return uses_allocator_construction_args<T>(alloc, piecewise_construct,
+        forward_as_tuple(std::forward<U>(u)),
+        forward_as_tuple(std::forward<V>(v)));
+    \end{codeblock}
+\end{itemdescr}
+
+\indexlibraryglobal{uses_allocator_construction_args}%
+\begin{itemdecl}
+    template<class T, class Alloc, class U, class V>
+    constexpr auto uses_allocator_construction_args(const Alloc& alloc, pair<U, V>& pr) noexcept;
+    template<class T, class Alloc, class U, class V>
+    constexpr auto uses_allocator_construction_args(const Alloc& alloc, const pair<U, V>& pr) noexcept;
+\end{itemdecl}
+\begin{addedblock}
+\begin{itemdecl}
+    template<class T, class Alloc, class U, class V>
+    constexpr auto uses_allocator_construction_args(const Alloc& alloc, pair<U, V>&& pr) noexcept;
+    template<class T, class Alloc, class U, class V>
+    constexpr auto uses_allocator_construction_args(const Alloc& alloc, const pair<U, V>&& pr) noexcept;
+
+    template<class T, class Alloc, @\placeholder{pair-like}@ Pair>
+    constexpr auto uses_allocator_construction_args(const Alloc& alloc, Pair&& pr) noexcept;
+
+\end{itemdecl}
+\end{addedblock}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \tcode{T} is a specialization of \tcode{pair}.
+
+    \pnum
+    \effects
+    Equivalent to:
+    \begin{codeblock}
+        return uses_allocator_construction_args<T>(alloc, piecewise_construct,
+        forward_as_tuple(@\changed{pr.first}{std::get<0>(std::forward<Pair>(pr)}@),
+        forward_as_tuple(@\changed{pr.second}{std::get<1>(std::forward<Pair>(pr)}@);
+    \end{codeblock}
+\end{itemdescr}
+
+\begin{removedblock}
+\indexlibraryglobal{uses_allocator_construction_args}%
+\begin{itemdecl}
+    template<class T, class Alloc, class U, class V>
+    constexpr auto uses_allocator_construction_args(const Alloc& alloc,
+    pair<U, V>&& pr) noexcept;
+    template<class T, class Alloc, class U, class V>
+    constexpr auto uses_allocator_construction_args(const Alloc& alloc,
+    const pair<U, V>&& pr) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \tcode{T} is a specialization of \tcode{pair}.
+
+    \pnum
+    \effects
+    Equivalent to:
+    \begin{codeblock}
+        return uses_allocator_construction_args<T>(alloc, piecewise_construct,
+        forward_as_tuple(get<0>(std::move(pr))),
+        forward_as_tuple(get<1>(std::move(pr))));
+    \end{codeblock}
+\end{itemdescr}
+
+\ednote{The above wording changes intend to merge all the pair-related \tcode{uses_allocator_construction_args} overloads specification by always calling \tcode{forward}, for each of the 4 existing overload, and the new one.}
+
+\end{removedblock}
 
 \rSec1[range.utility]{Range utilities}
 \rSec2[range.subrange]{Sub-ranges}
@@ -2365,6 +2355,18 @@ the alias template \exposid{tuple-or-pair} is defined as follows:
 
 \ednote{Replace all usages of \exposid{tuple-or-pair} by \tcode{tuple} in the range clause.
 This includes [range.zip], [range.adjacent.iterator] as well as [range.cartesian] if P2374 is adopted}
+
+
+\section{Feature test macros}
+
+Insert into [version.syn]
+
+\begin{addedblock}
+\begin{codeblock}
+#define __cpp_lib_tuple_like <DATE OF ADOPTION> // also in <utility>, <tuple>
+\end{codeblock}
+\end{addedblock}
+
 
 
 %\rSec1[containers]{Containers}
