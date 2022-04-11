@@ -13,7 +13,7 @@
 \setmainfont{Noto Sans}
 
 \title{Whitespaces Wording Revamp}
-\docnumber{P2348R2}
+\docnumber{D2348R3}
 \audience{EWG, CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -30,6 +30,14 @@
 \maketitle
 
 \section{Revisions}
+
+\subsection*{Revision 3}
+\begin{itemize}
+    \item Fix an example which was accidentally normative
+    \item remplace "non-whitespace character" by non-whitespace
+    \item typos
+    \item "Whitespace characters can appear within a preprocessing token only as part of a header name..." is now a note
+\end{itemize}
 
 \subsection*{Revision 2}
 \begin{itemize}
@@ -269,7 +277,7 @@ placeholder tokens produced by preprocessing \tcode{import} and \tcode{module} d
 (\grammarterm{import-keyword}, \grammarterm{module-keyword}, and \grammarterm{export-keyword}),
 identifiers, preprocessing numbers, character literals (including user-defined character
 literals), string literals (including user-defined string literals), preprocessing
-operators and punctuators, and single non-whitespace characters that do not lexically
+operators and punctuators, and single non-\changed{whitespace characters}{\grammarterm{whitespace}} that do not lexically
 match the other preprocessing token categories. If a U+0027 APOSTROPHE or a U+0022 QUOTATION MARK character
 matches the last category, the behavior is undefined. Preprocessing tokens can be
 separated by \cwhitespaces{whitespace;}\added{.}
@@ -277,10 +285,16 @@ separated by \cwhitespaces{whitespace;}\added{.}
 \removed{this consists of comments\iref{lex.comment}, or whitespace
 characters (U+0020 SPACE, U+0009 CHARACTER TABULATION, new-line, U+000B LINE TABULATION, and U+000C FORM FEED), or both}. As described in [cpp], in certain
 circumstances during translation phase 4, \cwhitespaces{whitespace} (or the absence
-thereof) serves as more than preprocessing token separation. \changed{Whitespace}{Whitespace characters}
+thereof) serves as more than preprocessing token separation. 
+
+\added{[Note:}
+
+\changed{Whitespace}{\grammarterm{whitespace}{s} and other whitespace characters}
 can appear within a preprocessing token only as part of a header name or
 between the quotation characters in a character literal or
-string literal.
+string literal
+
+\added{--end note]}.
 
 \ednote{"Whitespace characters" is intentional here: this may refer to unicode characters not considered whitespaces for the purpose of lexing, and do not refer to elements used to separate tokens.}
 
@@ -301,7 +315,7 @@ string literal.
 operators, and other separators}.
 
 \ednote{This is somewhat of a drive-by partial fix of \paper{CWG1901}.
-However the use of "separator" is somewhat missleading here. Was it meant to be mean whitespace?
+However the use of "separator" is somewhat misleading here. Was it meant to be mean whitespace?
 The following sentence is explicitely stating that whitespace are not tokens.
 }
 
@@ -654,15 +668,17 @@ shall consist of at most 16 characters.
 
 \pnum
 \removed{[\textit{Note:}}\space \removed{A} \added{Each longest sequence of characters that matches the grammar of a} \clb{source-file new-line} in a raw string literal \changed{results in a new-line in the
-    resulting execution string literal}{denotes a new-line}. Assuming no
-    whitespace at the beginning of lines in the following example, the assert will succeed:
+    resulting execution string literal}{denotes a new-line}. 
+
+\added{\textit{[Example:}}
+Assuming no whitespace at the beginning of lines in the following example, the assert will succeed:
     \begin{codeblock}
         const char* p = R"(a\
         b
         c)";
         assert(std::strcmp(p, "a\\\nb\nc") == 0);
     \end{codeblock}
-\removed{\textit{--- end note}]}
+\textit{--- end \changed{note}{example}]}
 
 \pnum
 \begin{example}

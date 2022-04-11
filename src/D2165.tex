@@ -17,7 +17,7 @@
 
 \section{Abstract}
 
-We propose to make \tcode{pair} constructibke from \tcode{tuple} and \tcode{std::array}
+We propose to make \tcode{pair} constructible from \tcode{tuple} and \tcode{std::array}
 We mandate \tcode{tuple_cat} and friends to be compatible with these types,
 and associative containers more compatible with them.
 The changes proposed in this paper make the use of std::pair unnecessary in new code.
@@ -272,6 +272,8 @@ With the present proposal, \tcode{pair} is no longer used by ranges. Do we want 
 
 \subsection{\textcolor{Red}{Breaking API changes}}
 
+\subsubsection{Ternary operator ambiguities}
+
 Before this paper, \tcode{tuple} was constructible from \tcode{pair},
 but the opposite was not true.
 
@@ -286,6 +288,50 @@ It can be resolved by casting either expression to the type of the other.
 
 Similar expressions such as \tcode{true ? std::tuple\{0.\} : std::tuple\{0\}} are ill-formed in C++20 because they are ambiguous.
 
+\subsubsection{The lying tuple also converting to std::tuple}
+
+Consider the following example, courtesy of Tomasz Kamiński and Barry Revzin.
+
+\begin{colorblock}
+    struct M {
+        operator tuple<int, int>() const { return {1, 1}; }
+    };
+    
+    namespace std {
+        template <> struct tuple_size<M> : integral_constant<size_t, 2> { };
+        template <int I> struct tuple_element<I, M> { using type = int; };
+        template <int I> auto get(M) { return 2; }
+    }
+\end{colorblock}
+
+In C++20, \tcode{std::tuple<int, int>\{M\}} would be equal to \tcode{std::tuple<int, int>\{1, 1\}};
+
+With the current proposal, the tuple-like constructor is a better match than the conversion operator, and
+\tcode{std::tuple<int, int>\{M\}} would be equal to \tcode{std::tuple<int, int>\{2, 2\}};
+
+As the conversion is not called, side effects that this operator might have (ex: logging) - are not executed.
+Another scenario may be that the conversion operator would return a tuple with different element types than \tcode{get}/\tcode{tuple_element_t}.
+
+And while there exists types that are both convertible to \tcode{std::tuple} and \tcode{tuple-like} - like ranges-v3's \tcode{compressed_pair},
+We do not think the case of types that would do different things when the conversion operator is called rather than the proposed \tcode{tuple-like}
+std::tuple constructor is worth considering
+
+\begin{itemize}
+    \item Checking the presence of an operator \tcode{tuple<tuple_element_t<Index>...>} is costly.
+    \item Checking the presence of an arbitrary conversion operator a tuple can be constructed from is not possible
+    \item We make no promise not to add overloads.
+    \item It is UB for users to add std::get overloads
+\end{itemize}
+
+But, if this was a problem, we could provide an opt-out mechanism such as
+
+\begin{colorblock}
+    template<class>
+    inline constexpr bool disable_tuple-like = false; // user specializable
+\end{colorblock}
+
+There is precedence for that (\tcode{ranges::disable_sized_range}), but this is not proposed in this paper,
+as we think the potential for breakage is theoretical.
 
 \subsection{Implementation}
 
@@ -365,7 +411,7 @@ struct common_type<TTuple, UTuple, TQual, UQual>;
 \begin{codeblock}
 template <typename T, size_t N>
 concept  @\placeholder{is-tuple-element}@ = requires (T t) {  // \expos
-    typename tuple_element_t<N, remove_const_t<T>>;
+    typename tuple_element_t<N, T>;
     { @\textbf{std::}@get<N>(t) } -> convertible_to<tuple_element_t<N, T>&>;
 };
 
@@ -383,7 +429,7 @@ concept @\placeholder{tuple-like}@ // \expos
 
 template <typename T>
 concept @\placeholder{pair-like}@ // \expos
-= @\placeholder{tuple-like}@<T> && tuple_size_v<T> == 2;
+= @\placeholder{tuple-like}@<T> && tuple_size_v<remove_cvref_t<T>> == 2;
 
 \end{codeblock}
 \end{addedblock}
@@ -446,7 +492,7 @@ constexpr const T&& get(const tuple<Types...>&& t) noexcept;
 
 // [tuple.rel], relational operators
 template<class... TTypes, class... UTypes>
-constexpr bool operator==(const tuple<TTypes...>&, const UTuple&);\end{codeblock}
+constexpr bool operator==(const tuple<TTypes...>&, const tuple<UTypes...>&);\end{codeblock}
 \begin{addedblock}
 \begin{codeblock}
 template<class... TTypes, @\placeholder{tuple-like}@ UTuple>
@@ -872,7 +918,8 @@ The default constructor of \tcode{tuple<>} is trivial.
 \pnum
 Let \tcode{I} be the pack \tcode{0, 1, ..., (sizeof...(Types) - 1)}.\newline
 Let \tcode{UTypes} be the pack \tcode{tuple_element_t<0, UTuple>, tuple_element_t<0, UTuple>, ..., tuple_element_t<tuple_size_v<UTuple> -1, UTuple>}.\newline
-Let \tcode{\exposid{FWD}(u)} be \tcode{static_cast<decltype(u)>(u)}.
+
+Let \tcode{\exposid{FWD}(u)} be \tcode{static_cast<UTuple>(u)}.
 
 \pnum
 \constraints
@@ -2269,6 +2316,41 @@ Subclause~\ref{memory} describes the contents of the header
 
 \end{removedblock}
 
+\rSec1[containers]{Containers}
+
+\rSec1[associative]{Associative containers}
+
+\ednote{We probably need to modify the requirements table, which I have found challenging as requirements apply equally to sets and maps.
+    In particular, we probably want to requiere \tcode{is_constructible<value_type, T>} where T is either the type passed to insert, or the \tcode{InputIterator}'s \tcode{value_type}.
+    Currently, we only seem to require \tcode{convertible_to}, which may not be sufficient?.
+    An alternative is to add explicit insert overloads for \tcode{pair-like} objects}.
+
+\rSec2[associative.general]{In general}
+
+\pnum
+The header map defines the class templates \tcode{map} and
+\tcode{multimap}; the header set defines the class templates
+\tcode{set} and \tcode{multiset}.
+
+\pnum
+The following exposition-only alias templates may appear in deduction guides for associative containers:
+\begin{codeblock}
+    template<class InputIterator>
+    using @\placeholder{iter-value-type}@ =
+    typename iterator_traits<InputIterator>::value_type;                // \expos
+    template<class InputIterator>
+    using @\placeholder{iter-key-type}@ = remove_const_t<
+    @\changed{typename iterator_traits<InputIterator>::value_type::first_type}{\\tuple_element_t<0, iterator_traits<InputIterator>::value_type>}@>;   // \expos
+    template<class InputIterator>
+    using @\placeholder{iter-mapped-type}@ =
+    @\changed{typename iterator_traits<InputIterator>::value_type::second_type}{\\tuple_element_t<1, iterator_traits<InputIterator>::value_type>}@>;   // \expos
+    template<class InputIterator>
+    using @\placeholder{iter-to-alloc-type}@ = pair<
+    add_const_t<@\changed{typename iterator_traits<InputIterator>::value_type::first_type}{\\tuple_element_t<0, iterator_traits<InputIterator>::value_type>}@>,
+    @\changed{typename iterator_traits<InputIterator>::value_type::second_type}{\\tuple_element_t<1, iterator_traits<InputIterator>::value_type>}@>;  // \expos
+\end{codeblock}
+
+
 \rSec1[range.utility]{Range utilities}
 \rSec2[range.subrange]{Sub-ranges}
 
@@ -2307,7 +2389,7 @@ namespace std::ranges {
 \begin{codeblock}
     template<class T, class U, class V>
     concept @\defexposconcept{pair-like-convertible-from}@ =                    // \expos
-    !@\libconcept{range}@<T> && @\exposconcept{pair-like}@<T> &&
+    !@\libconcept{range}@<T> && @\added{!is_reference_v<T> \&\&}@ @\exposconcept{pair-like}@<T> &&
     @\libconcept{constructible_from}@<T, U, V> &&
     @\exposconcept{convertible-to-non-slicing}@<U, tuple_element_t<0, T>> &&
     @\libconcept{convertible_to}@<V, tuple_element_t<1, T>>;
@@ -2367,41 +2449,6 @@ Insert into [version.syn]
 \end{codeblock}
 \end{addedblock}
 
-
-
-%\rSec1[containers]{Containers}
-%
-%\rSec1[associative]{Associative containers}
-%
-%\ednote{We probably need to modify the requirements table, which I have found challenging as requirements apply equally to sets and maps.
-%In particular, we probably want to requiere \tcode{is_constructible<value_type, T>} where T is either the type passed to insert, or the \tcode{InputIterator}'s \tcode{value_type}.
-%Currently, we only seem to require \tcode{convertible_to}, which may not be sufficient?.
-%An alternative is to add explicit insert overloads for \tcode{pair-like} objects}.
-%
-%\rSec2[associative.general]{In general}
-%
-%\pnum
-%The header map defines the class templates \tcode{map} and
-%\tcode{multimap}; the header set defines the class templates
-%\tcode{set} and \tcode{multiset}.
-%
-%\pnum
-%The following exposition-only alias templates may appear in deduction guides for associative containers:
-%\begin{codeblock}
-%    template<class InputIterator>
-%    using @\placeholder{iter-value-type}@ =
-%    typename iterator_traits<InputIterator>::value_type;                // \expos
-%    template<class InputIterator>
-%    using @\placeholder{iter-key-type}@ = remove_const_t<
-%    @\changed{typename iterator_traits<InputIterator>::value_type::first_type}{\\tuple_element_t<0, iterator_traits<InputIterator>::value_type>}@>;   // \expos
-%    template<class InputIterator>
-%    using @\placeholder{iter-mapped-type}@ =
-%    @\changed{typename iterator_traits<InputIterator>::value_type::second_type}{\\tuple_element_t<1, iterator_traits<InputIterator>::value_type>}@>;   // \expos
-%    template<class InputIterator>
-%    using @\placeholder{iter-to-alloc-type}@ = pair<
-%    add_const_t<@\changed{typename iterator_traits<InputIterator>::value_type::first_type}{\\tuple_element_t<0, iterator_traits<InputIterator>::value_type>}@>,
-%    @\changed{typename iterator_traits<InputIterator>::value_type::second_type}{\\tuple_element_t<1, iterator_traits<InputIterator>::value_type>}@>;  // \expos
-%\end{codeblock}
 %
 %\rSec2[map]{Class template \tcode{map}}
 %

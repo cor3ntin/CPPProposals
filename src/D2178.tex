@@ -46,7 +46,7 @@ the semantic of text elements is conserved through the different phases of compi
 
 \subsection{R1}
 \begin{itemize}
-\item Add a note about trailing whitespaces in raw string literals following a comment from the UK national body 
+\item Add a note about trailing whitespaces in raw string literals following a comment from the UK national body
 \item Add a FAQ
 \item Add some notes about BOM, ill-formed code units sequences, string concatenations.
 \end{itemize}
@@ -58,7 +58,7 @@ This proposal tries to establish a more or less exhaustive list of issues with l
 Some of these issues are too small to be worth the overhead cost of an individual paper, some may require further exploration,
 many are intertwined.
 Providing wording for individual resolutions may lead to a hard-to-solve N-ways merge, as such we recommend first establishing the design
-then providing a wording that matches the design.    
+then providing a wording that matches the design.
 
 \subsection{Is it worth it?}
 
@@ -92,7 +92,7 @@ Most C++ compilers ( GCC, EDG, MSVC, Clang) support utf8 as one of their input f
 
 Unlike \paper{N3463}, we do not intend to mandate or say anything about BOMs (Byte Order Mark), following Unicode recommendations.
 BOMs should be ignored (but using BOMs as a means to detect UTF-8 files is a valid implementation strategy, which is notably used by MSVC).
-Indeed, we should give enough freedom to implementers to handle the cases where a BOM contradicts a compiler flag. 
+Indeed, we should give enough freedom to implementers to handle the cases where a BOM contradicts a compiler flag.
 Web browsers for example found a BOM to not be a reliable mechanism.
 There are further issues with BOMs and toolings, such that they may be removed by IDEs or tooling.
 They are also widely used, and different companies have different policies.
@@ -125,8 +125,8 @@ Line terminators and the following characters constitute whitespaces:
 U+0009 HORIZONTAL TAB
 U+0020 SPACE
 U+200E LEFT-TO-RIGHT MARK
-U+200F RIGHT-TO-LEFT MARK 
-\end{codeblock} 
+U+200F RIGHT-TO-LEFT MARK
+\end{codeblock}
 
 These correspond to characters with the \textbf{Pattern_Whitespace} Unicode property.
 The line terminator subset is derived from \textbf{UAX14 - UNICODE LINE BREAKING ALGORITHM}.
@@ -135,7 +135,7 @@ We intend to fix \paper{CWG1655} following this clarification.
 
 \subsection{Proposal 3: Preserve Normalization forms}
 
-We propose to specify that Unicode encodes files are not normalized in phase 1 or phase 5, as to preserve the integrity 
+We propose to specify that Unicode encodes files are not normalized in phase 1 or phase 5, as to preserve the integrity
 of string literals when both the source and the literal associated character set are the Unicode character set.
 Instead, the exact sequence of code points of these literals is preserved.
 In effect, this does not change the existing behavior of tested implementations in phase 1 (and phase 5 is already specified on a per-codepoint basis).
@@ -148,16 +148,16 @@ This is also the case for others scripts, including many Brahmic scripts and emo
 
 
 
-\tcode{int i = 'é';} 
+\tcode{int i = 'é';}
 can be equivalent to either \tcode{int i = '\textbackslash u00e9';} or \tcode{int i = 'e\textbackslash u0301';}
 depending on source encoding and normalization.
-There is also a lot of divergence of implementations in how literals are interpreted. 
+There is also a lot of divergence of implementations in how literals are interpreted.
 
 \begin{center}
     \begin{tabular}{ c c | c | c | c | c }
-        \ & Clang & GCC UTF-8 & MSVC UTF-8 & GCC Latin-1 & MSVC Latin-1\\ 
+        \ & Clang & GCC UTF-8 & MSVC UTF-8 & GCC Latin-1 & MSVC Latin-1\\
         \tcode{'\textbf{e}\textbackslash u0301';} & ill-formed & \tcode{int(0x65CC81)} + Warning & \tcode{int(0x65cc81)} & ill-formed & \tcode{int (0x653f)}\\
-        \tcode{'\textbackslash u00e9';} & ill-formed & \tcode{int(0xC3A9)} + Warning & \tcode{int(0xC3A9)} & \tcode{0xFFFFFFFFFFFFFFE9}& \tcode{int(0x09)} \\    
+        \tcode{'\textbackslash u00e9';} & ill-formed & \tcode{int(0xC3A9)} + Warning & \tcode{int(0xC3A9)} & \tcode{0xFFFFFFFFFFFFFFE9}& \tcode{int(0x09)} \\
     \end{tabular}
 \end{center}
 
@@ -196,9 +196,9 @@ wchar_t c = L'é';
 MSVC first converts to UTF-16, and truncate to the first code unit which results in an invalid lone high surrogate \tcode{0xd83d}.
 
 
-\item  \tcode{L'ab'} is equivalent to \tcode{L'a'} on msvc and  \tcode{L'b'} on GCC and Clang. All implementations emit a warning under different warning levels 
+\item  \tcode{L'ab'} is equivalent to \tcode{L'a'} on msvc and  \tcode{L'b'} on GCC and Clang. All implementations emit a warning under different warning levels
 
-\item \tcode{L'é'} can be either 1 or 2 c-char depending on the source normalization: \tcode{L'\textbackslash u00e9'} behaves expectedly on all platforms, 
+\item \tcode{L'é'} can be either 1 or 2 c-char depending on the source normalization: \tcode{L'\textbackslash u00e9'} behaves expectedly on all platforms,
 while  \tcode{L'e\textbackslash u0301'} will be \tcode{e} in MSVC and \tcode{U+0301} in GCC AND clang.
 
 \end{itemize}
@@ -206,7 +206,7 @@ while  \tcode{L'e\textbackslash u0301'} will be \tcode{e} in MSVC and \tcode{U+0
 As such, we propose to make wide characters literals with multiple-chars or char which are not representable in the execution character set ill-formed.
 
 Note that wide characters literals with multiple c-char, unlike multi-character-literals are represented by a single \tcode{wchar_t}.
-The other difference is that Unicode combining characters may be representable by a \tcode{wchar_t} whereas they cannot be represented by a \tcode{char}. 
+The other difference is that Unicode combining characters may be representable by a \tcode{wchar_t} whereas they cannot be represented by a \tcode{char}.
 The first Unicode combining characters appear in the \emph{Combining Diacritical Marks} block, starting at \tcode{U+0300}.
 
 
@@ -238,7 +238,7 @@ CONCAT(\, U0001F431);
 \end{colorblock}
 
 However, these behaviors are currently UB within the standard.
-We propose to standardize existing practice by making these behaviors well-defined. 
+We propose to standardize existing practice by making these behaviors well-defined.
 
 
 \subsection{Proposal 8: Reaffirming Unicode as the character set of the internal representation}
@@ -265,7 +265,7 @@ It is therefore not possible for an implementation to uniquely map unrepresentab
 We only seek to mandate \emph{representability} in Unicode.
 This proposal has no bearing on the actual internal representation strategy of already conforming implementations. Notably, mandating internal as-if Unicode representation doesn't
 preclude bytewise preservation of narrow and wide string literals when the execution encoding is identical to the source encoding,  as long as there exists a Unicode representation,
-as this is otherwise non-observable: It is an important implementation strategy for encoding which are not roundtrip-able through Unicode such as Shift JIS 
+as this is otherwise non-observable: It is an important implementation strategy for encoding which are not roundtrip-able through Unicode such as Shift JIS
 to preserve the byte content of string literals when both source and execution encodings are identical.
 Such preservation is otherwise non-observable and doesn't need to be mandated, but it needs not to be precluded.
 Again, this constraint exists in practice as many implementations use Unicode internally and do not use the "implementation-defined mapping" leeway
@@ -282,7 +282,7 @@ Specifically:
 
 That list does not intend to be prescriptive, but to show that the C++ standard doesn't need and shouldn't try to handle characters not representable of Unicode.
 Furthermore, the author hopes that the wording can convert \emph{universal-character-names} to Unicode code points as soon as they are encountered or formed (which is exclusively a matter of wording,
-that would neither affect behavior nor prescribe an internal representation). 
+that would neither affect behavior nor prescribe an internal representation).
 
 Following this clarification we hope to fix \paper{CWG1332}
 
@@ -301,7 +301,7 @@ They should just not appear in text elements (identifiers and literals).
 We propose to remove the \tcode{_Pragma(L"")} syntax as both strings are interpreted as sequences of Unicode code points and never as a wide execution literal.
 C++ handling of text is confusing enough not to add meaningless characters. This would resolve \paper{CWG897}.
 Note that there is a divergence of implementation between C++ and C where C discard all prefixes and C++ only discards L.
- 
+
 Out of the 90 millions lines of code of the 1300+ open source projects available on vcpkg, a single use of that feature was found within clang's lexer test suite, for a total of ~2000 uses of \tcode{_Pragma}.
 Similarly, the only uses of \tcode{_Pragma (u8"")}, \tcode{_Pragma (u"")}, \tcode{_Pragma (U"")}, etc were found in Clang's  test suite
 (both because these are valid C and because neither GCC nor Clang are comforming, only \tcode{L""} is described as valid by the C++ standard).
@@ -327,7 +327,7 @@ While we think there should be a better way to detect encodings in C++ \cite{P18
 
 Instead, we recommend adopting the standard practice and user expectation of converting these literals to the narrow literal encoding before evaluating them.
 
-This also removes yet another theoretical encoding, which further simplifies the mental model. 
+This also removes yet another theoretical encoding, which further simplifies the mental model.
 
 \pagebreak
 
@@ -343,23 +343,23 @@ The red arrows represent operations that may alter the semantic of text elements
     graph [fontname = "Incosolata"];
     node [fontname = "Incosolata" fontsize=8];
     edge [fontname = "Incosolata" fontsize=7];
-    
+
     src [shape=box, label="Physical Source"]
     internal [shape=box, label="Internal = Basic Source + UCNs"]
     slice [shape=diamond, label="Slice"]
     cpp [shape=diamond, label="Preprocessor"]
     phase5 [shape=diamond, label="Phase 5"]
-    
+
     cppcond  [shape=box, label="Preprocessor Conditionals"]
     e  [shape=box, label="Execution"]
     w  [shape=box, label="Wide Encoding"]
     u  [shape=box, label="UTF-8/16/32"]
-    
+
     src -> internal [label="   Implementation defined mapping" color="red"]
     internal -> slice
     slice -> cpp
-    cpp -> phase5 
-    
+    cpp -> phase5
+
     cpp -> cppcond [color="red"]
     phase5 -> e [color="red"]
     phase5 -> w [color="red"]
@@ -372,35 +372,50 @@ In the proposed model, all conversions are either semantic preserving\footnote{T
 Outside of raw literals, \emph{universal-character-names} are converted to codepoints as they are formed, the wording is specified in term of the
 Unicode character set.
 
- \digraph{expected}{
+ \digraph{CPlusPlus}{
     rankdir=TB;
     graph [fontname = "Incosolata"];
     node [fontname = "Incosolata" fontsize=7];
     edge [fontname = "Incosolata" margin=20 fontsize=7];
-    
-    src [shape=box, label="Abstract Characters Sequence"]
+
+    src [shape=box, label="Abstract Characters Sequence (physical source file)"]
     utf [shape=box, label="UTF-8"]
     internal [shape=box, label="Unicode"]
-    cpp [shape=diamond, label="Preprocessor"]
-    slice [shape=diamond, label="Trim whitespaces + Slice"]
-    phase5 [shape=diamond, label="Phase 5"]
-    
-    
+
     e  [shape=box, label="Narrow Literal Encoding"]
     w  [shape=box, label="Wide Literal Encoding"]
     u  [shape=box, label="UTF-8/16/32"]
-    
+
     utf -> internal [label="codepoints preserving" color="blue"]
     src -> internal [label="semantic preserving" color="darkgreen"]
-    
-    internal -> slice
-    slice -> cpp
-    cpp -> phase5
-    
-    phase5 -> e [label="semantic preserving" color="darkgreen"]
+
+    internal -> phase5
+
+    phase5 -> e [label="Work In Progress" color="red"]
     phase5 -> w [label="semantic preserving" color="darkgreen"]
     phase5 -> u [label="codepoints preserving" color="blue"]
 }
+
+
+
+ \digraph{C}{
+    rankdir=TB;
+    graph [fontname = "Incosolata"];
+    node [fontname = "Incosolata" fontsize=7];
+    edge [fontname = "Incosolata" margin=20 fontsize=7];
+
+    src [shape=box, label="Abstract Characters Sequence (physical source file)"]
+    cppcond  [shape=box, label="Preprocessor Conditionals"]
+    e  [shape=box, label="Narrow Literal Encoding"]
+    w  [shape=box, label="Wide Literal Encoding"]
+    u  [shape=box, label="UTF-8/16/32"]
+
+    src -> cppcond
+    src -> e [label="implementation-defined" color="darkgreen"]
+    src -> w [label="implementation-defined" color="darkgreen"]
+    src -> u [label="codepoints preserving" color="blue"]
+}
+
 
 \section{Acknowledgments}
 Thanks to the people who provided feedback on the proposed changes, notably Tom Honnermann, Hubert Tong, Aaron Ballman, Steve Downey, Roger Orr, Jeans Maurer.
@@ -412,21 +427,21 @@ Many thanks to Peter Brett for his support and his thorough feedback.
 \bibliography{wg21}
 
 \begin{thebibliography}{9}
-    
+
     \bibitem[UAX-14]{UAX-14}
     \emph{UNICODE LINE BREAKING ALGORITHM}\newline
     \url{https://www.unicode.org/reports/tr14/}
-    
+
     \bibitem[Unicode]{Unicode}
     Unicode 13\newline
     \url{http://www.unicode.org/versions/Unicode13.0.0/}
-    
+
     \bibitem[CDRA]{CDRA}
     IBM\newline
     \emph{IBM Character Data Representation Architecture}\newline
     \url{https://www.ibm.com/downloads/cas/G01BQVRV}
-    
-    
+
+
     \bibitem[UTF-EBCDIC]{UTF-EBCDIC}
     V.S. Umamaheswaran\newline
     \emph{UTF-EBCDIC - Unicode Technical Report \#16}\newline

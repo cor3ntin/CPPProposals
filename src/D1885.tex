@@ -4,7 +4,7 @@
 \documentclass{wg21}
 
 \title{Naming Text Encodings to Demystify Them}
-\docnumber{P1885R9}
+\docnumber{P1885R10}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Peter Brett}{pbrett@cadence.com}
@@ -150,6 +150,11 @@ assert(wtf8 == text_encoding("___wtf8__"));
 
 \section{Revisions}
 
+\subsection*{Revision 10}
+\begin{itemize}
+\item \hyperref[P2498-concerns]{Address more concerns} raised by \paper{P2498R1}, and subsequent SG16 suggestions.
+\end{itemize}
+    
 \subsection*{Revision 9}
 
 LEWG forwarded P1885R8 to LWG, however:
@@ -164,7 +169,7 @@ LEWG forwarded P1885R8 to LWG, however:
     \item Wording fixes
     \item \textbf{Remove the wide methods to \hyperref[P2491-concerns]{address concerns} raised by \paper{P2491r0}}
     \item \hyperref[P2498-concerns]{Address concerns} raised by \paper{P2498R0}
-    
+
     \item Mandates CHAR_BIT == 8
     \item Remove the "object representation" wording.
 \end{itemize}
@@ -177,11 +182,11 @@ LEWG forwarded P1885R8 to LWG, however:
     In general, while most registered character encodings do describe a very specific set of characters and mapping, some do not. This blanket wording allows an implementation to offer a behavior that matches existing expectations.
     \item Add more recommended practices in the wording
     \item Specify that the encoding of literals is that of the object representation.
-    \item Specify that the encodings are encoding schemes. 
+    \item Specify that the encodings are encoding schemes.
     \item Always map UTF16-LE/BE to UTF-16 (and add prose to explain why).
     \item Fix an example, which while correct was not representative of desired recommended practices.
     \item Many wording fixes.
-    
+
 \end{itemize}
 
 
@@ -264,17 +269,166 @@ Future text encoders and decoders may use the proposed facility to identify thei
 The current facility is \emph{just} a fancy name.
 
 
-\phantomsection\label{P2498-concerns} \section{Addressing concerns raised by \paper{P2498R0} }
+\phantomsection\label{P2498-concerns} \section{Addressing concerns raised by \paper{P2498R1}and subsequent discussions }
 
+The present paper is designed as an interface over the IANA database. The presence of an encoding in the IANA database is precisely what the invariant of the class is (even if non-IANA encodings are \textbf{fully} supported through the \tcode{mib} encoding.)
 
-The present paper is designed as an interface over the IANA database. The presence of an encoding in the IANA database is precisely what the invariant of the class is (even if non-IANA encodings are supported through the \tcode{mib} encoding.)
-Other databases can be supported without changing the invariant - for example, there is a direct mapping between the WHATWG encoding standard and a sibset of IANA,
-and such a database could be supported without changing the invariant of the class.
-
-P2498R0 claims that "This registry [IANA] is known to be incomplete and, in some respects, does not provide a perfect match to the requirements of C++".
+P2498R0 claims that "This registry [IANA] is known to be incomplete and, in some respects, does not provide a perfect match to the requirements of C++."
 While it is true that not all encoding are registered with IANA, P1885 support arbitrary encodings. IANA is used to establish equivalence between encodings identified by different names across platforms or on the same platform.
 
-\paper{P2498R0} also proposed to add the following wording:
+\paper{P2498R1} proposes an implementation-defined mapping from some implementation-defined enum types to `text_encoding::id`.
+This would actually, given the current and proposed wording, allow implementations to use a 16 bits type instead of a 32 bits type to store the mib,
+which seems to reduce any forward compatibility avenue rather than increasong it. Also, if we are going to store the mib in some implementation-defined type, there is no reason to make it an enum.
+
+But \paper{P2498R1} fails to offer an example of a possible "alternative" registry or to explain how the proposed changes would make supporting alternative registry helpful. Let's go through some options.
+
+\subsection{WhatWG}
+
+Unlike IANA, WhatWG encodings are only identified by name and do not have any associated numerical identifier of any sort.
+WHATWG focuses on encodings frequently involved in the rendering of web pages and as such is, with exceptions, a subset of IANA.
+The following illustrate how to map IANA to whatwg encodings:
+
+\begin{colorblock}
+constexpr bool is_whatwg_encoding(const text_encoding & te) {
+    using e = text_encoding::id;
+    text_encoding::id ids[] {
+        e::ASCII,
+        e::UTF8, e::IBM866,
+        e::ISOLatin2, e::ISOLatin3,
+        e::ISOLatin4, e::ISOLatin5, e::ISOLatin6,
+        e::ISOLatinGreek, e::ISOLatinHebrew,
+        e::ISO88598I, e::ISO88596E,
+        e::ISO885913, e::ISO885914,
+        e::ISO885915, e::ISO885916,
+        e::KOI8R, e::KOI8U,
+        e::Macintosh, e::TIS620,
+        e::windows1250, e::windows1251,
+        e::windows1252, e::windows1253,
+        e::windows1254, e::windows1255,
+        e::windows1256, e::windows1257, e::windows1258,
+        e::GBK, e::GB18030,
+        e::Big5, e::EUCPkdFmtJapanese,
+        e::ISO2022JP, e::ShiftJIS,
+        e::EUCKR, e::KSC56011987,
+        e::ISO2022KR,
+        e::UTF16, e::UTF16BE, e::UTF16LE
+    };
+    if(auto it = std::find(std::begin(ids), std::end(ids), te.mib()); it != std::end(ids) )
+        return true;
+    if(te == text_encoding("x-mac-cyrillic") || te == text_encoding("x-mac-ukrainian"))
+        return true;
+    return false;
+}
+\end{colorblock}
+
+
+Note that, because WhatWG goal is to standardize existing practices on the web, they consider ASCII, latin1, and windows-1252
+to be the same encodings, while they are not under IANA (because, well, they are not).
+
+Therefore, let's imagine \tcode{whatwg_encoding}, an object modeling the WHATWG specification.
+
+\begin{colorblock}
+whatwg_encoding("ascii") == whatwg_encoding("windows-1252");  // true
+text_encoding("ascii")   == text_encoding("windows-1252");  // false
+whatwg_encoding("ascii") == text_encoding("windows-1252");  // ???
+\end{colorblock}
+
+That last expression doesn't make sense; the class have different invariants, and while it is possible to establish
+a conversion between the two types, it is not possible to establish a direct equivalence.
+Now, if `text_encoding` was modeling two or more registries, what comparison rules should it follow?
+
+
+This questions applies to other registries.
+
+\subsection{IBM, windows and vendors code pages}
+
+IBM and windows code pages do not constitute registries; they are interfaces and documentation specific to a vendor, for the purposes of their respective environment, and are not suitable to the aim of this paper: improving portability.
+
+But the situation is the same as for WHATWG:
+\begin{itemize}
+\item It is possible to map from one set of encoding to another without any extra data member.
+\item When a mapping exists, a conversion between mappings can be established, but no equality is possible.
+\end{itemize}
+
+Yet that doesn't mean that vendor-specific support can't exist.
+
+\begin{colorblock}
+// Option A
+struct text_encoding  {
+public:
+    constexpr id mib(); const
+    constexpr auto __vendor_specific_codepage() const;
+};
+
+// Option B
+namespace vendor_specific_namespace{
+    struct vendor_text_encoding  {
+        public:
+        constexpr auto codepage() const;
+    };
+}
+\end{colorblock}
+
+
+\subsection{ISO 2022}
+
+ISO 2022 (INTERNATIONAL REGISTER OF CODED CHARACTER SETS TO BE USED WITH ESCAPE SEQUENCES) is unsuitable for several reasons.
+For one, it is not updated since 1994, so it fails to reference important encodings such as GB18030.
+But most importantly, ISO 2022 does not describe a general encoding registry but a set of encodings or parts of encodings for use with ISO 2022.
+Specifically, what is registered in that registry are escape sequences to switch from/to an encoding.
+The existence of such escape sequences makes the registered encoding not strictly conforming to the encoding the escape sequence pertains to.
+For example, the registry describes no less than 4 "UTF-8" entries, all pertaining to different ways to insert UTF-8 in an ISO 2022 stream.
+
+Also, absent from this database are all the windows and IBM encodings.
+Some of the encodings used as part of ISO2022 were registered in IANA, and others are no longer in use.
+
+\subsection{Have you considered making \tcode{text_encoding} a template classd with a registery as parameter?}
+
+\tcode{text_encoding} describes elements of the IANA database:
+
+\begin{itemize}
+\item An enum all of the encodings, for type safety
+\item An mib for compatibility with third-party libraries, type safety, and fast comparison.
+\item A set of aliases.
+\item A set of rules for the comparison of names.
+\item A support for unregistered encodings
+\end{itemize}
+
+Other registers may fail to provide some of these capabilities or have different rules.
+WhatWG doesn't have a numerical id. Windows does not have aliases, for example.
+
+As such, two registries may have a different interface, maintain different invariants and have different rules for comparison.
+
+There is also no generic way to compare between registries, or to map between two registries if both of them maintain a numerical value are part of their invariant.
+
+These would be different types, with different methods and semantics: not a good scenario for genericity.
+
+\subsection{On the legitimacy of IANA}
+
+IANA is a recognized standards organization which have been involved in the maintenance of
+critical parts of the Internet since 1988.
+
+In any case, the database itself, like the time zone database which is referenced by the C++ standard, is relied on by many products and is under Creative Commons CC0 1.0. Its current maintainership have no bearing on the proposal at hand or subsequent evolutions.
+
+Yet, \paper{P2498R1}'s intent to rename \tcode{mib}` to \tcode{iana_mib} - a rename I'm not opposed to -
+seems to directly contradict the concerns about relying on a IANA standard.
+
+In any case, it behooves \paper{P2498R1} to determines whether the name "iana" can be used in the API from a legal standpoint.
+
+
+\subsection{Still, should WG21 import the entire registry as an annex?}
+
+While I do not think this is necessary... if that's something editors want to do, why not?
+
+\subsection{Should WG21 create its own registry?}
+
+That would be an excellent way to waste an enormous of committee time on the basis that everybody else's standard is unfit.
+The value of an industry-standard is that everybody uses the same, not in everyone making their own, differently broken version of it.
+Concerns that IANA is unsuitable for non-8-bits encodings are addressed further in this paper.
+
+\subsection{Should we be adding padding?}
+
+\paper{P2498R0} proposed:
 
 \begin{quoteblock}
     When defining the member variables and layout of \tcode{text_encoding}, implementations should consider the possibility that future revisions of this standard may reference additional or alternative text encoding registries.
@@ -288,8 +442,6 @@ I would like to observe that the \tcode{text_encoding::id} is purposefully using
 
 In any case, if there are concerns that the current design or the IANA database are not suitable, I would advise not pursuing this paper instead of trying to future-proof it.
 
-P2498R0 further propose to rename \tcode{text_encoding::id} to \tcode{text_encoding::iana_id}.
-I have no strong opinion on the name, and I am open to any suggestion LEWG wants to offer.
 
 \phantomsection\label{P2491-concerns} \section{Addressing concerns raised by \paper{P2491R0} }
 
@@ -344,15 +496,15 @@ I believe this also addresses concerns raised by the electronic polling of P1885
 
 \begin{quoteblock}
     The concerns expressed in [P2491R0] are very real. When wchar_t is in use and is of the right size, it is plausible to use names like UTF-16 to refer to an encoding form (trivially encoded as a sequence of wchar_t values) rather than an encoding scheme, but that would require weakening the focus on IANA in P1885 and would have only a weak connection to the intended utilities like iconv that plainly interpret such names as referring to an encoding scheme. Implementations can specify that functions like iconv work with wchar_t arrays without (and are not assisted in doing so by) any statement about object representations in the standard.
-    
+
     It is also true that inventiveness in a domain already so chaotic is plainly undesirable. While it might merely reaffirm [P1885R8]'s practical direction with a different interpretation, it seems that we need to reconsider the choices made in the extremely troublesome area of non-octet-based encoding schemes.
-    
+
     — Weakly Against
 \end{quoteblock}
 
 \begin{quoteblock}
     This feature is very useful (see for example next poll) and I believe should be included in standard. However, after reading [P2491R0], I agree that this concern need resolution. This may be as simple, as limiting returning IANA schemes to sizeof(char_size) == 1, i.e. leaving wide_literal implementation-defined now.
-    
+
     — Weakly Against
 \end{quoteblock}
 
@@ -1430,9 +1582,9 @@ The order of elements in \tcode{r} is unspecified.
 static consteval text_encoding literal() noexcept;
 \end{itemdecl}
 \begin{itemdescr}
- 
-\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.   
-    
+
+\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.
+
 \returns a \tcode{text_encoding} object representing the encoding scheme associated with the ordinary string literals [lex.charset].
 
 \end{itemdescr}
@@ -1443,8 +1595,8 @@ static consteval text_encoding literal() noexcept;
 %
 %\begin{itemdescr}
 %
-%\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.    
-%    
+%\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.
+%
 %Let \tcode{E} be a \tcode{text_encoding} object representing the encoding scheme associated with the object representation of wide string literals [lex.charset].
 %
 %\returns \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}}.
@@ -1464,8 +1616,8 @@ static text_encoding environment();
 
 \begin{itemdescr}
 
-\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.    
- 
+\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.
+
 \returns A \tcode{text_encoding} object representing the implementation-defined character encoding scheme of the environment.
 On a POSIX implementation, this is the encoding scheme associated with the POSIX locale denoted by the empty string \tcode{""}.
 
@@ -1485,8 +1637,8 @@ and other functions which can modify the environment [support.runtime].
 %
 %\begin{itemdescr}
 %
-%\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.   
-%    
+%\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.
+%
 %Let \tcode{E} be a \tcode{text_encoding} object representing the implementation-defined wide character encoding scheme of the environment.
 %On a POSIX implementation, this is the wide encoding scheme associated with the POSIX locale denoted by the empty string \tcode{""}.
 %
@@ -1638,8 +1790,8 @@ text_encoding encoding() const;
 
 \begin{itemdescr}
 
-\mandates \tcode{CHAR_BIT == 8} is \tcode{true}. 
-    
+\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.
+
 \returns a \tcode{text_encoding} object representing the implementation-defined encoding scheme associated with the locale \tcode{*this}.
 
 \end{itemdescr}
@@ -1649,11 +1801,11 @@ text_encoding encoding() const;
 %\end{itemdecl}
 %
 %\begin{itemdescr}
-%   
-%\mandates \tcode{CHAR_BIT == 8} is \tcode{true}. 
-%    
+%
+%\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.
+%
 %Let \tcode{E} be a \tcode{text_encoding} object representing the implementation-defined wide encoding scheme associated with the locale \tcode{*this}.
-% 
+%
 %\returns \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}}.
 %\end{itemdescr}
 \end{addedblock}

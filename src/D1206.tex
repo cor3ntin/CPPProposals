@@ -10,7 +10,7 @@
 \usepackage{tabto}    
 
 \title{Conversions from ranges to containers}
-\docnumber{D1206R7}
+\docnumber{P1206R7}
 \audience{LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Eric Niebler}{eric.niebler@gmail.com}
@@ -46,7 +46,7 @@ Wording changes
     \item simplify the reservable-container concept specification
     \item make ranges::to concepts into constexpr variables to make it clearer no semantic constraints is expected
     \item simplify and fix \tcode{ranges::to} wording and description
-    \item introduce \tcode{__cpp_lib_to} instead of bumping  \tcode{__cpp_lib_ranges}
+    \item introduce \tcode{__cpp_lib_ranges_to_container} instead of bumping  \tcode{__cpp_lib_ranges}
 \end{itemize}
 
 \subsection*{Revision 6}
@@ -609,7 +609,7 @@ but specialized allocators can choose a different definition.
 \end{note}
 
 \begin{addedblock}
-    The following exposition-only concept is used in the definition of containers
+    The following exposition-only concept is used in the definition of containers:
 \begin{codeblock}
 template<class R, class T>
 concept @\placeholdernc{container-compatible-range}@ = // \expos
@@ -5104,7 +5104,7 @@ namespace std {
     \pnum
     \effects
     Constructs a string from the values in the range \range{begin}{end},
-    as indicated in \tref{container.seq.req}.
+    as indicated in [container.seq.req].
 \end{itemdescr}
 
 \begin{addedblock}
@@ -5377,6 +5377,8 @@ In [range.utility] Insert after section [range.dangling]
 
 \rSec2[range.utility.conversions]{Range conversions}
 
+\pagebreak
+
 The range conversion functions construct an object (usually a container) from
 a range, by using a constructor taking a range, a \tcode{from_range_t} tagged constructor,
 or a constructor taking a pair of iterators, or by inserting each element of the
@@ -5391,7 +5393,7 @@ range into the default-constructed object.
     // returns vector<string>{"the", "quick", "brown", "fox"}
 \end{colorblock}\end{example}
 
-Let \placeholder{reservable-container} be defined as follow:
+Let \placeholder{reservable-container} be defined as follows:
 
 \begin{codeblock}
     template<class Container>
@@ -5404,7 +5406,7 @@ Let \placeholder{reservable-container} be defined as follow:
       };
 \end{codeblock}
 
-Let \placeholder{container-insertable} be defined as follow:
+Let \placeholder{container-insertable} be defined as follows:
 \begin{codeblock}
     template<class Container, class Ref>
     constexpr bool @\placeholder{container-insertable}@ =  // \expos
@@ -5414,11 +5416,11 @@ Let \placeholder{container-insertable} be defined as follow:
             };
 \end{codeblock}
 
-Let \placeholder{container-inserter} be defined as follow:
+Let \placeholder{container-inserter} be defined as follows:
 
     \begin{codeblock}
     template <typename Ref>
-    auto @\placeholder{container-inserter}@(C & c){
+    auto @\placeholder{container-inserter}@(C & c){  // \expos
         if constexpr (requires { c.push_back(declval<Ref>()); })
             return back_inserter(c);
         else
@@ -5530,10 +5532,6 @@ Let \placeholder{DEDUCE_EXPR} be defined as follows:
 
 \rSec3[range.utility.conversions.adapters]{\tcode{ranges::to} adaptors}
 
-\ednote{
-The wording below assume LEWG accepts \paper{P2387R0} as we need to lift the restriction on adaptor closure objects to accept any range.
-}
-
 
 \begin{itemdecl}
 template<class C, class... Args>
@@ -5562,8 +5560,8 @@ constexpr auto to(Args&&... args);
 
 \section{Feature test macros}
 
-Add a new macro in \tcode{<version>} \tcode{__cpp_lib_to} set to the date of adoption.
-The macro \tcode{__cpp_lib_to} is also present in <ranges>.
+Add a new macro in \tcode{<version>} \tcode{__cpp_lib_ranges_to_container} set to the date of adoption.
+The macro \tcode{__cpp_lib_ranges_to_container} is also present in <ranges>.
 
 
 Add a new macro in \tcode{<version>} \tcode{__cpp_lib_containers_ranges} set to the date of adoption.

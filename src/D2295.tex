@@ -8,7 +8,7 @@
 
 
 \title{Support for UTF-8 as a portable source file encoding}
-\docnumber{P2295R5}
+\docnumber{D2295R6}
 \audience{SG-16, EWG, SG-22}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Peter Brett}{pbrett@cadence.com}
@@ -32,6 +32,10 @@ We propose that UTF-8 source files should be supported by all C++ compilers.
 
 \section{Revisions}
 
+\subsection{R6}
+\begin{itemize}
+    \item Remove a note stating the wording was against \paper{P2314R2} as this paper has been merged.
+\end{itemize}
 
 \subsection{R5}
 \begin{itemize}
@@ -291,20 +295,6 @@ located in comments, header names or string literals).
 
 \section{Wording}
 
-\subsection{Note on wording}
-
-As SG-16 and Core try to improve the terminology and wording used to describe lexing in the standard,
-the proposed wording likely collides with other work happening in parallel.
-
-As such, this wording is based on the current standard.
-Once EWG accepts the design, a CWG-targeting paper merging the different lexing related design changes may be brought forward.
-As such, the wording reflects the intent but not necessarily the terminology that SG-16 wants to use, nor is it intended to be merged in its current form in the working draft.
-
-Notably, SG-16 and CWG are working on removing the mapping of characters to universal-character-name in phase 1, which has no observable impact on the behavior of C++ programs.
-
-\ednote{The proposed wording assumes \paper{P2314R2} has previously been applied to the wording draft.}
-
-
 \rSec1[lex.phases]{Phases of translation}%
 
 \pnum
@@ -316,13 +306,12 @@ following phases.
     \item
 
 \begin{addedblock}
-    The encoding scheme of a physical source file is determined in an
-    implementation-defined manner. An implementation shall provide a means, that is independent of the content of the source file, by
-    which the encoding scheme of source files can be specified. \begin{note} A
-    command-line option that specifies the encoding scheme to use as the result of
-    the determination is such a means.\end{note}
-     
-    An implementation shall support the UTF-8 encoding scheme. The set of additional encodings supported by an implementation is implementation-defined.
+    A physical source file is a sequence of integers with an associated encoding scheme determined in an
+    implementation-defined manner.
+
+    An implementation shall support the UTF-8 encoding scheme, and may support an implementation-defined set of additional encoding schemes.
+    If encoding schemes other than UTF-8 are supported,
+    an implementation shall provide a means by which the UTF-8 encoding scheme can be specified, independent of the content of the source file. \begin{note} A command-line option that specifies the encoding scheme to use as the result of the determination is such a means.\end{note}
     
     If the encoding scheme of a physical source file is determined to be UTF-8, then the
     physical source file shall be a well-formed UTF-8 code unit sequence. The source file is decoded
@@ -330,16 +319,10 @@ following phases.
     elements of the translation character set. \begin{note} There are no end-of-line
     indicators apart from the content of the UTF-8 code unit sequence. \end{note}
     
-    For any other encoding scheme supported by the implementation,
-\end{addedblock}\changed{P}{p}hysical source file characters are mapped, in an
+    For any other encoding scheme supported by the implementation, \end{addedblock}\changed{P}{p}hysical source file characters are mapped, in an
 implementation-defined manner, to the translation character set (introducing new-line characters for end-of-line
 indicators).
 \removed{The set of physical source file characters accepted is \impldef{physical source file characters}}.
-
-An implementation may use any internal
-encoding, so long as an actual extended character encountered in the
-source file, and the same extended character expressed in the source
-file as a \grammarterm{universal-character-name} (e.g., using the \tcode{\textbackslash uXXXX} notation), are handled equivalently except where this replacement is reverted\iref{lex.pptoken} in a raw string literal.
 
 \item
 \indextext{line splicing}%
@@ -371,10 +354,10 @@ In particular JeanHeyd Meneide offered the great insight that invalid UTF-8 can 
 Unicode 13\newline
 \url{http://www.unicode.org/versions/Unicode13.0.0/}
 
-\bibitem[N4885]{N4885}
+\bibitem[N4901]{N4901}
 Thomas Köppe
 \emph{Working Draft, Standard for Programming Language C++}\newline
-\url{https://wg21.link/N4885}
+\url{https://wg21.link/N4901}
 
 \bibitem[UAX-14]{UAX-14}
 \emph{UNICODE LINE BREAKING ALGORITHM}\newline
