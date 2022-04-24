@@ -37,6 +37,9 @@
     \item remplace "non-whitespace character" by non-whitespace
     \item typos
     \item "Whitespace characters can appear within a preprocessing token only as part of a header name..." is now a note
+    \item Rebase [cpp] on top of \paper{P2334R1}
+    \item Rebase [lex.phases] on top of \paper{P2223R2}
+    \item Rebase [lex.phases] on top of \paper{P2314R4} 
 \end{itemize}
 
 \subsection*{Revision 2}
@@ -162,17 +165,15 @@ following phases.
 
     \item
     \indextext{line splicing}%
-    Each instance of a backslash character (\textbackslash)
-    immediately followed by a \clb{new-line character} is deleted, splicing
+    Each sequence of a backslash character (\textbackslash) immediately followed by zero or more
+    \changed{whitespace characters other than new-line}{\grammarterm{horizontal-whitespace-character}} followed by a \clb{new-line  character} is deleted, splicing
     physical source lines to form logical source lines. Only the last
     backslash on any physical source line shall be eligible for being part
     of such a splice.
     Except for splices reverted in a raw string literal, if a splice results in
     a character sequence that matches the
     syntax of a \grammarterm{universal-character-name}, the behavior is
-    undefined. A source file that is not empty and that does not end in a \clb{new-line
-    character}, or that ends in a \clb{new-line character} immediately preceded by a
-    backslash character before any such splicing takes place,
+    undefined. A source file that is not empty and that does not end in a splice,
     shall be processed as if an additional \clb{new-line character} were appended
     to the file.
 
@@ -185,7 +186,7 @@ following phases.
     \removed{New-line characters are retained.} 
     \removed{Whether each nonempty sequence of whitespace characters other
     than new-line is retained or replaced by one space character is
-    unspecified.}  Each \grammarterm{universal-character-name} outside of a header-name or a character or string literal is replaced by the designated element of the translation character set ([lex.charset]). The process of dividing a source file's
+    unspecified.}  As characters from the source file are consumed to form the next preprocessing token (i.e., not being consumed as part of a \cwhitespace{comment or other forms of whitespace}), except when matching a \grammarterm{c-char-sequence}, \grammarterm{s-char-sequence}, \grammarterm{r-char-sequence}, \grammarterm{h-char-sequence}, or \grammarterm{q-char-sequence}, \grammarterm{universal-character-name}{s} are recognized and replaced by the designated element of the translation character set. The process of dividing a source file's
     characters into preprocessing tokens is context-dependent.
     \begin{example}
         See the handling of \tcode{<} within a \tcode{\#include} preprocessing
@@ -773,6 +774,23 @@ Assuming no whitespace at the beginning of lines in the following example, the a
 
 \begin{bnf}\obeyspaces
     \nontermdef{elif-group}\br
+    \terminal{\# elif    } constant-expression \clb{new-line} \opt{group}\br
+    \terminal{\# elifdef } constant-expression \clb{new-line} \opt{group}\br
+    \terminal{\# elifndef} constant-expression \clb{new-line} \opt{group}
+\end{bnf}
+
+\begin{bnf}\obeyspaces
+    \nontermdef{else-group}\br
+    \terminal{\# else   } \clb{new-line} \opt{group}
+\end{bnf}
+
+\begin{bnf}\obeyspaces
+    \nontermdef{endif-line}\br
+    \terminal{\# endif  } \clb{new-line}
+\end{bnf}
+
+\begin{bnf}\obeyspaces
+    \nontermdef{elif-group}\br
     \terminal{\# elif   } constant-expression \clb{new-line} \opt{group}
 \end{bnf}
 
@@ -1213,20 +1231,21 @@ is subjected to integral promotion before processing continues.
 \pnum
 Preprocessing directives of the forms
 \begin{ncsimplebnf}\obeyspaces
-    \terminal{\# ifdef  } identifier \clb{new-line} \opt{group}\br
+    \terminal{\# ifdef   } identifier \clb{new-line} \opt{group}\br
     \indextext{\idxcode{\#ifdef}}%
-    \terminal{\# ifndef } identifier \clb{new-line} \opt{group}
+    \terminal{\# ifndef  } identifier \clb{new-line} \opt{group}\br
     \indextext{\idxcode{\#ifndef}}%
+    \terminal{\# elifdef } identifier \clb{new-line} \opt{group}\br
+    \indextext{\idxcode{\#elifdef}}%
+    \terminal{\# elifndef} identifier \clb{new-line} \opt{group}
+    \indextext{\idxcode{\#elifndef}}%
 \end{ncsimplebnf}
 check whether the identifier is or is not currently defined as a macro name.
 Their conditions are equivalent to
-\tcode{\#if}
-\tcode{defined}
-\grammarterm{identifier}
-and
-\tcode{\#if}
-\tcode{!defined}
-\grammarterm{identifier}
+\tcode{\#if} \tcode{defined} \grammarterm{identifier},
+\tcode{\#if} \tcode{!defined} \grammarterm{identifier},
+\tcode{\#elif} \tcode{defined} \grammarterm{identifier}, and
+\tcode{\#elif} \tcode{!defined} \grammarterm{identifier},
 respectively.
 
 \pnum
