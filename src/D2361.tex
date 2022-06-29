@@ -13,7 +13,7 @@
 \setmainfont{Noto Sans}
 
 \title{Unevaluated strings}
-\docnumber{P2361R4}
+\docnumber{P2361R5}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Aaron Ballman}{aaron.ballman@gmail.com}
@@ -44,9 +44,16 @@ This means they should not be converted to the narrow encoding or any literal en
 Their encoding should therefore not be constrained or otherwise specified,
 except that these strings can contain any Unicode characters.
 
-This proposal aim to identify contexts in which strings are not evaluated so that they can be handle consistently by compilers.
+This proposal aims to identify contexts in which strings are not evaluated so that they can be handled consistently by compilers.
 
 \section{Revisions}
+
+\subsection{R5}
+\begin{itemize}
+\item Re-specify \tcode{asm} declarations to accept any \grammarterm{balanced-token-seq} rather than trying to put constraints on the 
+\grammarterm{string-literal} they are currently specified to accept. This simplifies the specification and more closely matches existing practices.
+\item Fix a number of typos.
+\end{itemize}
 
 \subsection{R4}
 \begin{itemize}
@@ -90,7 +97,7 @@ We propose that in all of these cases:
 \item No prefix is allowed
 \item The string is not converted to the execution encoding.
 \item \tcode{universal-character-name} and \tcode{simple-escape-sequence} (except \tcode{\textbackslash 0} ) are replaced by
-the corresponding Unicode codepoints, and other escape sequences are ill-formed (except in asm statements, see below).
+the corresponding Unicode codepoints, and other escape sequences are ill-formed.
 \end{itemize}
 
 This last point is important. Because the encoding the compiler will convert these strings to is not known, and because UCNs can represent any Unicode characters,
@@ -98,15 +105,15 @@ numeric-escape-sequences have no use beyond forcing the compiler to contend with
 code units in diagnostic messages.
 
 All of these changes are breaking changes.
-However, a survey of open source projects tend to show that none of the restrictions added
+However, a survey of open source projects tends to show that none of the restrictions added
 impact existing code.
 
 \textbf{This proposal does not specify how unevaluated strings are presented in diagnostic messages}.
 
-\subsection{Non printable characters and escape sequences}
+\subsection{Non-printable characters and escape sequences}
 
 This proposal does not attempt to restrict further the characters allowed in unevaluated strings.
-In particular, they may contain all matter of space, control characters, invisible characters and alert.
+In particular, they may contain all matter of space, control characters, invisible characters, and alert.
 The handling of these characters in diagnostic messages is left as quality of implementation, mostly
 for simplicity. The alternative would be to only allow graphic characters (General_Category L, M, N, P, S + spaces).
 
@@ -127,16 +134,14 @@ It has the advantage of being mostly consistent (all strings except those in hea
 existing code using non-ASCII characters in \tcode{static_assert} and attributes and
 litter C++ code with these prefixes, which seems to be a net negative.
 
-\section{\tcode{asm} statements}
+\section{\tcode{asm} declarations}
 
-Several people in SG22, as well as an implementer raised concerns about banning numeric escape sequences
+Several people in SG22, as well as an implementer, raised concerns about banning numeric escape sequences
 in asm statement as supposedly an implementation could do "something" here.
-Given the implementation-defined nature of \tcode{asm} statements, we decided to only preclude encoding prefixes in \tcode{asm} statements,
-and allow numeric escape sequences, whose behavior would remain implementation-defined and possibly inconsistent with the behavior of string literals
-in other contexts.
-
-An alternative approach outside of the scope of this paper would be to modify the specification of asm statements to allow a well-balanced token sequences,
-like for attributes parameters. This would better match existing practices.
+Given the implementation-defined, conditionally supported nature of \tcode{asm} declarations, and existing practice, we decided to modify the grammar to accept any balanced token sequence (which includes string literals).
+This is consistent with GCC's "extended asm" syntax, notably.
+Implementations that support a single string literal in \tcode{asm} declarations can, of course, continue to do so with no change required to their
+implementation and are free to put whichever requirements they need on them.
 
 \section{Compilers survey}
 
@@ -146,7 +151,7 @@ In \tcode{_Pragma} directives, the standard specifies that the \tcode{L} prefix 
 In C, all encoding prefixes are ignored. This divergence is highlighted in \paper{CWG897}.
 MSVC does not support \tcode{_Pragma(L"")}.  Only Clang supports other prefixes in \tcode{_Pragma}.
 
-Out of the 90 millions lines of code of the 1300+ open source projects available on vcpkg, a
+Out of the 90 million lines of code of the 1300+ open source projects available on vcpkg, a
 single use of that feature was found within clang’s lexer test suite, for a total of 2000 uses
 of \tcode{_Pragma}. Similarly, the only uses of \tcode{_Pragma (u8"")}, \tcode{_Pragma (u"")}, \tcode{_Pragma (U"")}, etc were
 found in Clang’s test suite (both because these are valid C and because neither GCC nor Clang
@@ -206,18 +211,18 @@ Those may make \tcode{static_assert(true, u8"foo");} valid again as \tcode{u8"fo
 
 \section{Implementability}
 
-This proposal requires implentations to keep around a non-encoded string for diagnostic purposes.
+This proposal requires implementations to keep around a non-encoded string for diagnostic purposes.
 This has recently come up in a clang patch to support EBCDIC as the literal encoding.
 To support diagnostics in this context, especially on a non-EBCDIC platform the original sequence of characters must be retained.
 This proposal offers a well-specified, portable mechanism to solve this problem.
 
 \section{Wording Challenges}
 
-Strings are handled in phase 5 and 6 before the program is parsed,
+Strings are handled in phases 5 and 6 before the program is parsed,
 which might force us to have a "reversal" of these phases.
 \grammarterm{string-literal} and \grammarterm{unevaluated-string-literal} only differ by the context in which they may appear.
 
-It is important to note that \grammarterm{unevaluated-string}, by vertue of not being evaluated, are not C++ expressions.
+It is important to note that \grammarterm{unevaluated-string}, by virtue of not being evaluated, are not C++ expressions.
 They are purposefully left out of the \grammarterm{literal} grammar.
 Not being literal, and not being expressions, \grammarterm{unevaluated-string} do not have a value category.
 
@@ -373,14 +378,14 @@ An \tcode{asm} declaration has the form
 
 \begin{bnf}
     \nontermdef{asm-declaration}\br
-    \opt{attribute-specifier-seq} \keyword{asm} \terminal{(} string-literal \terminal{)} \terminal{;}
+    \opt{attribute-specifier-seq} \keyword{asm} \terminal{(} \changed{string-literal}{balanced-token-seq} \terminal{)} \terminal{;}
 \end{bnf}
 
 The \tcode{asm} declaration is conditionally-supported; its meaning is
 \impldef{meaning of \tcode{asm} declaration}.
-\begin{addedblock}
-The \grammarterm{encoding-prefix} of the \grammarterm{string-literal} shall be absent.
-\end{addedblock}
+%\begin{addedblock}
+%The \grammarterm{encoding-prefix} of the \grammarterm{string-literal} shall be absent.
+%\end{addedblock}
 The optional \grammarterm{attribute-specifier-seq} in
 an \grammarterm{asm-declaration} appertains to the \tcode{asm} declaration.
 \begin{note}
@@ -533,7 +538,7 @@ A \defnadj{nodiscard}{call} is either
     that initializes an object of a nodiscard type.
 \end{itemize}
 
-Recommanded:
+Recommended Practice:
 Appearance of a nodiscard call as
 a potentially-evaluated discarded-value expression\iref{expr.prop}
 is discouraged unless explicitly cast to \tcode{void}.
