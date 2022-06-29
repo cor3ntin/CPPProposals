@@ -1,0 +1,498 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{A More Composable \tcode{from\_chars}}
+\docnumber{P2584R0}
+\audience{LEWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+We propose an easier way to convert a sequence of characters to a number using \tcode{std::from_chars}.
+This paper is a follow-up to \paper{P2007R0}.
+
+\section{Tony table}
+
+\begin{center}
+\begin{tabular}{l|l}
+Before & After\\ \hline
+
+\begin{minipage}[t]{0.5\textwidth}
+
+\begin{colorblock}
+std::string s = "1.2.3.4";
+
+auto ints =
+s | std::views::split('.')
+  | std::views::transform([](const auto & v){
+    int i = 0;
+    std::from_chars(std::to_address(v.begin()),
+               std::to_address(v.end(), i);
+    return i;
+});
+\end{colorblock}
+\end{minipage}
+&
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+std::string s = "1.2.3.4";
+
+auto ints =
+s | std::views::split('.')
+  | std::views::transform([](const auto & v) {
+      return std::from_chars<int>(v).value;
+});
+\end{colorblock}
+\end{minipage}
+\\\\ \hline
+
+\end{tabular}
+\end{center}
+
+This example was taken from Barry's Revzin \href{https://brevzin.github.io/c++/2020/07/06/split-view/}{blog post} on the deficiencies of the old split view.
+
+\pagebreak
+
+\section{Motivation and design}
+
+We propose to add new \tcode{from_chars} overloads with the aim of simplifying the use of the interface and making it more composable.
+
+
+\subsection{Proposed interface}
+
+\begin{colorblock}
+template <typename T>
+struct from_chars_result_range {
+    T value;
+    std::errc ec;
+    std::span<const char> unparsed;
+};
+template <integral T>
+requires (!std::same_as<bool, T>)
+constexpr from_chars_result_range<T> from_chars(std::span<const char> rng, int base = 10);
+
+template <floating_point T>
+from_chars_result_range<T> from_chars(std::span<const char> rng, chars_format fmt = chars_format::general);
+\end{colorblock}
+
+
+\subsection{\tcode{from_chars} should take a range rather than a pair of pointers}
+
+As explained in \paper{P2007R0}, a correct use of \tcode{from_chars} with any kind of range call for
+
+\begin{colorblock}
+std::from_chars(std::to_address(std::ranges::begin(rng)), std::to_address(std::ranges::end(rng)), out);
+\end{colorblock}
+
+This is because:
+\begin{itemize}
+\item The iterators may not be pointers
+\item The range may be contiguous but not sized (so \tcode{data(), data()+size()} isn't an option).
+\end{itemize}
+
+It's a lot of subtleties and verbosity for a relatively common interface.
+
+\subsection{\tcode{from_chars} should return its result by value}
+
+Having the converted value as part of the return type gives more opportunity for composition.
+For example, it allows patterns such as:
+
+\begin{colorblock}
+if(auto [value, ec, _]  = std::from_chars<int>(range); ec == std::errc()) {}
+\end{colorblock}
+
+To achieve that, the proposed \tcode{from_chars} overloads take the desired output type as a template parameter
+and return a \tcode{from_chars_result_range} object that contains the value in addition to the error and the remainder of the string.
+
+\subsection{\tcode{span} vs \tcode{string_view} vs \tcode{contiguous_range}}
+This proposal uses \tcode{span<const char>}.
+This is because \paper{P2499R0}, by making \tcode{string_view}'s string_view range constructor explicit, makes using it in contexts where we want to accept any range of char more tedious than it needs to be and less composable.
+
+Ultimately, whether we choose \tcode{span<const char>} or \tcode{string_view} depends on whether we think the range case is more commone than the \tcode{const char*} use case.
+
+Using \tcode{contiguous_range} over \tcode{span} has very little benefits.
+The proposed design uses span in its returned object anyway (to store the remaining range), so it would not save on headers inclusion, and \tcode{<span>} is a very small header anyway,
+
+\subsection{Header}
+
+During previous discussions, there were some concerns that this would impact compile times.
+In the meantime we:
+
+\begin{itemize}
+\item Made \tcode{from_chars} constexpr, leading to potentially bigger header
+\item Standardized header units and a \tcode{std} module.
+\end{itemize}
+
+\subsection{\tcode{from_chars_result_range} is not comparable}
+
+The rationale to make \tcode{from_chars_result} (\paper{P1191R0}) is unclear, and \href{https://lists.isocpp.org/lib/2021/11/21141.php}{it has been regarded as a bad move}.
+Indeed, it is unclear what the invariant of \tcode{from_chars_result} is.
+We do, therefore, not propose to make the new \tcode{from_chars_result_range} type comparable, especially in the absence of good rationale.
+
+\subsection{But \tcode{from_chars} is intended as a low level interface!}
+
+\tcode{from_chars} is efficient, correct and usable portably. That doesn't means it should be hard to use.
+The proposed interface doesn't make \tcode{from_chars} less usable, quite the contrary, and that's a good thing.
+It's not because a facility is "low-level" that it should be gratuitously expert-friendly.
+
+\section{Alternative design using \tcode{std::expected}}
+The proposed interface doesn't force to check a value was parsed.
+An alternative could be to use \tcode{std::expected} to encourage a correct by construction use of the API.
+\begin{colorblock}
+template <typename T>
+struct from_chars_result_range {
+    T value;
+    std::span<const char> unparsed = {};
+
+    // This constructor is required because of the requirements of @\tcode{value_or}@
+    // wgich checks for convertibility rather than constructibility.
+    from_chars_result_range(T value, std::span<const char> unparsed = {})
+    : value(value), unparsed(unparsed){};
+
+    // easy access to the value
+    operator T() const { return value; };
+};
+constexpr
+expected<from_chars_result_range<T>, errc> from_chars(span<const char> rng, int base = 10);
+
+template <std::floating_point T>
+std::expected<from_chars_result_range<T>, std::errc>
+from_chars(std::span<const char> rng, std::chars_format fmt = std::chars_format::general);
+\end{colorblock}
+
+This interface would be harder to misuse and would encourage checking for errors.
+It turns out to be pretty nice to use too, and I would encourage LEWG to consider this design.
+The one drawback is the reliance on the \tcode{expected} header.
+
+We could simplify this version of \tcode{from_chars_result_range} be lifting convetibility requirements on
+\tcode{value_or}, like explored in \paper{P2218R0}.
+
+\begin{colorblock}
+int main() {
+    assert(from_chars<int>("123").value_or(0) == 123);
+    assert(from_chars<int>("cafe", 16).value_or(0) == 0xcafe);
+    assert(from_chars<int>("cafe").value_or(42) == 42);
+
+    if(auto parsed = from_chars<int>("123!!"); parsed) {
+        auto [value, left] = *parsed;
+        assert(value == 123);
+        assert(std::ranges::equal(left, "!!"));
+    }
+}
+\end{colorblock}
+
+By making \tcode{from_chars_result_range<T>} convertible to \tcode{T} we allow people who don't need this information to ignore it.
+
+
+
+\section{Question for LEWG}
+
+\begin{itemize}
+    \item Do we like the general direction?
+    \item Do we prefer the version with expected or the one without?
+\end{itemize}
+
+\section{Implementation experience}
+
+The new overloads are specified to wrap the existing one, so this proposal presents
+no particular implementation complexity. A prototype can be found on \href{https://godbolt.org/z/rnxE1o9Ma}{Compiler Explorer}.
+
+The alternative design using \tcode{std::expected} is also demoed \href{https://godbolt.org/z/c5McG9TTd}{here}.
+
+\section{Wording (for the design without expected)}
+
+\rSec2[charconv.syn]{Header \tcode{<charconv>} synopsis}
+
+\begin{codeblock}
+@%
+\indexlibraryglobal{chars_format}%
+\indexlibrarymember{scientific}{chars_format}%
+\indexlibrarymember{fixed}{chars_format}%
+\indexlibrarymember{hex}{chars_format}%
+\indexlibrarymember{general}{chars_format}%\textbf{}
+@namespace std {
+    // floating-point format for primitive numerical conversion
+    enum class chars_format {
+        scientific = @\unspec@,
+        fixed = @\unspec@,
+        hex = @\unspec@,
+        general = fixed | scientific\textbf{}
+    };
+    @%
+    \indexlibraryglobal{to_chars_result}%
+    \indexlibrarymember{ptr}{to_chars_result}%
+    \indexlibrarymember{ec}{to_chars_result}
+    @
+    // \ref{charconv.to.chars}, primitive numerical output conversion
+    struct to_chars_result {
+        char* ptr;
+        errc ec;
+        friend bool operator==(const to_chars_result&, const to_chars_result&) = default;
+    };
+
+    to_chars_result to_chars(char* first, char* last, @\seebelow@ value, int base = 10);
+    to_chars_result to_chars(char* first, char* last, bool value, int base = 10) = delete;
+
+    to_chars_result to_chars(char* first, char* last, float value);
+    to_chars_result to_chars(char* first, char* last, double value);
+    to_chars_result to_chars(char* first, char* last, long double value);
+
+    to_chars_result to_chars(char* first, char* last, float value, chars_format fmt);
+    to_chars_result to_chars(char* first, char* last, double value, chars_format fmt);
+    to_chars_result to_chars(char* first, char* last, long double value, chars_format fmt);
+
+    to_chars_result to_chars(char* first, char* last, float value,
+    chars_format fmt, int precision);
+    to_chars_result to_chars(char* first, char* last, double value,
+    chars_format fmt, int precision);
+    to_chars_result to_chars(char* first, char* last, long double value,
+    chars_format fmt, int precision);
+    @%
+    \indexlibraryglobal{from_chars_result}%
+    \indexlibrarymember{ptr}{from_chars_result}%
+    \indexlibrarymember{ec}{from_chars_result}
+    @
+    // \ref{charconv.from.chars}, primitive numerical input conversion
+    struct from_chars_result {
+        const char* ptr;
+        errc ec;
+        friend bool operator==(const from_chars_result&, const from_chars_result&) = default;
+    };
+
+    @\added{template <integral T>}@
+    @\added{struct from_chars_result_range \{}@
+        @\added{T value;}@
+        @\added{std::errc ec;}@
+        @\added{std::span<const char> unparsed;}@
+    @\added{ \};}@
+
+
+    from_chars_result from_chars(const char* first, const char* last,
+    @\seebelow@& value, int base = 10);
+    @\added{template <typename T>}@
+    @\added{constexpr from_chars_result_range<T> from_chars(std::string_view rng, int base = 10)}@
+
+    from_chars_result from_chars(const char* first, const char* last, float& value,
+    chars_format fmt = chars_format::general);
+    from_chars_result from_chars(const char* first, const char* last, double& value,
+    chars_format fmt = chars_format::general);
+    from_chars_result from_chars(const char* first, const char* last, long double& value,
+    chars_format fmt = chars_format::general);
+    @\added{template <typename T>}@
+    @\added{from_chars_result_range<T> from_chars(std::span<const char> rng, }@
+                                          @\added{chars_format fmt = chars_format::general);}@
+}
+\end{codeblock}
+
+\pnum
+The type \tcode{chars_format} is a bitmask type\iref{bitmask.types}
+with elements \tcode{scientific}, \tcode{fixed}, and \tcode{hex}.
+
+\pnum
+The types \tcode{to_chars_result}\added{, \tcode{from_chars_result_range}, }and \tcode{from_chars_result}
+have the data members and special members specified above.
+They have no base classes or members other than those specified.
+
+\rSec2[charconv.from.chars]{Primitive numeric input conversion}
+
+\pnum
+All functions named \tcode{from_chars}
+analyze the string \range{first}{last}
+for a pattern,
+where \range{first}{last} is required to be a valid range.
+If no characters match the pattern,
+\tcode{value} is unmodified,
+the member \tcode{ptr} of the return value is \tcode{first} and
+the member \tcode{ec} is equal to \tcode{errc::invalid_argument}.
+\begin{note}
+    If the pattern allows for an optional sign,
+    but the string has no digit characters following the sign,
+    no characters match the pattern.
+\end{note}
+Otherwise,
+the characters matching the pattern
+are interpreted as a representation
+of a value of the type of \tcode{value}.
+The member \tcode{ptr}
+of the return value
+points to the first character
+not matching the pattern,
+or has the value \tcode{last}
+if all characters match.
+If the parsed value
+is not in the range
+representable by the type of \tcode{value},
+\tcode{value} is unmodified and
+the member \tcode{ec} of the return value
+is equal to \tcode{errc::result_out_of_range}.
+Otherwise,
+\tcode{value} is set to the parsed value,
+after rounding according to \tcode{round_to_nearest}\iref{round.style}, and
+the member \tcode{ec} is value-initialized.
+
+\indexlibraryglobal{from_chars}%
+\begin{itemdecl}
+from_chars_result from_chars(const char* first, const char* last,
+@\seebelow@&@\itcorr[-1]@ value, int base = 10);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\expects
+\tcode{base} has a value between 2 and 36 (inclusive).
+
+\pnum
+\effects
+The pattern is the expected form of the subject sequence
+in the \tcode{"C"} locale
+for the given nonzero base,
+as described for \tcode{strtol},
+except that no \tcode{"0x"} or \tcode{"0X"} prefix shall appear
+if the value of \tcode{base} is 16,
+and except that \tcode{'-'}
+is the only sign that may appear,
+and only if \tcode{value} has a signed type.
+
+\pnum
+\throws
+Nothing.
+
+\pnum
+\remarks
+The implementation shall provide overloads
+for all signed and unsigned integer types
+and \tcode{char}
+as the referenced type of the parameter \tcode{value}.
+\end{itemdescr}
+
+\begin{addedblock}
+\indexlibraryglobal{from_chars}%
+\begin{itemdecl}
+template <typename T>
+constexpr from_chars_result_range<T> from_chars(std::span<const char> rng, int base = 10)
+\end{itemdecl}
+
+\begin{itemdescr}
+
+\constraints \tcode{T} models \tcode{std::integral} and \tcode{std::same_as<T, bool>} is \tcode{false}.
+
+\pnum
+\expects
+\tcode{base} has a value between 2 and 36 (inclusive).
+
+\pnum
+\effects Equivalent to
+\begin{codeblock}
+T out;
+auto res = from_chars(to_address(rng.begin()), to_address(rng.end()), out, base);
+return {out, res.ec, rng.subspan(res.ptr - rng.data())};
+\end{codeblock}
+
+\pnum
+\throws
+Nothing.
+
+\pnum
+\end{itemdescr}
+
+\end{addedblock}
+
+\indexlibraryglobal{from_chars}%
+\begin{itemdecl}
+from_chars_result from_chars(const char* first, const char* last, float& value,
+chars_format fmt = chars_format::general);
+from_chars_result from_chars(const char* first, const char* last, double& value,
+chars_format fmt = chars_format::general);
+from_chars_result from_chars(const char* first, const char* last, long double& value,
+chars_format fmt = chars_format::general);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\expects
+\tcode{fmt} has the value of
+one of the enumerators of \tcode{chars_format}.
+
+\pnum
+\effects
+The pattern is the expected form of the subject sequence
+in the \tcode{"C"} locale,
+as described for \tcode{strtod},
+except that
+\begin{itemize}
+    \item
+    the sign \tcode{'+'} may only appear in the exponent part;
+    \item
+    if \tcode{fmt} has \tcode{chars_format::scientific} set
+    but not \tcode{chars_format::fixed},
+    the otherwise optional exponent part shall appear;
+    \item
+    if \tcode{fmt} has \tcode{chars_format::fixed} set
+    but not \tcode{chars_format::scientific},
+    the optional exponent part shall not appear; and
+    \item
+    if \tcode{fmt} is \tcode{chars_format::hex},
+    the prefix \tcode{"0x"} or \tcode{"0X"} is assumed.
+    \begin{example}
+        The string \tcode{0x123}
+        is parsed to have the value
+        \tcode{0}
+        with remaining characters \tcode{x123}.
+    \end{example}
+\end{itemize}
+In any case, the resulting \tcode{value} is one of
+at most two floating-point values
+closest to the value of the string matching the pattern.
+
+\pnum
+\throws
+Nothing.
+\end{itemdescr}
+
+\begin{addedblock}
+\begin{itemdecl}
+template <typename T>
+from_chars_result_range<T> from_chars(std::span<const char> rng, chars_format fmt = chars_format::general)
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+
+\constraints \tcode{T} models \tcode{floating_point}.
+
+\expects
+\tcode{fmt} has the value of
+one of the enumerators of \tcode{chars_format}.
+
+
+\effects Equivalent to
+\begin{codeblock}
+    T res;
+    auto [ptr, ec] = from_chars(to_address(rng.begin()), to_address(rng.end()), res, base);
+    return {res, ec, rng.subspan(ptr - rng.data())};
+\end{codeblock}
+
+\end{itemdescr}
+
+\end{addedblock}
+
+\section{Feature test macro}
+
+\ednote{
+Bump the value of \tcode{__cpp_lib_to_chars} to the date of adoption in \tcode{charconv} and \tcode{version}
+}
+\section{Acknowledgments}
+
+Thanks to Mateusz Pusz for writing \paper{P2007R0} which this paper is derived from.
+Thanks to Zhihao Yuan, Jeff Garland and others for helping me brainstorm these interfaces.
+
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+\end{document}

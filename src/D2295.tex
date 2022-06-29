@@ -35,6 +35,7 @@ We propose that UTF-8 source files should be supported by all C++ compilers.
 \subsection{R6}
 \begin{itemize}
     \item Remove a note stating the wording was against \paper{P2314R2} as this paper has been merged.
+    \item Rewording using CWG consensus wording.
 \end{itemize}
 
 \subsection{R5}
@@ -302,31 +303,45 @@ located in comments, header names or string literals).
 The precedence among the syntax rules of translation is specified by the
 following phases.
 
+
+\ednote{The following wording represent the CWG consensus.
+While this wording achieve the intent of this paper, the author finds it unfortunate that we use vague terms like "kind of source file" instead of talking about their encoding.
+Indeed, by notably keeping the explicit mention of records in the non utf-8 case - a concern that I think should exist outside of the standard, before phase 1 - this wording can be interpreted as utf-8 files stored in records as exempt from the well-formedness and codepoint preserving constraints, which isn't really motivated, and can be the object of further refinements in future papers.}
+
 \begin{enumerate}
-    \item
+
+    
+\item
 
 \begin{addedblock}
-    A physical source file is a sequence of integers with an associated encoding scheme determined in an
-    implementation-defined manner.
+%    A physical source file is a sequence of integers with an associated encoding scheme determined in an
+%    implementation-defined manner.
+%
+%    An implementation shall support the UTF-8 encoding scheme, and may support an implementation-defined set of additional encoding schemes.
+%    If encoding schemes other than UTF-8 are supported,
+%    an implementation shall provide a means by which the UTF-8 encoding scheme can be specified, independent of the content of the source file. \begin{note} A command-line option that specifies the encoding scheme to use as the result of the determination is such a means.\end{note}
+%    
+%    If the encoding scheme of a physical source file is determined to be UTF-8, then the
+%    physical source file shall be a well-formed UTF-8 code unit sequence. The source file is decoded
+%    to produce a sequence of UCS scalar values that constitutes the sequence of
+%    elements of the translation character set. \begin{note} There are no end-of-line
+%    indicators apart from the content of the UTF-8 code unit sequence. \end{note}
+%    
+%    For any other encoding scheme supported by the implementation, 
 
-    An implementation shall support the UTF-8 encoding scheme, and may support an implementation-defined set of additional encoding schemes.
-    If encoding schemes other than UTF-8 are supported,
-    an implementation shall provide a means by which the UTF-8 encoding scheme can be specified, independent of the content of the source file. \begin{note} A command-line option that specifies the encoding scheme to use as the result of the determination is such a means.\end{note}
-    
-    If the encoding scheme of a physical source file is determined to be UTF-8, then the
-    physical source file shall be a well-formed UTF-8 code unit sequence. The source file is decoded
-    to produce a sequence of UCS scalar values that constitutes the sequence of
-    elements of the translation character set. \begin{note} There are no end-of-line
-    indicators apart from the content of the UTF-8 code unit sequence. \end{note}
-    
-    For any other encoding scheme supported by the implementation, \end{addedblock}\changed{P}{p}hysical source file characters are mapped, in an
-implementation-defined manner, to the translation character set (introducing new-line characters for end-of-line
+An implementation shall support input files that are a sequence of UTF-8 code units (UTF-8 files). It may also support an implementation-defined set of other kinds of input files, and, if so, the kind of an input file is determined in an implementation-defined manner which includes a means of designating input files as UTF-8 files, independent of their content. \begin{note}In other words, recognizing the U+FEFF Byte Order Mark is not sufficient.\end{note}
+
+If an input file is determined to be a UTF-8 file, then it shall be a well-formed UTF-8 code unit sequence and it is decoded to produce a sequence of UCS scalar values that constitutes the sequence of elements of the translation character set.
+
+For any other kind of input file supported by the implementation, \end{addedblock}
+\removed{Physical source file} characters are mapped, in an
+implementation-defined manner, to \changed{the translation character set}{a sequence of translation character set elements} (introducing new-line characters for end-of-line
 indicators).
 \removed{The set of physical source file characters accepted is \impldef{physical source file characters}}.
 
 \item
 \indextext{line splicing}%
-\added{If the first character is U+FEFF BYTE ORDER MARK, it is deleted.}
+\added{If the first translation character is U+FEFF BYTE ORDER MARK, it is deleted.}
 %
 Each instance of a backslash character (\textbackslash)
 immediately followed by zero or more whitespace characters (other than new-line character) followed by a new-line character is deleted, splicing
@@ -335,6 +350,45 @@ backslash on any physical source line shall be eligible for being part
 of such a splice.
 
 \end{enumerate}
+
+%\section{Annex: Wording for paragraph 1 with changes made by P2348 applied}
+%
+%An implementation shall support physical source files that are a sequence of UTF-8 code units (UTF-8 source files). It may also support an implementation-defined set of other kinds of physical source files, and, if so, the kind of a physical source file is determined in an implementation-defined manner, which includes a means of designating physical source files as UTF-8 source files, independent of their content.
+%\begin{note}In other words, recognizing the U+FEFF Byte Order Mark is not sufficient.\end{note}
+%
+%If a physical source file is determined to be a UTF-8 source file, then it shall be a well-formed UTF-8 code unit sequence and it is decoded to produce a sequence of UCS scalar values that constitutes the sequence of elements of the translation character set.
+%
+%For any other kind of physical source file supported by the implementation, characters are mapped, in an implementation-defined manner, \changed{to the translation character set (introducing new-line characters for end-of-line indicators)}{to a sequence of translation character set elements}.
+%
+%
+%\section{Annex: Wording for paragraph 1 with changes made by P2348 applied and "physical" replaced by "input"}
+%
+%\ednote{
+%The term "physical source files" is both vaccuous an missleading as source files may not be files at all.
+%Ideally we would get rid of the term "source file" in phase 1 entierly, but we need a way to maintain a relation with
+%the term "source file" use in the document, both to denotes source files and their content post phase 1.
+%As there is preexisting wording specifying that source files are not files, using the term input makes it a bit clearer that
+%some amount of processing - such as reading the content of a file/db/record and reconsituting a structure may happen before phase 1.
+%The C++ standard should not concern itself with the medium in which source files are stored, rather starting processing from some textual content.
+%An alternative would be to replace "physical source file" by "source file" as the distinction is not done in the rest of the document.
+%For example "A include preprocessing directive causes the named header or source file" denotes what is in phase one a "physical source file".
+%"physical source files" would unfortunately also be a new term, as the status quo wording uses "physical source files characters" only.}
+%
+%
+%An implementation shall support \changed{physical source}{input} files that are a sequence of UTF-8 code units (UTF-8 source files). It may also support an implementation-defined set of other kinds of \changed{physical source}{input} files, and, if so, the kind of \changed{a  physical source}{an input} file is determined in an implementation-defined manner, which includes a means of designating  \changed{physical source}{input} files as UTF-8 source files, independent of their content. \begin{note}In other words, recognizing the U+FEFF Byte Order Mark is not sufficient.\end{note}
+%
+%If a  \changed{physical source}{input} file is determined to be a UTF-8 source file, then it shall be a well-formed UTF-8 code unit sequence and it is decoded to produce a sequence of UCS scalar values that constitutes the sequence of elements of the translation character set.
+%
+%For any other kind of  \changed{physical source}{input} file supported by the implementation, characters are mapped, in an implementation-defined manner, to a sequence of translation character set elements.
+
+\rSec2[diff.cpp14.lex]{lexical conventions}
+
+Valid \CppXIV{} code that uses trigraphs may not be valid or may have different
+semantics in this revision of \Cpp{}. Implementations may choose to
+translate trigraphs as specified in \CppXIV{} if they appear outside of a raw
+string literal, as part of the mapping from \changed{physical}{input} characters to
+the translation character set.
+
 
 \section{Acknowledgments}
 

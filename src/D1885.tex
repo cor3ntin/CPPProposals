@@ -4,8 +4,8 @@
 \documentclass{wg21}
 
 \title{Naming Text Encodings to Demystify Them}
-\docnumber{P1885R10}
-\audience{LEWG}
+\docnumber{D1885R11}
+\audience{LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Peter Brett}{pbrett@cadence.com}
 
@@ -149,6 +149,11 @@ assert(wtf8 == text_encoding("___wtf8__"));
 
 
 \section{Revisions}
+
+\subsection*{Revision 11}
+\begin{itemize}
+    \item Fix formatting issues in the wording.
+\end{itemize}
 
 \subsection*{Revision 10}
 \begin{itemize}
@@ -402,19 +407,6 @@ As such, two registries may have a different interface, maintain different invar
 There is also no generic way to compare between registries, or to map between two registries if both of them maintain a numerical value are part of their invariant.
 
 These would be different types, with different methods and semantics: not a good scenario for genericity.
-
-\subsection{On the legitimacy of IANA}
-
-IANA is a recognized standards organization which have been involved in the maintenance of
-critical parts of the Internet since 1988.
-
-In any case, the database itself, like the time zone database which is referenced by the C++ standard, is relied on by many products and is under Creative Commons CC0 1.0. Its current maintainership have no bearing on the proposal at hand or subsequent evolutions.
-
-Yet, \paper{P2498R1}'s intent to rename \tcode{mib}` to \tcode{iana_mib} - a rename I'm not opposed to -
-seems to directly contradict the concerns about relying on a IANA standard.
-
-In any case, it behooves \paper{P2498R1} to determines whether the name "iana" can be used in the API from a legal standpoint.
-
 
 \subsection{Still, should WG21 import the entire registry as an annex?}
 
@@ -1388,7 +1380,8 @@ struct text_encoding {
     struct aliases_view;
     constexpr aliases_view aliases() const noexcept;
 
-    constexpr friend bool operator==(const text_encoding& encoding, const text_encoding & other) noexcept;
+    constexpr friend bool operator==(const text_encoding& encoding, 
+                                     const text_encoding & other) noexcept;
     constexpr friend bool operator==(const text_encoding& encoding, id mib) noexcept;
 
     static consteval text_encoding literal() noexcept;
@@ -1436,7 +1429,7 @@ The primary name of a registered character encoding is the name of that encoding
 \ednote{The term primary name appears in \href{https://datatracker.ietf.org/doc/html/rfc2978\#section-2.3}{RFC2978}}
 
 The set of aliases of a registered character encoding is an implementation-defined superset of the aliases specified in the IANA Character Sets registry.
-No two registered character encodings share any identical alias when compared by \emph{\tcode{COMP_NAME}}.
+No two registered character encodings share any identical alias when compared by \tcode{\placeholder{COMP_NAME}}.
 
 \begin{note}
 The \tcode{text_encoding::id} enumeration contains an enumerator for each known registered character encoding.
@@ -1465,7 +1458,7 @@ An object \tcode{e} of type \tcode{text_encoding} maintains the following invari
 \end{itemize}
 
 
-\pnum Let \tcode{bool \emph{COMP_NAME}(string_view a, string_view b)} be a function that returns \tcode{true} if the two strings a and b encoded in the ordinary literal encoding are equal ignoring, from left-to-right,
+\pnum Let \tcode{bool \placeholder{COMP_NAME}(string_view a, string_view b)} be a function that returns \tcode{true} if the two strings a and b encoded in the ordinary literal encoding are equal ignoring, from left-to-right,
 \begin{itemize}
     \item all elements which are not digits or letters [character.seq.general],
     \item character case, and
@@ -1507,8 +1500,8 @@ constexpr explicit text_encoding(string_view name) noexcept;
     \end{itemize}
     \postconditions
     \begin{itemize}
-         \item If there exists a primary name or alias \tcode{a} of a known registered character encoding such that \tcode{\emph{COMP_NAME}(a, name)} is \tcode{true}, \tcode{mib_} has the value of the enumerator of \tcode{id} associated with that registered character encoding. Otherwise, \tcode{mib_ == id::other} is \tcode{true}.
-         \item  \tcode{name.compare(name_) == 0} is \tcode{true}
+         \item If there exists a primary name or alias \tcode{a} of a known registered character encoding such that \tcode{\placeholder{COMP_NAME}(a, name)} is \tcode{true}, \tcode{mib_} has the value of the enumerator of \tcode{id} associated with that registered character encoding. Otherwise, \tcode{mib_ == id::other} is \tcode{true}.
+         \item  \tcode{name.compare(name_) == 0} is \tcode{true}.
     \end{itemize}
 \end{itemdescr}
 
@@ -1523,9 +1516,9 @@ constexpr text_encoding(id mib) noexcept;
 
     \postcondition
     \begin{itemize}
-       \item  \tcode{mib_ == mib} is true.
-       \item  If \tcode{(mib_ == id::unknown || mib_ == id::other)} is true, \tcode{strlen(name_) == 0} is \tcode{true}. Otherwise,
-       \tcode{ranges::find(aliases, string_view(name_)) != aliases().end()}.
+       \item  \tcode{mib_ == mib} is \tcode{true}.
+       \item  If \tcode{(mib_ == id::unknown || mib_ == id::other)} is \tcode{true}, \tcode{strlen(name_) == 0} is \tcode{true}. Otherwise,
+       \tcode{ranges::contains(aliases, string_view(name_))} is \tcode{true}.
     \end{itemize}
 \end{itemdescr}
 
@@ -1715,7 +1708,7 @@ Both \tcode{ranges::range_value_t<text_encoding::aliases_view>} and \tcode{range
 \begin{itemdescr}
     \returns
 
-    If \tcode{a.mib_ == id::other \&\& b.mib_ == id::other} is true, then \tcode{\emph{COMP_NAME}(a.name_, b.name_)}.
+    If \tcode{a.mib_ == id::other \&\& b.mib_ == id::other} is \tcode{true}, then \tcode{\placeholder{COMP_NAME}(a.name_, b.name_)}.
 
     Otherwise, \tcode{a.mib_ == b.mib_}.
 

@@ -1,0 +1,471 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{Mitigation strategies for P2036 "Changing scope for lambda trailing-return-type"}
+\docnumber{D2579R0}
+\audience{EWG,CWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+\paper{P2036R3} was adopted for C++23 and as a Defect Report, affecting C++11 and greater.
+After implementing this paper in Clang, we observed the proposed changes make ill-formed previously valid and relied upon
+code.
+
+\textbf{While this paper explores multiple options, the provided wording is for option E which was chosen by EWG.}
+
+\section{The problem}
+
+Previously, in the \grammarterm{lambda-declarator} of a lambda expression, lookup would find the names in the enclosing scope of the lambda,
+even if the name would refer to an entity that would be captured explicitly or implicitly.
+This defies user expectations which should be allowed to expect:
+\begin{itemize}
+    \item Name lookup would "find the first thing of that name" (formulation stolen from \paper{P1753R0}, thanks, Walter!)
+    \item The type of an expression would be consistent throughout a lambda, i.e., be the same in the \grammarterm{lambda-declarator} and in the
+    \grammarterm{compound statement} of a lambda.
+\end{itemize}
+
+And this problem was solved by \paper{P2036R3}. Great.
+
+\paper{P2036R3}, however, faced a problem.
+The type of an expression involving a capture cannot be known until we know whether the lambda is mutable.
+And the `mutable` keyword, is not lexically close from the capture (as it is after the
+\grammarterm{template-parameter-list}, \grammarterm{requires-clause}, \grammarterm{attribute-specifier-seq}
+and \grammarterm{parameter-declaration-clause}.
+
+\begin{quoteblock}
+What do we want to do about a case like this?
+
+\begin{colorblock}
+double x;
+[x=1](decltype((x)) y){ return x; }
+\end{colorblock}
+
+There are four options for what this lambda could mean:
+
+\begin{itemize}
+\item this is a lambda that takes a \tcode{double\&} (status quo).
+\item this is a lambda that takes an \tcode{int\&} (lookup could be changed to find the init-capture but not do any member access transformation - even though this lambda ends up being not mutable)
+\item this is a lambda that takes an \tcode{int const\&} (would require lookahead, highly undesirable)
+\item this is ill-formed
+\end{itemize}
+
+\end{quoteblock}
+
+\paper{P2036R3} draws the following conclusions:
+
+\begin{quoteblock}
+
+While there's a lot of motivation for the trailing-return-type, I have never seen anybody write this and do not know what the motivation for such a thing would be. (1) isn't very reasonable since the init-capture is lexically closer to use, and it's just as surprising to find ::x in the parameter-declaration-clause as it is in the trailing-return-type.\\
+
+The advantage of (4) is that it guarantees that all uses of x in the lambda-expression after the lambda-introducer mean the same thing — we reject the cases up front where we are not sure what answer to give without doing lookahead. If motivation arises in the future for using captures in these contexts, we can always change the lookup in these contexts to allow such uses — rejecting now doesn't cut off that path.\\
+
+This paper proposes (4).
+
+\end{quoteblock}
+
+I think \paper{P2036R3} is fundamentally correct that `decltype((x))` should behave the same anywhere in the lambda, and the motivation that applies to
+the trailing return type applies equally to the parameter list. Making it ill-formed is a more desirable outcome than giving it different meanings in different places.
+However, making it ill-formed proved to have a large blast radius.
+
+\subsection{\paper{P2036R3} breaks existing code}
+
+We first found an issue in LLVM, which we patched.
+
+\begin{colorblock}
+if (Seg->end <= *Idx) {
+    Seg = std::upper_bound( ++Seg, EndSeg, *Idx,
+    [=](std::remove_reference_t<decltype(*Idx)> V, const std::remove_reference_t<decltype(*Seg)> &S) {
+        return V < S.end;
+    });
+    if (Seg == EndSeg)
+    break;
+}
+\end{colorblock}
+
+But we then found another issue in libstdc++:
+
+\begin{colorblock}
+void _M_invalidate_locals() {
+    auto __local_end = _M_cont()._M_base().cend(0);
+    this->_M_invalidate_local_if(
+    [__local_end](__decltype(__local_end) __it)
+    { return __it != __local_end; });
+}
+\end{colorblock}
+
+This was fixed by implementing \paper{CWG2569} however, soon after, the following 2 code reductions were reported as broken.
+
+\begin{colorblock}
+template <typename It, typename MapFn>
+auto MapJoin(It first, It last, MapFn map_fn) {
+    return std::accumulate(
+    first, last, map_fn(*first),
+    // a new diagnostic: error: captured variable 'first' cannot appear here
+    [=](typename std::result_of<MapFn(decltype(*first))>::type result) {  });
+}
+\end{colorblock}
+
+and
+
+\begin{colorblock}
+void foo() {
+    int x = [x](int y[sizeof x]){return sizeof x;}(0);
+}
+\end{colorblock}
+
+As all of these breakages were reported in a non-shipping compiler in the days following the deployment of the change, leading us to believe that they would break a lot more code if it were more widely deployed.
+The patch was then reverted, so we were not able to gather more data, but we think this proposal would be too disruptive in its current form to be implemented in shipping compilers.
+
+\subsection{What about these snippets}
+
+While I have no evidence of that, it seems that one of the reasons for the amount of breakage we are seeing is that C++11 did not support generic lambdas.
+And so, code that might use \tcode{auto} in more recent versions of C++ would have had to name capture in the parameter list in previous versions and C++.
+We could argue that introducing type aliases might be more elegant. Still, these code snippets are not, by any stretch of the imagination, outlandish enough that they should no longer work.
+
+\section{Mitigation strategies}
+
+\subsection{A: CWG2569's proposed resolution}
+
+After noticing an issue with the compilation of libstdc++ (\href{https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105291}{Bug report}),
+Barry created \href{https://cplusplus.github.io/CWG/issues/2569.html}{CWG2569}.
+
+This proposes to allow \tcode{decltype(capture_id)}, \tcode{noexcept(capture_id)}, \tcode{sizeof(capture_id)}
+as we know these expressions will not be affected by the lambda's mutability.
+
+However, this fix proves problematic:
+\begin{itemize}
+    \item It does not address the breadth of expressions referring to captures seen in the wild and is, as such insufficient.
+    \item It is rather arbitrary and hard to make sense of. Why is \tcode{sizeof(a)} fine by example but \tcode{sizeof(+a)} isn't? How do we teach that
+    \item Even with these seemingly-arbitrary looking restrictions, this proposed resolution is a non-trivial implement for at least some implementation.
+\end{itemize}
+
+Implementation experience tells us that any attempt to find a subset of expressions we could allow in a lambda's parameter declaration clause such that it would not affect existing code is a futile pursuit.
+
+\subsection{B: Before the mutable keyword, lookup find the variable in the enclosing scope}
+
+This was the status quo in C++20 and earlier.
+However, the motivation for \paper{P2036R3} still remains. Having \tcode{decltype(expr)} give a different result before and after the mutable keyword is not better than giving different results before and after the start of the compound statement of the lambda expression.
+If we are able to name a capture (explicitly or not), it should give a consistent result.
+The only possible justification for inconsistency there is implementation difficulty and backward compatibility, which are fine arguments, but they would be incoherent and surprising for users.
+
+\subsection{C: Making lambdas referring to captures in its parameter declaration clause ill-formed if it is later found to be mutable}
+
+A compiler could assume that the lambda call-operator is const, such that captures referred to would be assumed to be const.
+If later the lambda is found to be mutable, the program could be made ill-formed on the basis that the assumed type of a capture is not consistent in the entire scope of the lambda expression.
+This may be confusing and does not entirely eliminate the risk of breakage.
+There exist some \tcode{mutable} lambdas that capture by copy and then refer to captured variables in their parameter declaration clause, but certainly much less.
+A \href{https://sourcegraph.com/search?q=context:global+\%5C\%5B.\%2B\%5C\%5D\%5C\%28.*decltype.*\%5C\%29+mutable+lang:c\%2B\%2B++count:2000\&patternType=regexp}{very crude search} found a couple results.
+
+This solution does have some benefits:
+\begin{itemize}
+    \item It does not require a lookahead
+    \item It would allow the use of capture anywhere after the capture list - including in the template parameter list and require clause.
+    \item It has an evolution path to support mutable captures with \paper{P2034R0}: if the mutable keyword is placed in the capture-list, this whole problem goes away.
+\end{itemize}
+
+It is not perfect. First, it reduces but does not eliminate the breakage entirely. And second, it introduces an oddity that can be taught and justified, but it is still an oddity and a novelty that lookup would behave differently depending on whether a mutable keyword is found later.
+
+\subsection{D: Looking ahead for the existence of the mutable keyword}
+
+If the compiler could determine before parsing the lambda whether it will be mutable or not, it could give a consistent answer without arbitrary restriction.
+\paper{P2036R3} flat out rejected this option with the assumption of implementation burden.
+
+There are four places where a captured entity can appear before the mutable keyword
+(all of these parts are optional):
+
+\begin{colorblock}
+[=]</*#1*/> requires /*#2*/ (/*4*/) mutable
+\end{colorblock}
+
+Some (Or at the very least clang) cannot do arbitrary parses and revert it.
+
+The template parameter list (\#1) and the following \tcode{requires} clause (\#2) would need to be fully analyzed to find where they end.
+
+For example, consider:
+
+\begin{colorblock}
+[]<auto N = 1 < 0>() requires std::same_as<decltype(N>0), int>{};
+\end{colorblock}
+
+\paper{P2036R3} is correct to say that this would put a lot of burden on implementations.
+
+However, the \tcode{attribute-specifier-seq} and the \tcode{parameter-declaration-clause}
+need only to be lexed (and the parentheses balanced) to be skipped, and lexing ahead is a more tractable problem,
+that implementations are more likely to be able to implement with a reasonable effort.
+
+The pros of this approach are:
+\begin{itemize}
+\item It does not break existing code referring to a capture in a parameter declaration
+\item It offers a behavior for the parameter-clause that is consistent with the trailing return type and, hopefully, the user's expectations
+\end{itemize}
+
+It's not a perfect approach: captures cannot be referred to in the template parameter list or first
+requires clause.
+The risk of breaking existing code is not null but very limited by virtue of lambda template parameter lists being a C++20 feature,
+and C++20 not being widely deployed yet - but it is an issue that would get worse with time.
+
+And we still have this problem of that limitation being seemingly arbitrary from the users' perspective.
+
+We should also note that looking ahead is not free in terms of compile-time, but the impact should be minimal.
+
+Still, of all the options presented, D seems to offer the best mitigation strategy while being
+coherent with \paper{P2036R3}, and avoiding adding too many new gotchas and corner cases.
+
+We should note that clang already had to implement a form of lookahead to support GNU attributes, which can appear between the
+lambda parameter declaration clause and the \tcode{mutable} keyword, for example:
+
+\begin{colorblock}
+int y;
+[=]() __attribute__((diagnose_if(!is_same<decltype((y)), const int &>, "wrong type", "warning"))){}();
+\end{colorblock}
+
+
+\subsection{E: identifiers refered to captured variables but do not take the mutable keyword into account}
+
+\textbf{This option was choosen by EWG, wording is provided below}.
+
+Barry observed on the reflector thar, for regular class member functions, refering to a member of that class in the parameter list
+doesn't take a const qualiffier into account
+
+\begin{colorblock}
+struct F {
+    float x;
+    void mem1(decltype((x)) p3);       // p3 is a float&
+    void mem2(decltype((x)) p4) const; // p4 is a float&
+};
+\end{colorblock}
+
+We could argue that doing the same thing for lambdas would make sense as it would be consistent with regular classes:
+
+
+\begin{colorblock}
+int x;
+[x=42.0]<decltype(x) a> // float 
+(decltype((x)) b)       // float&    
+-> decltype((x))        // const float&    
+\end{colorblock}
+
+
+There are multiple advantages to this approach:
+
+\begin{itemize}
+\item We can find a capture variable anywhere, including in the template parameter list, so we avoid exceptions and inconsistencies
+\item Consistent with member functions
+\item No lookahead
+\end{itemize}
+
+It has however one drawback: \tcode{decltype((foo))} can change meaning after the end of the function parameter list.
+
+We also have 2 options here:
+
+\begin{itemize}
+\item Before the end of the parameter list access to a captured variables are considered mutable, which is consistent with trying to
+access the member variable outside of a const call operator, and consistent with the behavior of regular classes with member function.
+
+\item Before the end of the parameter list access to a captured variables are considered const because const is the default for lambda call operators. I would argue that this is less consistent, and add more special cases. 
+\end{itemize} 
+
+I find myself whether the behavior of member function is the one we would want if we could change it,
+but they would suffer the same problem: it's not generally implementable for their template parameter list.
+
+In all, I still slightly prefer option D, but option E looks better than all other options.
+
+\section{Should P2036R3 still be a DR?}
+
+From previous wiki discussions, it is not clear how much the different scenarios for breakage and semantic changes have been discussed.
+I think there are three interesting things to discuss here, in addition to the parameter declaration clause addressed by the rest of this paper.
+
+\subsection{Template parameters}
+\begin{colorblock}
+int x;
+[x]<auto N = x> {}
+\end{colorblock}
+
+This is made ill-formed by P2036 and the proposed mitigation. Given that template parameter lists are a c++20 features, and C++20 is not widely deployed yet, not applying that behavior
+change retroactively would create some churn that benefits no one.
+
+\subsection{Init capture visibility}
+\begin{colorblock}
+auto f() {
+    float x;
+    return [x = 0] -> decltype(x){ return 1.2;}();
+}
+\end{colorblock}
+
+In C++20 \tcode{f} would produce a float; it now produces an int.
+However, this sort of shadowing is ill-advised and probably rare enough that it isn't a large problem in practice.
+I have no data to back that up.
+
+
+In general, this paper is a semantic change, and code that relies on the semantics changed by the paper will be affected
+whether by updating the toolchain or by changing standard mode, and there aren't a lot of opportunities to diagnose that change.
+
+Given the very strong consensus established in Prague and subsequently in 2021 by EWG that this was a defect, I do not see a big motivation to revisit
+that discussion if a sufficient mitigation strategy - such as option D - is adopted for C++23.
+
+However, in the absence of such mitigation, this paper would not be implemented as a DR, and might not be implemented at all, given the potential damage it causes.
+
+\section{Lookup for non-standard C++ attributes}
+
+Lookup for implementation-specific attributes needs to be specified to support existing use cases:
+
+\begin{colorblock}
+int main() {
+    int asp = 5;
+    [=] [[gnu::regparm(asp)]] () {};
+}
+\end{colorblock}
+
+
+\section{Implementation experience}
+
+Both \textbf{A: CWG2569's proposed resolution} and option \textbf{D: Looking ahead for the existence of the mutable keyword} have been implemented in clang.
+Option A was deployed and still broke a lot of production code.
+Option D was able to successfully compile the synthetic code examples submitted by users after deployment of the original paper implementation and the CWG2569 proposed resolution implementation.
+
+\section{Wording for Option E}
+
+
+\ednote{Add the following section immediately after [basic.scope.param].}
+
+\begin{addedblock}
+\rSec2[basic.scope.lambda]{Lambda parameter scope}
+
+A \grammarterm{lambda-introducer} L introduces a lambda scope that includes L and extends to the end of the \grammarterm{compound-statement} in the \grammarterm{lambda-expression}. 
+\begin{note}
+An init-capture cannot be used for its value within the lambda-introducer.
+\end{note} 
+\end{addedblock}
+
+
+\rSec2[expr.prim.lambda]{Lambda expressions}
+\rSec3[expr.prim.lambda.capture]{Captures}
+
+\ednote{Paragraph 5. The changes to this paragraph have not been explicitely discussed by EWG, and may be better
+treated as a core issue or an NB comment.}
+
+
+\pnum
+If an \grammarterm{identifier} in a \grammarterm{\removed{simple-}capture} appears
+as the \grammarterm{declarator-id} of a parameter of the \grammarterm{lambda-declarator}{'s} \grammarterm{parameter-declaration-clause}\added{or names a template parameter of the \grammarterm{lambda-expression}{'s} \grammarterm{template-parameter-list}} the program is ill-formed.
+
+\begin{example}
+\begin{codeblock}
+void f() {
+    int x = 0;
+    auto g = [x](int x) { return 0; };    // error: parameter and \grammarterm{\removed{simple-}capture} have the same name
+    @\added{auto h = [y = 0]<typename y>() \{ return 0; \}; // error: template parameter and \grammarterm{capture} have the same name}@
+}
+\end{codeblock}
+\end{example}
+
+
+\ednote{Paragraph 6}
+
+
+\pnum
+An \grammarterm{init-capture} inhabits the \changed{function parameter scope of
+the \grammarterm{lambda-expression}'s\\ 
+\grammarterm{parameter-declaration-clause}}{lambda scope of the \grammarterm{lambda-expression}'s \grammarterm{lambda-introducer}}.
+An \grammarterm{init-capture} without ellipsis
+behaves as if it declares and explicitly captures a variable of
+the form ``\keyword{auto} \grammarterm{init-capture} \tcode{;}'', except that:
+\begin{itemize}
+    \item if the capture is by copy (see below), the non-static data member
+    declared for the capture and the variable are treated as two different ways
+    of referring to the same object, which has the lifetime of the non-static
+    data member, and no additional copy and destruction is performed, and
+    \item if the capture is by reference, the variable's lifetime ends when the
+    closure object's lifetime ends.
+\end{itemize}
+
+\rSec3[expr.prim.id.unqual]{Unqualified names}
+
+[...]
+
+\pnum
+The result is the entity denoted by
+the \grammarterm{unqualified-id}\iref{basic.lookup.unqual}.
+If the \grammarterm{unqualified-id} appears
+in a \grammarterm{lambda-expression} at program point $P$ and
+the entity is a local entity\iref{basic.pre} or a variable declared by
+an \grammarterm{init-capture}\iref{expr.prim.lambda.capture},
+then let $S$ be the \grammarterm{compound-statement} of
+the innermost enclosing \grammarterm{lambda-expression} of $P$.
+If naming the entity from outside of an unevaluated operand within $S$
+would refer to an entity
+captured by copy in some intervening \grammarterm{lambda-expression},
+then let $E$ be the innermost such \grammarterm{lambda-expression}\changed{, and:}{.}
+\begin{itemize}
+    \item
+    If \added{there is such a \grammarterm{lambda-expression} and if} $P$ is in $E$'s function parameter scope
+    but not its \grammarterm{parameter-declaration-clause}, then
+    the type of the expression is
+    the type of a class member access expression\iref{expr.ref}
+    naming the non-static data member
+    that would be declared for such a capture
+    in the object parameter\iref{dcl.fct} of the function call operator of $E$.
+    \begin{note}
+        If $E$ is not declared \keyword{mutable},
+        the type of such an identifier will typically be \keyword{const} qualified.
+    \end{note}
+
+    \item
+    Otherwise (\added{if there is no such \grammarterm{lambda-expression} or} if $P$ either precedes $E$'s function parameter scope or is in $E$'s \grammarterm{parameter-declaration-clause}), the \removed{program is ill-formed.}
+\end{itemize}
+\removed{Otherwise, the} type of the expression is the type of the result.
+\begin{note}
+    If the entity is a template parameter object for
+    a template parameter of type \tcode{T}\iref{temp.param},
+    the type of the expression is \tcode{const T}.
+\end{note}
+\begin{note}
+    The type will be adjusted as described in \ref{expr.type}
+    if it is cv-qualified or is a reference type.
+\end{note}
+The expression is an lvalue
+if the entity is a function, variable, structured binding\iref{dcl.struct.bind}, data member, or
+template parameter object
+and a prvalue otherwise\iref{basic.lval};
+it is a bit-field if the identifier designates a bit-field.
+\begin{example}
+\begin{codeblock}
+    void f() {
+        float x, &r = x;
+        [=]() -> decltype((x)) {      // lambda returns \tcode{float const\&} because this lambda is not \tcode{mutable} and
+            // \tcode{x} is an lvalue
+            decltype(x) y1;             // \tcode{y1} has type \tcode{float}
+            decltype((x)) y2 = y1;      // \tcode{y2} has type \tcode{float const\&}
+            decltype(r) r1 = y1;        // \tcode{r1} has type \tcode{float\&}
+            decltype((r)) r2 = y2;      // \tcode{r2} has type \tcode{float const\&}
+            return y2;
+        };
+
+        @\removed{[=]<decltype(x) P>{};         // error: \tcode{x} refers to local entity but precedes the lambda's function parameter scope}@
+        [=](decltype((x)) y){};       // \changed{error: \tcode{x} refers to local entity but is in the lambda's\\\grammarterm{parameter-declaration-clause}}{Ok, \tcode{y} has type \tcode{float\&}}
+        [=]{
+            @\removed{[]<decltype(x) P>{};      // OK, \tcode{x} is in the outer lambda's function parameter scope}@
+            [](decltype((x)) y){};    // OK, lambda takes a parameter of type \tcode{float const\&}
+            [x=1](decltype((x)) z){}; // \changed{error: \tcode{x} refers to \grammarterm{init-capture} but is in the lambda's \grammarterm{parameter-declaration-clause}}{ok, \tcode{z} has type \tcode{int\&}}
+        };
+    }
+\end{codeblock}
+\end{example}
+
+\section{Acknowledgments}
+
+Thanks to Barry Revzin and Davis Herring for their help with the wording, and to the many people who gave feedback on this
+issue.
+
+
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+\end{document}
