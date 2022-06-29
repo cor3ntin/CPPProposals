@@ -29,7 +29,7 @@ The changes proposed in this paper make the use of std::pair unnecessary in new 
 The following changes where made following LWG small group review (June 14th 2022)
 
 \begin{itemize}
-\item Remove the comparison between pair and tuple-like as they were insufficient to satisfay equality_comparible as a common_reference isn't specialized for a pair and a tuple-like.  
+\item Remove the comparison between pair and tuple-like as they were insufficient to satisfay equality_comparible as a common_reference isn't specialized for a pair and a tuple-like.
 \item Remove the changes to support use_allocator construction which the group agreed were not needed.
 \item Modify the definition of \tcode{tuple-like} to support \tcode{std::get} implementations returning prvalues, such as \tcode{subrange}.
 \item Simplify the wording of the added tuple constructor.
@@ -344,7 +344,7 @@ Consider the following example, courtesy of Tomasz Kamiński and Barry Revzin.
     struct M {
         operator tuple<int, int>() const { return {1, 1}; }
     };
-    
+
     namespace std {
         template <> struct tuple_size<M> : integral_constant<size_t, 2> { };
         template <int I> struct tuple_element<I, M> { using type = int; };
@@ -443,15 +443,15 @@ class tuple;
 
 
 \begin{codeblock}
-    
+
 template <typename T>
 concept @\placeholder{tuple-like}@ =  @\seebelow@; // \expos
 
 template <typename T>
 concept @\placeholder{pair-like}@ // \expos
     = @\placeholder{tuple-like}@<T> && tuple_size_v<remove_cvref_t<T>> == 2;
-    
-    
+
+
 \end{codeblock}
 \end{addedblock}
 
@@ -1300,8 +1300,8 @@ template parameter pack named \tcode{UTypes}, where indexing is zero-based.
 \begin{itemdescr}  % NOCHECK: order
     \pnum
     \begin{addedblock}
-    % Constructs a \tcode{tuple} that is a concatenation of all \placeholder{tuple-like} in \tcode{tpls}.    
-        
+    % Constructs a \tcode{tuple} that is a concatenation of all \placeholder{tuple-like} in \tcode{tpls}.
+
     For all $i$ in  \range{0}{\tcode{sizeof...(Tuples)}}
         \begin{itemize}
          \item Let $\tcode{T}_i$ be the $i^\text{th}$ type in \tcode{Tuples}.
@@ -1313,17 +1313,17 @@ template parameter pack named \tcode{UTypes}, where indexing is zero-based.
          \item Let $Elems_i$ be a pack of the types $E_i$$_0, $\dots$,  E_{iS_{i}}$.
          \item Let $elems_i$ be a pack of the expressions $e_i$$_0, $\dots$,  e_{i(S_{i}-1)}$.
      \end{itemize}
- 
+
     Let $n$ be \tcode{sizeof...(Tuples)}.
-    
+
     The types in \tcode{CTypes} are equal to the ordered
     sequence of the extended types \\
-    $Elems_0\tcode{...} , Elems_1\tcode{...} , $\dots$ , Elems_{n-1}\tcode{...}$.
-    
+    $Elems_0\tcode{...} , Elems_1\tcode{...} , \cdots , Elems_{n-1}\tcode{...}$.
+
     Let \tcode{celems} be the ordered sequence of the extended packs of expressions $elems_i$, ..., $elems_{n-1}$.
- 
+
 \mandates
-    
+
     For all types \tcode{T} in \tcode{CTypes} the following preconditions are met:
     \begin{itemize}
         \item If \tcode{T} is deduced as an lvalue reference type, then
@@ -1331,13 +1331,13 @@ template parameter pack named \tcode{UTypes}, where indexing is zero-based.
         \item \tcode{is_constructible_v<T, T\&\&>}  is \tcode{true}.
     \end{itemize}
 
-\returns 
+\returns
     \tcode{tuple<CTypes...>(celems...)}
     \end{addedblock}
     \begin{removedblock}
-    
-    
-    
+
+
+
     In the following paragraphs, let $\tcode{T}_i$ be the $i^\text{th}$ type in \tcode{Tuples},
     $\tcode{U}_i$ be \tcode{remove_reference_t<T$_i$>}, and $\tcode{tp}_i$ be the $i^\text{th}$
     parameter in the function parameter pack \tcode{tpls}, where all indexing is
@@ -1510,12 +1510,12 @@ operator<=>(const tuple<TTypes...>& t, const UTuple& u);
 \end{addedblock}
 
 \begin{itemdescr}
-    
+
     \begin{addedblock}
         For the second overload, \tcode{Elems} denotes the pack of types \tcode{tuple_element_t<0, UTuple>, tuple_element_t<1, UTuple>, ...,
         tuple_element_t<tuple_size_v<UTuple> -1, UTuple>}.
     \end{addedblock}
-    
+
     \pnum
     \effects
     Performs a lexicographical comparison between \tcode{t} and \tcode{u}.
@@ -2228,13 +2228,14 @@ namespace std::ranges {
 namespace std::ranges {
     template<class T, size_t N>
     concept @\defexposconcept{has-tuple-element}@ =                   // \expos
-    @\added{\exposconcept{tuple-like}<T> \&\& (N < tuple_size_v<T>)}@
+    @\added{\exposconcept{tuple-like}<T> \&\& N < tuple_size_v<T>;}@
      @\removed{  requires(T t) \{ }@
         @\removed{    typename tuple_size<T>::type;}@
         @\removed{    requires N < tuple_size_v<T>;}@
         @\removed{  typename tuple_element_t<N, T>;}@
         @\removed{  \{ std::get<N>(t) \} -> convertible_to<const tuple_element_t<N, T>\&>;}@
-    @\removed{ \}} ;@
+    @\removed{ \};}@
+}
 \end{codeblock}
 
 
