@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Mitigation strategies for P2036 "Changing scope for lambda trailing-return-type"}
-\docnumber{D2579R0}
+\docnumber{P2579R0}
 \audience{EWG,CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -247,9 +247,9 @@ We could argue that doing the same thing for lambdas would make sense as it woul
 
 \begin{colorblock}
 int x;
-[x=42.0]<decltype(x) a> // float 
-(decltype((x)) b)       // float&    
--> decltype((x))        // const float&    
+[x=42.0]<decltype(x) a> // float
+(decltype((x)) b)       // float&
+-> decltype((x))        // const float&
 \end{colorblock}
 
 
@@ -269,8 +269,8 @@ We also have 2 options here:
 \item Before the end of the parameter list access to a captured variables are considered mutable, which is consistent with trying to
 access the member variable outside of a const call operator, and consistent with the behavior of regular classes with member function.
 
-\item Before the end of the parameter list access to a captured variables are considered const because const is the default for lambda call operators. I would argue that this is less consistent, and add more special cases. 
-\end{itemize} 
+\item Before the end of the parameter list access to a captured variables are considered const because const is the default for lambda call operators. I would argue that this is less consistent, and add more special cases.
+\end{itemize}
 
 I find myself whether the behavior of member function is the one we would want if we could change it,
 but they would suffer the same problem: it's not generally implementable for their template parameter list.
@@ -336,12 +336,10 @@ Option D was able to successfully compile the synthetic code examples submitted 
 \ednote{Add the following section immediately after [basic.scope.param].}
 
 \begin{addedblock}
-\rSec2[basic.scope.lambda]{Lambda parameter scope}
+\rSec2[basic.scope.lambda]{Lambda scope}
 
-A \grammarterm{lambda-introducer} L introduces a lambda scope that includes L and extends to the end of the \grammarterm{compound-statement} in the \grammarterm{lambda-expression}. 
-\begin{note}
-An init-capture cannot be used for its value within the lambda-introducer.
-\end{note} 
+A \grammarterm{lambda-expression} \tcode{E} introduces a \grammarterm{lambda scope} that starts immediately after the \grammarterm{lambda-introducer} of \tcode{E} and extends to the end of the \grammarterm{compound-statement} of
+\tcode{E}.
 \end{addedblock}
 
 
@@ -354,14 +352,14 @@ treated as a core issue or an NB comment.}
 
 \pnum
 If an \grammarterm{identifier} in a \grammarterm{\removed{simple-}capture} appears
-as the \grammarterm{declarator-id} of a parameter of the \grammarterm{lambda-declarator}{'s} \grammarterm{parameter-declaration-clause}\added{or names a template parameter of the \grammarterm{lambda-expression}{'s} \grammarterm{template-parameter-list}} the program is ill-formed.
+as the \grammarterm{declarator-id} of a parameter of the \grammarterm{lambda-declarator}{'s} \grammarterm{parameter-declaration-clause}\added{or as the name of a template parameter of the \grammarterm{lambda-expression}{'s} \grammarterm{template-parameter-list}} the program is ill-formed.
 
 \begin{example}
 \begin{codeblock}
 void f() {
     int x = 0;
     auto g = [x](int x) { return 0; };    // error: parameter and \grammarterm{\removed{simple-}capture} have the same name
-    @\added{auto h = [y = 0]<typename y>() \{ return 0; \}; // error: template parameter and \grammarterm{capture} have the same name}@
+    @\added{auto h = [y = 0]<typename y>(y) \{ return 0; \}; // error: template parameter and \grammarterm{capture} have the same name}@
 }
 \end{codeblock}
 \end{example}
@@ -372,8 +370,8 @@ void f() {
 
 \pnum
 An \grammarterm{init-capture} inhabits the \changed{function parameter scope of
-the \grammarterm{lambda-expression}'s\\ 
-\grammarterm{parameter-declaration-clause}}{lambda scope of the \grammarterm{lambda-expression}'s \grammarterm{lambda-introducer}}.
+the \grammarterm{lambda-expression}'s\\
+\grammarterm{parameter-declaration-clause}}{lambda scope of the \grammarterm{lambda-expression}}.
 An \grammarterm{init-capture} without ellipsis
 behaves as if it declares and explicitly captures a variable of
 the form ``\keyword{auto} \grammarterm{init-capture} \tcode{;}'', except that:
@@ -449,11 +447,15 @@ it is a bit-field if the identifier designates a bit-field.
         };
 
         @\removed{[=]<decltype(x) P>{};         // error: \tcode{x} refers to local entity but precedes the lambda's function parameter scope}@
-        [=](decltype((x)) y){};       // \changed{error: \tcode{x} refers to local entity but is in the lambda's\\\grammarterm{parameter-declaration-clause}}{Ok, \tcode{y} has type \tcode{float\&}}
+        [=](decltype((x)) y) {
+              @\added{decltype((x)) z = x;}@
+        };       // \changed{error: \tcode{x} refers to local entity but is in the lambda's\\\grammarterm{parameter-declaration-clause}}{Ok, \tcode{y} has type \tcode{float\&}, \tcode{z} has type \tcode{float const\&}}
         [=]{
             @\removed{[]<decltype(x) P>{};      // OK, \tcode{x} is in the outer lambda's function parameter scope}@
             [](decltype((x)) y){};    // OK, lambda takes a parameter of type \tcode{float const\&}
-            [x=1](decltype((x)) z){}; // \changed{error: \tcode{x} refers to \grammarterm{init-capture} but is in the lambda's \grammarterm{parameter-declaration-clause}}{ok, \tcode{z} has type \tcode{int\&}}
+            [x=1](decltype((x)) y){
+                @\added{decltype((x)) z = x;}@
+            }; // \changed{error: \tcode{x} refers to \grammarterm{init-capture} but is in the lambda's \grammarterm{parameter-declaration-clause}}{ok, \tcode{y} has type \tcode{int\&}, \tcode{z} has type \tcode{int const\&}}
         };
     }
 \end{codeblock}

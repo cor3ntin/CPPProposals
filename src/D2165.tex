@@ -43,7 +43,6 @@ The following changes where made following LWG review (June 24th 2022)
 
 \begin{itemize}
 \item Rewrite \tcode{tuple-like} to explicity state only \tcode{pair}, \tcode{tuple}, \tcode{array}.
-\item \textbf{exclude ranges::subrange} from that list as it has a conversion operator to \placeholder{pair-like}.
 \item Mark the return type of the new \tcode{operator<=>} "see below" in the synopsis.
 \item The description of the new \tcode{operator<=>} in \tcode{<tuple>} was referring to a non-existing pack. Add wording to introduce that pack.
 \item \tcode{tuple_element_t} and \tcode{tuple_size_v} were sometimes used on reference types. Add \tcode{remove_cvref_t}.
@@ -589,7 +588,7 @@ concept @\placeholder{tuple-like}@ =  @\seebelow@; // \expos
 
 \begin{itemdescr}
 A type \tcode{T} models the exposition-only concept \placeholder{tuple-like} if \tcode{std::remove_cvref_t<T>} is
-a specialization of \tcode{array}, \tcode{pair}, or \tcode{tuple}.
+a specialization of \tcode{array}, \tcode{pair}, \tcode{tuple} or \tcode{ranges::subrange}.
 \end{itemdescr}
 
 
@@ -801,6 +800,7 @@ Let \tcode{I} be the pack \tcode{0, 1, ..., (sizeof...(Types) - 1)}.\newline
 \constraints
 \begin{itemize}
     \item \tcode{\placeholder{different-from}<UTuple, tuple>} [range.utility.helpers] is \tcode{true},
+    \item \tcode{remove_cvref_t<UTuple>} is not a specialization of \tcode{ranges::subrange},
     \item
     \tcode{sizeof...(Types)} equals \tcode{tuple_size_v<remove_cvref_t<UTuple>>},
     \item
@@ -1245,6 +1245,7 @@ template parameter pack named \tcode{UTypes}, where indexing is zero-based.
     \constraints
     \begin{itemize}
         \item \tcode{\placeholder{different-from}<UTuple, tuple>} [range.utility.helpers] is \tcode{true},
+        \item \tcode{remove_cvref_t<UTuple>} is not a specialization of \tcode{ranges::subrange},
         \item \tcode{sizeof...(Types)} equals \tcode{tuple_size_v<remove_cvref_t<UTuple>>} and,
         \item \tcode{is_assignable_v<$\tcode{T}_i$\&, decltype(get<$i$>(std::forward<UTuple>(u)))>} is \tcode{true} for all $i$.
     \end{itemize}
@@ -1270,6 +1271,7 @@ template parameter pack named \tcode{UTypes}, where indexing is zero-based.
     \constraints
     \begin{itemize}
         \item \tcode{\placeholder{different-from}<UTuple, tuple>} [range.utility.helpers] is \tcode{true},
+        \item \tcode{remove_cvref_t<UTuple>} is not a specialization of \tcode{ranges::subrange},
         \item
         \tcode{sizeof...(Types)} equals \tcode{tuple_size_v<remove_cvref_t<UTuple>>} and,
         \item \tcode{is_assignable_v<const $\tcode{T}_i$\&, decltype(get<$i$>(std::forward<UTuple>(u)))>} is \tcode{true} for all $i$.
@@ -1308,28 +1310,21 @@ template parameter pack named \tcode{UTypes}, where indexing is zero-based.
          \item Let $\tcode{U}_i$ be \tcode{remove_cvref_t<$\tcode{T}_i$>}
          \item Let $\tcode{tp}_i$ be the $i^\text{th}$ parameter in the function parameter pack \tcode{tpls}.
          \item Let $S_i$ be \tcode{tuple_size_v<U$_i$>}.
-         \item Let $E_i$$_k$ be \tcode{tuple_element_t<$k$, U$_i$>}.
-         \item Let $e_i$$_k$ be \tcode{get<$k$>(std::forward<$\tcode{T}_i$>($\tcode{tp}_i$))}.
-         \item Let $Elems_i$ be a pack of the types $E_i$$_0, \cdots,  E_{iS_{i}}$.
-         \item Let $elems_i$ be a pack of the expressions $e_i$$_0, \cdots,  e_{i(S_{i}-1)}$.
+         \item Let $E_i^k$ be \tcode{tuple_element_t<$k$, U$_i$>}.
+         \item Let $e_i^k$ be \tcode{get<$k$>(std::forward<$\tcode{T}_i$>($\tcode{tp}_i$))}.
+         \item Let $Elems_i$ be a pack of the types $E_i^0, \cdots,  E_i^{S_i-1}$.
+         \item Let $elems_i$ be a pack of the expressions $e_i^0, \cdots,  e_i^{S_i-1}$.
      \end{itemize}
 
     Let $n$ be \tcode{sizeof...(Tuples)}.
 
     The types in \tcode{CTypes} are equal to the ordered
-    sequence of the extended types \\
+    sequence of the expanded packs of types \\
     $Elems_0\tcode{...} , Elems_1\tcode{...} , \cdots , Elems_{n-1}\tcode{...}$.
 
-    Let \tcode{celems} be the ordered sequence of the extended packs of expressions $elems_0, \cdots, elems_{n-1}$.
+    Let \tcode{celems} be the ordered sequence of the expanded packs of expressions $elems_0..., \cdots, elems_{n-1}...$.
 
-\mandates
-
-    For all types \tcode{T} in \tcode{CTypes} the following preconditions are met:
-    \begin{itemize}
-        \item If \tcode{T} is deduced as an lvalue reference type, then
-        \tcode{is_constructible_v<T, T\&>} is \tcode{true}, otherwise
-        \item \tcode{is_constructible_v<T, T\&\&>}  is \tcode{true}.
-    \end{itemize}
+\mandates \tcode{(is_constructible_v<CTypes, decltype(celems)> \&\& ...)} is \tcode{true}.
 
 \returns
     \tcode{tuple<CTypes...>(celems...)}
@@ -1888,6 +1883,7 @@ are template-argument-equivalent\iref{temp.type} if and only if
     \constraints
     \begin{itemize}
         \item \tcode{\placeholder{different-from}<P, pair>} [range.utility.helpers] is \tcode{true},
+        \item \tcode{remove_cvref_t<P>} is not a specialization of \tcode{ranges::subrange},
         \item
         \tcode{is_assignable_v<T1\&, decltype(get<0>(std::forward<P>(p)))>} is \tcode{true}, and
         \item
@@ -1912,6 +1908,7 @@ are template-argument-equivalent\iref{temp.type} if and only if
     \constraints
     \begin{itemize}
         \item \tcode{\placeholder{different-from}<P, pair>} is \tcode{true},
+        \item \tcode{remove_cvref_t<P>} is not a specialization of \tcode{ranges::subrange},
         \item
         \tcode{is_assignable_v<const T1\&, decltype(get<0>(std::forward<P>(p)))>} is \tcode{true}, and
         \item
