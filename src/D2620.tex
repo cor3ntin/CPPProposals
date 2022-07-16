@@ -1,0 +1,177 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{Lifting artificial restrictions on universal character names}
+\docnumber{P2620R0}
+\audience{EWG, SG-22}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+We propose to lift restrictions on \grammarterm{universal-character-names} in identifiers.
+
+\section {Motivation}
+
+There are restrictions on the constitution of \grammarterm{universal-character-names} that seem artificial,
+and we should lift them\footnote{This is a small cleanup that isn't worth doing unless we can spend very little time on it,
+classified as low priority bucket 72.}!
+
+\begin{colorblock}
+\N{LATIN CAPITAL LETTER I} = 42; // ERROR: I is in the basic character set
+\N{LATIN CAPITAL LETTER I WITH DOT ABOVE} = 42 ;// Ok
+\end{colorblock}
+
+This is by no mean a major issue in C++, as we don't put restrictions on \grammarterm{universal-character-names} in string literals (unlike C),
+but it is somewhat inconsistent with the lexing model.
+
+Instead of restricting \grammarterm{universal-character-names} values,
+we can instead mandate that they are part of valid identifiers outside of strings.
+
+\section{Comparison With C}
+
+C does not allow \grammarterm{universal-character-names} to designate elements of the basic character set:
+
+\begin{quoteblock}
+2 A universal character name shall not designate a codepoint where the hexadecimal value is:
+- less than 00A0 other than 0024 (\$), 0040 (@), or 0060 (` );
+\end{quoteblock}
+
+This has been a pain point for users who would like to consistently use \tcode{\textbackslash{u}} in string literals as
+part of code generation processes.
+
+\begin{itemize}
+\item \href{https://github.com/llvm/llvm-project/issues/36392}{LLVM issue: Unicode string literals}
+\item \href{https://stackoverflow.com/questions/20158472/why-c99-has-such-an-odd-restriction-for-universal-character-names}{Why C99 has such an odd restriction for universal character names?}
+\item \href{https://stackoverflow.com/questions/62759943/restrictions-to-unicode-escape-sequences-in-c11}{Restrictions to Unicode escape sequences in C11}
+\end{itemize}
+
+I hope that both languages regain consistency by:
+\begin{itemize}
+\item Not restricting UCNs in string literals
+\item Not putting restrictions on UCNs in identifiers beyond what naturally falls out of the grammar of identifiers.
+\end{itemize}
+
+\section{Wording}
+
+%\rSec1[lex.separate]{Separate translation}
+%
+%
+%\pnum{4.} The source file is decomposed into preprocessing
+%tokens\iref{lex.pptoken} and sequences of whitespace characters
+%(including comments). A source file shall not end in a partial
+%preprocessing token or in a partial comment.
+%Each comment is replaced by one space character. New-line characters are
+%retained. Whether each nonempty sequence of whitespace characters other
+%than new-line is retained or replaced by one space character is
+%unspecified.
+%As characters from the source file are consumed
+%to form the next preprocessing token
+%(i.e., not being consumed as part of a comment or other forms of whitespace),
+%except when matching a
+%\grammarterm{c-char-sequence},
+%\grammarterm{s-char-sequence},
+%\grammarterm{r-char-sequence},
+%\grammarterm{h-char-sequence}, or
+%\grammarterm{q-char-sequence},
+%\grammarterm{universal-character-name}s are recognized and
+%replaced by the designated element of the translation character set.
+%
+%The process of dividing a source file's
+%characters into preprocessing tokens is context-dependent.
+%\begin{example}
+%    See the handling of \tcode{<} within a \tcode{\#include} preprocessing
+%    directive.
+%\end{example}
+
+\rSec1[lex.charset]{Character sets}
+
+A \grammarterm{universal-character-name}
+designates the character in the translation character set
+whose UCS scalar value is the hexadecimal number represented by
+the sequence of \grammarterm{hexadecimal-digit}s
+in the \grammarterm{universal-character-name}.
+The program is ill-formed if that number is not a UCS scalar value.
+\removed{If a \grammarterm{universal-character-name} outside
+the \grammarterm{c-char-sequence}, \grammarterm{s-char-sequence}, or
+\grammarterm{r-char-sequence} of
+a \grammarterm{character-literal} or \grammarterm{string-literal}
+(in either case, including within a \grammarterm{user-defined-literal})
+corresponds to a control character or
+to a character in the basic character set, the program is ill-formed.}
+\begin{note}
+    A sequence of characters resembling a \grammarterm{universal-character-name} in an
+    \grammarterm{r-char-sequence}\iref{lex.string} does not form a
+    \grammarterm{universal-character-name}.
+\end{note}
+
+\rSec1[lex.name]{Identifiers}
+
+\indextext{identifier|(}%
+\begin{bnf}
+    \nontermdef{identifier}\br
+    identifier-start\br
+    identifier identifier-continue
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{identifier-start}\br
+    nondigit\br
+    \textnormal{an element of the translation character set of class XID_Start}
+    \added{universal-character-name\\\textnormal{  designating an element of the translation character set of class XID_Start}}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{identifier-continue}\br
+    digit\br
+    nondigit\br
+    \textnormal{an element of the translation character set of class XID\_Continue}
+    \added{universal-character-name\\
+        \textnormal{    designating an element of the translation character set of class XID\_Continue}}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{nondigit} \textnormal{one of}\br
+    \terminal{a b c d e f g h i j k l m}\br
+    \terminal{n o p q r s t u v w x y z}\br
+    \terminal{A B C D E F G H I J K L M}\br
+    \terminal{N O P Q R S T U V W X Y Z _}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{digit} \textnormal{one of}\br
+    \terminal{0 1 2 3 4 5 6 7 8 9}
+\end{bnf}
+
+\pnum
+\indextext{name!length of}%
+\indextext{name}%
+The character classes XID_Start and XID_Continue
+are Derived Core Properties as described by UAX \#44.
+
+\begin{addedblock}
+\grammarterm{universal-character-name}{s} are replaced by the designated element of the translation character set.
+
+%A \grammarterm{universal-character-name} matching \grammarterm{identifier-start} or \grammarterm{identifier-continue} shall designate an element %of the translation character with the XID_Start or XID_Continue property respectively.
+\end{addedblock}
+
+The program is ill-formed
+if an \grammarterm{identifier} does not conform to
+Normalization Form C as specified in ISO/IEC 10646.
+\begin{note}
+    Identifiers are case-sensitive.
+\end{note}
+\begin{note}
+    In translation phase 4,
+    \grammarterm{identifier} also includes
+    those \grammarterm{preprocessing-token}s\iref{lex.pptoken}
+    differentiated as keywords\iref{lex.key}
+    in the later translation phase 7\iref{lex.token}.
+\end{note}
+
+\end{document}

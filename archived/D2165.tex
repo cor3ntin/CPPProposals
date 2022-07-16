@@ -6,7 +6,7 @@
 \documentclass{wg21}
 
 \title{Compatibility between \tcode{tuple}, \tcode{pair} and \placeholder{tuple-like} objects}
-\docnumber{D2165R4}
+\docnumber{P2165R4}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -71,6 +71,18 @@ The following changes where made following LWG small group review (June 28th 202
 \item In \tcode{operator==(tuple, tuple)}, the statements that two empty tuples compare equal is now a note.
 \end{itemize}
 
+The following changes where made following LWG review (July 8th 2022)
+
+\begin{itemize}
+\item The \tcode{tuple-like} concept now models \textbf{and satisfies} its requirements.
+\item Reword the introduction of TTypes/Utypes in [tuple.common_ref].
+\item Reorder the constraints in [tuple.common_ref].
+\item Use the wording "The member \grammarterm{typedef-name} \tcode{type}..." in [tuple.common_ref].
+\item Missing period in \tcode{tuple_cat}
+\item In \tcode{tuple_cat}, introduce $n$ first and don't use range notation.
+
+\end{itemize}
+
 \subsection{R3}
 \begin{itemize}
 \item Reduce the scope to types that have a \tcode{get} method in the \tcode{std::} namespace.
@@ -96,7 +108,7 @@ Second, R2 also modifies associative containers to accept tuple-like objects.
 \begin{itemize}
     \item The wording in R0 was non-sensical
     \item Add a note on deduction guide
-    \item Modify \tcode{tuple_cat} to unconditionally support \tcode{tuple-like} entities
+    \item Modify \tcode{tuple_cat} to unconditionally support \tcode{tuple-like} entities.
 \end{itemize}
 
 \pagebreak
@@ -587,7 +599,7 @@ concept @\placeholder{tuple-like}@ =  @\seebelow@; // \expos
 \end{itemdecl}
 
 \begin{itemdescr}
-A type \tcode{T} models the exposition-only concept \placeholder{tuple-like} if \tcode{std::remove_cvref_t<T>} is
+A type \tcode{T} models and satisfies the exposition-only concept \placeholder{tuple-like} if \tcode{std::remove_cvref_t<T>} is
 a specialization of \tcode{array}, \tcode{pair}, \tcode{tuple} or \tcode{ranges::subrange}.
 \end{itemdescr}
 
@@ -816,13 +828,13 @@ Let \tcode{I} be the pack \tcode{0, 1, ..., (sizeof...(Types) - 1)}.\newline
 \pnum
 \effects
 For all $i$, initializes the $i^\textrm{th}$ element of \tcode{*this}
-with \tcode{get<$i$>(\exposid{FWD}(u))}.
+with \tcode{get<$i$>(std::forward<UTuple>(u))}.
 
 \pnum
 \remarks
 The expression inside \keyword{explicit} is equivalent to:
 \begin{codeblock}
-    !(is_convertible_v<decltype(get<I>(@\exposid{FWD}@(u))), Types> && ...)
+    !(is_convertible_v<decltype(get<I>(std::forward<UTuple>(u))), Types> && ...)
 \end{codeblock}
 \end{itemdescr}
 \end{addedblock}
@@ -1304,19 +1316,19 @@ template parameter pack named \tcode{UTypes}, where indexing is zero-based.
     \begin{addedblock}
     % Constructs a \tcode{tuple} that is a concatenation of all \placeholder{tuple-like} in \tcode{tpls}.
 
-    For all $i$ in  \range{0}{\tcode{sizeof...(Tuples)}}
+    Let $n$ be \tcode{sizeof...(Tuples)}.
+
+    For every integer $0$ ≤ $i$ < $n$:
         \begin{itemize}
          \item Let $\tcode{T}_i$ be the $i^\text{th}$ type in \tcode{Tuples}.
          \item Let $\tcode{U}_i$ be \tcode{remove_cvref_t<$\tcode{T}_i$>}
-         \item Let $\tcode{tp}_i$ be the $i^\text{th}$ parameter in the function parameter pack \tcode{tpls}.
+         \item Let $\tcode{tp}_i$ be the $i^\text{th}$ element in the function parameter pack \tcode{tpls}.
          \item Let $S_i$ be \tcode{tuple_size_v<U$_i$>}.
          \item Let $E_i^k$ be \tcode{tuple_element_t<$k$, U$_i$>}.
          \item Let $e_i^k$ be \tcode{get<$k$>(std::forward<$\tcode{T}_i$>($\tcode{tp}_i$))}.
          \item Let $Elems_i$ be a pack of the types $E_i^0, \cdots,  E_i^{S_i-1}$.
          \item Let $elems_i$ be a pack of the expressions $e_i^0, \cdots,  e_i^{S_i-1}$.
      \end{itemize}
-
-    Let $n$ be \tcode{sizeof...(Tuples)}.
 
     The types in \tcode{CTypes} are equal to the ordered
     sequence of the expanded packs of types \\
@@ -1327,7 +1339,7 @@ template parameter pack named \tcode{UTypes}, where indexing is zero-based.
 \mandates \tcode{(is_constructible_v<CTypes, decltype(celems)> \&\& ...)} is \tcode{true}.
 
 \returns
-    \tcode{tuple<CTypes...>(celems...)}
+    \tcode{tuple<CTypes...>(celems...)}.
     \end{addedblock}
     \begin{removedblock}
 
@@ -1460,6 +1472,8 @@ constexpr bool operator==(const tuple<TTypes...>& t, const UTuple& u);
 \end{addedblock}
 
 \begin{itemdescr}
+    \added{For the first overload let \tcode{UTuple} be \tcode{tuple<UTypes...>}.}
+
     \pnum
     \mandates
     For all \tcode{i},
@@ -1474,7 +1488,7 @@ constexpr bool operator==(const tuple<TTypes...>& t, const UTuple& u);
     \tcode{true} if \tcode{get<i>(t) == get<i>(u)} for all
     \tcode{i}, otherwise \tcode{false}.
     \added{[Note:}
-    For any two zero-length \changed{tuple}{\placeholder{tuple-like}}s \tcode{e} and \tcode{f}, \tcode{e == f} returns \tcode{true}.
+    \changed{For any two zero-length tuples \tcode{e} and \tcode{f}, \tcode{e == f}}{If \tcode{sizeof...(TTypes)} equals zero,} returns \tcode{true}.
     \added{]}
 
     \pnum
@@ -1514,14 +1528,14 @@ operator<=>(const tuple<TTypes...>& t, const UTuple& u);
     \pnum
     \effects
     Performs a lexicographical comparison between \tcode{t} and \tcode{u}.
-    For any two zero-length \changed{tuple}{\placeholder{tuple-like}}s \tcode{t} and \tcode{u},
-    \tcode{t <=> u} returns \tcode{strong_ordering::equal}.
+    \changed{For any two zero-length tuples \tcode{t} and \tcode{u},
+    \tcode{t <=> u}}{If \tcode{sizeof...(TTypes)} equals zero,} returns \tcode{strong_ordering::equal}.
     Otherwise, equivalent to:
     \begin{codeblock}
         if (auto c = @\placeholder{synth-three-way}@(get<0>(t), get<0>(u)); c != 0) return c;
         return @$\tcode{t}_\mathrm{tail}$@ <=> @$\tcode{u}_\mathrm{tail}$@;
     \end{codeblock}
-    where $\tcode{r}_\mathrm{tail}$ for some \changed{tuple}{\placeholder{tuple-like}} \tcode{r}
+    where $\tcode{r}_\mathrm{tail}$ for some \removed{tuple} \tcode{r}
     is a tuple containing all but the first element of \tcode{r}.
 
     \begin{addedblock}
@@ -1545,12 +1559,16 @@ operator<=>(const tuple<TTypes...>& t, const UTuple& u);
 \rSec2[tuple.common_ref]{common_reference specialization}
 
 \begin{addedblock}
-    In the description that follow, let $i$ be in the range
-    \range{0}{\tcode{tuple\char`_size\char`_v<TTuple>}} in order.
+    In the descriptions that follow:
+    \begin{itemize}
+        \item Let \tcode{TTypes} be a pack formed by the sequence of \tcode{tuple\char`_element\char`_t<$i$, TTuple>} for every integer $0$ ≤ $i$ < \tcode{tuple\char`_size\char`_v<TTuple>}.
+        \item Let \tcode{UTypes} be a pack formed by the sequence of \tcode{tuple\char`_element\char`_t<$i$, UTuple>} for every integer $0$ ≤ $i$ < \tcode{tuple\char`_size\char`_v<UTuple>}.
+    \end{itemize}
 
-    Let $\tcode{T}_i$ be the type denoted by \tcode{tuple\char`_element\char`_t<$i$, TTuple>} of a template parameter named \tcode{TTuple} satisfying \placeholder{tuple-like}. \tcode{TTypes} denotes a pack formed by the sequence of $\tcode{T}_i$.
 
-    Let $\tcode{U}_i$ be the type denoted by \tcode{tuple\char`_element\char`_t<$i$, UTuple>} of a template parameter named \tcode{UTuple} satisfying \placeholder{tuple-like}. \tcode{UTypes} denotes a pack formed by the sequence of $\tcode{U}_i$.
+    %Let $\tcode{T}_i$ be the type denoted by \tcode{tuple\char`_element\char`_t<$i$, TTuple>} of a template parameter named \tcode{TTuple} satisfying \placeholder{tuple-like}. \tcode{TTypes} denotes a pack formed by the sequence of $\tcode{T}_i$.
+
+    %Let $\tcode{U}_i$ be the type denoted by \tcode{tuple\char`_element\char`_t<$i$, UTuple>} of a template parameter named \tcode{UTuple} satisfying \placeholder{tuple-like}. \tcode{UTypes} denotes a pack formed by the sequence of $\tcode{U}_i$.
 \end{addedblock}
 
 \begin{itemdecl}
@@ -1563,14 +1581,14 @@ struct basic_common_reference<TTuple, UTuple, TQual, UQual> {
 \begin{itemdescr}
 \constraints
 \begin{itemize}
-    \item \tcode{TTuple} is a specialization of \tcode{tuple} or \tcode{UTuple} is a specialization of \tcode{tuple},
-    \item \tcode{tuple_size_v<TTuple>} equals \tcode{tuple_size_v<UTuple>}.
+    \item \tcode{TTuple} is a specialization of \tcode{tuple} or \tcode{UTuple} is a specialization of \tcode{tuple}.
     \item \tcode{is_same_v<TTuple, decay_t<TTuple>>} is \tcode{true}.
     \item \tcode{is_same_v<UTuple, decay_t<UTuple>>} is \tcode{true}.
+    \item \tcode{tuple_size_v<TTuple>} equals \tcode{tuple_size_v<UTuple>}.
     \item \tcode{tuple<common_reference_t<TQual<TTypes>, UQual<UTypes>>...>} denotes a type.
 \end{itemize}
 
-\tcode{type} denotes the type \tcode{tuple<common_reference_t<TQual<TTypes>, UQual<UTypes>>...>}.
+The member \grammarterm{typedef-name} \tcode{type} denotes the type \tcode{tuple<common_reference_t<TQual<TTypes>, UQual<UTypes>>...>}.
 
 \end{itemdescr}
 
@@ -1584,15 +1602,16 @@ struct common_type<TTuple, UTuple> {
 
 \constraints
 \begin{itemize}
-    \item \tcode{TTuple} is a specialization of \tcode{tuple} or \tcode{UTuple} is a specialization of \tcode{tuple},
+    \item \tcode{TTuple} is a specialization of \tcode{tuple} or \tcode{UTuple} is a specialization of \tcode{tuple}.
     % add a constraint for the size
-    \item \tcode{tuple_size_v<TTuple>} equals \tcode{tuple_size_v<UTuple>}.
     \item \tcode{is_same_v<TTuple, decay_t<TTuple>>} is \tcode{true}.
     \item \tcode{is_same_v<UTuple, decay_t<UTuple>>} is \tcode{true}.
+    \item \tcode{tuple_size_v<TTuple>} equals \tcode{tuple_size_v<UTuple>}.
     \item \tcode{tuple<common_type_t<TTypes, UTypes>...>} denotes a type.
+
 \end{itemize}
 
-\tcode{type} denotes the type \tcode{tuple<common_type_t<TTypes, UTypes>...>}.
+The member \grammarterm{typedef-name} \tcode{type} denotes the type \tcode{tuple<common_type_t<TTypes, UTypes>...>}.
 
 \end{itemdescr}
 \end{addedblock}
@@ -2157,14 +2176,14 @@ The following exposition-only alias templates may appear in deduction guides for
     typename iterator_traits<InputIterator>::value_type;                // \expos
     template<class InputIterator>
     using @\placeholder{iter-key-type}@ = remove_const_t<
-    @\changed{typename iterator_traits<InputIterator>::value_type::first_type}{\\tuple_element_t<0, iter_value_t<InputIterator>>}@>;   // \expos
+    @\changed{typename iterator_traits<InputIterator>::value_type::first_type}{\\tuple_element_t<0, \placeholder{iter-value-type}<InputIterator>>}@>;   // \expos
     template<class InputIterator>
     using @\placeholder{iter-mapped-type}@ =
-    @\changed{typename iterator_traits<InputIterator>::value_type::second_type}{\\tuple_element_t<1, iter_value_t<InputIterator>>}@;   // \expos
+    @\changed{typename iterator_traits<InputIterator>::value_type::second_type}{\\tuple_element_t<1, \placeholder{iter-value-type}<InputIterator>>}@;   // \expos
     template<class InputIterator>
     using @\placeholder{iter-to-alloc-type}@ = pair<
-    add_const_t<@\changed{typename iterator_traits<InputIterator>::value_type::first_type}{\\tuple_element_t<0, iter_value_t<InputIterator>>}@>,
-    @\changed{typename iterator_traits<InputIterator>::value_type::second_type}{\\tuple_element_t<1, iter_value_t<InputIterator>>}@>;  // \expos
+    add_const_t<@\changed{typename iterator_traits<InputIterator>::value_type::first_type}{\\tuple_element_t<0, \placeholder{iter-value-type}<InputIterator>>}@>,
+    @\changed{typename iterator_traits<InputIterator>::value_type::second_type}{\\tuple_element_t<1, \placeholder{iter-value-type}<InputIterator>>}@>;  // \expos
 \end{codeblock}
 
 
@@ -2237,6 +2256,34 @@ namespace std::ranges {
 
 
 \rSec3[range.zip.view]{Class template \tcode{zip_view}}
+
+
+\rSec3[range.zip.view]{Class template \tcode{zip_view}}
+
+\indexlibrarymember{begin}{zip_view}%
+\indexlibrarymember{end}{zip_view}%
+\indexlibrarymember{size}{zip_view}%
+\begin{codeblock}
+namespace std::ranges {
+    template<class... Rs>
+    concept @\defexposconcept{zip-is-common}@ =                             // \expos
+    (sizeof...(Rs) == 1 && (@\libconcept{common_range}@<Rs> && ...)) ||
+    (!(@\libconcept{bidirectional_range}@<Rs> && ...) && (@\libconcept{common_range}@<Rs> && ...)) ||
+    ((@\libconcept{random_access_range}@<Rs> && ...) && (@\libconcept{sized_range}@<Rs> && ...));
+
+    @\removed{template<class... Ts>}@
+    @\removed{using \exposid{tuple-or-pair} = \seebelow;                 // \expos}@
+
+    template<class F, class Tuple>
+    constexpr auto @\exposid{tuple-transform}@(F&& f, Tuple&& tuple) { // \expos
+        return apply([&]<class... Ts>(Ts&&... elements) {
+            return @\exposid{tuple-or-pair}@<invoke_result_t<F&, Ts>...>(
+            invoke(f, std::forward<Ts>(elements))...
+            );
+        }, std::forward<Tuple>(tuple));
+    }
+\end{codeblock}
+
 
 \ednote{Remove [range.zip.view]p1}
 

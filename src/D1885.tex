@@ -150,16 +150,44 @@ assert(wtf8 == text_encoding("___wtf8__"));
 
 \section{Revisions}
 
-\subsection*{Revision 11}
+
 \begin{itemize}
     \item Fix formatting issues in the wording.
+    \item Fix typo in \tcode{text_encoding::operator==(id)}
+    \item Place the new header in the [localization] clause as a temporary location.
 \end{itemize}
+
+\subsection*{Revision 11}
+Following LWG small group review (12th June 2022)
+\begin{itemize}
+    \item Add a synopsis for the \tcode{text_encoding} header.
+    \item Move the definition of \tcode{text_encoding::id} in its own subsection.
+    \item Add Overview, General, and Members headings.
+    \item Correctly use square brackets to denote an example.
+    \item Remove nonsensical \tcode{text_encoding::} qualification from the declaration of \tcode{environment_is}.
+    \item Reorder the bullets in \tcode{text_encoding::id}.
+    \item Fix the \tcode{text_encoding} invariant description (\tcode{==other} => \tcode{!= unknown} in the second bullet).
+    \item Add a comma in \placeholder{COMP_NAME} (equal, ignoring...).
+    \item all elements which => all elements that
+    \item \tcode{text_encoding(string_view)} constructor: basic source character set => basic character set, add reference to lex.charset.
+    \item Turn that constructor's bullets into sentences.
+    \item Add missing parentheses in \tcode{ranges::contains(aliases, ...)}.
+    \item In \tcode{name()} NTMBs => NTBS (unlike what i said in the meeting, this can never be a multi byte string because the constructor has a precondition, which needs to be there for COMP_NAME to work with exotic shift state encodings).
+    \item In \tcode{name()}, use a different notation for the range.
+    \item Specify that \tcode{text_encoding} is a trivially copyable type.
+    \item In the description of aliases_view
+    \begin{itemize}
+        \item \tcode{alias_view} models and satisfies => \tcode{alias_view} models.
+        \item \tcode{model same_as<const char*>} => denote \tcode{const char*}.
+    \end{itemize}
+\end{itemize}
+
 
 \subsection*{Revision 10}
 \begin{itemize}
 \item \hyperref[P2498-concerns]{Address more concerns} raised by \paper{P2498R1}, and subsequent SG16 suggestions.
 \end{itemize}
-    
+
 \subsection*{Revision 9}
 
 LEWG forwarded P1885R8 to LWG, however:
@@ -1089,10 +1117,63 @@ place that respects the current alphabetic order}:
 #define __cpp_lib_text_encoding 2030XX (**placeholder**) // also in \tcode{text_encoding}
 \end{codeblock}
 
-\ednote{Add a new header \tcode{<text_encoding>}}.
 
 \begin{quote}
+
+\rSec1[localization]{Localization}
+
+\rSec1[localization.general]{General}
+
+\pnum
+This Clause describes components that \Cpp{} programs may use to
+encapsulate (and therefore be more portable when confronting)
+cultural differences.
+The locale facility includes
+internationalization support for character classification and string collation,
+numeric, monetary, and date/time formatting and parsing, and
+message retrieval.
+
+\pnum
+The following subclauses describe components for
+locales themselves,
+the standard facets, and
+facilities from the ISO C library,
+as summarized in \tref{localization.summary}.
+
+\begin{libsumtab}{Localization library summary}{localization.summary}
+    \char`[locales] & Locales                   &   \tcode{<locale>}    \\
+    \char`[locale.categories] & Standard \tcode{locale} & categories    \\
+    \char`[c.locales] & C library locales       &   \tcode{<clocale>}   \\
+    \added{\char`[text.encoding]} & \added{Text encodings identification}  &   \added{\tcode{<text_encoding>}}   \\
+\end{libsumtab}
+
+\ednote{The intent is to [text.encoding] to a better section at a letter date, as described in \href{https://github.com/cplusplus/draft/issues/5226}{GH\#5226} }.
+
 \begin{addedblock}
+\rSec2[text.encoding.syn]{Header \tcode{<text\_encoding>} synopsis}
+
+\ednote{The position of this subclause in [localization] is left as the editors discretion}.
+
+\begin{codeblock}
+
+namespace std {
+
+    struct text_encoding;
+
+    // hash support
+    template<class T> struct hash;
+    template<>
+    struct hash<text_encoding>;
+
+}
+
+\end{codeblock}
+
+
+\rSec2[text.encoding]{class \tcode{text_encoding}}
+
+
+\rSec3[text.encoding.overview]{Overview}
 
 [text.encoding] describes an interface for accessing the IANA Character Sets registry.
 
@@ -1107,7 +1188,360 @@ struct text_encoding {
 
     inline constexpr size_t max_name_length = 63;
 
-    enum class id : int_least32_t {
+    enum class id : int_least32_t;
+
+    using enum id;
+
+    constexpr text_encoding() = default;
+    constexpr explicit text_encoding(string_view name) noexcept;
+    constexpr text_encoding(id mib) noexcept;
+
+    constexpr id mib() const noexcept;
+    constexpr const char* name() const noexcept;
+
+    struct aliases_view;
+    constexpr aliases_view aliases() const noexcept;
+
+    constexpr friend bool operator==(const text_encoding& encoding,
+                                     const text_encoding & other) noexcept;
+    constexpr friend bool operator==(const text_encoding& encoding, id mib) noexcept;
+
+    static consteval text_encoding literal() noexcept;
+
+    static text_encoding environment();
+
+
+    template<id id_>
+    static bool environment_is();
+
+    private:
+        id mib_ = id::unknown; // \expos
+        char name_[max_name_length+1] = {0}; // \expos
+    };
+}
+\end{codeblock}
+\end{addedblock}
+\end{quote}
+
+
+\begin{addedblock}
+
+
+\tcode{text_encoding} is a trivially copyable type ([basic.types.general]).
+
+\rSec3[text.encoding.general]{General}
+
+\pnum A \defn{registered character encoding} is a character encoding scheme in the IANA Character Sets registry.
+\begin{note}
+    The IANA Character Sets registry refers to character sets rather than character encodings.
+\end{note}
+
+
+
+The set of known registered character encoding contains every registered character encoding specified in the IANA Character Sets registry except for the following:
+\begin{itemize}
+\item NATS-DANO (33)
+\item NATS-DANO-ADD	(34)
+\end{itemize}
+
+Each known registered character encoding is identified by an enumerator in \tcode{text_encoding::id}, has a unique \defn{primary name} and has a set of zero or more \defn{alias}{es}.
+The primary name of a registered character encoding is the name of that encoding specified in the IANA Character Sets registry.
+
+\ednote{The term primary name appears in \href{https://datatracker.ietf.org/doc/html/rfc2978\#section-2.3}{RFC2978}}
+
+The set of aliases of a registered character encoding is an implementation-defined superset of the aliases specified in the IANA Character Sets registry.
+No two registered character encodings share any identical alias when compared by \tcode{\placeholder{COMP_NAME}}.
+
+
+How a \tcode{text_encoding} object is determined to be representative of a character encoding scheme implemented in the translation or execution environment is implementation-defined.
+
+An object \tcode{e} of type \tcode{text_encoding} maintains the following invariants:
+\begin{itemize}
+\item \tcode{e.name() == nullptr} is \tcode{true} if and only if \tcode{e.mib() == text_encoding::id::unknown} is \tcode{true}.
+\item \tcode{e.mib() == text_encoding(e.name()).mib()} is \tcode{true} if \tcode{e.mib() != text_encoding::id::unknown} is \tcode{true}.
+\end{itemize}
+
+\recommended
+\begin{itemize}
+\item Implementations should not consider registered encodings to be interchangeable [Example:Shift_JIS and Windows-31J denote different encodings].
+\item Implementations should not refer to a registered encoding to describe another similar yet different non-registered encoding unless there is a precedent on that implementation [Example: Big5].
+% \item The encodings returned from \tcode{wide_literal} and \tcode{wide_environments} should describe encodings in the native endianness.
+% \item The encodings returned from \tcode{wide_literal} and \tcode{wide_environments} should describe encodings whose code unit types is represented by \tcode{sizeof(wchar_t)} octets.
+\end{itemize}
+
+
+\pnum Let \tcode{bool \placeholder{COMP_NAME}(string_view a, string_view b)} be a function that returns \tcode{true} if the two strings a and b encoded in the ordinary literal encoding are equal, ignoring, from left-to-right,
+\begin{itemize}
+    \item all elements that are not digits or letters [character.seq.general],
+    \item character case, and
+    \item any sequence of one or more '0' character not immediately preceded by a sequence consisting of a digit in the range [1-9] optionally followed by one or more elements which are not digits or letters.
+\end{itemize}
+
+\begin{note}
+    This comparison is identical to the "Charset Alias Matching" algorithm described in the Unicode Technical Standard 22.
+\end{note}
+
+\begin{example}
+\begin{codeblock}
+    assert(COMP_NAME("UTF-8", "utf8") == true);
+    assert(COMP_NAME("u.t.f-008", "utf8") == true);
+    assert(COMP_NAME("ut8", "utf8") == false);
+    assert(COMP_NAME("utf-80", "utf8") == false);
+\end{codeblock}
+\end{example}
+
+%\pnum Given a \tcode{text_encoding} object \tcode{E}, let \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}} denote
+%\begin{itemize}
+%    \item an implementation-defined \tcode{text_encoding} object \tcode{n} such as \tcode{n == text_encoding::id::UTF16} is \tcode{true}  if \tcode{E == text_encoding::id::UTF16LE || E == text_encoding::id::UTF16BE} is \tcode{true},
+%    \item otherwise if \tcode{e == text_encoding::id::UTF132LE || e == text_encoding::id::UTF32BE} is \tcode{true}, an implementation-defined \tcode{text_encoding} \tcode{n} such as \tcode{n == text_encoding::id::UTF32} is \tcode{true},
+%    \item otherwise \tcode{E}.
+%\end{itemize}
+
+
+
+\rSec3[text.encoding.members]{Members}
+
+\begin{itemdecl}
+constexpr explicit text_encoding(string_view name) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \preconditions
+    \begin{itemize}
+        \item \tcode{name} represents a string in the ordinary literal encoding consisting only of elements of the basic character set [lex.charset].
+        \item \tcode{name.size() <= max_name_length} is \tcode{true}.
+        \item \tcode{name.contains('\textbackslash 0')} is \tcode{false}.
+    \end{itemize}
+    \postconditions
+    \begin{itemize}
+         \item If there exists a primary name or alias \tcode{a} of a known registered character encoding such that \tcode{\placeholder{COMP_NAME}(a, name)} is \tcode{true}, \tcode{mib_} has the value of the enumerator of \tcode{id} associated with that registered character encoding. Otherwise, \tcode{mib_ == id::other} is \tcode{true}.
+         \item  \tcode{name.compare(name_) == 0} is \tcode{true}.
+    \end{itemize}
+\end{itemdescr}
+
+
+\begin{itemdecl}
+constexpr text_encoding(id mib) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \preconditions
+    \tcode{mib} has the value of one of the enumerators of \tcode{id}.
+
+    \postcondition
+    \begin{itemize}
+       \item  \tcode{mib_ == mib} is \tcode{true}.
+       \item  If \tcode{(mib_ == id::unknown || mib_ == id::other)} is \tcode{true}, \tcode{strlen(name_) == 0} is \tcode{true}. Otherwise,
+       \tcode{ranges::contains(aliases(), string_view(name_))} is \tcode{true}.
+    \end{itemize}
+\end{itemdescr}
+
+
+\begin{itemdecl}
+constexpr id mib() const noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\returns \tcode{mib\_}.
+
+\end{itemdescr}
+
+\begin{itemdecl}
+constexpr const char* name() const noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+\returns \tcode{name_} if \tcode{(name_[0] != '\textbackslash 0')}, \tcode{nullptr} otherwise;
+
+\remarks
+If \tcode{name() == nullptr} is \tcode{false}, \tcode{name()} is an NTBS and accessing elements of\\
+\tcode{name\_} outside of the range \tcode{name() + [0, strlen() + 1)} is undefined behavior.
+\end{itemdescr}
+
+\begin{itemdecl}
+constexpr aliases_view aliases() const noexcept;
+\end{itemdecl}
+
+
+\begin{itemdescr}
+
+Let \tcode{r} denote an instance of \tcode{aliases_view}.
+
+\pnum If \tcode{*this} represents a known registered character encoding then:
+\begin{itemize}
+    \item \tcode{r.front()} is the  primary name of the registered character encoding,
+    \item \tcode{r} contains the aliases of the registered character encoding,
+    \item \tcode{r} does not contain duplicate values when compared with \tcode{strcmp}.
+\end{itemize}
+
+Otherwise, \tcode{r} is an empty range.
+
+All elements in \tcode{r} are non-null, non-empty NTBS encoded in the literal character encoding and comprised only of characters from the basic character set.
+
+\returns \tcode{r}.
+
+\begin{note}
+The order of elements in \tcode{r} is unspecified.
+\end{note}
+
+\end{itemdescr}
+
+\begin{itemdecl}
+static consteval text_encoding literal() noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+
+\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.
+
+\returns a \tcode{text_encoding} object representing the encoding scheme associated with the ordinary string literals [lex.charset].
+
+\end{itemdescr}
+
+%\begin{itemdecl}
+%static consteval text_encoding wide_literal() noexcept;
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%
+%\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.
+%
+%Let \tcode{E} be a \tcode{text_encoding} object representing the encoding scheme associated with the object representation of wide string literals [lex.charset].
+%
+%\returns \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}}.
+%
+%\begin{note}
+%    The encoding represented by the returned value of this function, if any, is not required to meet the preconditions of all the standard wide-character functions.
+%\end{note}
+
+% \recommended Implementations should return a value that represents an encoding whose code unit size matches the size of a single \tcode{wchar_t}.
+
+% \end{itemdescr}
+
+\begin{itemdecl}
+static text_encoding environment();
+\end{itemdecl}
+
+
+\begin{itemdescr}
+
+\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.
+
+\returns A \tcode{text_encoding} object representing the implementation-defined character encoding scheme of the environment.
+On a POSIX implementation, this is the encoding scheme associated with the POSIX locale denoted by the empty string \tcode{""}.
+
+\begin{note}
+    This function is not affected by calls to \tcode{setlocale}.
+    It is unspecified whether this function is affected by changes to environment variables during the lifetime of the program.
+\end{note}
+
+\recommended Implementations should return a value that is not affected by calls to the POSIX function \tcode{setenv}
+and other functions which can modify the environment [support.runtime].
+
+%\end{itemdescr}
+%
+%\begin{itemdecl}
+%static text_encoding wide_environment();
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%
+%\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.
+%
+%Let \tcode{E} be a \tcode{text_encoding} object representing the implementation-defined wide character encoding scheme of the environment.
+%On a POSIX implementation, this is the wide encoding scheme associated with the POSIX locale denoted by the empty string \tcode{""}.
+%
+%\returns \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}}.
+%
+%\begin{note}
+%    This function is not affected by calls to \tcode{setlocale}.
+%    It is unspecified whether this function is affected by changes to environment variables during the lifetime of the program.
+%    The encoding represented by the returned value of this function, if any, is not required to meet the preconditions of all the standard wide-character functions.
+%\end{note}
+%
+%% \recommended Implementations should return a value that represents an encoding whose code unit size matches the size of a single \tcode{wchar_t}.
+%
+
+\end{itemdescr}
+
+\begin{itemdecl}
+template<id id_>
+static bool environment_is();
+\end{itemdecl}
+
+\begin{itemdescr}
+\returns \tcode{environment() == id_}
+\end{itemdescr}
+
+%\begin{itemdecl}
+%template<id id_>
+%static bool text_encoding::environment_wide_is();
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%\returns \tcode{wide_environment() == id_}
+%\end{itemdescr}
+
+
+\rSec3[text.encoding.aliases]{class text_encoding::aliases_view}
+
+\begin{codeblock}
+struct text_encoding::aliases_view : ranges::view_interface<text_encoding::aliases_view> {\textbf{}
+    constexpr @\impdef@ begin() const;
+    constexpr @\impdef@ end() const;
+};
+\end{codeblock}
+
+\tcode{text_encoding::aliases_view} models \tcode{copyable}, \tcode{ranges::view}, \tcode{ranges::random_access_range}, and \tcode{ranges::borrowed_range}.
+
+Both \tcode{ranges::range_value_t<text_encoding::aliases_view>} and \tcode{ranges::range_reference_t<text_encoding::aliases_view>} denote \tcode{const char*}.
+
+% \ednote{Tomasz suggested that the definitions of begin/end are not necessary as we already say that \tcode{text_encoding::aliases_view} models \tcode{ranges::view} }
+
+%\begin{itemdecl}
+%constexpr iterator begin() const;
+%\end{itemdecl}
+%\begin{itemdescr}
+%\returns an iterator representing the begin of the range of aliases for the encoding the view was constructed from.
+%\end{itemdescr}
+%
+%
+%\begin{itemdecl}
+%constexpr sentinel end() const;
+%\end{itemdecl}
+%\begin{itemdescr}
+%\returns an iterator representing the end of the range of aliases for the encoding the view was constructed from.
+%\end{itemdescr}
+
+
+\rSec3[text.encoding.comp]{Comparison functions}
+
+\begin{itemdecl}
+    constexpr bool operator==(const text_encoding & a, const text_encoding & b) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \returns
+
+    If \tcode{a.mib_ == id::other \&\& b.mib_ == id::other} is \tcode{true}, then \tcode{\placeholder{COMP_NAME}(a.name_, b.name_)}.
+
+    Otherwise, \tcode{a.mib_ == b.mib_}.
+
+\end{itemdescr}
+
+\begin{itemdecl}
+    constexpr bool operator==(const text_encoding & encoding, id mib) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \returns \tcode{encoding.mib_ == mib}.
+
+    \remarks This operator induces an equivalence relation on its arguments\\
+    if and only if \tcode{mib != id::other} is \tcode{true}.
+\end{itemdescr}
+
+\rSec3[text.encoding.id]{enumeration \tcode{text_encoding::id}}
+
+\begin{codeblock}
+    enum class id {
         other = 1,
         unknown = 2,
         ASCII = 3,
@@ -1367,365 +1801,20 @@ struct text_encoding {
         TIS620 = 2259,
         CP50220 = 2260
     };
-
-    using enum id;
-
-    constexpr text_encoding() = default;
-    constexpr explicit text_encoding(string_view name) noexcept;
-    constexpr text_encoding(id mib) noexcept;
-
-    constexpr id mib() const noexcept;
-    constexpr const char* name() const noexcept;
-
-    struct aliases_view;
-    constexpr aliases_view aliases() const noexcept;
-
-    constexpr friend bool operator==(const text_encoding& encoding, 
-                                     const text_encoding & other) noexcept;
-    constexpr friend bool operator==(const text_encoding& encoding, id mib) noexcept;
-
-    static consteval text_encoding literal() noexcept;
-
-    static text_encoding environment();
-
-
-    template<id id_>
-    static bool text_encoding::environment_is();
-
-    private:
-        id mib_ = id::unknown; // \expos
-        char name_[max_name_length+1] = {0}; // \expos
-    };
-
-
-// hash support
-template<class T> struct hash;
-template<> struct hash<text_encoding>;
-
-}
-\end{codeblock}
-\end{addedblock}
-\end{quote}
-
-
-\begin{addedblock}
-
-\pnum A \defn{registered character encoding} is a character encoding scheme in the IANA Character Sets registry.
-\begin{note}
-    The IANA Character Sets registry refers to character sets rather than character encodings.
-\end{note}
-
-
-
-The set of known registered character encoding contains every registered character encoding specified in the IANA Character Sets registry except for the following:
-\begin{itemize}
-\item NATS-DANO (33)
-\item NATS-DANO-ADD	(34)
-\end{itemize}
-
-Each known registered character encoding is identified by an enumerator in \tcode{text_encoding::id}, has a unique \defn{primary name} and has a set of zero or more \defn{alias}{es}.
-The primary name of a registered character encoding is the name of that encoding specified in the IANA Character Sets registry.
-
-\ednote{The term primary name appears in \href{https://datatracker.ietf.org/doc/html/rfc2978\#section-2.3}{RFC2978}}
-
-The set of aliases of a registered character encoding is an implementation-defined superset of the aliases specified in the IANA Character Sets registry.
-No two registered character encodings share any identical alias when compared by \tcode{\placeholder{COMP_NAME}}.
-
-\begin{note}
-The \tcode{text_encoding::id} enumeration contains an enumerator for each known registered character encoding.
-For each encoding, the corresponding enumerator is derived from the alias beginning with "cs", as follows
-\begin{itemize}
-    \item the "cs" prefix is removed from each name
-    \item \tcode{csUnicode} is mapped to \tcode{text_encoding::id::UCS2}
-    \item \tcode{csIBBM904} is mapped to \tcode{text_encoding::id::IBM904}
-    \end{itemize}
-\end{note}
-
-How a \tcode{text_encoding} object is determined to be representative of a character encoding scheme implemented in the translation or execution environment is implementation-defined.
-
-An object \tcode{e} of type \tcode{text_encoding} maintains the following invariants:
-\begin{itemize}
-\item \tcode{e.name() == nullptr} is \tcode{true} if and only if \tcode{e.mib() == text_encoding::id::unknown} is \tcode{true}.
-\item \tcode{e.mib() == text_encoding(e.name()).mib()} is \tcode{true} if \tcode{e.mib() == text_encoding::id::other} is \tcode{true}.
-\end{itemize}
-
-\recommended
-\begin{itemize}
-\item Implementations should not consider registered encodings to be interchangeable [Example:Shift_JIS and Windows-31J denote different encodings].
-\item Implementations should not refer to a registered encoding to describe another similar yet different non-registered encoding unless there is a precedent on that implementation (Example: Big5).
-% \item The encodings returned from \tcode{wide_literal} and \tcode{wide_environments} should describe encodings in the native endianness.
-% \item The encodings returned from \tcode{wide_literal} and \tcode{wide_environments} should describe encodings whose code unit types is represented by \tcode{sizeof(wchar_t)} octets.
-\end{itemize}
-
-
-\pnum Let \tcode{bool \placeholder{COMP_NAME}(string_view a, string_view b)} be a function that returns \tcode{true} if the two strings a and b encoded in the ordinary literal encoding are equal ignoring, from left-to-right,
-\begin{itemize}
-    \item all elements which are not digits or letters [character.seq.general],
-    \item character case, and
-    \item any sequence of one or more '0' character not immediately preceded by a sequence consisting of a digit in the range [1-9] optionally followed by one or more elements which are not digits or letters.
-\end{itemize}
-
-\begin{note}
-    This comparison is identical to the "Charset Alias Matching" algorithm described in the Unicode Technical Standard 22.
-\end{note}
-
-\begin{example}
-\begin{codeblock}
-    assert(COMP_NAME("UTF-8", "utf8") == true);
-    assert(COMP_NAME("u.t.f-008", "utf8") == true);
-    assert(COMP_NAME("ut8", "utf8") == false);
-    assert(COMP_NAME("utf-80", "utf8") == false);
-\end{codeblock}
-\end{example}
-
-%\pnum Given a \tcode{text_encoding} object \tcode{E}, let \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}} denote
-%\begin{itemize}
-%    \item an implementation-defined \tcode{text_encoding} object \tcode{n} such as \tcode{n == text_encoding::id::UTF16} is \tcode{true}  if \tcode{E == text_encoding::id::UTF16LE || E == text_encoding::id::UTF16BE} is \tcode{true},
-%    \item otherwise if \tcode{e == text_encoding::id::UTF132LE || e == text_encoding::id::UTF32BE} is \tcode{true}, an implementation-defined \tcode{text_encoding} \tcode{n} such as \tcode{n == text_encoding::id::UTF32} is \tcode{true},
-%    \item otherwise \tcode{E}.
-%\end{itemize}
-
-
-\begin{itemdecl}
-constexpr explicit text_encoding(string_view name) noexcept;
-\end{itemdecl}
-
-\begin{itemdescr}
-    \preconditions
-    \begin{itemize}
-        \item \tcode{name} represents a string in the ordinary literal encoding,
-        \item all elements in \tcode{name} are in the basic source character set,
-        \item \tcode{name.size() <= max_name_length} is \tcode{true}, and
-        \item \tcode{name.contains('\textbackslash 0')} is \tcode{false}.
-    \end{itemize}
-    \postconditions
-    \begin{itemize}
-         \item If there exists a primary name or alias \tcode{a} of a known registered character encoding such that \tcode{\placeholder{COMP_NAME}(a, name)} is \tcode{true}, \tcode{mib_} has the value of the enumerator of \tcode{id} associated with that registered character encoding. Otherwise, \tcode{mib_ == id::other} is \tcode{true}.
-         \item  \tcode{name.compare(name_) == 0} is \tcode{true}.
-    \end{itemize}
-\end{itemdescr}
-
-
-\begin{itemdecl}
-constexpr text_encoding(id mib) noexcept;
-\end{itemdecl}
-
-\begin{itemdescr}
-    \preconditions
-    \tcode{mib} has the value of one of the enumerators of \tcode{id}.
-
-    \postcondition
-    \begin{itemize}
-       \item  \tcode{mib_ == mib} is \tcode{true}.
-       \item  If \tcode{(mib_ == id::unknown || mib_ == id::other)} is \tcode{true}, \tcode{strlen(name_) == 0} is \tcode{true}. Otherwise,
-       \tcode{ranges::contains(aliases, string_view(name_))} is \tcode{true}.
-    \end{itemize}
-\end{itemdescr}
-
-
-\begin{itemdecl}
-constexpr id mib() const noexcept;
-\end{itemdecl}
-
-\begin{itemdescr}
-\returns \tcode{mib\_}.
-
-\end{itemdescr}
-
-\begin{itemdecl}
-constexpr const char* name() const noexcept;
-\end{itemdecl}
-\begin{itemdescr}
-\returns \tcode{name_} if \tcode{(name_[0] != '\textbackslash 0')}, \tcode{nullptr} otherwise;
-
-\remarks
-If \tcode{name() == nullptr} is false, \tcode{name()} is an NTMBs and accessing elements of\\
-\tcode{name\_} outside of the range \tcode{[name(), strlen(name())+1]} is undefined behavior.
-\end{itemdescr}
-
-\begin{itemdecl}
-constexpr aliases_view aliases() const noexcept;
-\end{itemdecl}
-
-
-\begin{itemdescr}
-
-Let \tcode{r} denote an instance of \tcode{aliases_view}.
-
-\pnum If \tcode{*this} represents a known registered character encoding then:
-\begin{itemize}
-    \item \tcode{r.front()} is the  primary name of the registered character encoding,
-    \item \tcode{r} contains the aliases of the registered character encoding,
-    \item \tcode{r} does not contain duplicate values when compared with \tcode{strcmp}.
-\end{itemize}
-
-Otherwise, \tcode{r} is an empty range.
-
-All elements in \tcode{r} are non-null, non-empty NTBS encoded in the literal character encoding and comprised only of characters from the basic character set.
-
-\returns \tcode{r}.
-
-\begin{note}
-The order of elements in \tcode{r} is unspecified.
-\end{note}
-
-\end{itemdescr}
-
-\begin{itemdecl}
-static consteval text_encoding literal() noexcept;
-\end{itemdecl}
-\begin{itemdescr}
-
-\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.
-
-\returns a \tcode{text_encoding} object representing the encoding scheme associated with the ordinary string literals [lex.charset].
-
-\end{itemdescr}
-
-%\begin{itemdecl}
-%static consteval text_encoding wide_literal() noexcept;
-%\end{itemdecl}
-%
-%\begin{itemdescr}
-%
-%\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.
-%
-%Let \tcode{E} be a \tcode{text_encoding} object representing the encoding scheme associated with the object representation of wide string literals [lex.charset].
-%
-%\returns \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}}.
-%
-%\begin{note}
-%    The encoding represented by the returned value of this function, if any, is not required to meet the preconditions of all the standard wide-character functions.
-%\end{note}
-
-% \recommended Implementations should return a value that represents an encoding whose code unit size matches the size of a single \tcode{wchar_t}.
-
-% \end{itemdescr}
-
-\begin{itemdecl}
-static text_encoding environment();
-\end{itemdecl}
-
-
-\begin{itemdescr}
-
-\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.
-
-\returns A \tcode{text_encoding} object representing the implementation-defined character encoding scheme of the environment.
-On a POSIX implementation, this is the encoding scheme associated with the POSIX locale denoted by the empty string \tcode{""}.
-
-\begin{note}
-    This function is not affected by calls to \tcode{setlocale}.
-    It is unspecified whether this function is affected by changes to environment variables during the lifetime of the program.
-\end{note}
-
-\recommended Implementations should return a value that is not affected by calls to the POSIX function \tcode{setenv}
-and other functions which can modify the environment [support.runtime].
-
-%\end{itemdescr}
-%
-%\begin{itemdecl}
-%static text_encoding wide_environment();
-%\end{itemdecl}
-%
-%\begin{itemdescr}
-%
-%\mandates \tcode{CHAR_BIT == 8} is \tcode{true}.
-%
-%Let \tcode{E} be a \tcode{text_encoding} object representing the implementation-defined wide character encoding scheme of the environment.
-%On a POSIX implementation, this is the wide encoding scheme associated with the POSIX locale denoted by the empty string \tcode{""}.
-%
-%\returns \tcode{\emph{SUBSTITUTE_UTF_ENCODING}{(E)}}.
-%
-%\begin{note}
-%    This function is not affected by calls to \tcode{setlocale}.
-%    It is unspecified whether this function is affected by changes to environment variables during the lifetime of the program.
-%    The encoding represented by the returned value of this function, if any, is not required to meet the preconditions of all the standard wide-character functions.
-%\end{note}
-%
-%% \recommended Implementations should return a value that represents an encoding whose code unit size matches the size of a single \tcode{wchar_t}.
-%
-
-\end{itemdescr}
-
-\begin{itemdecl}
-template<id id_>
-static bool text_encoding::environment_is();
-\end{itemdecl}
-
-\begin{itemdescr}
-\returns \tcode{environment() == id_}
-\end{itemdescr}
-
-%\begin{itemdecl}
-%template<id id_>
-%static bool text_encoding::environment_wide_is();
-%\end{itemdecl}
-%
-%\begin{itemdescr}
-%\returns \tcode{wide_environment() == id_}
-%\end{itemdescr}
-
-
-\rSec3[text.encoding.aliases]{class text_encoding::aliases_view}
-
-\begin{codeblock}
-struct text_encoding::aliases_view : ranges::view_interface<text_encoding::aliases_view> {
-    using iterator = @\impdef@;
-    using sentinel = @\impdef@;
-    constexpr iterator begin() const;
-    constexpr sentinel end() const;
-};
 \end{codeblock}
 
-\tcode{text_encoding::aliases_view} models \tcode{copyable}, \tcode{ranges::view}, \tcode{ranges::random_access_range}, and \tcode{ranges::borrowed_range}.
-Both \tcode{ranges::range_value_t<text_encoding::aliases_view>} and \tcode{ranges::range_reference_t<text_encoding::aliases_view>} model \tcode{same_as<const char*>}.
-
-\ednote{Tomasz suggested that the definitions of begin/end are not necessary as we already say that \tcode{text_encoding::aliases_view} models \tcode{ranges::view} }
-
-%\begin{itemdecl}
-%constexpr iterator begin() const;
-%\end{itemdecl}
-%\begin{itemdescr}
-%\returns an iterator representing the begin of the range of aliases for the encoding the view was constructed from.
-%\end{itemdescr}
-%
-%
-%\begin{itemdecl}
-%constexpr sentinel end() const;
-%\end{itemdecl}
-%\begin{itemdescr}
-%\returns an iterator representing the end of the range of aliases for the encoding the view was constructed from.
-%\end{itemdescr}
+\begin{note}
+    The \tcode{text_encoding::id} enumeration contains an enumerator for each known registered character encoding.
+    For each encoding, the corresponding enumerator is derived from the alias beginning with "cs", as follows
+    \begin{itemize}
+        \item \tcode{csUnicode} is mapped to \tcode{text_encoding::id::UCS2},
+        \item \tcode{csIBBM904} is mapped to \tcode{text_encoding::id::IBM904}, and
+        \item the "cs" prefix is removed from other names.
+    \end{itemize}
+\end{note}
 
 
-\rSec3[text.encoding.comp]{Comparison functions}
-
-\begin{itemdecl}
-    constexpr bool operator==(const text_encoding & a, const text_encoding & b) noexcept;
-\end{itemdecl}
-
-\begin{itemdescr}
-    \returns
-
-    If \tcode{a.mib_ == id::other \&\& b.mib_ == id::other} is \tcode{true}, then \tcode{\placeholder{COMP_NAME}(a.name_, b.name_)}.
-
-    Otherwise, \tcode{a.mib_ == b.mib_}.
-
-\end{itemdescr}
-
-\begin{itemdecl}
-    constexpr bool operator==(const text_encoding & encoding, id mib) noexcept;
-\end{itemdecl}
-
-\begin{itemdescr}
-    \returns \tcode{encoding.mib_ == mib}.
-
-    \remarks This operator induces an equivalence relation on its arguments\\
-    if and only if \tcode{i != id::other} is \tcode{true}.
-\end{itemdescr}
-
-\rSec3[text.encoding.hash]{Hash specialization}
+\rSec2[text.encoding.hash]{Hash specialization}
 
 \begin{itemdecl}
 template<class T> struct hash;
@@ -1735,6 +1824,8 @@ template<> struct hash<text_encoding>;
 \begin{itemdescr}
 The specialization is enabled ([unord.hash]).
 \end{itemdescr}
+
+
 
 \end{addedblock}
 

@@ -50,8 +50,13 @@ This proposal aims to identify contexts in which strings are not evaluated so th
 
 \subsection{R5}
 \begin{itemize}
-\item Re-specify \tcode{asm} declarations to accept any \grammarterm{balanced-token-seq} rather than trying to put constraints on the 
+\item Re-specify \tcode{asm} declarations to accept any \grammarterm{balanced-token-seq} rather than trying to put constraints on the
 \grammarterm{string-literal} they are currently specified to accept. This simplifies the specification and more closely matches existing practices.
+\textbf{Following EWG review, additional wording has been added to make it clear that an implementation does not have to support \tcode{asm} statements or any grammar therein}.
+The intent of the proposal is to allow implementer to either allow any kind of grammar they want in \tcode{asm} statements, or allow no grammar whatsoever; No implementation would have to
+change its handling of \tcode{asm} statements with this proposal.
+Further work to remove [decl.asm] entierly wile leaving the \tcode{asm} keyword reserved for vendor extensions could be the object of a separate paper.
+
 \item Fix a number of typos.
 \end{itemize}
 
@@ -142,6 +147,9 @@ Given the implementation-defined, conditionally supported nature of \tcode{asm} 
 This is consistent with GCC's "extended asm" syntax, notably.
 Implementations that support a single string literal in \tcode{asm} declarations can, of course, continue to do so with no change required to their
 implementation and are free to put whichever requirements they need on them.
+This does not requires an implementation to be able to parse arbitrary \grammarterm{balanced-token-seq} either.
+The intent is that any \grammarterm{balanced-token-seq} not recognized by an implementation that would otherwise support \tcode{asm} statements
+can be ill-formed.
 
 \section{Compilers survey}
 
@@ -172,11 +180,11 @@ The following diagnostics are emmited by MSVC with \tcode{/execution-charset:asc
 \begin{codeblock}
 static_assert(false, "Your code is on @\emoji{1F525}@");
 
-<source>(1): warning C4566: character represented by universal-character-name 
+<source>(1): warning C4566: character represented by universal-character-name
 '\u00F0'  cannot be represented in the current code page (20127)
-<source>(1): warning C4566: character represented by universal-character-name 
+<source>(1): warning C4566: character represented by universal-character-name
 '\u0178'  cannot be represented in the current code page (20127)
-<source>(1): warning C4566: character represented by universal-character-name 
+<source>(1): warning C4566: character represented by universal-character-name
 '\u201D' cannot be represented in the current code page (20127)
 <source>(1): warning C4566: character represented by universal-character-name
 '\u00A5' cannot be represented in the current code page (20127)
@@ -381,7 +389,7 @@ An \tcode{asm} declaration has the form
     \opt{attribute-specifier-seq} \keyword{asm} \terminal{(} \changed{string-literal}{balanced-token-seq} \terminal{)} \terminal{;}
 \end{bnf}
 
-The \tcode{asm} declaration is conditionally-supported; its meaning is
+The \tcode{asm} declaration is conditionally-supported; \added{any restrictions on the \grammarterm{balanced-token-seq} and} its meaning \changed{is}{are}
 \impldef{meaning of \tcode{asm} declaration}.
 %\begin{addedblock}
 %The \grammarterm{encoding-prefix} of the \grammarterm{string-literal} shall be absent.
@@ -664,7 +672,7 @@ A unary operator expression of the form:
     \terminal{_Pragma} \terminal{(} string-literal \terminal{)}
 \end{ncbnf}
 
-is processed as follows: The \grammarterm{string-literal} 
+is processed as follows: The \grammarterm{string-literal}
 is \defnx{destringized}{destringization} by
 \removed{deleting the \tcode{L} prefix, if present,} deleting the leading and trailing
 double-quotes,replacing each escape sequence \tcode{\textbackslash"} by a double-quote, and
