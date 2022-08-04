@@ -1,0 +1,563 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{\tcode{charN\_t} incremental adoption: Casting pointers of UTF character types}
+\docnumber{D2626R0}
+\audience{SG-16, LEWG, EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+We propose a set of functions to cast to and from pointers of \tcode{char8_t}, \tcode{char16_t}, \tcode{char32_t}.
+
+
+
+\section{Tony table}
+\subsection{Before}
+\begin{colorblock}
+
+const wchar_t* str = L"Hello @\emoji{🌎}@";
+
+// The innocent: ill-formed.
+const char16_t*  u = static_cast<const char16_t*>(str);
+
+// The 10x developer: UB.
+const char16_t*  u = reinterpret_cast<const char16_t*>(str);
+
+// The C approach: UB in C++
+const char16_t*  u = (const char16_t*)(str);
+
+// The ranger: @$O(n)$@, not contiguous
+auto v = std::wstring_view(str) | std::views::transform(std::bit_cast<char16_t, wchar_t>);
+
+// Download more RAM: @$O(n)$@, allocates
+auto v = std::wstring_view(str)
+    | std::views::transform(std::bit_cast<char16_t, char16_t>) | std::to<std::vector>;
+
+// The abstract Matrix: still UB
+const char16_t* u =  std::launder(reinterpret_cast<const char16_t*>(str));
+
+// The expert: not constexpr
+const char16_t* u =  std::start_lifetime_as_array(reinterpret_cast<const char16_t*>(str),
+                                                  std::char_traits<wchar_t>::length(str));
+
+\end{colorblock}
+\pagebreak
+\subsection{After}
+
+\begin{colorblock}
+// constexpr @\emoji{thumbs-up}@
+// no-op @\emoji{thumbs-up}@
+// Explicit about the semantics @\emoji{crab}@
+// Not UB @\emoji{astonished-face}@
+constexpr std::u16_string_view v = std::cast_as_utf_unchecked(L"Hello"sv);
+\end{colorblock}
+
+\section {Motivation}
+
+\tcode{char8_t}, \tcode{char16_t}, \tcode{char32_t} are useful to denotes UTF code units,
+and offer distinct types from \tcode{char}, \tcode{wchar_t}.
+
+Indeed, existing practices use \tcode{char} to represent bytes, code units in the narrow encoding,
+code units in an arbitrary encoding, or UTF-8 code units.
+
+It is therefore important that we had types to signal UTF code units and code units sequences such that:
+\begin{itemize}
+    \item library authors can signal that an interface expects UTF
+    \item library users can have some assurance that their UTF data will be properly interpreted and preserved.
+\end{itemize}
+
+This is necessary in C++ because the narrow and wide encodings are not guaranteed to be UTF-8 - and often are not -,
+and character types are not distinct from bytes or integer types.
+
+We can lament that there should be a single character type and that it should be UTF-8.
+Unfortunately, there are too much code and systems for which this wishful assumption doesn't hold.
+
+But of course, as \tcode{char16_t} and \tcode{char32_t} were adopted in C++11 and \tcode{char8_t} in C++20 - 15 to 25 years after the UTF encodings were standardized-, there exist a large body of code and projects that represent UTF-data by other means: Either using \tcode{char} and \tcode{wchar_t}, or an unsigned integer type.
+
+There exist no way to pass a \tcode{charN\_t} code units sequences to such pre-existing interface without either making a copy
+or triggering undefined behavior.
+This impossibility to pass or to extract \tcode{charN\_t*} to/from these legacy interfaces is one of the issues causing the seemingly poor adoption of these types, and the persistence of the problems they aimed to solve - and which very much still exist.
+
+
+\section{Design}
+
+We propose 2 sets of functions:
+
+\begin{itemize}
+\item \tcode{std::cast_as_utf_unchecked}: cast a pointer of \tcode{std::byte}, \tcode{char}, \tcode{wchar_t} or unsigned integer type of size \tcode{N} to a pointer of \tcode{charN_t}.
+\item \tcode{std::cast_utf_to<T>}: cast a pointer of \tcode{charN_t} to a pointer of \tcode{T} (which can be \tcode{std::byte}, \tcode{char}, \tcode{wchar_t} or an unsigned integer type of size \tcode{N}).
+\end{itemize}
+
+These functions have semantics somewhat similar to \tcode{std::start_lifetime_as_array} in that they end the lifetime of the source objects, and start the lifetime of new objects with the same value but a different type. They are also, unlike \tcode{std::start_lifetime_as_array}, \tcode{constexpr}.
+As such, they do require some compiler support in the form of a magic built-in.
+
+\subsection {Valid casts}
+
+\begin{tabular}{|l|c|c|c|}
+    \hline
+    & char8\_t & char16\_t & char32\_t \\
+    \hline
+    char & x &  &  \\
+    \hline
+    unsigned char & x &  &  \\
+    \hline
+    uint\_least16\_t &  & x &  \\
+    \hline
+    uint\_least32\_t &  &  & x \\
+    \hline
+    wchar\_t & ! & ! & ! \\
+    \hline
+    std::byte & x &  &  \\
+    \hline
+\end{tabular}
+
+! : implementation-defined
+
+Note that \tcode{charN_t} is defined to have the size of \tcode{uint\_leastN\_t} on all platforms
+(which will be N bits almost everywhere, but theorically there could be some extra padding bits, which don't affect anything).
+
+
+\subsection{\tcode{span} and \tcode{string_view} overloads}
+
+For convenience, we propose \tcode{span} and \tcode{basic_string_view} overloads of both \tcode{std::cast_as_utf_unchecked} and \tcode{std::cast_utf_to}.
+These functions take their parameter by rvalue reference, as the objects denoted by their range are ended. Forcing a move adds *some* safety or at least
+some signaling of what is happening. The goal is to make the interface as usable and ergonomic as possible.
+
+\subsection{Semamtic cast and Unicode sandwich}
+
+\tcode{std::cast_as_utf_unchecked} isn't just casting the type of the string.
+It is also meant to reflect that the string value will now be semantically a UTF-8 sequence. The type change, the representation does not, but the value and its domain do.
+The name and the precondition - that the sequence must indeed represent UTF data - reflect that domain change.
+
+\subsection{Naming}
+The names were picked to
+\begin{itemize}
+    \item Make it clear that it's a cast
+    \item Be the same for all utf character types, for the sake of genericity.
+    \item Make it clear that passing UTF data to a function that do not expect may not be a safe operation.
+    \item Leaving the room for a different function which does check for the validity of the UTF sequence and return an \tcode{std::expected} for example.
+    This is not explored in this paper, as to not getting ahead and conflicting with the work done by \tcode{P1629R1}.
+\end{itemize}
+
+\subsection{Headers}
+
+The basic pointer interface is tentatively in \tcode{<utility>}. This is not great, not terrible.
+There isn't a more suitable header - maybe \tcode{cuchar}, but there isn't anything C++ specific in there yet.
+
+\subsection{Why only supporting ranges of code units and not individual code units?}
+
+\tcode{std::bit_cast} is perfectly suitable for that purpose.
+
+\subsection{What about C?}
+
+in C, \tcode{charN_t} are aliases for the corresponding unsigned integer type, so the concern does not apply.
+
+
+\subsection{Future work}
+\begin{itemize}
+\item We should consider a validating variant of \tcode{std::cast_as_utf_unchecked}\\(\tcode{std::cast_as_utf}) once the standard library has a better
+grasp on how to model encoding errors.
+\item \tcode{charN_t} types are poorly supported in the standard library. We should notably support them in format.
+\end{itemize}
+
+\subsection{Alternative (not) considered}
+Other solutions have been proposed to this problem:
+\begin{itemize}
+    \item Relaxing aliasing rules
+    \item Introducing special overloading rules
+    \item Introducing magic in \tcode{static_cast}
+    \item Deprecating/Removing \tcode{char8_t} from the standard.
+\end{itemize}
+
+However, these solutions do not address how their application would solve the problems that led to the introduction of these character types
+in the first place (see \paper{P0482R6} for the original motivation), or would introduce poorly understood complexities, while hiding an operation,
+which, by its dangerouns nature, should be explicit.
+
+
+\section{Implementation}
+I prototyped a crude implementation in clang, but in the absence of existing support for \tcode{std::start_lifetime_as_array}, the implementation is probably not entirely correct. It does however illustrate the feature and the constexpr support, which is the one novelty compared to  \tcode{std::start_lifetime_as_array}.
+A prototype can be found on \href{https://godbolt.org/z/d6n8b6qKd}{Compiler Explorer}, demonstrating constexpr usage and usage with an existing interface -
+In this case \tcode{iconv}.
+
+
+\section{Existing practices}
+\begin{itemize}
+\item Many Win32 functions deal in \tcode{wchar_t*} pointers, but the encoding is UTF-16, so it should be possible to exchange \tcode{char16_t*} with these interfaces, but isn't.
+\item \tcode{iconv} can convert to and from UTF-8 but its interface expects \tcode{char} pointers.
+\item \tcode{QString::fromUtf8} expects \tcode{char} pointers.
+\item ICU can use \tcode{char16_t} or \tcode{uint16_t}.  ICU offers cast functions that are one of the inspirations for this paper \href{https://unicode-org.github.io/icu-docs/apidoc/dev/icu4c/namespaceicu.html#aa6035f45e4e41a4f7e7c7074e38304cd}{[Documentation]}.
+\item Any resemblance with \href{https://doc.rust-lang.org/stable/std/str/fn.from_utf8_unchecked.html}{Rust's \tcode{std::str::from_utf8_unchecked}} is not entirely coincidental.
+\end{itemize}
+
+\section{Wording}
+
+\rSec2[basic.fundamental]{Fundamental types}
+
+Type \keyword{char} is a distinct type
+that has an \impldef{underlying type of \tcode{char}} choice of
+``\tcode{\keyword{signed} \keyword{char}}'' or ``\tcode{\keyword{unsigned} \keyword{char}}'' as its underlying type.
+The three types \keyword{char}, \tcode{\keyword{signed} \keyword{char}}, and \tcode{\keyword{unsigned} \keyword{char}}
+are collectively called
+\defnadjx{ordinary character}{types}{type}.
+The ordinary character types and \keyword{char8_t}
+are collectively called \defnadjx{narrow character}{types}{type}.
+For narrow character types,
+each possible bit pattern of the object representation represents
+a distinct value.
+\begin{note}
+    This requirement does not hold for other types.
+\end{note}
+\begin{note}
+    A bit-field of narrow character type whose width is larger than
+    the width of that type has padding bits; see \ref{basic.types.general}.
+\end{note}
+
+\pnum
+\indextext{\idxcode{wchar_t}|see{type, \tcode{wchar_t}}}%
+\indextext{type!\idxcode{wchar_t}}%
+\indextext{type!underlying!\idxcode{wchar_t}}%
+Type \keyword{wchar_t} is a distinct type that has
+an \impldef{underlying type of \tcode{wchar_t}}
+signed or unsigned integer type as its underlying type.
+
+\pnum
+\indextext{\idxcode{char8_t}|see{type, \tcode{char8_t}}}%
+\indextext{type!\idxcode{char8_t}}%
+\indextext{type!underlying!\idxcode{char8_t}}%
+Type \keyword{char8_t} denotes a distinct type
+whose underlying type is \tcode{\keyword{unsigned} \keyword{char}}.
+Types \keyword{char16_t} and \keyword{char32_t} denote distinct types
+whose underlying types are \tcode{uint_least16_t} and \tcode{uint_least32_t},
+respectively, in <cstdint>.
+
+\begin{addedblock}
+The types \keyword{char8_t}, \keyword{char16_t} and \keyword{char32_t} are collectively called \defnadjx{utf character}{types}{type}.
+\end{addedblock}
+
+\pnum
+\indextext{Boolean type}%
+\indextext{type!Boolean}%
+Type \tcode{bool} is a distinct type that has
+the same object representation,
+value representation, and
+alignment requirements as
+an \impldef{underlying type of \tcode{bool}} unsigned integer type.
+The values of type \keyword{bool} are
+\keyword{true} and \keyword{false}.
+
+
+\rSec1[utility]{Utility components}
+
+\rSec2[utility.syn]{Header \tcode{<utility>} synopsis}
+
+\pnum
+The header utility
+contains some basic function and class templates that are used
+throughout the rest of the library.
+
+\begin{codeblock}
+namespace std {
+    // [..]
+
+     // [utility.underlying], to_­underlying
+   template<class T>
+   constexpr underlying_type_t<T> to_underlying(T value) noexcept;
+\end{codeblock}
+
+\begin{addedblock}
+\begin{codeblock}
+    // [utility.utf.cast]
+    template <class From>
+    constexpr @\seebelow@ cast_as_utf_unchecked(From* ptr, size_t n) noexcept;
+    template <class To, class From>
+    constexpr @\seebelow@ cast_utf_to(From* ptr, size_t n) noexcept;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+    // [utility.unreachable], unreachable
+    [[noreturn]] void unreachable();
+    // [...]
+}
+\end{codeblock}
+
+
+\begin{addedblock}
+\rSec2[utility.utf.cast]{UTF cast utilities}
+
+Let \tcode{\placeholder{COPY\_CV(From, To)}} denote the type \tcode{To} with the same cv-qualifiers as \tcode{From}.
+
+For a type \tcode{T}, if there exist a \emph{utf character type} ([basic.fundamental]) \tcode{U} that has the same size and alignement as \tcode{T}, then
+\tcode{\placeholder{UTF_TYPE(T)}} denotes \tcode{U}.
+
+Otherwise \tcode{\placeholder{UTF_TYPE(T)}} does not denote a type.
+
+\begin{itemdecl}
+template <class From>
+constexpr @\tcode{\placeholder{COPY\_CV(From, UTF\_TYPE(From))}}@* cast_as_utf_unchecked(From* ptr, size_t n) noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+    \constraints
+    \begin{itemize}
+        \item \tcode{remove_cv_t<From>} denotes an integral type or \tcode{byte}.
+        \item \tcode{remove_cv_t<From>} does not denote an \emph{utf character type}.
+        \item \tcode{\placeholder{UTF_TYPE(From)}} denotes a type.
+    \end{itemize}
+
+    \preconditions
+
+    \range{\tcode{ptr}}{\tcode{ptr + n}} is valid range, and a valid code unit sequence in the UTF encoding associated with \placeholder{UTF_TYPE(\tcode{From})}.
+
+    \effects The lifetime of each object \tcode{O} in the range \range{\tcode{ptr}}{\tcode{ptr + n}} is ended and an object of type
+    \tcode{\placeholder{COPY\_CV(From, UTF\_TYPE(From))}} with the same object representation as \tcode{O} is implicitely created at the address of \tcode{O}.
+
+    \returns A pointer to the first object in the range \range{\tcode{ptr}}{\tcode{ptr + n}}
+    \\
+\\
+\end{itemdescr}
+\begin{itemdecl}
+template <class To, class From>
+constexpr @\tcode{\placeholder{COPY\_CV(From, To)}}@* cast_utf_to(From* ptr, size_t n) noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+    \constraints
+    \begin{itemize}
+        \item \tcode{remove_cv_t<From>} denotes a \emph{utf character type}.
+        \item \tcode{To} denotes an integral type or \tcode{byte}.
+        \item \tcode{To} does not denote an \emph{utf character type}.
+        \item \tcode{From} and \tcode{To} have the same size and alignment.
+        \item \tcode{same_as<To, remove_cv_t<To>>} is \tcode{true}.
+    \end{itemize}
+
+    \preconditions \range{\tcode{ptr}}{\tcode{ptr + n}} is valid range.
+
+    \effects The lifetime of each object \tcode{O} in the range \range{\tcode{ptr}}{\tcode{ptr + n}} is ended and an object of type
+    \tcode{\placeholder{COPY\_CV(From, To)}} with the same object representation as \tcode{O} is implicitely created at the address of \tcode{O}.
+
+    \returns A pointer of type to the first object in the range \range{\tcode{ptr}}{\tcode{ptr + n}}.
+\end{itemdescr}
+\end{addedblock}
+
+\rSec1[string.view]{String view classes}
+
+\rSec2[string.view.synop]{Header \tcode{<string_view>} synopsis}
+
+\begin{codeblock}
+#include <compare>              // see \ref{compare.syn}
+
+namespace std {
+    // \ref{string.view.template}, class template \tcode{basic_string_view}
+    template<class charT, class traits = char_traits<charT>>
+    class basic_string_view;
+
+    inline namespace literals {
+        inline namespace string_view_literals {
+            // \ref{string.view.literals}, suffix for \tcode{basic_string_view} literals
+            constexpr string_view    operator""sv(const char* str, size_t len) noexcept;
+            constexpr u8string_view  operator""sv(const char8_t* str, size_t len) noexcept;
+            constexpr u16string_view operator""sv(const char16_t* str, size_t len) noexcept;
+            constexpr u32string_view operator""sv(const char32_t* str, size_t len) noexcept;
+            constexpr wstring_view   operator""sv(const wchar_t* str, size_t len) noexcept;
+        }
+    }
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+    template <class T>
+    constexpr @\seebelow@ cast_as_utf_unchecked(basic_string_view<T> && v) noexcept;
+    template <class To, class From>
+    constexpr auto cast_utf_to(basic_string_view<From> && v) noexcept;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
+}
+\end{codeblock}
+
+
+\begin{addedblock}
+\rSec2[string_view.utf.cast]{UTF cast functions}
+
+\begin{itemdecl}
+template <class T>
+constexpr auto cast_as_utf_unchecked(basic_string_view<T> && v) noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+    \constraints
+    \begin{itemize}
+        \item \tcode{remove_cv_t<From>} denotes an integral type or \tcode{byte}.
+        \item \tcode{remove_cv_t<From>} does not denote an \emph{utf character type}.
+        \item \tcode{\placeholder{UTF_TYPE(From)}} denotes a type ([utility.utf.cast]).
+    \end{itemize}
+
+    \returns \tcode{basic_string_view\{cast_as_utf_unchecked(v.data(), v.size()), v.size()\}}.
+\end{itemdescr}
+
+\begin{itemdecl}
+template <class To, class From>
+constexpr auto cast_utf_to(basic_string_view<From> && v) noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+
+    \constraints
+    \begin{itemize}
+        \item \tcode{remove_cv_t<From>} denotes a \emph{utf character type}.
+        \item \tcode{same_as<To, char> || same_as<To, wchar_t>} is \tcode{true}.
+        \item \tcode{From} and \tcode{To} have the same size and alignment.
+    \end{itemize}
+
+    \returns \tcode{basic_string_view\{cast_utf_to<To>(v.data(), v.size()), v.size()\}}.
+\end{itemdescr}
+\end{addedblock}
+
+\rSec1[views]{Views}
+
+\rSec2[views.general]{General}
+
+\pnum
+The header <span> defines the view \tcode{span}.
+
+\rSec2[span.syn]{Header \tcode{<span>} synopsis}%
+
+\begin{codeblock}
+namespace std {
+    // constants
+    inline constexpr size_t dynamic_extent = numeric_limits<size_t>::max();
+
+    // \ref{views.span}, class template \tcode{span}
+    template<class ElementType, size_t Extent = dynamic_extent>
+    class span;
+
+    template<class ElementType, size_t Extent>
+    inline constexpr bool ranges::enable_view<span<ElementType, Extent>> = true;
+    template<class ElementType, size_t Extent>
+    inline constexpr bool ranges::enable_borrowed_range<span<ElementType, Extent>> = true;
+
+    // \ref{span.objectrep}, views of object representation
+    template<class ElementType, size_t Extent>
+    span<const byte, Extent == dynamic_extent ? dynamic_extent : sizeof(ElementType) * Extent>
+    as_bytes(span<ElementType, Extent> s) noexcept;
+
+    template<class ElementType, size_t Extent>
+    span<byte, Extent == dynamic_extent ? dynamic_extent : sizeof(ElementType) * Extent>
+    as_writable_bytes(span<ElementType, Extent> s) noexcept;
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+    template <class T>
+    constexpr @\seebelow@ cast_as_utf_unchecked(span<T> && v) noexcept;
+    template <class To, class From>
+    constexpr auto cast_utf_to(span<From> && v) noexcept;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+}
+\end{codeblock}
+
+
+\rSec3[span.objectrep]{Views of object representation}
+
+\indexlibraryglobal{as_bytes}%
+\begin{itemdecl}
+    template<class ElementType, size_t Extent>
+    span<const byte, Extent == dynamic_extent ? dynamic_extent : sizeof(ElementType) * Extent>
+    as_bytes(span<ElementType, Extent> s) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Equivalent to: \tcode{return R\{reinterpret_cast<const byte*>(s.data()), s.size_bytes()\};}
+    where \tcode{R} is the return type.
+\end{itemdescr}
+
+\indexlibraryglobal{as_writable_bytes}%
+\begin{itemdecl}
+    template<class ElementType, size_t Extent>
+    span<byte, Extent == dynamic_extent ? dynamic_extent : sizeof(ElementType) * Extent>
+    as_writable_bytes(span<ElementType, Extent> s) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \constraints
+    \tcode{is_const_v<ElementType>} is \tcode{false}.
+
+    \pnum
+    \effects
+    Equivalent to: \tcode{return R\{reinterpret_cast<byte*>(s.data()), s.size_bytes()\};}
+    where \tcode{R} is the return type.
+\end{itemdescr}
+
+\begin{addedblock}
+\begin{itemdecl}
+    template <class T>
+    constexpr auto cast_as_utf_unchecked(span<T> && v) noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+    \constraints
+    \begin{itemize}
+        \item \tcode{remove_cv_t<From>} denotes an integral type or \tcode{byte}.
+        \item \tcode{remove_cv_t<From>} does not denote an \emph{utf character type}.
+        \item \tcode{\placeholder{UTF_TYPE(From)}} denotes a type ([utility.utf.cast]).
+    \end{itemize}
+
+    \returns \tcode{span\{cast_as_utf_unchecked(v.data(), v.size()), v.size()\}}.
+\end{itemdescr}
+
+\begin{itemdecl}
+    template <class To, class From>
+    constexpr auto cast_utf_to(span<From> && v) noexcept;
+\end{itemdecl}
+\begin{itemdescr}
+
+    \constraints
+    \begin{itemize}
+        \item \tcode{remove_cv_t<From>} denotes a \emph{utf character type}.
+        \item \tcode{To} denotes an integral type or \tcode{byte}.
+        \item \tcode{To} does not denote an \emph{utf character type}.
+        \item \tcode{From} and \tcode{To} have the same size and alignment.
+        \item \tcode{same_as<To, remove_cv_t<To>>} is \tcode{true}.
+    \end{itemize}
+
+    \returns \tcode{span\{cast_utf_to<To>(v.data(), v.size()), v.size()\}}.
+\end{itemdescr}
+\end{addedblock}
+
+\section{Feature test macros}
+
+\ednote{Add a new macro in \tcode{<version>}, \tcode{<utility>}, \tcode{<span>}, and \tcode{<string\_view>} : \tcode{__cpp_lib_utf_cast} set to the date of adoption}.
+
+
+\section{Acknowledgments}
+
+Matt Godbolt for hosting an implementation on Compiler Explorer.
+
+Tom Honermann, Hubert Tong, Richard Smith, David Goldblatt for helping me have a better grasp on TBAA.
+
+Timur Doumler for his work on \tcode{start_lifetime_as} (\paper{P2590R2}).
+
+The many people who voiced their desire for better usability of the \tcode{charN_t} types.
+
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+
+\renewcommand{\section}[2]{}%
+\begin{thebibliography}{9}
+
+    \bibitem[N4885]{N4892}
+    Thomas Köppe
+    \emph{Working Draft, Standard for Programming Language C++}\newline
+    \url{https://wg21.link/N4892}
+
+\end{thebibliography}
+
+\end{document}
