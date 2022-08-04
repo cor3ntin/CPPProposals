@@ -9,8 +9,8 @@
 
 
 \title{Usability improvements for \tcode{std::thread}}
-\docnumber{P2019R0}
-\audience{LEWG}
+\docnumber{P2019R1}
+\audience{LEWG, SG1}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 \begin{document}
@@ -22,7 +22,7 @@
 \renewcommand{\arraystretch}{1.}
 
 \def\changemargin#1#2{\list{}{\rightmargin#2\leftmargin#1}\item[]}
-\let\endchangemargin=\endlist 
+\let\endchangemargin=\endlist
 \setlength\extrarowheight{5pt}
 
 
@@ -33,44 +33,41 @@ as we demonstrate, current practices in many domains.
 
 The absence of these features make \tcode{std::thread} and \tcode{std::jthread} unfit or unsatisfactory for many use cases.
 
-\section{ABI considerations}
+\section{Revisions}
 
-\color{red}
+\subsection{R1}
 
-This paper proposes a class \tcode{std::thread::attributes} which is meant to be extended in future standard versions.
-However, such extension capabilities are not be possible without the ability to break ABI.
+Rework the design to take a list of attributes as parameters, instead of a single type.
+This is done to alleviate ABI and extensibility concerns raised by SG1.
 
-The proposed design is therefore not viable over time within the current stability constraints.
-We do not propose an alternative design at this time.
+SG1 suggested exploring a property-based design, but this ship doesn't seem to still be sailing,
+So instead there is still a constructor interface, but with a separate type for each attribute.
 
+Both \tcode{thread_name} and \tcode{thread_stack_size} are preserved in this revision despite the
+mixed feelings SG1 expressed for the \tcode{thread_stack_size} attribute (see polls section).
 
-\color{black}
 \section{Example}
 
-The following code illustrate the totality of the proposed additions:
+The following code illustrates the totality of the proposed additions:
 
 \begin{colorblock}
 void f();
 int main() {
-    std::thread thread(
-     std::thread::attributes()
-        .name("Worker")
-        .stack_size(512*1024),
-     f
-    );
-    thread.join();
+    std::jthread thread(f,
+                       std::thread_name("Worker"),
+                       std::thread_stack_size(512*1024));
     return 0;
 }
 \end{colorblock}
 
 
-This code suggest a thread name as well as a stack size 
-the implementation should used when creating a new thread of execution.
+This code suggests a thread name as well as a stack size
+the implementation should use when creating a new thread of execution.
 
 Achieving the same result in C++20 requires duplicating the entire \tcode{std::thread}
 class, which would be difficult to fit in a Tony table.
 
-Here is how to set the name and stack size of a thread on most posix implementation
+Here is how to set the name and stack size of a thread on most POSIX implementation
 
 \begin{colorblock}
 int libcpp_thread_create(libcpp_thread_t *t, void *(*func)(void *),
@@ -101,23 +98,61 @@ int libcpp_thread_create(libcpp_thread_t *t, void *(*func)(void *),
     return res;
 }
 \end{colorblock}
+
+\section{Previous Polls}
+
+\begin{quoteblock}
+SG1, July 2020
+We want the ability to provide attributes to thread (full threads: thread, jthread) constructors, even if we can't specify their semantics fully.
+
+\begin{tabular}{|c|c|}
+\hline
+Yay & Nay\\
+\hline
+12 & 1 \\
+\hline
+\end{tabular}
+\end{quoteblock}
+\begin{quoteblock}
+The name attribute.
+
+\begin{tabular}{|c|c|}
+\hline
+Yay & Nay\\
+\hline
+14 & 1 \\
+\hline
+\end{tabular}
+\end{quoteblock}
+\begin{quoteblock}
+The name attribute.
+
+\begin{tabular}{|c|c|}
+\hline
+Yay & Nay\\
+\hline
+7 & 7 \\
+\hline
+\end{tabular}
+\end{quoteblock}
+
+
 \section{Motivation}
 
 \subsection{Threads have a name}
 
-Most operating systems, including real-time operating systems for embedded platforms
-provide a way to name thread.
+Most operating systems, including real-time operating systems for embedded platforms, provide a way to name threads.
 
 Names of threads are usually stored in the control structure the kernel uses to manage threads or tasks.
 
 The name can be used by:
 \begin{itemize}
     \item Debuggers such as GDB, LLDB, WinDBG, and IDEs using these tools
-    \item Platforms and third party crash dump and trace reporting tools
+    \item Platforms and third-party crash dump and trace reporting tools
     \item System task and process monitors
     \item Other profiling tracing and diagnostic tools
     \item Windows Performance Analyzer and ETW tracing
-\end{itemize} 
+\end{itemize}
 
 The \href{https://docs.microsoft.com/en-us/visualstudio/debugger/how-to-set-a-thread-name-in-native-code?view=vs-2019}{Visual Studio documentation for SetThreadDescription} explains:
 
@@ -129,9 +164,9 @@ This non-exhaustive table shows that most platforms do in fact provide a way to 
 
 \begin{center}
 \begin{scriptsize}
-\makesavenoteenv{tabular}
+% \makesavenoteenv{tabular}
 \begin{tabular}{ |c|c|c|c| }
-  
+
     %\hline
     %\multicolumn{5}{|c|}{System APIS for Naming Threads} \\
     \hline
@@ -141,7 +176,7 @@ This non-exhaustive table shows that most platforms do in fact provide a way to 
     QNX & \multicolumn{2}{c|}{\tcode{pthread_setname_np}} & \tcode{pthread_getname_np} \\
     NetBSD & \multicolumn{2}{c|}{\tcode{pthread_setname_np}} & \tcode{pthread_getname_np} \\
     \hline
-    Win32 & & \tcode{SetThreadDescription}\footnote{Since Windows 10 1607 - In older versions a name can be set only when a debugger is attached, by throwing an exception from the calling thread. See  \href{https://stackoverflow.com/a/59490438/877556}{Windows Documentation} and  \href{https://randomascii.wordpress.com/2015/10/26/thread-naming-in-windows-time-for-something-better/}{this article by Bruce Dawson}} & \tcode{GetThreadDescription} \\
+    Win32 & & \tcode{SetThreadDescription}\footnote{Since Windows 10 1607 - In older versions, a name can be set only when a debugger is attached, by throwing an exception from the calling thread. See  \href{https://stackoverflow.com/a/59490438/877556}{Windows Documentation} and  \href{https://randomascii.wordpress.com/2015/10/26/thread-naming-in-windows-time-for-something-better/}{this article by Bruce Dawson}} & \tcode{GetThreadDescription} \\
     \hline
     Darwin & & \tcode{pthread_setname_np}\footnote{Can only be called from the new thread} & \tcode{pthread_getname_np} \\
     \hline
@@ -156,17 +191,17 @@ This non-exhaustive table shows that most platforms do in fact provide a way to 
     \hline
     FreeRTOS & \tcode{xTaskCreate} & & \tcode{pcTaskGetName} \\
     \hline
-    VXWORKS &  \tcode{taskSpawn} & & \\
+    VxWorks &  \tcode{taskSpawn} & & \\
     \hline
     eCos & \tcode{cyg_thread_create} & & \\
     \hline
     Plan 9 &\tcode{threadsetname}\footnote{Can only be called from the new thread}  & \tcode{threadsetname}\footnote{Can only be called from the new thread}&\\
     \hline
     Haiku & \tcode{spawn_thread} & \tcode{rename_thread} &\tcode{get_thread_info} \\
-    \hline 
+    \hline
     Keil RTX & \tcode{osThreadNew} & & \tcode{osThreadGetName}  \\
     \hline
-    Webassembly & & &  \\
+    WebAssembly & & &  \\
     \hline
 \end{tabular}
 \end{scriptsize}
@@ -176,7 +211,7 @@ Web assembly was the only platform for which we didn't find a way to set a threa
 
 A cursory review of programming language reveals that at least the following languages/environments provide a way to set thread names:
 
-\href{https://doc.rust-lang.org/std/thread/struct.Builder.html}{Rust}, \href{https://docs.python.org/3/library/threading.html#thread-objects}{Python}, \href{https://dlang.org/phobos/core_thread_osthread.html#.Thread.name}{D} 
+\href{https://doc.rust-lang.org/std/thread/struct.Builder.html}{Rust}, \href{https://docs.python.org/3/library/threading.html#thread-objects}{Python}, \href{https://dlang.org/phobos/core_thread_osthread.html#.Thread.name}{D}
 , \href{https://docs.microsoft.com/en-us/dotnet/api/system.threading.thread.name?view=netframework-4.8}{C\#}
 , \href{https://docs.oracle.com/javase/7/docs/api/java/lang/Thread.html}{Java}
 , \href{https://docs.raku.org/type/Thread#method_name}{Raku}
@@ -184,8 +219,8 @@ A cursory review of programming language reveals that at least the following lan
 , \href{https://doc.qt.io/qt-5/qthread.html#managing-threads}{Qt}
 , \href{https://github.com/facebook/folly/blob/master/folly/system/ThreadName.h}{Folly}
 
-We also found \href{https://stackoverflow.com/questions/10121560/stdthread-naming-your-thread}{multiple} questions \href{https://stackoverflow.com/questions/57477053/how-to-set-custom-name-of-this-thread}{related} to setting \href{https://stackoverflow.com/questions/16486937/name-a-thread-created-by-beginthread-in-c}{name thread} 
-on Stackoverfow.
+We also found \href{https://stackoverflow.com/questions/10121560/stdthread-naming-your-thread}{multiple} questions \href{https://stackoverflow.com/questions/57477053/how-to-set-custom-name-of-this-thread}{related} to setting \href{https://stackoverflow.com/questions/16486937/name-a-thread-created-by-beginthread-in-c}{name thread}
+on StackOverflow.
 
 Thread names are also the object of a C proposal \cite{N2419}
 
@@ -208,14 +243,14 @@ We observe fewer variations of APIs across platforms (compared to names) as the 
 that can be no greater than the total system memory.
 
 \tcode{pthread_attr_setstacksize} is part of the POSIX specification since Issue 5 (1997).
-However, platforms vary in the minimum and maximum stack size supported.
+However, platforms vary in the minimum and maximum stack sizes supported.
 
 
-\begin{changemargin}{-1.7cm}{0.5cm} 
+\begin{changemargin}{-1.7cm}{0.5cm}
 \begin{center}
 \begin{footnotesize}
 \begin{tabular}{ |c|c|c| }
-    
+
     %\hline
     %\multicolumn{5}{|c|}{System APIS for Naming Threads} \\
     \hline
@@ -240,31 +275,31 @@ However, platforms vary in the minimum and maximum stack size supported.
     \hline
     FreeRTOS & \tcode{xTaskCreate} &  \\
     \hline
-    VXWORKS &  \tcode{taskSpawn} &  \\
+    VxWorks &  \tcode{taskSpawn} &  \\
     \hline
     eCos & \tcode{cyg_thread_create} &  \\
     \hline
     Plan 9 & \tcode{threadcreate}  &  \\
     \hline
     Haiku &  &\tcode{get_thread_info} \\
-    \hline 
+    \hline
     Keil RTX & & \tcode{osThreadGetStackSize}  \\
     \hline
-    Webassembly & & \tcode{pthread_attr_getstacksize}  \\
+    WebAssembly & & \tcode{pthread_attr_getstacksize}  \\
     \hline
 \end{tabular}
 \end{footnotesize}
 \end{center}
 \end{changemargin}
 
-We observe that \href{https://docs.oracle.com/javase/7/docs/api/java/lang/Thread.html#Thread()}{Java}, \href{https://doc.rust-lang.org/std/thread/struct.Builder.html}{Rust}, 
-\href{https://docs.python.org/3/library/threading.html}{Python}, \href{https://docs.microsoft.com/en-us/dotnet/api/system.threading.thread.-ctor?view=netframework-4.8#System_Threading_Thread__ctor_System_Threading_ParameterizedThreadStart_System_Int32_}{C\#}, \href{https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/runtime_control.html}{Haskell} (through a compile time parameter), \href{https://dlang.org/phobos/core_thread_osthread.htm}{D}, \href{https://perldoc.perl.org/threads.html#THREAD-STACK-SIZE}{Perl}, Swift,
+We observe that \href{https://docs.oracle.com/javase/7/docs/api/java/lang/Thread.html#Thread()}{Java}, \href{https://doc.rust-lang.org/std/thread/struct.Builder.html}{Rust},
+\href{https://docs.python.org/3/library/threading.html}{Python}, \href{https://docs.microsoft.com/en-us/dotnet/api/system.threading.thread.-ctor?view=netframework-4.8#System_Threading_Thread__ctor_System_Threading_ParameterizedThreadStart_System_Int32_}{C\#}, \href{https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/runtime_control.html}{Haskell} (through a compile-time parameter), \href{https://dlang.org/phobos/core_thread_osthread.htm}{D}, \href{https://perldoc.perl.org/threads.html#THREAD-STACK-SIZE}{Perl}, Swift,
 \href{https://www.boost.org/doc/libs/1_72_0/doc/html/thread/thread_management.html#thread.thread_management.tutorial.attributes}{Boost},  \href{https://doc.qt.io/qt-5/qthread.html#setStackSize}{Qt}
 support constructing threads with a stack size.
 
 There are many reasons why a program may need to set a stack size:
 \begin{itemize}
-\item Ensuring consistent stack-size across platforms for portability and reliability as some applications are designed to be run with a specific amount of stack size. 
+\item Ensuring a consistent stack size across platforms for portability and reliability as some applications are designed to be run with a specific amount of stack size.
 
 More generally, such inconsistencies are a source of bugs and expensive testing.
 
@@ -279,7 +314,7 @@ Libc++ \tcode{std::thread} implementation is (very approximately) 1000 lines of 
 Because stack size needs to be set before thread creation, an application wishing to use a non-default stack size has to duplicate that effort.
 
 We found threads classes supporting names and stack size in many open source projects, including POCO, Chromium, Firefox, LLVM, Bloomberg Basic Development Environment, Folly, Intel TBB, Tensorflow...
-In many cases, these classes are very similar to \tcode{std::thread}, except for they support a stack size.
+In many cases, these classes are very similar to \tcode{std::thread}, except they support a stack size.
 
 Like thread names, adding this support to \tcode{std::thread} would be standardizing existing practices.
 
@@ -288,25 +323,25 @@ As such this proposal is more about rounding an existing feature rather than pro
 
 \section{FAQ}
 
-In which we try to answer all the question we heard about this proposal
+In which we try to answer all the questions we heard about this proposal
 
 \subsection{What about queries?}
 
 We observe that
 \begin{itemize}
-\item It is rarely useful to query the stack size (except to assert that it in a range acceptable to the application).\\
+\item It is rarely useful to query the stack size (except to assert that it is in a range acceptable to the application).\\
 Querying the stack size could be done by storing a \tcode{std::size_t} within the \tcode{std::thread} instance, which is rather cheap,
 but we still don't think it is worth it.
-\item It is rarely useful to query the thread name, nor is there a portable way to do so (some platforms have API to do that). Use cases for querying a thread name includes printing stack traces \cite{P0881R5}\\
+\item It is rarely useful to query the thread name, nor is there a portable way to do so (some platforms have API to do that). Use cases for querying a thread name include printing stack traces \cite{P0881R5}\\
 \item It is also more difficult to design a query API for the name that would not pull in \tcode{<string>}
 \item While less convenient facility, it is at least possible to query available properties after creation from \tcode{native_handle}.
 \end{itemize}
 
 
-\subsection{Threads should have names??? What next, \tcode{mutex} should have name ? \tcode{vector}?}
+\subsection{Threads should have names??? What next, \tcode{mutex} should have a name? \tcode{vector}?}
 
-Naming threads is standard practice across many operating system and environments.
-This proposal merely proposes to expose this widely available and use system feature.
+Naming threads is standard practice across many operating systems and environments.
+This proposal merely proposes to expose this widely available and used system feature.
 We observe that it is common for threads to have names as processes do.
 
 Windows indeed has the concept of named mutexes which are used to share mutexes across processes.
@@ -318,14 +353,9 @@ A quick review of platforms reveals that it is not standard practice to use a mu
 by their identifiers. Giving them a name would make little sense.
 
 
-\subsection{What about domains? Colors?}
-
-These are not features provides by systems nor it is existing practice or implemented in any of the languages and libraries we surveyed.
-While it is true that these features may be offered by some tools they either use a heuristic to set these information or rely on tool-specific methods. 
-
 \subsection{I don't need that and don't want to pay for it}
 
-None of the proposed attributes is stored in the thread object nor any object associated with the thread or its associated \tcode{thread} object.
+None of the proposed attributes is stored in the thread object nor in any object associated with the thread or its associated \tcode{thread} object.
 the proposed \tcode{thread::attribute} object can be destroyed after the thread creation.
 The behavior of preexisting constructors remains unchanged.
 
@@ -334,16 +364,16 @@ On many implementations, including Linux, the space for the thread name is alloc
 \subsection{It's an ABI break ???}
 
 No.
-Because none of the attributes is stored in the thread or it's associated \tcode{std::thread} object, the ABI is not changed.
+Because none of the attributes is stored in the thread or its associated \tcode{std::thread} object, the ABI is not changed.
 We proposed adding a single template constructor.
 
 
 \subsection{We cannot speak about stack size in the standard?}
-There exist a POSIX function which makes the wording more palatable.
+There exist a POSIX function that makes the wording more palatable.
 Setting a stack size insufficient for the correct execution of a well-formed program isn't different
 than if the default stack size is insufficient ([intro.compliance])
 
-\subsection{This is not something that the committee have the bandwidth to deal with?}
+\subsection{This is not something that the committee has the bandwidth to deal with?}
 
 We spent resources standardizing 2 (!) thread classes, which are not used in many cases.
 This proposal will help more people use \tcode{std::thread}.
@@ -355,17 +385,32 @@ The cost of re-implementing classes similar to \tcode{std::thread} is great for 
 Here is a conforming minimal implementation
 
 \begin{colorblock}
-class thread {
-    class attributes  {
-    public:  
-        attributes& stack_size(std::size_t) noexcept {return *this;}
-        attributes& name(std::span<const char>)  {return *this;}
-        attributes& name(std::span<const char8_t>)  {return *this;}
-    };
-template<class F, class... Args>}
-explicit thread(const attributes &, F&& f, Args&&... args)
-: thread(std::forward<F>(f), std::forward<Args>(args)...) {}
+namespace std {
+
+struct thread_attribute {};
+
+struct thread_name : thread_attribute {
+   constexpr thread_name(std::string_view str) noexcept {};
+   constexpr thread_name(std::u8string_view str) noexcept {};
 };
+
+struct thread_stack_size : thread_attribute {
+    constexpr thread_stack_size(std::size_t) noexcept {}
+};
+
+template <typename T>
+concept __thread_attribute = std::derived_from<T, thread_attribute>;
+
+class thread {
+    template<class F, __thread_attribute... Attrs>
+    explicit thread(F&& f, Attrs&&...)
+    : thread(std::forward<F>(f)) {}
+};
+
+
+}
+
+
 \end{colorblock}
 
 \subsection{This belongs in a library?}
@@ -374,7 +419,7 @@ Because the proposed attributes may need to be set during the thread creation, a
 to reimplement all of \tcode{std::thread}.
 Besides the cost of doing that implementation, it poses composability challenges (cannot put a \tcode{custom_thread} in a \tcode{std::thread_poool} for example)
 
-\subsection{What about GPUs threads?}
+\subsection{What about GPU threads?}
 
 While \tcode{std::thread} has no mechanism to specify an execution context, an implementation that wishes
 to use \tcode{std::thread} on a GPU or other hardware could ignore all attributes or the ones not relevant on their platform.
@@ -393,7 +438,7 @@ Depending on platforms, threads may have
 The meaning of each value and parameter has more variation across implementations,
 as it is tied to the scheduler or the system.
 
-It is also less generally useful and mostly used in HPC and embedded platforms, where there is the greatest variety of implementation. 
+It is also less generally useful and mostly used in HPC and embedded platforms, where there is the greatest variety of implementation.
 
 As such, thread priorities and other properties are not proposed in this paper.
 However, the API is designed to allow adding support for more properties in the future.
@@ -411,10 +456,10 @@ parties libraries to support thread priorities.
 \item Thread names can be either narrow encoded or, in the case of win32, Unicode (UTF-16) encoded
 \item There is a platform-specific limit on thread name length (15(+1) on Linux, 32K on windows)
 \item All platforms expect names to be null-terminated.
-\item Some platforms set the name during the thread creation, while on Darwin (and plan 9) it can only be set in the thread which name is set.
+\item Some platforms set the name during the thread creation, while on Darwin (and plan 9) it can only be set in the thread in which the name is set.
 \item The stack size is always set prior to the thread creation.
-\item Platforms have minimum and maximum stack size that are not always possible to expose
-\item Implementation may allocate more stack size than requested (it is usually aligned on a memory page) 
+\item Platforms have minimum and maximum stack sizes that are not always possible to expose
+\item Implementation may allocate more stack size than requested (it is usually aligned on a memory page)
 \item Implementation may ignore stack size requests
 \item On some platforms, the thread stack size is not configurable.
 \item On some platforms, the thread stack size is not query-able.
@@ -424,57 +469,62 @@ parties libraries to support thread priorities.
 
 \subsection{Design}
 
-We propose adding a \tcode{thread::attribute} on which can be set a stack size and a name.
-This class can then be passed to the constructor of \tcode{std::thread} and \tcode{std::jthread}.
+We propose adding a new constructor to \tcode{std::thread} and \tcode{std::jthread}
+of the form \tcode{thread(\placeholder{thread-attribute}..., invokable)} where attribute is
+an instance of any type deriving from \tcode{std::thread_attribute} (where  \tcode{std::thread_attribute} serves no
+other purposes than tagging a type as a thread attribute. Attributes that the implementation does not know how to support
+are ignored, and the effects of known attributes are implementation-defined.
 
-The setters \tcode{name} and \tcode{stack_size} can be used to set each attributes, which are ignored
-if not set.
+Having separate types for individual attributes alleviates ABI concerns, and makes extension easier.
+Individual attributes - which only serve to hold a value, have constexpr constructors so they can be cheaply initialized.
 
-\tcode{name} can be either utf-8 or narrow encoding. This is because most posix implementations are UTF-8 (but take a narrow encoding parameter) and  windows is UTF-16 (\tcode{wchar_t*}).
-\tcode{name} take a span whose header is cheaper than \tcode{string_view} and it otherwise makes no difference.
+\tcode{thread_name} makes a copy of this argument and supports non-null terminated strings, and \tcode{u8} strings, as to
+portably support environments with utf-8 execution encodings (Linux), environments where Unicode encodings can be preserved (Windows),
+and other environments.
 
-The name has to be copied by implementations which do support that attribute, however, that name is short,
-and limited to 16 or 32 bytes in many implementations.
-Still, this is why \tcode{name} is not \tcode{noexcept}
+This interface is made possible by the realization that lambdas alleviate the needs for \tcode{(j)thread} to support parameter forwardings,
+and so we don't need attributes + function + arguments but just function + attributes.
 
-The setters are preferred to constructors arguments as it makes it easier to add other attributes in the
-future, such as thread priority, while maintaining a small surface API.
+The attributes are put after, which is a subpar choice that can be revisited if \paper{P2347R2} is adopted.
+A slightly different design would be to take a tuple of thread attributes as the first parameter.
 
 \section{Implementation}
 
-A \href{https://github.com/cor3ntin/llvm-project/tree/thread_name}{prototype implementation} for libc++ (supporting only POSIX) threads has been created to validate the design.
+A \href{https://github.com/cor3ntin/llvm-project/tree/thread_name_p2019}{prototype implementation} for libc++ (supporting only POSIX) threads has been created to validate the design.
+This is available on \href{https://compiler-explorer.com/z/MzGsndc7W}{Compiler explorer}, but of limited usefulness in the absence of debugging tools.
 
 \section{Alternatives considered}
 
-\subsection{P0320 \cite{P0320R1}}
+\subsection{\paper{P0320R1}}
 
-P0320R1 proposes a mechanism such as the \tcode{thread::attributes} class proposed in this paper, except
-all attributes would be implementation-defined (the standard would specify no setter).
+P0320R1 proposes \tcode{thread::attributes} holding a set of attributes that would all be implementation-defined (the standard would specify no attributes).
 This puts the burden on the user to check which attributes are present, presumably using \tcode{\#ifdef}.
 We feel very strongly that such an approach fails to improve portability and only improves the status quo marginally.
 There is little value in standardizing a class without standardizing its members.
+
+A class is also less extensible and portable than individually declared attributes and poses more ABI concerns.
 
 Moreover, it proposes a \tcode{get_attributes()} function which would returned an implementation-defined object
 with all the supported attributes of that platform.
 The problem is that not all attributes that can be set can be queried (and reciprocally), and that interface would force
 and implementation to return all the attributes it supports, which is wasteful (would have to allocate for the name if a user wants to check the stack size).
 
-\subsection{P0484 \cite{P0484R1}}
+\subsection{\paper{P0484R1}}
 
 P0484 proposes several solutions in the same design space:
 
 \begin{itemize}
-\item  A constructor taking a native handle as parameter
+\item  A constructor taking a native handle as a parameter
 \begin{codeblock}
 std::thread thread::thread(native_handle_type h);
 \end{codeblock}
 
-This is probably a good idea, regardless of the attributes presented here, 
+This is probably a good idea, regardless of the attributes presented here,
 to interface with C libraries or third-party code.
 
 This solves the problem of having to rewrite an entire thread class just to set a stack size.
 However, it would still be painful to do so portably, as described in P0484.
-A standard library that targets a limited number of platforms can set the attributes more easily than a library that may desire to work on an environment where C++ is deployed. 
+A standard library that targets a limited number of platforms can set the attributes more easily than a library that may desire to work in an environment where C++ is deployed.
 
 \item A factory function for creating a thread with attributes
 \begin{codeblock}
@@ -491,156 +541,294 @@ We think this is trying to solve two problems:
 \end{itemize}
 
 We are sympathetic to the first concern, however, it seems orthogonal to thread attributes.
-If a unicorn type (\tcode{expected}?) or a cheaper exception mechanism is ever standardized, 
+If a unicorn type (\tcode{expected}?) or a cheaper exception mechanism is ever standardized,
 such a factory function will be welcome, but it doesn't prevent a thread constructor to support attributes.
 As for guaranteed stack size:
 
 \begin{itemize}
-\item  Some platforms do no support stack size at all - doesn't mean they won't use the desired amount
+\item  Some platforms do not support stack size at all - doesn't mean they won't use the desired amount
 \item  Some platforms may ignore stack size requests silently
 \item  Some platforms may allocate more than request to align with memory pages
-\item  Trying to check after the thread has started is not possible (aka it would throw an exception even though the new thread has started) 
+\item  Trying to check after the thread has started is not possible (aka it would throw an exception even though the new thread has started)
 \end{itemize}
 
-As such, we allow but do not require and implementation to throw when a stack size request cannot be fulfilled.
+As such, we allow but do not require an implementation to throw when a stack size request cannot be fulfilled.
 
 
 \section{Wording}
 
-For illustrative purposes only
+\rSec1[thread.threads]{Threads}
+
+\rSec2[thread.threads.general]{General}
+
+\pnum
+\ref{thread.threads} describes components that can be used to create and manage threads.
+\begin{note}
+    These threads are intended to map one-to-one with operating system threads.
+\end{note}
+
+\rSec2[thread.syn]{Header \tcode{<thread>} synopsis}
+
+\begin{codeblock}
+#include <compare>              // see \ref{compare.syn}
+
+namespace std {
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+    class thread_attribute {};
+    class thread_name;
+    class thread_stack_size;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+    // \ref{thread.thread.class}, class \tcode{thread}
+    class thread;
+
+    void swap(thread& x, thread& y) noexcept;
+
+    // \ref{thread.jthread.class}, class \tcode{jthread}
+    class jthread;
+
+    // \ref{thread.thread.this}, namespace \tcode{this_thread}
+    namespace this_thread {
+        thread::id get_id() noexcept;
+
+        void yield() noexcept;
+        template<class Clock, class Duration>
+        void sleep_until(const chrono::time_point<Clock, Duration>& abs_time);
+        template<class Rep, class Period>
+        void sleep_for(const chrono::duration<Rep, Period>& rel_time);
+    }
+}
+\end{codeblock}
+\begin{addedblock}
+
+\rSec2[thread.attributes]{Thread Attributes}
+
+A type which inherits from \tcode{thread_attribute} is a thread attribute.
+Thread attributes can be used to define additional implementation-defined behaviors on a \tcode{thread} or \tcode{jthread} object.
+Thread attributes not supported by an implementation are ignored.
+
+\rSec3[thread.thread.name.class]{Class \tcode{thread_name}}
+
+\begin{codeblock}
+class thread_name : thread_attribute {
+public:
+    constexpr thread_name(std::string_view name) noexcept;
+    constexpr thread_name(std::u8string_view name) noexcept;
+private:
+    @\impdefnc@ __name[@\impdefnc@]; // \expos
+};
+\end{codeblock}
+
+\recommended
+
+The \tcode{thread_name} thread attribute, if supported by the implementation, can be used
+to set the name of a thread as if per a call to the POSIX function \tcode{pthread_setname_np}.
+
+\begin{itemdecl}
+constexpr thread_name(std::string_view name) noexcept;
+constexpr thread_name(std::u8string_view name) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\effects Initializes \tcode{__name} with \tcode{name} in an implementation-defined manner.
+
+\recommended If \tcode{__name} is not large enough to store the value of \tcode{name},
+             the thread name might be truncated. If the implementation performs a text conversion
+             during the initialization of \tcode{__name} and if \tcode{name} is a valid code unit sequence
+             in the encoding associated with its type, \tcode{__name} should be a valid code unit sequence in its
+             associated encoding.
+\end{itemdescr}
+
+\rSec3[thread.thread.stack.size.class]{Class \tcode{thread_stack_size}}
+
+\begin{codeblock}
+class thread_stack_size : thread_attribute {
+public:
+    constexpr thread_stack_size(std::size_t size) noexcept;
+private:
+    constexpr std::size_t __size; // \expos
+};
+\end{codeblock}
+
+\recommended
+Configure a stack size as if by POSIX \mbox{\tcode{pthread_attr_setstacksize()}}.\\
+The stack size set by the implementation
+can be aligned on an unspecified boundary, or clamped between unspecified lower and upper limits.
+
+If \tcode{__size == 0} is \tcode{true} the thread attribute should be ignored.
 
 
-\rSec3[thread.thread.class]{Class \tcode{thread}}
+\begin{itemdecl}
+constexpr thread_stack_size(std::size_t size) noexcept;
+\end{itemdecl}
 
+\begin{itemdescr}
+\effects Initializes \tcode{__size} with \tcode{size} in an implementation-defined manner.
+\end{itemdescr}
+
+\end{addedblock}
+
+\rSec2[thread.thread.class]{Class \tcode{thread}}
+
+\rSec3[thread.thread.class.general]{General}
+
+\pnum
+The class \tcode{thread} provides a mechanism to create a new thread of execution, to join with
+a thread (i.e., wait for a thread to complete), and to perform other operations that manage and
+query the state of a thread. A \tcode{thread} object uniquely represents a particular thread of
+execution. That representation may be transferred to other \tcode{thread} objects in such a way
+that no two \tcode{thread} objects simultaneously represent the same thread of execution. A
+thread of execution is \term{detached} when no \tcode{thread} object represents that thread.
+Objects of class \tcode{thread} can be in a state that does not represent a thread of
+execution.
+\begin{note}
+    A \tcode{thread} object does not represent a thread of execution after
+    default construction, after being moved from, or after a successful call to \tcode{detach} or
+    \tcode{join}.
+\end{note}
 
 \begin{codeblock}
 namespace std {
     class thread {
         public:
-        // types
+        class thread::id;
         class id;
-        @\added{class attributes;}@
-        using native_handle_type = @\impdefnc@;
-        
+        using native_handle_type = @\impdefnc@;         // see~\ref{thread.req.native}
+
         // construct/copy/destroy
         thread() noexcept;
         template<class F, class... Args> explicit thread(F&& f, Args&&... args);
-        @\added{template<class F, class... Args>}@ 
-        @\added{explicit thread(const attributes \& attrs, F\&\& f, Args\&\&... args);}@
-        
+
+        @\added{template <class F, class... Attrs>}@
+        @\added{explicit thread(F \&\& f, Attrs\&\&... attrs);}@
+
         ~thread();
-        //...
+        thread(const thread&) = delete;
+        thread(thread&&) noexcept;
+        thread& operator=(const thread&) = delete;
+        thread& operator=(thread&&) noexcept;
+
+        // \ref{thread.thread.member}, members
+        void swap(thread&) noexcept;
+        bool joinable() const noexcept;
+        void join();
+        void detach();
+        id get_id() const noexcept;
+        native_handle_type native_handle();                         // see~\ref{thread.req.native}
+
+        // static members
+        static unsigned int hardware_concurrency() noexcept;
     };
 }
 \end{codeblock}
 
-\begin{addedblock}
-
-\rSec3[thread.thread.attr]{Class \tcode{thread::attributes}}
-
-
-\begin{codeblock}
-
-class thread::attributes  {
-public:
-    attributes() noexcept = default;
-    attributes(const attributes&);
-    attributes(attributes&& other) = default;
-    
-    attributes& stack_size(std::size_t size) noexcept;
-    attributes& name(std::span<const char> name);
-    attributes& name(std::span<const char8_t> name);
-    
-    @\emph{implementation-defined}@ __name; // \expos
-    std::size_t __size; // \expos
-};
-\end{codeblock}
-
-\pnum
-An object of type \tcode{thread::attributes} provides a way to
-set different parameters that may be used by the constructor of \tcode{std::thread} and \tcode{std::jhread}.
-
-The behavior of each attribute is implementation-defined.
-Attributes that are not handled by the implementation are ignored.
-
-\begin{center}
-\begin{footnotesize}
-%\def\arraystretch{1.5}%
-\begin{tabular}{ll}
-    \hline
-    Name & Description\\
-    \hline
-    \tcode{stack\_size} & \parbox{10cm}{
-        \vspace{.5\baselineskip}
-        \begin{note}
-        The intent is to configure a stack size as if by POSIX \mbox{\tcode{pthread_attr_setstacksize()}}.\\
-        \end{note}\\
-        If a non-zero value is outside of the range of values supported by the implementation, \tcode{thread} and \tcode{jthread} constructors
-        may throw \tcode{system_error}.\\
-        \vspace{.5\baselineskip}   
-    }\\
-    \hline
-    \tcode{name} & \parbox{10cm}{\vspace{.5\baselineskip}
-        \tcode{name} represents a string convertible to the native character encoding which may be used to non-uniquely identify a thread of execution.\\\\
-        When the value of \tcode{name} is outside of the range of values supported by the implementation, an implementation\\
-        can ignore the attribute entirely or use any \tcode{subspan} of the value to non-uniquely identify the thread of execution.
-        \vspace{.5\baselineskip}
-}\\
-        
-    \hline
-\end{tabular}
-\end{footnotesize}
-\end{center}
-
-
-\begin{itemdecl}
-attributes& stack_size(std::size_t size) noexcept;
-\end{itemdecl}
-\begin{itemdescr}
-\effects Initialize the \tcode{stack_size} attribute with the value of \tcode{size}.
-
-\returns \tcode{*this;}
-\end{itemdescr}
-
-
-\begin{itemdecl}
-attributes& name(std::span<const char> name);
-\end{itemdecl}
-\begin{itemdescr}
-\preconditions \tcode{name} represents a valid string of character in the narrow literal encoding
-
-\effects Initialize the \tcode{name} attribute with the value of \tcode{name}.
-
-\throws \tcode{bad\_alloc}
-
-\returns \tcode{*this;}
-
-
-\end{itemdescr}
-
-
-\begin{itemdecl}
-attributes& name(std::span<const char8_t> name);
-\end{itemdecl}
-\begin{itemdescr}
-\effects Initialize the \tcode{name} attribute with the value of \tcode{name}.
-
-\returns \tcode{*this;}
-
-\throws \tcode{bad\_alloc}
-\end{itemdescr}
-\end{addedblock}
+%\rSec3[thread.thread.attr]{Class \tcode{thread::attributes}}
+%
+%
+%\begin{codeblock}
+%
+%class thread::attributes  {
+%public:
+%    attributes() noexcept = default;
+%    attributes(const attributes&);
+%    attributes(attributes&& other) = default;
+%
+%    attributes& stack_size(std::size_t size) noexcept;
+%    attributes& name(std::span<const char> name);
+%    attributes& name(std::span<const char8_t> name);
+%
+%    @\emph{implementation-defined}@ __name; // \expos
+%    std::size_t __size; // \expos
+%};
+%\end{codeblock}
+%
+%\pnum
+%An object of type \tcode{thread::attributes} provides a way to
+%set different parameters that may be used by the constructor of \tcode{std::thread} and \tcode{std::jhread}.
+%
+%The behavior of each attribute is implementation-defined.
+%Attributes that are not handled by the implementation are ignored.
+%
+%\begin{center}
+%\begin{footnotesize}
+%%\def\arraystretch{1.5}%
+%\begin{tabular}{ll}
+%    \hline
+%    Name & Description\\
+%    \hline
+%    \tcode{stack\_size} & \parbox{10cm}{
+%        \vspace{.5\baselineskip}
+%        \begin{note}
+%        The intent is to configure a stack size as if by POSIX \mbox{\tcode{pthread_attr_setstacksize()}}.\\
+%        \end{note}\\
+%        If a non-zero value is outside of the range of values supported by the implementation, \tcode{thread} and \tcode{jthread} constructors
+%        may throw \tcode{system_error}.\\
+%        \vspace{.5\baselineskip}
+%    }\\
+%    \hline
+%    \tcode{name} & \parbox{10cm}{\vspace{.5\baselineskip}
+%        \tcode{name} represents a string convertible to the native character encoding which may be used to non-uniquely identify a thread of execution.\\\\
+%        When the value of \tcode{name} is outside of the range of values supported by the implementation, an implementation\\
+%        can ignore the attribute entirely or use any \tcode{subspan} of the value to non-uniquely identify the thread of execution.
+%        \vspace{.5\baselineskip}
+%}\\
+%
+%    \hline
+%\end{tabular}
+%\end{footnotesize}
+%\end{center}
+%
+%
+%\begin{itemdecl}
+%attributes& stack_size(std::size_t size) noexcept;
+%\end{itemdecl}
+%\begin{itemdescr}
+%\effects Initialize the \tcode{stack_size} attribute with the value of \tcode{size}.
+%
+%\returns \tcode{*this;}
+%\end{itemdescr}
+%
+%
+%\begin{itemdecl}
+%attributes& name(std::span<const char> name);
+%\end{itemdecl}
+%\begin{itemdescr}
+%\preconditions \tcode{name} represents a valid string of character in the narrow literal encoding
+%
+%\effects Initialize the \tcode{name} attribute with the value of \tcode{name}.
+%
+%\throws \tcode{bad\_alloc}
+%
+%\returns \tcode{*this;}
+%\end{itemdescr}
+%
+%
+%\begin{itemdecl}
+%attributes& name(std::span<const char8_t> name);
+%\end{itemdecl}
+%\begin{itemdescr}
+%\effects Initialize the \tcode{name} attribute with the value of \tcode{name}.
+%
+%\returns \tcode{*this;}
+%
+%\throws \tcode{bad\_alloc}
+%\end{itemdescr}
+%%\end{addedblock}
 
 \rSec3[thread.thread.constr]{Constructors}
 
 \begin{itemdecl}
-template<class F, class... Args> 
+template<class F, class... Args>
 explicit thread(F&& f, Args&&... args);
 \end{itemdecl}
 \begin{addedblock}
 \begin{itemdecl}
-template<class F, class... Args> 
-explicit thread(const thread::attributes & attrs, F&& f, Args&&... args);
+template<class F, class... Attrs>
+requires (sizeof...(Attrs) != 0)
+explicit thread(F&& f, Attrs&&... attrs);
 \end{itemdecl}
 \end{addedblock}
 
@@ -648,21 +836,25 @@ explicit thread(const thread::attributes & attrs, F&& f, Args&&... args);
 \pnum
 \constraints
 \begin{itemize}
-\begin{addedblock}
-\item \tcode{remove_cvref_t<F>} is not the same type as \tcode{thread::attributes}.
-\end{addedblock}
 \item \tcode{remove_cvref_t<F>} is not the same type as \tcode{thread}.
-\end{itemize} 
+\end{itemize}
 \pnum
 \mandates
 The following are all \tcode{true}:
 \begin{itemize}
+    \begin{addedblock}
+    \item \tcode{(is_base_of_v<thread_attribute, Attrs>) \&\& ...)},
+    \end{addedblock}
     \item \tcode{is_constructible_v<decay_t<F>, F>},
     \item \tcode{(is_constructible_v<decay_t<Args>, Args> \&\& ...)},
     \item \tcode{is_move_constructible_v<decay_t<F>>},
     \item \tcode{(is_move_constructible_v<decay_t<Args>> \&\& ...)}, and
     \item \tcode{is_invocable_v<decay_t<F>, decay_t<Args>...>}.
 \end{itemize}
+
+\begin{addedblock}
+Each type representing a thread attribute known of the implementation occurs no more than once in \tcode{Attrs},
+\end{addedblock}
 
 \pnum
 \expects
@@ -686,7 +878,7 @@ If the invocation of \tcode{invoke} terminates with an uncaught exception,
 \tcode{terminate} is called.
 
 \begin{addedblock}
-In the second form, \tcode{attrs} can be used to specify implementation-defined thread attributes (see [thread.thread.attr]).
+In the second form, \tcode{attrs} can be used to define implementation-defined behaviors. Thread attributes parameters unknown to the implementation are ignored. (see [thread.attributes]).
 \end{addedblock}
 
 \pnum
@@ -711,27 +903,34 @@ synchronizes with the beginning of the invocation of the copy of \tcode{f}.
 \end{itemize}
 \end{itemdescr}
 
+\section{\tcode{jthread}}
+
+\ednote{TODO: exact same wording as for thread}.
+
+\section{Feature test macros}
+
+\ednote{Add a new macro in \tcode{<version>}, \tcode{<thread>}: \tcode{__cpp_lib_thread_attributes} set to the date of adoption}.
 
 
 \section{Acknowledgments}
 
-Thanks to Martin Hořeňovský, Kamil Rytarowski, Clément Grégoire, Bruce Dawson, Patrice Roy, Ronen Friedman, Billy Baker and others for their valuable feedback.
+Thanks to Martin Hořeňovský, Kamil Rytarowski, Clément Grégoire, Bruce Dawson, Patrice Roy, Ronen Friedman, Billy Baker, and others for their valuable feedback.
 
 
 \bibliographystyle{plain}
-\bibliography{../wg21}
+\bibliography{wg21}
 
 
 \renewcommand{\section}[2]{}%
 \begin{thebibliography}{9}
-    \nocite{N4830}
-    
-    \bibitem[N2419]{N2419}
-    Kamil Rytarowski
-    \emph{Add methods for setting and getting the thread name} (WG14 proposal)\newline
-    \url{http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2419.htm}
+
+    \bibitem[N4885]{N4892}
+    Thomas Köppe
+    \emph{Working Draft, Standard for Programming Language C++}\newline
+    \url{https://wg21.link/N4892}
+
 \end{thebibliography}
 
-
+\end{document}
 
 \end{document}

@@ -12,96 +12,95 @@
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 \usepackage{tikz}
-%\usepackage[twitter]{emoji}
 \begin{document}
-    
+
     \maketitle
-    
+
     \paperquote{It's just semantic! - Kevlin Henney}
-    
+
     \section{Target}
-    
+
     C++23
-    
+
     \section{Abstract}
-    
-    This paper makes non-encodable characters (characters that cannot be represented in the literal encoding) in character and string literals ill-formed. 
+
+    This paper makes non-encodable characters (characters that cannot be represented in the literal encoding) in character and string literals ill-formed.
     We also restrict the valid characters in a multicharacter literal to avoid visual ambiguity caused by graphemes constituted of multiple code points.
-    
+
     Both proposed changes are unrelated but proposed in the same paper as their wording is co-located.
     The overarching motivation is to make lexing less suprising in the presence of non-latin1 characters in the source.
-    
+
     \section{Revisions}
     \subsection{R3}
     \begin{itemize}
         \item Fix spelling of code point
         \item Make it clearer than both proposals are independant, but the wording is jumbled together.
     \end{itemize}
-    
+
     \subsection{R2}
     \begin{itemize}
         \item Modify the wording to mandate that each element of a multicharacter literal is representable as a single code unit,
-        rather than restricting them to members of the basic character set. 
+        rather than restricting them to members of the basic character set.
         \item Expand motivation to clarify that multicharacter literals are changed only to avoid visual ambiguities.
     \end{itemize}
-    
+
     \subsection{R1}
     \begin{itemize}
         \item Rebase the wording
         \item Propose to make non-basic characters in multi-characters ill-formed
         \item Add more motivation.
     \end{itemize}
-    
-    
+
+
     \section{Non-encodable character-literals}
-    
+
     Implementation defined behaviors related to conversion to literal encoding reduce the portability of C++ programs and lead to silently incorrect
     programs as implementations are allowed to substitute the characters they cannot represent.
     Strings are text which carries intent and meaning. We believe an implementation should not be able to alter that meaning.
-    
+
     A program should either conserve the same sequence of abstract character as in the source or be ill-formed.
-    
+
     This constitutes a breaking change in the wording, as well as some implementations(MSVC), and matches other existing implementations' behavior.
-    
-    
+
+
     This is a follow-up to \paper{P2362R3} and a realization of the plan outlined in \paper{P2178R1}.
-    
+
     \subsection{Impact on the standard and implementations}
-    
+
     \begin{itemize}
         \item Clang always use UTF-8 to encode narrow literals
         \item GCC emits a diagnostics
-        
+
         \begin{quoteblock}
             converting to execution character set: Invalid or incomplete multibyte or wide character
         \end{quoteblock}
         \item MSVC uses \tcode{?} as a replacement character.
         For example, the string \tcode{"こんにちは"} becomes \tcode{' ?? ?? ', 00H}.
         MSVC does emits warning for this scenario (enabled by default).
-        
+
         \begin{quoteblock}
             \begin{codeblock}
-                <source>(4): warning C4566: character represented by universal-character-name 
+                <source>(4): warning C4566: character represented by universal-character-name
                 '\u3053' cannot be represented in the current code page (20127)
                 <source>(4): warning C4566: character represented by universal-character-name
                 '\u3093' cannot be represented in the current code page (20127)
-                <source>(4): warning C4566: character represented by universal-character-name 
+                <source>(4): warning C4566: character represented by universal-character-name
                 '\u306B' cannot be represented in the current code page (20127)
                 <source>(4): warning C4566: character represented by universal-character-name
                 '\u3061' cannot be represented in the current code page (20127)
-                <source>(4): warning C4566: character represented by universal-character-name 
+                <source>(4): warning C4566: character represented by universal-character-name
                 '\u306F' cannot be represented in the current code page (20127)
             \end{codeblock}
         \end{quoteblock}
-        
+
     \end{itemize}
-    
+
     A demonstration of existing behavior is available on \href{https://compiler-explorer.com/z/4vheqx1oj}{Compiler Explorer}.
-    
+
     We argue that the code which breaks never matches the developer's intent.
-    
+
     \subsection{Are we removing a capability?}
-    
+
     \begin{itemize}
         \item The exact nature of the literal encoding can be observed by a dedicated API \paper{P1885R7}, and in general, the relying on non-encodable characters to detect the literal encoding
         is non-portable as it can only work on windows. It is also very difficult to use such clever tricks in a way that has no false positives or false negatives.
@@ -109,22 +108,22 @@
         \item \tcode{u8} strings can be used portably.
         \item If the code's author does not care about the content of a string being preserved, then presumably that character can be removed.
     \end{itemize}
-    
+
     \subsection{Impact on C}
-    
+
     This makes a behavior that is implementation-defined in C ill-formed in C++.
     GCC exposes the same behavior (the one proposed by this paper) in all language modes.
-    
+
     \section{Multi character literals}
-    
+
     Narrow multicharacter literals such as \tcode{'intl'} are widely used. We are not proposing to remove them.
     However, grapheme clusters - for example, 'é' (e, ACUTE ACCENT) - read as single characters.
     A multicharacter literal can be visually indistinguishable from a character literal, leading to the accidental creation of multicharacter literals.
     This is the same issue described for wide literals in \paper{P2362R3}.
-    
+
     Unlike what we proposed for wide-literals, we can't make all the multi-characters literals ill-formed.
     Instead, we propose that multi-characters literals can only contain characters representable as a single code unit.
-    
+
     This has two benefits
     \begin{itemize}
         \item It excludes all combining characters or characters that do not constitute a full grapheme. That takes care of the visual ambiguity.
@@ -133,46 +132,46 @@
     And indeed, the documentation of GCC shows that code points that do not fit in a single byte are not preserved but instead truncated.
     \begin{quoteblock}
         The compiler evaluates a multicharacter character constant a character at a time, shifting the previous value left by the number of bits per target character and then or-ing in the bit-pattern of the new character truncated to the width of a target character. The final bit-pattern is given type int, and is therefore signed, regardless of whether single characters are signed or not. If there are more characters in the constant than would fit in the target int the compiler issues a warning, and the excess leading characters are ignored.
-        
+
         For example, 'ab' for a target with an 8-bit char would be interpreted as \tcode{(int) ((unsigned char) 'a' * 256 + (unsigned char) 'b')}, and '\textbackslash 234a' as \tcode{(int) ((unsigned char) '\textbackslash 234' \* 256 + (unsigned char) 'a')}.
     \end{quoteblock}
-    
+
     Because this proposal only cares about visual ambiguities between character literal and multicharacter literals, we do not propose to
     make any escape sequences in multicharacter literal ill-formed (the number of escape sequences in a multicharacter or character literal is visually identifiable).
-    
+
     It is likely that escape sequences in multicharacter literals are in the general case non-sensible but given the implementation-defined nature of
     multicharacter literals, we do not think there is value in adding further restriction; our only goal is for users to accidentally introduce them.
-    
+
     \subsection{Alternatives considered}
-    
+
     We considered
     \begin{itemize}
         \item Restricting elements of multi-characters literals to elements of the basic translation set. However, that would exclude \$ and @.
         \item Restricting elements of multi-characters literals to U+0000-U+007F.
     \end{itemize}
-    
+
     These solutions are virtually isomorphic (given that characters in these ranges are visually distinguishable). However, restricting encodability by a single unit is arguably the more direct expression of intent.
-    
-    
+
+
     \subsection{Impact on the standard and implementations}
-    
-    GCC, Clang ICC(EDG) emit a warning for any multi-characters literals in general. They also emit a warning when the computed value exceeds the size of \tcode{int}. 
-    
+
+    GCC, Clang ICC(EDG) emit a warning for any multi-characters literals in general. They also emit a warning when the computed value exceeds the size of \tcode{int}.
+
     No compiler emits a warning for non-encodable characters in multicharacter literals.
     Because this feature cannot produce a sensible result, we do not think its removal would affect users.
-    
+
     \section{Feature macro}
-    
+
     No feature macro is proposed because the transformation to characters literals and string literals is not observable by the program.
-    
-    
+
+
     \section{Proposed wording}
-    
+
     \ednote{The \removedprev{Magenta text with blue squiggly lines} correspond to wording previously removed by \paper{P2362R3}. This wording should stay removed.}
-    
-    
+
+
     \rSec2[lex.ccon]{Character literals}
-    
+
     \pnum
     \indextext{literal!character}%
     \indextext{literal!\idxcode{char8_t}}%
@@ -200,16 +199,16 @@
         A multicharacter literal shall not have an \grammarterm{encoding-prefix}.
         If a multicharacter literal contains a \grammarterm{basic-c-char} that is not encodable as a single code unit in the ordinary literal encoding, the program is ill-formed.
     \end{addedblock}
-    
+
     \begin{removedblock}
         The \grammarterm{encoding-prefix} of
         a non-encodable character literal or
         a multicharacter literal
         shall be absent \removedprev{or \tcode{L}}.
     \end{removedblock}
-    
+
     \changed{Such \grammarterm{character-literal}{s}}{Multicharacter literals} are conditionally-supported.
-    
+
     \pnum
     The kind of a \grammarterm{character-literal},
     its type, and its associated character encoding
@@ -219,7 +218,7 @@
     \removed{The special cases for
         non-encodable character literals and multicharacter literals
         take precedence over the\removedprev{ir respective} base kind\removedprev{s}.}
-    
+
     \begin{removedblock}
         \begin{note}
             The associated character encoding for ordinary \removedprev{and wide} character literals
@@ -234,7 +233,7 @@
             that encoding it would require more than one code unit.
         \end{note}
     \end{removedblock}
-    
+
     \begin{floattable}{Character literals}{lex.ccon.literal}
         {lllll}
         \topline
@@ -287,7 +286,7 @@
         UTF-32 &
         \tcode{U'z'} \\
     \end{floattable}
-    
+
     \pnum
     In translation phase 4,
     the value of a \grammarterm{character-literal} is determined
@@ -338,8 +337,8 @@
         is conditionally-supported and
         has an \impldef{value of \grammarterm{conditional-escape-sequence}} value.
     \end{itemize}
-    
-    
+
+
     %Modify 5.2.5 [lex.phases] as follow
     %
     %\begin{quote}
@@ -359,7 +358,7 @@
     %single \grammarterm{c-char} representable in the execution character
     %set has type \tcode{char}, with value equal to the
     %numerical value of the encoding of the \grammarterm{c-char} in the
-    %execution character set. 
+    %execution character set.
     %An ordinary character literal that contains more than one \grammarterm{c-char} is a
     %\grammarterm{multicharacter literal}.
     %A multicharacter literal\removed{, or an ordinary character literal containing
@@ -383,7 +382,7 @@
     %\grammarterm{c-char} has no representation in the execution wide-character set, in which
     %case the \changed{value is implementation-defined}{program is ill-formed}. \begin{note} The type \tcode{wchar_t} is able to
     %	represent all members of the execution wide-character set (see~\ref{basic.fundamental}).
-    %\end{note} 
+    %\end{note}
     %The value of a wide-character literal containing multiple \grammarterm{c-char}{s} is implementation-defined.
     %
     %\end{quote}
@@ -412,15 +411,15 @@
     %\begin{note}
     %	If the value of a character literal prefixed by
     %	\tcode{u}, \tcode{u8}, or \tcode{U}
-    %	is outside the range defined for its type, 
+    %	is outside the range defined for its type,
     %	the program is ill-formed.
     %\end{note}
     %\end{removedblock}
-    
+
     \rSec2[lex.string]{String literals}
-    
+
     \begin{quote}
-        
+
         String literal objects are initialized with
         the sequence of code unit values
         corresponding to the \grammarterm{string-literal}'s sequence of
@@ -494,22 +493,22 @@
             \impldef{effect of \grammarterm{conditional-escape-sequence} on encoding state}
             what effect these sequences have on encoding state.
         \end{itemize}
-        
-        
-        
+
+
+
         %\added{If the value of a character literal is outside the range defined for its type, the program is ill-formed.}
-        
+
     \end{quote}
-    
+
     \section{Acknowledgments}
-    
+
     Many thanks to JeanHeyd Meneide, Peter Bindels, Zach Laine, Tom Honermann, and Steve Downey, who reviewed this paper and offered valuable feedback.
-    
-    
+
+
     \bibliographystyle{plain}
     \bibliography{wg21}
-    
-    
+
+
     \renewcommand{\section}[2]{}%
     \begin{thebibliography}{9}
         \bibitem[N4885]{N4885}
@@ -517,5 +516,5 @@
         \emph{Working Draft, Standard for Programming Language C++}\newline
         \url{https://wg21.link/N4885}
     \end{thebibliography}
-    
+
 \end{document}

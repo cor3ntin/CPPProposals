@@ -14,7 +14,7 @@ mkoutput:
 	mkdir -p $(OUT)
 
 $(OUT)/%.pdf: $(SRC)/%.tex
-	cd $(OUT) && TEXINPUTS=$(SRC):$(SRC)/../emojis:$(TEXINPUTS) lualatex -shell-escape --interaction=batchmode $<
+	cd $(OUT) && TEXINPUTS=$(SRC):$(TEXINPUTS) lualatex -shell-escape --interaction=batchmode $<
 
 bib:
 	wget https://wg21.link/index.bib -O $(SRC)/wg21.bib
