@@ -1,0 +1,313 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{A plan for better template meta programming facilities in C++26}
+\docnumber{D2632R0}
+\audience{EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+Features such as concepts, \tcode{if constexpr} and template parameters packs have made Template Meta Programming more powerful and accessible than it was 15 years ago, or even 5 years ago.
+
+However, some programms are still very difficult, if not impossible to express. Using template meta programming often require a high level of expertise.
+Shortcomings of the core language have been addressed through library features with high compile time costs and poor user experience.
+
+These problems can be solved by extending the core language, or lifting restrictions therein.
+The overarching goals is to present a set of features to make generic programming and template meta programming easier,
+faster to compile, with better compile time diagnostics.
+
+Invidual features described in this document are of will be the object of separate proposals.
+
+
+\section{Revisions}
+
+\section{Scope and Goals}
+
+\subsection{Not a paradigm shift}
+
+The C++ committee likes big, bold complex and paradigm shifting proposals, like concepts and reflection.
+This is no such proposal.
+Most of the proposed features and highlighted proposals are logical extensions or generalization of existing features.
+Most are patterns that many people have tried to express only to find they can't.
+As such the combined goal of the presented features is not as much to make C++ more exciting as it is to make it less surprising and frustrating.
+
+\subsection{Iterrative Improvements}
+
+This paper touches on pack handling, template template parameters, type deduction, diagnostics, \tcode{constexpr} features, etc.
+The features presented have various degrees of maturity and implementation experience.
+We need to find a balance between having a good long term vision of the design space, and incremental improvements, such that well understood features,
+are not held back by more controversial or less mature proposals.
+It is not our intention to present a large proposal, but rather a number of small to medium sized proposals wth compounded benefits.
+We should strive to standardize many of these individual features for C++26.
+
+\subsection{Interraction with reflection}
+
+There is some overalap between what is considered Template Meta Programming, \tcode{constexpr} facilities, and reflection.
+The features presented in this paper (\paper{P1240R2}) are orthogonal to reflection and do not intend to compete with reflections
+features.
+As reflection can be used as a mechanism to manipulate types, there will inevitably be some problems that can be solved by both reflection
+and template metaprogramming techniques, or a combination of the two. The best tool to use for a given task will be context dependant,
+and this paper does not try to held any particular tool as the best.
+Waiting for reflection should not stop us from improving the rest of the language.
+
+\subsection{Circle}
+
+Many of the features presented in this paper were designed and implemented in Circle by Sean Baxter.
+There is a lot of commonality between this paper and the work presented by Sean Baxter at CppNow in May 2022.
+This is very much intentional: We were really impressed by this body of work and the underlying philosophy that the language should be incrementally improved
+to fit the need of library and user types, rather that relying on arcane, slow to compile, hard to diagnose template meta-programming features.
+
+
+\section{Template parameters}
+
+\subsection{Universal template parameters}
+
+\subsection{Variable and concept template template parameters}
+
+\section{Parameter Packs}
+
+Packs are fundamentally sequences of expressions or types.
+There exist, however no standard facilities to interate, index, search, or modify these sequences.
+Most techniques to manipulate these sequences rely on recursion and rely on the instantiation of
+types that are linerar - sometimes quadratic - with the size of the packs, leasding to high development costs and long compile times.
+By improving language support for packs we can, all at once improve compile times, diagnostic messages, ease of development.
+
+\subsection{Indexing}
+
+Once of the most fundamental operation that can be done with a sequence is to index it:
+Given an index \tcode{n} and a pack of type, we want to know the \tcode{n}th type, and given a pack of expression, we want the nth expression.
+
+Here is a meta programming facility extracting the Nth type:
+
+\begin{colorblock}
+template <std::size_t I, typename T, typename ...Ts>
+struct nth_element_impl {
+    using type = typename nth_element_impl<I-1, Ts...>::type;
+};
+
+template <typename T, typename ...Ts>
+struct nth_element_impl<0, T, Ts...> {
+    using type = T;
+};
+
+template <std::size_t I, typename ...Ts>
+using nth_element = typename nth_element_impl<I, Ts...>::type;
+\end{colorblock}
+
+This code was taken from a \href{https://ldionne.com/2015/11/29/efficient-parameter-pack-indexing/}{blog post} written by Louis Dione in 2015.
+This is the most straigntforward approach presented.
+
+It's a recursive solution, which is already non-trivial to write for a lot of C++ developer and it is the simple solution presented.
+Most importantly, Louis's benchmark show that this very slow to compile.
+
+The conclusion of the article, led to Clang implementing a built-in \tcode{__type_pack_element} builtin.
+
+\begin{colorblock}
+template <std::size_t N, typename... T>
+using nth_element = __type_pack_element<N, T...>;
+\end{colorblock}
+
+\href{https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100157}{GCC is considering} a similar facility.
+
+An \href{https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100157}{internet search reveals} a large number of people searching for answer to this exact problem.
+
+Both \paper{P1858R2} and Cicle propose to solve this problem with a pack subscripting operator:
+
+\begin{colorblock}
+template<std::size_t N, typename... T>
+auto get(T&&... args) -> std::remove_cvref_t<T...[N]> // Indexes a pack of type {
+    return args...[N]; // Indexes a pack of expression
+}
+\end{colorblock}
+
+This can then be used to implement \tcode{std::get} like facilities, simplify standard and library times interfaces, etc.
+The following code, for example, implement \tcode{std::variant::variant()}.
+
+\begin{colorblock}
+template<class... Types>
+class variant {
+public:
+    constexpr variant()
+    noexcept(std::is_nothrow_default_constructible_v<Types...[0]>)
+    requires(std::is_default_constructible_v<Types...[0]>);
+
+};
+\end{colorblock}
+
+\subsubsection{Negative Indexing}
+
+Both Circle and P1858 propose negative indexing
+
+\begin{colorblock}
+template <typename... T>
+using Last = T...[-1];
+static_assert(std::same_as<Last<int, double, long>, long>);
+\end{colorblock}
+
+\tcode{T...[-1]} is equivalent to \tcode{T...[sizeof...(T)-1]}.
+
+
+This is fairly useful as getting the last element of a pack is a frequent operation.
+
+
+Pack indexing is covered in more details in \paper{P1858R2}. \paper{P1858R2} Demonstrate how pack indexing can be used to simplify
+\tcode{std::tuple} and tuple-adjacent facilities.
+
+The proposed syntax is valid today however, \href{https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2020/p1858r2.html#pack-indexing-ambiguity}{as explained by Barry},
+The current meaning (declaring a pack of C arrays without name) is neither super useful, nor used, nor implemented by all compilers (\href{https://godbolt.org/z/6obhffPTP}{[Compiler Explorer]}).
+
+Pack indexing can be standardized and implemented independently of other features proposed in this paper.
+
+\subsection{Pack slicing}
+
+Slicing, or subsetting a pack is also a fairly common operation.
+In particular, many constraints or requirements apply to all elements but the first, or all elements but the last.
+
+For examples, \tcode{std::ranges::cartesian_product_view}, and almost all supporting functions is defined as
+
+\begin{colorblock}
+template<input_range First, forward_range...Vs>
+class cartesian_product_view : public view_interface<cartesian_product_view<First, Vs...>> {};
+\end{colorblock}
+
+Because of the different requirements on \tcode{First} and the necessity to be able to extract \tcode{First}
+is many places.
+
+Having the ability to take a subset of the pack can simplify that code:
+
+\begin{colorblock}
+template<input_range...Vs>
+requires (forward_range<Vs...[1:]> && ...)
+class cartesian_product_view : public view_interface<cartesian_product_view<Vs...>> {};
+\end{colorblock}
+
+Circle supports a third step parameter, which can be used to stride the pack, or reverse it,
+and that seems less useful. It is not proposed by \paper{P1858R2}.
+
+It is important to note that slicing yields a pack rather than its elements, so there might be dots on both sides
+
+\begin{colorblock}
+auto f(int a, int b);
+int g(auto... pack) {
+    return f(pack...[1:3]...); // pack...[1:3] slices the pack and ... expands it
+}
+\end{colorblock}
+
+\subsection{Member Packs}
+
+\subsection{Non-trailing packs}
+
+\subsection{Multi-conditional operator}
+
+\subsection{Packs in structured bindings}
+
+\subsection{Packs as return values}
+
+\subsection{Integer sequences and their indexing}
+
+Cirle offers the following facilities to generate a list of integers as a pack of variables:
+
+\begin{itemize}
+\item \tcode{int...(N)} : Generate a pack of \tcode{N} consecutive integers starting at 0
+\item \tcode{int...(begin:end:step)} : Generate a pack of integers in the range \range{begin}{end} with a step of \tcode{step}.
+\item \tcode{int...}: yields the index of the current element in the pack expansion
+\end{itemize}
+
+These features are nice to have but far from necessary.
+
+First, it is important to note that most use cases for integer sequences can be replaced by other feature presented in this paper,
+such as pack indexing and expansion statements, and that, once we have these facilities, it is not clear that the need for a
+pack of integers will be frequent enough to warrant a language feature.
+
+Second, the syntax choosen by circle is entierly workable but also a bit suprising.
+Ideally, we would want a pack size type to be \tcode{std::size_t}, and so tso token \tcode{int...} may lead to confusion.
+
+But lastly, it is not clear that producing a pack in that way is the better solution, and we feel more exploration is needed
+before commiting time to a feature that may or not be useful.
+
+For example, expansion statements (\paper{P1306R1}) can be used in conjonction of \tcode{views::iota} to create a loop
+of N elements, that can be used in the same contexts.
+
+We could imagine that structured bindings - or even packs - could be initialized from a range.
+
+Or other similar looking solution.
+
+In the meantime, it is possible to extend \tcode{std::integer_sequence} to be compatible with the tuple protocole.
+
+\begin{colorblock}
+namespace std {
+    template <class T, T... N>
+    struct tuple_size<integer_sequence<T, N...>>
+    : integral_constant<size_t, sizeof...(N)>
+    { };
+
+    template <size_t I,  class T, T... N>
+    struct tuple_element<I, integer_sequence<T, N...>> {
+        using type = T;
+    };
+
+    template <std::size_t I,  class T, T... N>
+    constexpr auto get(std::integer_sequence<T, N...>) {
+        return N...[I];
+    }
+}
+\end{colorblock}
+
+\section{Constexpr facilities}
+
+\subsection{\tcode{constexpr} structured bindings}
+
+\subsection{\tcode{constexpr} ternary operator}
+
+\section{Priorities and status}
+
+\begin{tabular}{|l|c|c|c|}
+    \hline
+    Feature & Paper & Implemented in Circle? & Implemented In Clang? \\
+    \hline
+    Pack Indexing & \paper{P1858R2} & \checkmark &  \\
+    \hline
+    Pack Slicing& \paper{P1858R2} & \checkmark &  \\
+    \hline
+    &  &  &  \\
+    \hline
+    &  &  &  \\
+    \hline
+    &  &  &  \\
+    \hline
+    &  &  &  \\
+    \hline
+    &  &  &  \\
+    \hline
+    &  &  &  \\
+    \hline
+    &  &  &  \\
+    \hline
+    &  &  &  \\
+    \hline
+\end{tabular}
+
+
+\section{References}
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21, extra}
+
+\begin{thebibliography}{9}
+
+\bibitem[N4885]{N4885}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4885}
+
+
+\end{thebibliography}
+
+\end{document}
