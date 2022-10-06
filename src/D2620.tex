@@ -4,9 +4,9 @@
 
 \documentclass{wg21}
 
-\title{Lifting artificial restrictions on universal character names}
-\docnumber{D2620R1}
-\audience{EWG, SG-22}
+\title{Improve the wording for Universal Character Names in identifiers}
+\docnumber{P2620R2}
+\audience{CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 \begin{document}
@@ -14,10 +14,22 @@
 
 \section{Abstract}
 
-We propose to lift restrictions on \grammarterm{universal-character-names} in identifiers.
+Reword how \grammarterm{universal-character-names} in identifiers are specified.
 
 
 \section{Revisions}
+
+\subsection*{Revision 2}
+
+The previous revision of this paper proposed to allow UCNs outside of string literals to refer to
+basic character sets elements.
+However, we realized that we would not have a good model for UCNs in identifiers that are keywords.
+Neither allowing UCNs in keywords, or disallowing them seem desirable because of implementation burden and undue complexity.
+
+It gets more challenging when considering macro names, contextual keywords and preprocessing directives.
+However, there was consensus that the other wording changes operated by this paper, ie moving the description of the UCNs handling in [lex.name] was desirable, and this paper now only contain that wording change.
+\textbf{This paper no longer contains any design change} and is retargeted at CWG.
+
 
 \subsection*{Revision 1}
 \begin{itemize}
@@ -25,78 +37,78 @@ We propose to lift restrictions on \grammarterm{universal-character-names} in id
   \item Improve the wording by removing handling of UCNs from phase [lex.charset].
 \end{itemize}
 
-\section {Motivation}
-
-There are restrictions on the constitution of \grammarterm{universal-character-names} that seem artificial,
-and we should lift them\footnote{This is a small cleanup that isn't worth doing unless we can spend very little time on it,
-classified as low priority bucket 72.}!
-
-\begin{colorblock}
-\N{LATIN CAPITAL LETTER I} = 42; // ERROR: I is in the basic character set
-\N{LATIN CAPITAL LETTER I WITH DOT ABOVE} = 42 ;// Ok
-\end{colorblock}
-
-This is by no mean a major issue in C++, as we don't put restrictions on \grammarterm{universal-character-names} in string literals (unlike C),
-but it is somewhat inconsistent with the lexing model.
-
-Instead of restricting \grammarterm{universal-character-names} values,
-we can instead mandate that they are part of valid identifiers outside of strings.
-
-\section{Comparison With C}
-
-C does not allow \grammarterm{universal-character-names} to designate elements of the basic character set:
-
-\begin{quoteblock}
-2 A universal character name shall not designate a codepoint where the hexadecimal value is:
-- less than 00A0 other than 0024 (\$), 0040 (@), or 0060 (` );
-\end{quoteblock}
-
-This has been a pain point for users who would like to consistently use \tcode{\textbackslash{u}} in string literals as
-part of code generation processes.
-
-\begin{itemize}
-\item \href{https://github.com/llvm/llvm-project/issues/36392}{LLVM issue: Unicode string literals}
-\item \href{https://stackoverflow.com/questions/20158472/why-c99-has-such-an-odd-restriction-for-universal-character-names}{Why C99 has such an odd restriction for universal character names?}
-\item \href{https://stackoverflow.com/questions/62759943/restrictions-to-unicode-escape-sequences-in-c11}{Restrictions to Unicode escape sequences in C11}
-\end{itemize}
-
-I hope that both languages regain consistency by:
-\begin{itemize}
-\item Not restricting UCNs in string literals
-\item Not putting restrictions on UCNs in identifiers beyond what naturally falls out of the grammar of identifiers.
-\end{itemize}
+%\section {Motivation}
+%
+%There are restrictions on the constitution of \grammarterm{universal-character-names} that seem artificial,
+%and we should lift them\footnote{This is a small cleanup that isn't worth doing unless we can spend very little time on it,
+%classified as low priority bucket 72.}!
+%
+%\begin{colorblock}
+%\N{LATIN CAPITAL LETTER I} = 42; // ERROR: I is in the basic character set
+%\N{LATIN CAPITAL LETTER I WITH DOT ABOVE} = 42 ;// Ok
+%\end{colorblock}
+%
+%This is by no mean a major issue in C++, as we don't put restrictions on \grammarterm{universal-character-names} in string literals (unlike C),
+%but it is somewhat inconsistent with the lexing model.
+%
+%Instead of restricting \grammarterm{universal-character-names} values,
+%we can instead mandate that they are part of valid identifiers outside of strings.
+%
+%\section{Comparison With C}
+%
+%C does not allow \grammarterm{universal-character-names} to designate elements of the basic character set:
+%
+%\begin{quoteblock}
+%2 A universal character name shall not designate a codepoint where the hexadecimal value is:
+%- less than 00A0 other than 0024 (\$), 0040 (@), or 0060 (` );
+%\end{quoteblock}
+%
+%This has been a pain point for users who would like to consistently use \tcode{\textbackslash{u}} in string literals as
+%part of code generation processes.
+%
+%\begin{itemize}
+%\item \href{https://github.com/llvm/llvm-project/issues/36392}{LLVM issue: Unicode string literals}
+%\item \href{https://stackoverflow.com/questions/20158472/why-c99-has-such-an-odd-restriction-for-universal-character-names}{Why C99 has such an odd restriction for universal character names?}
+%\item \href{https://stackoverflow.com/questions/62759943/restrictions-to-unicode-escape-sequences-in-c11}{Restrictions to Unicode escape sequences in C11}
+%\end{itemize}
+%
+%I hope that both languages regain consistency by:
+%\begin{itemize}
+%\item Not restricting UCNs in string literals
+%\item Not putting restrictions on UCNs in identifiers beyond what naturally falls out of the grammar of identifiers.
+%\end{itemize}
 
 \section{Wording}
 
-%\rSec1[lex.separate]{Separate translation}
-%
-%
-%\pnum{4.} The source file is decomposed into preprocessing
-%tokens\iref{lex.pptoken} and sequences of whitespace characters
-%(including comments). A source file shall not end in a partial
-%preprocessing token or in a partial comment.
-%Each comment is replaced by one space character. New-line characters are
-%retained. Whether each nonempty sequence of whitespace characters other
-%than new-line is retained or replaced by one space character is
-%unspecified.
-%As characters from the source file are consumed
-%to form the next preprocessing token
-%(i.e., not being consumed as part of a comment or other forms of whitespace),
-%except when matching a
-%\grammarterm{c-char-sequence},
-%\grammarterm{s-char-sequence},
-%\grammarterm{r-char-sequence},
-%\grammarterm{h-char-sequence}, or
-%\grammarterm{q-char-sequence},
-%\grammarterm{universal-character-name}s are recognized and
-%replaced by the designated element of the translation character set.
-%
-%The process of dividing a source file's
-%characters into preprocessing tokens is context-dependent.
-%\begin{example}
-%    See the handling of \tcode{<} within a \tcode{\#include} preprocessing
-%    directive.
-%\end{example}
+\rSec1[lex.separate]{Separate translation}
+
+
+\pnum{4.} The source file is decomposed into preprocessing
+tokens\iref{lex.pptoken} and sequences of whitespace characters
+(including comments). A source file shall not end in a partial
+preprocessing token or in a partial comment.
+Each comment is replaced by one space character. New-line characters are
+retained. Whether each nonempty sequence of whitespace characters other
+than new-line is retained or replaced by one space character is
+unspecified.
+\removed{As characters from the source file are consumed
+to form the next preprocessing token
+(i.e., not being consumed as part of a comment or other forms of whitespace),
+except when matching a
+\grammarterm{c-char-sequence},
+\grammarterm{s-char-sequence},
+\grammarterm{r-char-sequence},
+\grammarterm{h-char-sequence}, or
+\grammarterm{q-char-sequence},
+\grammarterm{universal-character-name}s are recognized and
+replaced by the designated element of the translation character set.}
+
+The process of dividing a source file's
+characters into preprocessing tokens is context-dependent.
+\begin{example}
+    See the handling of \tcode{<} within a \tcode{\#include} preprocessing
+    directive.
+\end{example}
 
 \rSec1[lex.charset]{Character sets}
 
@@ -106,13 +118,13 @@ whose UCS scalar value is the hexadecimal number represented by
 the sequence of \grammarterm{hexadecimal-digit}s
 in the \grammarterm{universal-character-name}.
 The program is ill-formed if that number is not a UCS scalar value.
-\removed{If a \grammarterm{universal-character-name} outside
+If a \grammarterm{universal-character-name} outside
 the \grammarterm{c-char-sequence}, \grammarterm{s-char-sequence}, or
 \grammarterm{r-char-sequence} of
 a \grammarterm{character-literal} or \grammarterm{string-literal}
 (in either case, including within a \grammarterm{user-defined-literal})
 corresponds to a control character or
-to a character in the basic character set, the program is ill-formed.}
+to a character in the basic character set, the program is ill-formed.
 \begin{note}
     A sequence of characters resembling a \grammarterm{universal-character-name} in an
     \grammarterm{r-char-sequence}\iref{lex.string} does not form a

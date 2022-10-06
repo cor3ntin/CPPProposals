@@ -13,7 +13,7 @@
 \setmainfont{Noto Sans}
 
 \title{Whitespaces Wording Revamp}
-\docnumber{D2348R3}
+\docnumber{P2348R3}
 \audience{EWG, CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -39,7 +39,7 @@
     \item "Whitespace characters can appear within a preprocessing token only as part of a header name..." is now a note
     \item Rebase [cpp] on top of \paper{P2334R1}
     \item Rebase [lex.phases] on top of \paper{P2223R2}
-    \item Rebase [lex.phases] on top of \paper{P2314R4} 
+    \item Rebase [lex.phases] on top of \paper{P2314R4}
 \end{itemize}
 
 \subsection*{Revision 2}
@@ -51,7 +51,7 @@
 \begin{itemize}
     \item The previous revisions classified Vertical Tab and Form Feed as vertical spaces. This was consistent with Unicode, but not with the current wording, nor with any of the existing implementations. As this paper is trying not to modify the status quo, and because the author cannot find a reason to challenge the status quo, this version treats these codepoints as horizontal whitespaces.
     \item Add a note about \tcode{\textbackslash n\textbackslash r} and other not spelled-out sequences.
-    \item Align the grammar in [lex.whitespaces] with terminology used in \paper{P2314R2} and rebase the rest of the wording on top of  \paper{P2314R2}. 
+    \item Align the grammar in [lex.whitespaces] with terminology used in \paper{P2314R2} and rebase the rest of the wording on top of  \paper{P2314R2}.
 \end{itemize}
 
 \section{Design}
@@ -111,7 +111,7 @@ In practice, this is not observable (and we may want a note stating that somewhe
 
 Note that some compilers (namely GCC) will emit a diagnostic for the presence of vertical tabs
 in preprocessing directives.
-With this, such diagnostic in pedantic mode is not necessary for corformance, but might still
+With this, such diagnostic in pedantic mode is not necessary for conformance, but might still
 be useful [\href{https://godbolt.org/z/r8hdzM6Gx}{Compiler Explorer}].
 
 
@@ -166,7 +166,7 @@ following phases.
     \item
     \indextext{line splicing}%
     Each sequence of a backslash character (\textbackslash) immediately followed by zero or more
-    \changed{whitespace characters other than new-line}{\grammarterm{horizontal-whitespace-character}} followed by a \clb{new-line  character} is deleted, splicing
+    \changed{whitespace characters other than new-line}{\grammarterm{horizontal-whitespace-character}{s}} followed by a \clb{new-line  character} is deleted, splicing
     physical source lines to form logical source lines. Only the last
     backslash on any physical source line shall be eligible for being part
     of such a splice.
@@ -181,9 +181,9 @@ following phases.
     tokens\iref{lex.pptoken} and \cwhitespaces{sequences of whitespace characters
     (including comments)}. A source file shall not end in a partial
     preprocessing token or in a partial comment.
-    \removed{Each comment is replaced by one space character.} 
-    %\changed{New-line characters are}{Each \grammarterm{line-break} is} retained. 
-    \removed{New-line characters are retained.} 
+    \removed{Each comment is replaced by one space character.}
+    %\changed{New-line characters are}{Each \grammarterm{line-break} is} retained.
+    \removed{New-line characters are retained.}
     \removed{Whether each nonempty sequence of whitespace characters other
     than new-line is retained or replaced by one space character is
     unspecified.}  As characters from the source file are consumed to form the next preprocessing token (i.e., not being consumed as part of a \cwhitespace{comment or other forms of whitespace}), except when matching a \grammarterm{c-char-sequence}, \grammarterm{s-char-sequence}, \grammarterm{r-char-sequence}, \grammarterm{h-char-sequence}, or \grammarterm{q-char-sequence}, \grammarterm{universal-character-name}{s} are recognized and replaced by the designated element of the translation character set. The process of dividing a source file's
@@ -263,7 +263,7 @@ following phases.
     string-literal\br
     user-defined-string-literal\br
     preprocessing-op-or-punc\br
-    \textnormal{each \changed{non-whitespace character}{character that cannot be part of a \grammarterm{whitespace} and} cannot be one of the above}
+    \textnormal{each \changed{non-whitespace character}{character that is not part of a \grammarterm{whitespace} and}  \changed{cannot be}{is not part of} one of the above}
 \end{bnf}
 
 \pnum
@@ -286,7 +286,7 @@ separated by \cwhitespaces{whitespace;}\added{.}
 \removed{this consists of comments\iref{lex.comment}, or whitespace
 characters (U+0020 SPACE, U+0009 CHARACTER TABULATION, new-line, U+000B LINE TABULATION, and U+000C FORM FEED), or both}. As described in [cpp], in certain
 circumstances during translation phase 4, \cwhitespaces{whitespace} (or the absence
-thereof) serves as more than preprocessing token separation. 
+thereof) serves as more than preprocessing token separation.
 
 \added{[Note:}
 
@@ -365,7 +365,7 @@ as they serve to separate tokens.
 
 \begin{bnf}
     \nontermdef{single-line-comment-elem}\br
-    \textnormal{any member of the translation character set except any character that matches} line-break-character\br
+    \textnormal{any member of the translation character set except} line-break-character\br
 \end{bnf}
 
 \begin{bnf}
@@ -376,18 +376,18 @@ as they serve to separate tokens.
 \begin{bnf}
     \nontermdef{multi-line-comment-elem-seq}\br
     multi-line-comment-elem\br
-    multi-line-comment-elem-seq multi-line-comment-elem    
+    multi-line-comment-elem-seq multi-line-comment-elem
 \end{bnf}
 
 \begin{bnf}
     \nontermdef{multi-line-comment-elem}\br
-    \textnormal{any member of the translation character set except * followed by /}\br
+    \textnormal{any member of the translation character set except * immediately followed by /}\br
 \end{bnf}
 
 \begin{bnf}
     \nontermdef{line-break}\br
     line-break-character\br
-    \textnormal{U+000D CARRIAGE RETURN followed by U+000A LINE FEED}\br
+    \textnormal{U+000D CARRIAGE RETURN immediately followed by U+000A LINE FEED}\br
 \end{bnf}
 
 \begin{bnf}
@@ -404,7 +404,17 @@ as they serve to separate tokens.
     \textnormal{U+0020 SPACE}\br
 \end{bnf}
 
-A \tcode{whitespace} is the longest sequence of characters that could constitute a \tcode{whitespace}.
+A \grammarterm{whitespace} is the longest sequence of characters that could constitute a \grammarterm{whitespace}.
+
+\begin{addedblock}
+\begin{note}
+    The comment characters \tcode{//}, \tcode{/*},
+    and \tcode{*/} have no special meaning within a \tcode{//} comment and
+    are treated just like other characters. Similarly, the comment
+    characters \tcode{//} and \tcode{/*} have no special meaning within a
+    \tcode{/*} comment.
+\end{note}
+\end{addedblock}
 
 \end{addedblock}
 
@@ -413,7 +423,7 @@ A \tcode{whitespace} is the longest sequence of characters that could constitute
 \end{removedblock}
 \pnum
 \removed{The characters \tcode{/*} start a comment, which terminates with the
-characters \tcode{*/}.} 
+characters \tcode{*/}.}
 %\ednote{This is retained to explain that a ine comment cannot contain the sequence \tcode{*/}}  These comments do not nest.
 \indextext{comment!\tcode{//}}%
 \removed{The characters \tcode{//} start a comment, which terminates immediately before the
@@ -421,6 +431,7 @@ next new-line character. If there is a form-feed or a vertical-tab
 character in such a comment, only whitespace characters shall appear
 between it and the new-line that terminates the comment; no diagnostic
 is required.}
+\begin{removedblock}
 \begin{note}
     The comment characters \tcode{//}, \tcode{/*},
     and \tcode{*/} have no special meaning within a \tcode{//} comment and
@@ -428,6 +439,7 @@ is required.}
     characters \tcode{//} and \tcode{/*} have no special meaning within a
     \tcode{/*} comment.
 \end{note}
+\end{removedblock}
 
 %\begin{addedblock}
 %\grammarterm{whitespace}{s} are ignored except as they serve to separate tokens.
@@ -452,7 +464,7 @@ is required.}
 
 \begin{bnf}
     \nontermdef{h-char}\br
-    \textnormal{any member of the source character set except \added{any character that matches} \clbc{new-line} and \terminal{>}}
+    \textnormal{any member of the source character set except \clbc{new-line} and \terminal{>}}
 \end{bnf}
 
 \begin{bnf}
@@ -463,7 +475,7 @@ is required.}
 
 \begin{bnf}
     \nontermdef{q-char}\br
-    \textnormal{any member of the source character set except \added{any character that matches} \clbc{new-line} and \terminal{"}}
+    \textnormal{any member of the source character set except \clbc{new-line} and \terminal{"}}
 \end{bnf}
 
 \pnum
@@ -669,7 +681,7 @@ shall consist of at most 16 characters.
 
 \pnum
 \removed{[\textit{Note:}}\space \removed{A} \added{Each longest sequence of characters that matches the grammar of a} \clb{source-file new-line} in a raw string literal \changed{results in a new-line in the
-    resulting execution string literal}{denotes a new-line}. 
+    resulting execution string literal}{denotes a new-line}.
 
 \added{\textit{[Example:}}
 Assuming no whitespace at the beginning of lines in the following example, the assert will succeed:

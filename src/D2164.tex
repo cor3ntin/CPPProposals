@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{\tcode{views::enumerate}}
-\docnumber{P2164R5}
+\docnumber{P2164R6}
 \audience{LEWG, SG-9}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -19,6 +19,15 @@ We propose a view \tcode{enumerate} whose value type is a struct with 2 members 
 representing respectively the position and value of the elements in the adapted range.
 
 \section{Revisions}
+
+
+\subsection{R6}
+Wording changes:
+\begin{itemize}
+    \item Add \tcode{enumerate_result} to the list of \tcode{tuple-like} types
+    \item Because \tcode{enumerate_view::iterator::operator*} returns values,  \tcode{enumerate_view::iterator}
+    cannot be a \tcode{Cpp17ForwardIterator}. Change \tcode{iterator_category} and add \tcode{iterator_concept} accordingly.
+\end{itemize}
 
 \subsection{R5}
 
@@ -207,9 +216,30 @@ representing respectively the position and value of the elements in the adapted 
 
 \section{Wording}
 
-\begin{addedblock}
+
 
 \ednote{TODO: ranges synopsis}
+
+
+\rSec2[tuple.like]{Concept \exposconcept{tuple-like}}
+
+% FIXME: \exposconcept{} is not allowed in \indexlibrarymember
+\indexlibrarymember{\placeholder{tuple-like}}{tuple}%
+\begin{itemdecl}
+    template <typename T>
+    concept @\defexposconcept{tuple-like}@ = @\seebelownc@;           // \expos
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    A type \tcode{T} models and satisfies
+    the exposition-only concept \exposconcept{tuple-like}
+    if \tcode{std::remove_cvref_t<T>} is a specialization of
+    \tcode{array}, \tcode{pair}, \tcode{tuple}, \added{\tcode{ranges::enumerate\char`_result}, }or \tcode{ranges::subrange}.
+\end{itemdescr}
+
+
+\begin{addedblock}
 
 \rSec2[range.enumerate]{Enumerate view}
 
@@ -399,7 +429,9 @@ namespace std::ranges {
 
 
       public:
-        using iterator_category = typename iterator_traits<iterator_t<Base>>::iterator_category;
+        using iterator_category = input_iterator_tag;
+        using iterator_concept  = @\seebelow@;
+
 
         using reference  = enumerate_result<index_type, range_reference_t<Base>>;
         using value_type = tuple<index_type, range_value_t<Base>>;
@@ -463,6 +495,19 @@ namespace std::ranges {
 }
 \end{codeblock}
 
+\tcode{iterator::iterator_concept} is defined as follows:
+\begin{itemize}
+\item If \exposid{Base} models \libconcept{random_access_range},
+    then \tcode{iterator_concept} denotes \tcode{random_access_iterator_tag}.
+    \item
+    Otherwise, if \exposid{Base} models \libconcept{bidirectional_range},
+    then \tcode{iterator_concept} denotes \tcode{bidirectional_iterator_tag}.
+    \item
+    Otherwise, if \exposid{Base} models \libconcept{forward_range},
+    then \tcode{iterator_concept} \tcode{iterator_concept} denotes \tcode{forward_iterator_tag}.
+     \item
+    Otherwise, \tcode{iterator_concept} denotes \tcode{input_iterator_tag}.
+\end{itemize}
 
 \tcode{iterator::index_type} is defined as follow:
 \begin{itemize}
