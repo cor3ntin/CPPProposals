@@ -80,7 +80,7 @@ Feature & Paper & In Circle? & Other\\
 \rowcolor{Tier1}\hyperref[sec:constexprstructured]{\tcode{constexpr} structured bindings} & \paper{P1481R0} &  \checkmark &  \\
 \rowcolor{Tier1}\hyperref[sec:staticassertfalse]{\tcode{static_assert(false)}} & \paper{P2593R0}  & \checkmark  &  Implemented in GCC \\
 \rowcolor{Tier1}\hyperref[sec:constexprternary]{\tcode{constexpr}/pack ternary}&  & \checkmark  (...??) &  \\
-\rowcolor{Tier1}\hyperref[sec:expansionindex]{Index of the current expansion}&  & \checkmark  (int...) &  \\
+%\rowcolor{Tier1}\hyperref[sec:expansionindex]{Index of the current expansion}&  & \checkmark  (int...) &  \\
 \rowcolor{Tier1}\hyperref[sec:expansionstatements]{Expansion statements}& \paper{P1306R1} & \checkmark &  \\
 \midrule
 \midrule
@@ -89,6 +89,7 @@ Feature & Paper & In Circle? & Other\\
 %\rowcolor{Tier2}Non-transient constexpr allocation & \paper{P1974R0} & & \\
 \rowcolor{Tier2}\hyperref[sec:packsinbindings]{Packs in structured bindings}& \paper{P1858R2} &  \checkmark & Implemented in clang \\
 \rowcolor{Tier2}Generalized structural types & \paper{P2484R0} & & \\
+\rowcolor{Tier2}\hyperref[sec:indexsequence]{Integer sequences in the core language}&  & \checkmark &  \\
 \rowcolor{Tier2}Deducing forwarding reference& \paper{P2481R1} & \checkmark &  \\
 \rowcolor{Tier2}\hyperref[sec:packslicing]{Pack Slicing}& \paper{P1858R2} & \checkmark &  \\
 \rowcolor{Tier2}\hyperref[sec:utp]{Universal template parameters} & \paper{P1985R1} & \checkmark & \\
@@ -128,7 +129,6 @@ Feature & Paper & In Circle? & Other\\
 \rowcolor{Tier4}\hyperref[sec:packnesslevel]{Multiple levels of pack expansions}&  &  &  \\
 \rowcolor{Tier4}Language variants/tuples&  &  &  \\
 \rowcolor{Tier4}Pack of variables declaration&  &  &  \\
-\rowcolor{Tier4}\hyperref[sec:indexsequence]{Index sequences in the core language}&  & \checkmark &  \\
 \rowcolor{Tier4}Step for pack slicing&  & \checkmark &  \\
 \rowcolor{Tier4}\hyperref[sec:membertraits]{Member traits}(Dot syntax on types/enums)&  & \checkmark &  \\
 \hline
@@ -195,7 +195,7 @@ Universal template parameters cannot be emulated by library solution, and their 
 generic code to support many generic types.
 
 P1985R3 offers a holistic approach to the use of universal template parameter (template parameters of any kind)
-by considering them dependant until instantiation.
+by considering them dependent until instantiation.
 
 The approach chosen by Circle is to only allow universal template parameters as template arguments and template parameters. They can notably be used in primary template declarations which are then specialized by kind.
 While less encompassing than what P1985R3 proposes, it has fewer moving pieces and implementation complexity, and could
@@ -244,7 +244,7 @@ static_assert(range_of<std::string, std::integral>);
 \end{colorblock}
 
 There is no syntax ambiguity between universal template parameters (\tcode{template auto}) and variable template template parameters (\tcode{auto}).
-I do not think there needs to be new syntax for disambiguating in dependant contexts, ie before specialization the only thing the compiler needs to know is that a given entity is a template disambiguated by \tcode{template}, which can be used for newly introduced entities.
+I do not think there needs to be new syntax for disambiguating in dependent contexts, ie before specialization the only thing the compiler needs to know is that a given entity is a template disambiguated by \tcode{template}, which can be used for newly introduced entities.
 
 
 Note that, by large, concepts behave very much like a variable template of type bool except they provide the compiler opportunity for better diagnostics and can be used to constrain parameters, variable declaration, etc.
@@ -617,7 +617,7 @@ g(my_tuple.[:]...); // unpack it (generate the same sequence of get<> calls)
 
 General unpacking and packs in structured bindings are overlapping features, and we should focus on standardizing one of them.
 
-\subsection{Pack in non-dependant contexts}
+\subsection{Pack in non-dependent contexts}
 \label{sec:packsoutsideoftemplate}
 
 By allowing packs as public members variables, aliases, and supporting expansions of tuple-like types,
@@ -632,11 +632,11 @@ It was suggested that additional syntax at the start of the expression would hel
 
 To quote Barry Revzin, that's a lot of dots.
 
-Alternatively \tcode{...} could be used either before or after the expansion and always before in non-dependant contexts. That's a lot of inconsistencies to teach, especially as the placement of \tcode{...} is something students have reported having trouble with.
+Alternatively \tcode{...} could be used either before or after the expansion and always before in non-dependent contexts. That's a lot of inconsistencies to teach, especially as the placement of \tcode{...} is something students have reported having trouble with.
 
 \href{https://godbolt.org/z/9ef4r69Wh}{Circle demonstrates} that this additional syntax is not necessary.
 
-Packs in structured bindings (\paper{P1061R2}) have been implemented in Clang by Jason Rice(\href{https://godbolt.org/z/Tnz4e1dY9}{Compiler Explorer}). In effect this implementation treats a pack as dependant and performs
+Packs in structured bindings (\paper{P1061R2}) have been implemented in Clang by Jason Rice(\href{https://godbolt.org/z/Tnz4e1dY9}{Compiler Explorer}). In effect this implementation treats a pack as dependent and performs
 pack exansion and substitution of the pack once the complete pack expanding expression is parsed.
 
 We recommend more implementation experience with this feature before burdening users with more inconsistent syntax
@@ -646,8 +646,8 @@ assuming it's not a pack expansion and then transform it when it is established 
 Either way, an implementation is necessary before making premature syntax decisions.
 If determined to be possible, any added implementation complexity is preferable to added complexity in the language.
 
-More importantly, the other features presented in this paper are not contingent on a resolution to this question being found, and the issue of packs in non-dependant contexts can be shelved until more implementation experience is available without holding progress back.
-Pack expansions in non-dependant contexts can just be made ill-formed for now. Not ideal but better than not progressing everything else Circle, this paper and related proposals offer.
+More importantly, the other features presented in this paper are not contingent on a resolution to this question being found, and the issue of packs in non-dependent contexts can be shelved until more implementation experience is available without holding progress back.
+Pack expansions in non-dependent contexts can just be made ill-formed for now. Not ideal but better than not progressing everything else Circle, this paper and related proposals offer.
 
 \subsection{Non-trailing packs}
 \label{sec:nontrailing}
@@ -662,27 +662,117 @@ as such \textbf{\paper{P2347R2} should still be pursued, at least for functions}
 In other contexts where overload resolution does not take place, non-trailing pack deduction
 can be replaced by pack indexing without loss in expressivity.
 
-\subsection{Integer sequences and their indexing}
+\subsection{Integer sequences}
 \label{sec:indexsequence}
 
-Circle offers the following facilities to generate a list of integers as a pack of variables:
+
+Current implementation techniques rely heavily on index sequences to index, splice, and manipulate packs.
+In the standard, it is used in the implementation of \tcode{tuple, zip, variant, bind_back, array} and other facilities.
+A search on GitHub reveals over 15000 uses in open source projects.
+
+It is important to observe that many uses of \tcode{integer_sequence} could be replaced by other facilities presented in this paper.
+For example, \tcode{std::tuple} uses \tcode{std::integer_sequence} to create indexed elements holder that are inherited from.
+That can be replaced by member packs.
+\tcode{std::integer_sequence}  is also used to splice and index elements, or to switch over elements of a pack, all of which can be
+replaced by pack indexing, slicing, and expansion statements.
+
+Nevertheless, generating a sequence of integers is still a useful operation.
+
+Observing that, Circle offers the following facilities to generate a list of integers as a pack of variables:
 
 \begin{itemize}
+\item \tcode{int...}: Generate a pack of consecutive integers between 0 and the size of the current expansion (so it can only be used in the context in the context of an expansion)
 \item \tcode{int...(N)} : Generate a pack of \tcode{N} consecutive integers starting at 0
 \item \tcode{int...(begin:end:step)} : Generate a pack of integers in the range \range{begin}{end} with a step of \tcode{step}.
 \end{itemize}
 
-These features are nice to have but far from necessary.
+\begin{colorblock}
+template<class... TTypes, class... UTypes>
+constexpr bool operator==(const tuple<TTypes...>& t,
+const tuple<UTypes...>& u) {
+   constexpr size_t N = sizeof...(TTypes);
+   static_assert(N == sizeof...(UTypes));
+   return (... && (get<int...(N)>(t) == get<int...>(u)));
+}
+\end{colorblock}
 
-First, it is important to note that most use cases for integer sequences can be replaced by other features presented in this paper,
-such as pack indexing and expansion statements, and that, once we have these facilities, it is not clear that the need for a
-pack of integers will be frequent enough to warrant a language feature.
+Like other Circle features, \tcode{int...(N)} can be used outside of a dependent context.
 
-Second, the syntax chosen by Circle is entirely workable but also a bit surprising.
-Ideally, we would want a pack size type to be \tcode{std::size_t}, and so the token \tcode{int...} may lead to confusion.
+\begin{colorblock}
+int main() {
+    constexpr std::array v{1, 2, 3};
+    return (0 + ... + v[int...(v.size())]);
+}
+\end{colorblock}
 
-But lastly, it is not clear that producing a pack in that way is the better solution.
-It is for example possible to extend \tcode{std::integer_sequence} to be compatible with the tuple protocol.
+As such, \tcode{int...(N)} is just a facility to stamp integer literals.
+
+\subsection{What is wrong with \tcode{integer_sequence}}
+
+\tcode{integer_sequence} relies on type deduction, and as such cannot be used directly, it requires
+the introduction of an additional class or function template.
+
+For example, tuple equality can be written in standard C++ as follow:
+\begin{colorblock}
+template<class... TTypes, class... UTypes>
+constexpr bool operator==(const std::tuple<TTypes...>& t,  const std::tuple<UTypes...>& u) {
+    constexpr std::size_t N = sizeof...(TTypes);
+    static_assert(N == sizeof...(UTypes));
+    return [&]<auto...I>(std::index_sequence<I...>) {
+        return (... && (get<I>(t) == get<I>(u)));
+    }(std::make_index_sequence<N>{});
+}
+\end{colorblock}
+
+Similarly, using an integer sequence as part of a base class specification requires some contortions
+
+\begin{colorblock}
+template <auto N, typename T>
+struct Holder { T elem; };
+
+template <typename I, typename...T>
+struct tuple_impl;
+
+template <auto... I, typename...T>
+struct tuple_impl<std::index_sequence<I...>, T...> : Holder<I, T>... {};
+
+template <typename...T>
+struct tuple : tuple_impl<std::make_index_sequence<sizeof...(T)>, T...> {};
+\end{colorblock}
+
+Contrast that with Circle, which is much better at expressing the intent:
+
+\begin{colorblock}
+template <auto N, typename T>
+struct Holder { T elem; };
+
+template <typename...T>
+struct tuple : Holder<int..., T>... {}; // int... is a shorthand for int...(sizeof..(T))
+                                        // as that's the size of the pack under expansion
+\end{colorblock}
+
+Maybe more critically, vendors have found \tcode{make_index_sequence} to have a major negative impact on compile times.
+
+GCC added a builtin \tcode{__integer_pack(N)} which is similar to \tcode{int...(N)} in Circle, except it only works in templates.
+Clang provides \tcode{__make_integer_seq} that instanciates an \tcode{integer_sequence}.
+
+These approaches are very different but solve the same problem: implementing integer sequences in the language has a huge impact on performance.
+Quoting the commit that introduced the built-in in clang:
+
+\begin{quoteblock}
+\tcode{__make_integer_seq<std::integer_sequence, int, 90000>} takes 0.25
+seconds.\\
+
+\tcode{std::make_integer_sequence<int, 90000>} takes unbound time, it is still
+running. Clang is consuming gigabytes of memory.
+\end{quoteblock}
+
+Note that \tcode{std::make_integer_seq} can only be implemented recursively, and so needs to instantiate
+$\mathcal{O}(n)$ types.
+
+\subsection{Improved library solution 1: Unpacking integer sequences}
+
+We can subscribe \tcode{integer_sequence} to the tuple protocol.
 
 \begin{colorblock}
 namespace std {
@@ -703,7 +793,39 @@ namespace std {
 }
 \end{colorblock}
 
-But taking this idea further, we can observe that any constexpr random access range can be turned into a destructurable type, and therefore, a pack.
+We can then unpack the sequence without relying on deduction, either with a structured binding or with the generalized \tcode{.[:]} syntax:
+
+
+\begin{colorblock}
+template<class... TTypes, class... UTypes>
+constexpr bool operator==(const std::tuple<TTypes...>& t,  const std::tuple<UTypes...>& u) {
+    constexpr std::size_t N = sizeof...(TTypes);
+    static_assert(N == sizeof...(UTypes));
+    constexpr auto seq = std::make_index_sequence<N>{};
+    return (... && (get<seq.[:]>(t) == get<seq.[:]>(u)));
+}
+\end{colorblock}
+
+This lets us declare the sequence as a local variable and gets rid of the nested lambda.\\
+You can find an example of that technique on \href{https://godbolt.org/z/o6WcGoz7q}{Compiler Explorer}.
+
+It is also possible to use the same technique in a base specifier,
+
+\begin{colorblock}
+template <typename... T>
+struct tuple : Holder<std::make_index_sequence<sizeof...(T)>{}.[:], T>... {};
+\end{colorblock}
+
+But here, the index sequence is created \tcode{sizeof..(T)} times and a single element is kept each time.
+Not ideal. Not necessarily evident, and the syntax may also surprise non-experts.
+
+We also did not solve the performance aspect, and still rely on compiler magic to save us.
+
+\subsubsection{Improved library solution 2: Using ranges?}
+
+Taking this idea further, we can observe that any constexpr random access range can be turned into a destructurable type,
+and therefore, a pack.
+
 
 \begin{colorblock}
 template<auto Rng>
@@ -712,13 +834,11 @@ struct destructurable_range {
     using value_type = std::ranges::range_value_t<decltype(Rng)>;
     using reference  = std::ranges::range_reference_t<decltype(Rng)>;
     static constexpr auto & range = Rng;
-
     template <std::size_t I>
     constexpr decltype(auto) get() {
         return range[I];
     }
 };
-
 namespace std {
     template <auto Rng>
     struct tuple_size<destructurable_range<Rng>>
@@ -729,94 +849,61 @@ namespace std {
         using type = typename destructurable_range<Rng>::value_type;
     };
 }
-\end{colorblock}
-
-This lets us use any range algorithm to produce a sequence:
-
-\begin{colorblock}
-auto [... elems] = destructurable_range<std::views::iota(3, 10)>{};
-return (0 + ... + elems);
+int main() {
+    auto [... elems] = destructurable_range<std::views::iota(3, 10)>{};
+    return (0 + ... + elems);
+}
 \end{colorblock}
 
 
 This however relies on ranges being structural types (see \paper{P2484R0}).
 There is at least the intent that \tcode{std::vector} should be a structural type so, at least the following should be supported:
-
 \begin{colorblock}
-auto [... elems] = destructurable_range<std::views::iota(3, 10) | std::ranges::to<vector>>{};
-return (0 + ... + elems);
+    auto [... elems] = destructurable_range<std::views::iota(3, 10) | std::ranges::to<vector>>{};
+    return (0 + ... + elems);
 \end{colorblock}
 
-\subsection{Index of the current expansion}
-\label{sec:expansionindex}
+This has the nice property of being to yield complex sequences of arbitrary types and can leverage the suit of standard algorithms
+and views to produce interesting non-sequential... sequences.
 
-Usage experience in Circle shows that it is very frequently useful
-to know the current index of an expansion.
+It does however suffer the same issues as the previous solution: Performance pitfalls (in  terms of compile times) without the
+introduction of a variable, and harder to use than it probably should be for a relatively common operation in generic code.
 
-For example, let us consider this \tcode{std::tuple} constructor constructing from a tuple-like type
-(requirements omitted for simplicity).
+\subsubsection{Introducing a language feature}
+
+Given that, we ought to consider a language solution, similar to Circle's  \tcode{int...(N)}.
+The syntax chosen by Circle is entirely workable but also a bit surprising.
+Ideally, we would want a pack size type to be \tcode{std::size_t}, and so the token \tcode{int...} may lead to confusion.
+
+It is, however, surprisingly difficult to find a better alternative. We probably want some kind of keyword here.
+but good keywords are hard to find.
+
+Gašper Ažman observed that "an integer sequence of the size of the current expansion" is not sufficient,
+as illustrated in this example in which two differently sized tuples are expanded:
 
 \begin{colorblock}
-template<typename... Ts>
-struct tuple {
-    Ts ...elem;
-    template<typename A, typename B>
-    tuple(std::pair<A, B> && u)
-    : elem(std::get</*????*/>(std::forward<decltype(u)>(u)))... { }
+template <typename T>
+int expand(auto&&...);
+
+template <typename... Ts, typename... Us>
+auto f(auto&& g, std::tuple<Ts...> x, std::tuple<Us...> y) {
+    (..., expand<Us>(
+        (..., expand<Ts>(
+            g(int...(sizeof...(Ts)), std::get<int...(sizeof...(Ts))>(x),
+              int...(sizeof...(Us)), std::get<int...(sizeof...(Us))>(y))))));
 };
 \end{colorblock}
 
-We want to initialize each member \tcode{elem} (which is a pack), with the corresponding member of the \placeholder{tupkle-like} object.
-In some contexts, we could use a combination of expansion statements, \tcode{iota}, and pack indexing.
-However, in addition to being verbose and not super ergonomic, in some contexts, such as in member initializers, it's not possible at all.
-Ideally, we would want to be able to expand the index of the current expansion, as to call \tcode{get<0>(u), get<1>(u)}, etc.
 
-This can be achieved, with the feature presented so far, with a library solution.
-We can introduce an \tcode{index_sequence} to that effect. We use the following utility for readability and to avoid constructing multiple objects in the expansion
+More work is needed to fylly understand the requirements of a good syntax here but we could adopt Circle \tcode{int...} syntax,
+or find an identifier that no one uses (such as \tcode{integer_pack}) and support 3 use cases:
 
-\begin{colorblock}
-template <template auto... Args>
-constexpr inline std::make_index_sequence<sizeof...(Args)> pack_index;
-\end{colorblock}
-
-Which can then be used to generate an index for each expansion
-
-\begin{colorblock}
-template<typename... Ts>
-struct tuple {
-    Ts ...elem;
-    template<typename A, typename B>
-    tuple(std::pair<A, B> && u)
-    : elem(std::get<std::pack_index<Ts...>.[:]>(std::forward<decltype(u)>(u)))... { }
-};
-\end{colorblock}
-
-Note that because \tcode{index_sequence} is a tuple-like/destructurable type and not a pack, we need to index into that type explicitly using \tcode{.[:]}.
-But this is not ideal. While workable, it has some usability issues and certainly is not as compile-time performant as it could be.
-
-Because it comes up very frequently, Circle has a dedicated language feature to yield the index of the current expansion.
-Circle spells this feature \tcode{int...}.
-
-\begin{colorblock}
-template<typename... Ts>
-struct tuple {
-Ts ...elem;
-
-template<typename A, typename B>
-tuple(std::pair<A, B> && u)
- // elem...[0](std::get<0>(forward<decltype(u)>(u))), elem...[1](std::get<1>(forward<decltype(u)>(u)))
-: elem(std::get<int...>(std::forward<decltype(u)>(u)))...
-{ }
-};
-\end{colorblock}
-
-There again the \tcode{int...} works - and is unambiguous even if \tcode{int...} can already appear in a template parameter list.
-However, it could be confusing given it certainly yields a \tcode{size_t} rather than an \tcode{int}.
-
-An alternative would be to use \tcode{[:]} which is consistent with \tcode{tuple.[:]} and not used in another context.
-It also does not have an ellipsis which improves readability.
-The specific syntax can be left to bikeshedding, the important point is that indexing an expansion is a very useful, and common operation,
-which the core language should support.
+\begin{itemize}
+\item Create a sequence of the size of the current (innermost) expansion
+\item Create a sequence of user-provided size \tcode{N}
+\item Create a sequence between Start and End
+\item Create a sequence of the size of a user-provided pack id (as an alias of \tcode{int...(sizeof...(T))})
+\end{itemize}
 
 
 \subsection{Pack aliases}
@@ -1203,12 +1290,29 @@ There is also an argument to be made for compile times, given that some type tra
 this syntax, implemented entirely in the compiler is therefore more efficient.
 
 However, compilers can already provide builtins for these.
-Recent library work allows the \tcode{_v/_t} versions of these traits to be independant (\paper{P1715R0}),
+Recent library work allows the \tcode{_v/_t} versions of these traits to be independent (\paper{P1715R0}),
 and individual numerics type traits are being added - hopefully in C++26 (\paper{P1841R3}).
 
 Therefore, the usefulness of menber traits is debatable and as our time is limited, we do not consider this an important feature
 for WG21 to spend time on.
 But, the existence if this feature in Circle is illustrative of the usefulness of implementing frequently used type traits as builtins.
+
+\ednote{TOD}
+
+.template.
+universal args
+etc
+
+\subsection{Additional members on types}
+
+Circle also supports querying:
+
+\begin{itemize}
+\item \tcode{T.template} : The class template of a specialization \tcode{T}
+\item \tcode{T.type_args}, \tcode{T.nontype_args}, \tcode{T.template_args}, \tcode{T.universal_args} : The template arguments of a specialization \tcode{T}.
+      (These four ways to get to the template parameters exist to disambiguate types and variables during parsing)
+\item \tcode{T.string}: The name of a type, template or enum as a \tcode{const char*}. This simplified form of reflection is notably used by Sean baxter to \hyperref[sec:static_assert_expr]{improve \tcode{static_assert} messages}.
+\end{itemize}
 
 \subsection{Member traits on packs}
 
@@ -1331,7 +1435,7 @@ constexpr bool operator<(const variant<Types...>& v,  const variant<Types...>& w
 }
 \end{colorblock}
 
-There have also been efforts to support \tcode{static_assert} in non-dependant contexts \paper{P2593R0},
+There have also been efforts to support \tcode{static_assert} in non-dependent contexts \paper{P2593R0},
 and \paper{P1936R0} explores a mechanism that could be adapted to support user-crafted warnings.
 
 
