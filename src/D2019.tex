@@ -9,7 +9,7 @@
 
 
 \title{Usability improvements for \tcode{std::thread}}
-\docnumber{P2019R1}
+\docnumber{P2019R2}
 \audience{LEWG, SG1}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -34,6 +34,10 @@ as we demonstrate, current practices in many domains.
 The absence of these features make \tcode{std::thread} and \tcode{std::jthread} unfit or unsatisfactory for many use cases.
 
 \section{Revisions}
+
+\subsection{R2}
+
+Wording improvements.
 
 \subsection{R1}
 
@@ -610,6 +614,9 @@ A type which inherits from \tcode{thread_attribute} is a thread attribute.
 Thread attributes can be used to define additional implementation-defined behaviors on a \tcode{thread} or \tcode{jthread} object.
 Thread attributes not supported by an implementation are ignored.
 
+%\recommended
+%Implementations may provide additional platform-specific thread attributes derived from \tcode{thread_attribute} using reserved names.
+
 \rSec3[thread.thread.name.class]{Class \tcode{thread_name}}
 
 \begin{codeblock}
@@ -625,7 +632,8 @@ private:
 \recommended
 
 The \tcode{thread_name} thread attribute, if supported by the implementation, can be used
-to set the name of a thread as if per a call to the POSIX function \tcode{pthread_setname_np}.
+to set the name of a thread such that the name could be used for debugging or platform-specific display mechanisms.
+The name should not be stored in the \tcode{std::thread} or \tcode{std::jthread} object.
 
 \begin{itemdecl}
 constexpr thread_name(std::string_view name) noexcept;
@@ -654,9 +662,8 @@ private:
 \end{codeblock}
 
 \recommended
-Configure a stack size as if by POSIX \mbox{\tcode{pthread_attr_setstacksize()}}.\\
-The stack size set by the implementation
-can be aligned on an unspecified boundary, or clamped between unspecified lower and upper limits.
+Configure a desired stack size as if by POSIX \mbox{\tcode{pthread_attr_setstacksize()}}.\\
+The stack size set by the implementation may be adjusted up or down to meet platform-specific requirements
 
 If \tcode{__size == 0} is \tcode{true} the thread attribute should be ignored.
 
@@ -840,17 +847,36 @@ explicit thread(F&& f, Attrs&&... attrs);
 \end{itemize}
 \pnum
 \mandates
+\begin{removedblock}
 The following are all \tcode{true}:
 \begin{itemize}
-    \begin{addedblock}
-    \item \tcode{(is_base_of_v<thread_attribute, Attrs>) \&\& ...)},
-    \end{addedblock}
     \item \tcode{is_constructible_v<decay_t<F>, F>},
     \item \tcode{(is_constructible_v<decay_t<Args>, Args> \&\& ...)},
     \item \tcode{is_move_constructible_v<decay_t<F>>},
     \item \tcode{(is_move_constructible_v<decay_t<Args>> \&\& ...)}, and
     \item \tcode{is_invocable_v<decay_t<F>, decay_t<Args>...>}.
 \end{itemize}
+\end{removedblock}
+\begin{addedblock}
+\begin{itemize}
+    \item \tcode{is_constructible_v<decay_t<F>, F>} is \tcode{true},
+    \item \tcode{is_move_constructible_v<decay_t<F>>} is \tcode{true}.
+
+    \item For the first overload, the following are all true:
+    \begin{itemize}
+    \item \tcode{(is_constructible_v<decay_t<Args>, Args> \&\& ...)},
+    \item \tcode{(is_move_constructible_v<decay_t<Args>> \&\& ...)}, and
+    \item \tcode{is_invocable_v<decay_t<F>, decay_t<Args>...>}.
+    \end{itemize}
+
+    \item For the second overload, the following are all true:
+    \begin{itemize}
+        \item \tcode{(is_base_of_v<thread_attribute, Attrs>) \&\& ...)},
+        \item \tcode{(is_invocable_v<decay_t<F>>}.
+    \end{itemize}
+\end{itemize}
+\end{addedblock}
+
 
 \begin{addedblock}
 Each type representing a thread attribute known of the implementation occurs no more than once in \tcode{Attrs},
@@ -878,7 +904,7 @@ If the invocation of \tcode{invoke} terminates with an uncaught exception,
 \tcode{terminate} is called.
 
 \begin{addedblock}
-In the second form, \tcode{attrs} can be used to define implementation-defined behaviors. Thread attributes parameters unknown to the implementation are ignored. (see [thread.attributes]).
+For the second overloads, \tcode{attrs} can be used to tailor the thread with additional implementation-defined behaviors. Thread attributes parameters unknown to the implementation are ignored. (see [thread.attributes]).
 \end{addedblock}
 
 \pnum
@@ -915,6 +941,8 @@ synchronizes with the beginning of the invocation of the copy of \tcode{f}.
 \section{Acknowledgments}
 
 Thanks to Martin Hořeňovský, Kamil Rytarowski, Clément Grégoire, Bruce Dawson, Patrice Roy, Ronen Friedman, Billy Baker, and others for their valuable feedback.
+Thanks to
+Jonathan Wakely and Mathias Stearn for their wording suggestions.
 
 
 \bibliographystyle{plain}
