@@ -101,6 +101,7 @@
 \newcommand*{\authorthree}[2]{\def\@authorthree{#1} \def\@emailthree{#2}}
 \newcommand*{\authorfour}[2]{\def\@authorfour{#1} \def\@emailfour{#2}}
 \newcommand*{\authorfive}[2]{\def\@authorfive{#1} \def\@emailfive{#2}}
+\newcommand*{\authorsix}[2]{\def\@authorfive{#1} \def\@emailsix{#2}}
 
 
 \renewcommand{\maketitle}{%
@@ -118,6 +119,8 @@
                   \ifdef{\@authorthree}{\\&\@authorthree\ \textless\href{mailto:\@emailthree}{\@emailthree}\textgreater}{}%
                   \ifdef{\@authorfour}{\\&\@authorfour\ \textless\href{mailto:\@emailfour}{\@emailfour}\textgreater}{}%
                   \ifdef{\@authorfive}{\\&\@authorfive\ \textless\href{mailto:\@emailfive}{\@emailfive}\textgreater}{}%
+                  \ifdef{\@authorsix}{\\&\@authorsix\ \textless\href{mailto:\@emailsix}{\@emailsix}\textgreater}{}%
+
 
 
     \end{tabular}%
@@ -177,6 +180,7 @@
 %%--------------------------------------------------
 %% Difference markups
 \definecolor{addclr}{rgb}{0,.6,.6}
+\definecolor{addclrTwo}{rgb}{0.01, 0.28, 1.0}
 \definecolor{remclr}{rgb}{1,0,0}
 \definecolor{remclr2}{rgb}{0.71, 0.4, 0.11}
 \definecolor{noteclr}{rgb}{0.55,0,55}
@@ -186,11 +190,13 @@
 
 
 \newcommand{\added}[1]{\textcolor{addclr}{\uline{#1}}}
+\newcommand{\addedTwo}[1]{\textcolor{addclrTwo}{\uline{#1}}}
 \newcommand{\removed}[1]{\textcolor{remclr}{\sout{#1}}}
 \newcommand{\removedprev}[1]{\textcolor{magenta}{\squiggly{#1}}}
 \newcommand{\changed}[2]{\removed{#1} \added{#2}}
 
 \newenvironment{addedm}{\color{addclr}}{ }
+\newenvironment{addedm2}{\color{addclr}}{ }
 \newenvironment{changedm}{\color{noteclr}}{ }
 \newenvironment{removedm}{\color{remclr}}{ }
 
@@ -209,6 +215,17 @@
 {
 \color{black}
 }
+
+\newenvironment{addedblockTwo}
+{
+\color{addclrTwo}
+}
+{
+\color{black}
+}
+
+
+
 \newenvironment{removedblock}
 {
 \color{remclr}
