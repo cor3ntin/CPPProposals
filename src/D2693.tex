@@ -21,7 +21,7 @@ and to add formatters for \tcode{std::stacktrace}.
 
 \section{History}
 
-LEWG approved \paper{P1636R2} in 2019 (cologne) for C++20.
+LEWG approved \paper{P1636R2} in 2019 (Cologne) for C++20.
 The paper was subsequently reviewed in 2021 by LWG, who requested wording changes.
 
 SG16 had significant concerns with the formatting of \tcode{filesystem::path} and asked for that formatter to be removed.
@@ -56,13 +56,13 @@ Which we decided not to pursue as part of this NB comment resolution.
 \subsection{Why do we need \tcode{thread::id} formatting in C++23?}
 
 Two reasons. First, it is very commonly used by loggers. But most importantly that information is not exposed by any other means
-than a \tcode{ostream} \tcode{<<} overload. There is no accessor of any kind, so the only well-defined way to extract a \tcode{thread::id}
+than an \tcode{ostream} \tcode{<<} overload. There is no accessor of any kind, so the only well-defined way to extract a \tcode{thread::id}
 is to use streams
 
 \begin{colorblock}
 std::ostringstream ss;
 ss << thread.get_id();
-std::print("called a nice API on thread {}", ss.c_str());
+std::print("called a nice API on thread {}", ss.str());
 \end{colorblock}
 
 Note that a quick search on GitHub reveals that users, when their expectations are subverted,  will hm... find a way, and won't let such thing as well-definedness stop them. They will, for example, exploit the amazing flexibility of \tcode{printf}
@@ -70,7 +70,7 @@ to get what they want:
 
 \begin{colorblock}
 printf("[Thread %d Profiling: %ld microseconds] ",
-    std::this_thread::get_id(), microseconds);
+    std::this_thread::get_id(), microseconds); // UB
 \end{colorblock}
 
 By properly supporting \tcode{thread::id} in \tcode{format}, we can avoid the proliferation of undefined, non portable, and dangerous code.
@@ -109,10 +109,11 @@ Given the wide variance in how \tcode{complex} are formatted in other programmin
 
 These don't seem sufficiently useful to be processed as part of NB comments.
 
+Moreover, there were plans to remove smart pointer formatters from P1636 for consistency with raw pointers which are intentionally not formattable by default.
+
 \subsection{Stacktrace}
 
-\tcode{std::stacktrace} and \tcode{std::stacktrace_entry} would have both a formatter and a \tcode{to_string} methods,
-such that the following would be equivalent:
+We propose adding formatters for \tcode{std::stacktrace} and \tcode{std::stacktrace_entry} in addition to existing \tcode{std::to_string} overloads such that the following would be equivalent:
 
 \begin{colorblock}
 to_string(a_stacktrace);
@@ -170,13 +171,10 @@ namespace std {
 \end{codeblock}
 \begin{addedblock}
 \begin{codeblock}
-    template<class charT>
-    requires std::same_as<char, charT>
-    struct formatter<stacktrace_entry, charT>
+    struct formatter<stacktrace_entry>
 
-    template<class Allocator, class charT>
-    requires std::same_as<char, charT>
-    struct formatter<basic_stacktrace<Allocator>, charT>;
+    template<class Allocator>
+    struct formatter<basic_stacktrace<Allocator>>;
 \end{codeblock}
 \end{addedblock}
 \begin{codeblock}
@@ -209,29 +207,15 @@ namespace std {
 \begin{addedblock}
 
 \rSec3[stacktrace.format]{Formatting support}
-\begin{codeblock}
-template<class charT>
-requires (std::same_as<char, charT>)
-struct formatter<stacktrace_entry, charT>  {
-    template<class ParseContext>
-    constexpr ParseContext::iterator parse(ParseContext& ctx) const {
-        return ctx.begin();
-    }
-    template<class FormatContext>
-    FormatContext::iterator format(const stacktrace_entry& ste, FormatContext& ctx) const;
-};
-\end{codeblock}
 
 \begin{itemdecl}
-template<class FormatContext>
-FormatContext::iterator format(const stacktrace_entry& ste, FormatContext& ctx) const;
+struct formatter<stacktrace_entry>;
 \end{itemdecl}
 
 \begin{itemdescr}
-\effects Writes the same description that would be produced by \tcode{to_string(ste)} into \tcode{ctx.out()}.
+The \tcode{parse} member function of this formatter takes an empty format specification.
 
-\returns An iterator past the end of the output range.
-
+A \tcode{stacktrace_entry} object is formatted as if by passing it to \tcode{to_string} and copying the returned string through the output iterator of the context.
 \end{itemdescr}
 
 
