@@ -5,17 +5,19 @@
 \documentclass{wg21}
 
 \title{A plan for better template meta programming facilities in C++26}
-\docnumber{D2632R0}
+\docnumber{P2632R0}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Pablo Halpern}{phalpern@halpernwightsoftware.com}
 \authorthree{John Lakos}{jlakos@bloomberg.net}
-\authorfour{Alisdair Meredith}{ALISDAIRM@me.com}
+\authorfour{Alisdair Meredith}{ameredith1@bloomberg.net}
 \authorfive{Joshua Berne}{jberne4@bloomberg.net}
+\authorsix{Gašper Ažman}{gasper.azman@gmail.com}
 
 \usepackage{color, colortbl}
 \begin{document}
 \maketitle
+\paperquote{Incremental changes can substentially improve expressiveness - Sean Baxter}
 
 \section{Abstract}
 
@@ -74,6 +76,7 @@ Feature & Paper & In Circle? & Other\\
 \textbf{Tier 1} \\
 
 \rowcolor{Tier1}\hyperref[sec:packindexing]{Pack Indexing} & \paper{P1858R2} & \checkmark &\\
+\rowcolor{Tier1} & \cite{P2662R0} &  &\\
 \rowcolor{Tier1}\hyperref[sec:memberpack]{Member Pack}& \paper{P1858R2} &  \checkmark &\\
 \rowcolor{Tier1}\hyperref[sec:packaliases]{Pack Aliases}& \paper{P1858R2} &  \checkmark &  \\
 \rowcolor{Tier1}\hyperref[sec:unpacking]{Unpacking structured types}& \paper{P1858R2} &  \checkmark &  \\
@@ -87,7 +90,7 @@ Feature & Paper & In Circle? & Other\\
 \textbf{Tier 2} \\
 \rowcolor{Tier2}Reflection& \paper{P1240R2} & \checkmark &  \\
 %\rowcolor{Tier2}Non-transient constexpr allocation & \paper{P1974R0} & & \\
-\rowcolor{Tier2}\hyperref[sec:packsinbindings]{Packs in structured bindings}& \paper{P1858R2} &  \checkmark & Implemented in clang \\
+\rowcolor{Tier2}\hyperref[sec:packsinbindings]{Packs in structured bindings}& \paper{P1061R2} &  \checkmark & Implemented in clang \\
 \rowcolor{Tier2}Generalized structural types & \paper{P2484R0} & & \\
 \rowcolor{Tier2}\hyperref[sec:indexsequence]{Integer sequences in the core language}&  & \checkmark &  \\
 \rowcolor{Tier2}Deducing forwarding reference& \paper{P2481R1} & \checkmark &  \\
@@ -394,7 +397,7 @@ static_assert(std::same_as<Last<int, double, long>, long>);
 This is fairly useful as getting the last element of a pack is a frequent operation.
 
 
-Pack indexing is covered in more detail in \paper{P1858R2}. \paper{P1858R2} Demonstrate how pack indexing can be used to simplify
+Pack indexing is covered in more detail in \paper{P1858R2} and \cite{P2662R0} . \paper{P1858R2} Demonstrate how pack indexing can be used to simplify
 \tcode{std::tuple} and tuple-adjacent facilities.
 
 The proposed syntax is valid today (with a different meaning) however, \href{https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2020/p1858r2.html#pack-indexing-ambiguity}{as explained by Barry},
@@ -638,6 +641,8 @@ Alternatively \tcode{...} could be used either before or after the expansion and
 
 Packs in structured bindings (\paper{P1061R2}) have been implemented in Clang by Jason Rice(\href{https://godbolt.org/z/Tnz4e1dY9}{Compiler Explorer}). In effect this implementation treats a pack as dependent and performs
 pack exansion and substitution of the pack once the complete pack expanding expression is parsed.
+
+The implementation technique used by Jason can be used to support other kinds of non-dependant packs.
 
 We recommend more implementation experience with this feature before burdening users with more inconsistent syntax
 that would only exist for the not-yet-established benefits of some implementations.
@@ -1171,7 +1176,7 @@ struct extents {
 
     template<SizeType... IndexTypes>
     constexpr extents(IndexTypes... exts) :
-        m( dynamic_extent == Extents ??  exts...[find_dynamic_index<[:]>] : Extents)... { }
+        m( dynamic_extent == Extents ??  exts...[find_dynamic_index<int...>] : Extents)... { }
 };
 \end{colorblock}
 
@@ -1230,7 +1235,7 @@ class variant {
     };
     std::size_t active_index;
     ~variant() {
-        _index == [:] ...? member.~Ts() : std::unreachable();
+        _index == int... ...? member.~Ts() : std::unreachable();
     }
 };
 \end{colorblock}
@@ -1424,7 +1429,7 @@ Circle treats \tcode{static_assert} a bit like an expression to support it in mu
 \begin{colorblock}
 template<class... Types>
 constexpr bool operator<(const variant<Types...>& v,  const variant<Types...>& w) {
-    static_assert(requires{ (bool)(get<[:]>(v) < get<[:]>(w)); },
+    static_assert(requires{ (bool)(get<int...>(v) < get<int...>(w)); },
         std::format("{} has no operator<", std::meta::name_of(^Types)))...;
 }
 \end{colorblock}
@@ -1545,6 +1550,12 @@ and \href{https://github.com/seanbaxter/circle}{Github}.
 \bibliography{wg21, extra}
 
 \begin{thebibliography}{9}
+
+\bibitem[P2662R0]{P2662R0}
+Corentin Jabot, Pablo Halpern, John Lakos, Alisdair Meredith, and Joshua Berne\newline
+Pack Indexing\newline
+\url{https://wg21.link/P2662R0}\newline
+October 2022
 
 \bibitem[N4885]{N4885}
 Thomas Köppe

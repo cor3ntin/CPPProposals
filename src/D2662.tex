@@ -1,0 +1,940 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{Pack Indexing}
+\docnumber{P2662R0}
+\audience{EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Pablo Halpern}{phalpern@halpernwightsoftware.com}
+\authorthree{John Lakos}{jlakos@bloomberg.net}
+\authorfour{Alisdair Meredith}{ameredith1@bloomberg.net}
+\authorfive{Joshua Berne}{jberne4@bloomberg.net}
+
+\usepackage{color, colortbl}
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+This paper expands on the pack indexing feature described in \paper{P1858R2} and provides wording.
+
+\section{Revisions}
+
+\subsection{R0}
+
+Initial revision
+
+\subsection{Motivation}
+
+The motivation for pack indexing is covered in "Generalized pack declaration and usage" (\paper{P1858R2}) and
+"A plan for better template meta programming facilities in C++26" \cite{P2632R0}.
+
+The short version is that packs are sequences of types/expressions, and indexing is a fundamental operation on sequences.
+C++ and its users have so far relied on deduction or library facilities such as \tcode{index_sequence} or full-fledged template metaprogramming libraries such as
+mp11 and boost.Hana to extract the Nth element of a pack, which has a high cost both in terms of code complexity and compiler throughput.
+
+Previous works in this area also include \paper{P0565R0}, \paper{P1803R0}, \paper{N3761} and \paper{N4235}.
+
+\section{Proposal}
+
+This paper proposes a new code language syntax to index packs of types (yielding a type), and packs of expressions (yielding an expression).
+
+\subsection{Syntax}
+
+The general syntax is \tcode{\placeholder{name-of-a-pack} ... [constant-expression]}.
+The syntax has the benefit of reusing familiar elements (\tcode{...} usually denotes a pack expansion) and \tcode{[]} subscripts,
+It is therefore natural that indexing a pack expansion reuses these elements.
+
+\begin{colorblock}
+template <typename... T>
+constexpr auto first_plus_last(T... values) ->  T...[0] {
+    return T...[0](values...[0] + values...[sizeof...(values)-1]);
+}
+int main() {
+    //first_plus_last(); // ill-formed
+    static_assert(first_plus_last(1, 2, 10) == 11);
+}
+\end{colorblock}
+
+\subsection{Pack Index}
+
+The index of a pack indexing expression or specifier is an integral constant expression between 0 and \tcode{sizeof...(pack)}.
+Empty packs can't be indexed.
+
+This paper does not add support for indexing from the end (as an alias of \tcode{T...[sizeof...(T)-N]}).
+Indeed, a negative index (\tcode{T...[-1]}) would be surprising.
+
+Consider:
+
+\begin{colorblock}
+// Return the index of the first type convertible to Needle in Pack
+@\textbf{or -1 if Pack does not contain a suitable type}@.
+template <typename Needle, typename... Pack>
+auto find_convertible_in_pack;
+
+ // if find_convertible_in_pack<Foo, Types> is -1, T will be the last type, erronously.
+using T = Types...[find_convertible_in_pack<Foo, Types>];
+\end{colorblock}
+
+In general, incorrect computations in an index can lead to a negative value that should make the program ill-formed but would instead
+yield an incorrect type.
+
+Note however that circle does support from-the end indexing using a negative index, and Sean Baxter reports no surprise from using this feature.
+
+The solution for indexing from the end is to provide a specific syntax, for example, C\# uses \tcode{\^{}} to mean "from the end", and Dlang interprets \tcode{\${}}
+as the size of the array it appears in
+\begin{colorblock}
+using Foo = T...[0];
+using Bar = T...[^1]; // First from the end
+using Bar = T...[$ - 1]; // First from the end
+\end{colorblock}
+
+Given that there are different alternatives, all of which can be added later, and for which we do not have usage experience, this proposal does not support
+from-the-end indexing.
+
+\subsection{Indexing a pack of types}
+
+Indexing a pack of type is a type specifier that can, like \tcode{decltype} appear:
+\begin{itemize}
+    \item As a simple-type-specifier
+    \item As a base class specifier
+    \item As a nested name specifier
+    \item As the type of an explicit destructor call
+\end{itemize}
+
+\subsection{Type deduction}
+
+Pack indexing specifiers should not allow deducing the pack from such an expression.
+
+Consider:
+
+\begin{colorblock}
+template <typename... T>
+void f(T...[0]);
+f(0);
+\end{colorblock}
+
+It doesn't really make sense to start thinking about how deduction would work here or what that code would possibly mean.
+We simply always consider packs indexing non-deduced contexts.
+
+\subsection{Indexing a pack of expressions}
+
+The intent is that a pack indexing expression behaves exactly as the underlying expression would.
+In particular, \tcode{decltype(id-dexpression) and \tcode{decltype(pack-indexing-expression)}} behave the same.
+
+\section{Future Evolutions}
+
+The syntax can be extended  in subsequent proposals to support:
+
+\begin{itemize}
+\item Indexing packs introduced by structured bindings or other non dependent packs
+\item Indexing packs of template template parameters
+\item From-the-end-indexing
+\item Pack Slicing (Returning a subset of a pack as an unexpanded packs)
+\item Packs of univeral template parameters could be indexed in the same way.
+\end{itemize}
+
+
+\section{Potential impact on existing code}
+
+In C++11, \tcode{T... [N]} declares a pack of arrays of size \tcode{N};
+
+\begin{colorblock}
+template <typename... T>
+void f(T... [1]); //
+int main() {
+    f<int, double>(nullptr, nullptr); // void f<int, double>(int [1], double [1])
+}
+\end{colorblock}
+
+Neither MSVC nor gcc supports this syntax and this pattern does not appear outside of compiler test suites (from a search on \href{https://cs.github.com/}{Github}, \href{https://codesearch.isocpp.org/cgi-bin/cgi_ppsearch?q=...%5B&search=Search}{isocpp} and in VCPKG).
+
+Should anyone be affected, a workaround is to name the variable.
+
+\begin{colorblock}
+template <typename... T>
+void f(T... foo[1]);
+\end{colorblock}
+
+
+\section{Implementation}
+
+This proposal is inspired from features implemented in the Circle compiler (with the same syntax).
+The provided wording is based on an implementation in a fork of clang, which is available on compiler explorer.
+
+The implementation is available on \href{https://compiler-explorer.com/z/WKobTEq6x}{Compiler Explorer}.
+
+
+As of the writting of the paper, the implementation is known not to support pack indexing inside of the expansion of another template parameters.
+We hope to fix these issues before Kona.
+
+Ie, the following is intended to work but currently does not
+
+\begin{colorblock}
+template <typename... Ts, int... N>
+auto f(Ts... ts) {
+    return std::tuple{ (ts...[N])... };
+}
+\end{colorblock}
+
+\section{Wording}
+
+
+\rSec2[basic.lookup.qual]{Qualified name lookup}
+
+\rSec3[basic.lookup.qual.general]{General}
+
+\pnum
+\indextext{lookup!qualified name|(}%
+\indextext{name!qualified}%
+\indextext{qualification!explicit}%
+Lookup of an \grammarterm{identifier}
+followed by a \tcode{::} scope resolution operator
+considers only
+namespaces, types, and templates whose specializations are types.
+If a name, \grammarterm{template-id}, \added{pack-indexing-specifier,} or \grammarterm{decltype-specifier}
+is followed by a \tcode{::},
+it shall designate a namespace, class, enumeration, or dependent type,
+and the \tcode{::} is never interpreted as
+a complete \grammarterm{nested-name-specifier}.
+
+\rSec2[expr.prim.id]{Names}
+\rSec3[expr.prim.id.unqual]{Unqualified names}
+
+\begin{bnf}
+    \nontermdef{unqualified-id}\br
+    identifier\br
+    \added{pack-indexing-expression}\br
+    operator-function-id\br
+    conversion-function-id\br
+    literal-operator-id\br
+    \terminal{\~} type-name\br
+    \terminal{\~} decltype-specifier\br
+    \added{\terminal{\~} pack-indexing-specifier}\br
+    template-id
+\end{bnf}
+
+\pnum
+\indextext{identifier}%
+An \grammarterm{identifier} is only
+an \grammarterm{id-expression} if it has
+been suitably declared\iref{dcl.dcl}
+or if it appears as part of a \grammarterm{declarator-id}\iref{dcl.decl}.
+An \grammarterm{identifier} that names a coroutine parameter
+refers to the copy of the parameter\iref{dcl.fct.def.coroutine}.
+\begin{note}
+    For \grammarterm{operator-function-id}{s}, see~\ref{over.oper}; for
+    \grammarterm{conversion-function-id}{s}, see~\ref{class.conv.fct}; for
+    \grammarterm{literal-operator-id}{s}, see~\ref{over.literal}; for
+    \grammarterm{template-id}{s}, see~\ref{temp.names}.
+    A \grammarterm{type-name} \added{, \grammarterm{pack-index-type}, } or \grammarterm{decltype-specifier}
+    prefixed by \tcode{\~} denotes the destructor of the type so named;
+    see~\ref{expr.prim.id.dtor}.
+    Within the definition of a non-static member function, an
+    \grammarterm{identifier} that names a non-static member is transformed to a
+    class member access expression\iref{class.mfct.non.static}.
+\end{note}
+
+\pnum
+A \defn{component name} of an \grammarterm{unqualified-id} $U$ is
+\begin{itemize}
+    \item
+    $U$ if it is a name or
+    \item
+    the component name of
+    the \grammarterm{template-id} or \grammarterm{type-name} of $U$, if any.
+\end{itemize}
+\begin{note}
+    Other constructs that contain names to look up can have several
+    component names\iref{expr.prim.id.qual,dcl.type.simple,dcl.type.elab,
+        dcl.mptr,namespace.udecl,temp.param,temp.names,temp.res}.
+\end{note}
+The \defnadj{terminal}{name} of a construct is
+the component name of that construct that appears lexically last.
+
+
+\rSec3[expr.prim.id.qual]{Qualified names}
+
+\indextext{operator!scope resolution}%
+\indextext{\idxcode{::}|see{operator, scope resolution}}%
+%
+\begin{bnf}
+    \nontermdef{qualified-id}\br
+    nested-name-specifier \opt{\keyword{template}} unqualified-id
+\end{bnf}
+
+\indextext{operator!scope resolution}%
+\indextext{name hiding}%
+%
+\begin{bnf}
+    \nontermdef{nested-name-specifier}\br
+    \terminal{::}\br
+    type-name \terminal{::}\br
+    namespace-name \terminal{::}\br
+    decltype-specifier \terminal{::}\br
+    \added{pack-indexing-specifier \terminal{::}}\br
+    nested-name-specifier identifier \terminal{::}\br
+    nested-name-specifier \opt{\keyword{template}} simple-template-id \terminal{::}
+\end{bnf}
+
+\pnum
+\indextext{component name}%
+The component names of a \grammarterm{qualified-id} are those of
+its \grammarterm{nested-name-specifier} and \grammarterm{unqualified-id}.
+The component names of a \grammarterm{nested-name-specifier} are
+its \grammarterm{identifier} (if any) and those of its
+\grammarterm{type-name},
+\grammarterm{namespace-name},
+\grammarterm{simple-template-id}, and/or
+\grammarterm{nested-name-specifier}.
+
+\pnum
+A \grammarterm{nested-name-specifier} is \defn{declarative} if it is part of
+\begin{itemize}
+    \item
+    a \grammarterm{class-head-name},
+    \item
+    an \grammarterm{enum-head-name},
+    \item
+    a \grammarterm{qualified-id}
+    that is the \grammarterm{id-expression} of a \grammarterm{declarator-id}, or
+    \item
+    a declarative \grammarterm{nested-name-specifier}.
+\end{itemize}
+A declarative \grammarterm{nested-name-specifier}
+shall not have a \grammarterm{decltype-specifier}.
+A declaration that uses a declarative \grammarterm{nested-name-specifier}
+shall be a friend declaration or
+inhabit a scope that contains the entity being redeclared or specialized.
+
+\pnum
+The \grammarterm{nested-name-specifier} \tcode{::} nominates
+the global namespace.
+A \grammarterm{nested-name-specifier} with a \grammarterm{decltype-specifier}
+nominates the type denoted by the \grammarterm{decltype-specifier},
+which shall be a class or enumeration type.
+If a \grammarterm{nested-name-specifier} $N$
+is declarative and
+has a \grammarterm{simple-template-id} with a template argument list $A$
+that involves a template parameter,
+let $T$ be the template nominated by $N$ without $A$.
+$T$ shall be a class template.
+\begin{itemize}
+    \item
+    If $A$ is the template argument list\iref{temp.arg} of
+    the corresponding \grammarterm{template-head} $H$\iref{temp.mem},
+    $N$ nominates the primary template of $T$;
+    $H$ shall be equivalent to
+    the \grammarterm{template-head} of $T$\iref{temp.over.link}.
+    \item
+    Otherwise, $N$ nominates the partial specialization\iref{temp.spec.partial} of $T$
+    whose template argument list is equivalent to $A$\iref{temp.over.link};
+    the program is ill-formed if no such partial specialization exists.
+\end{itemize}
+Any other \grammarterm{nested-name-specifier} nominates
+the entity denoted by its
+\grammarterm{type-name},
+\grammarterm{namespace-name},
+\grammarterm{identifier}, or
+\grammarterm{simple-template-id}.
+If the \grammarterm{nested-name-specifier} is not declarative,
+the entity shall not be a template.
+
+\pnum
+A \grammarterm{qualified-id} shall not be of the form\added{s}
+\grammarterm{nested-name-specifier} \opt{\keyword{template}} \tcode{\~}
+\grammarterm{decltype-specifier}
+\changed{nor of the form}{, }
+\grammarterm{decltype-specifier} \tcode{::} \tcode{\~} \grammarterm{type-name}
+\added{,
+\grammarterm{nested-name-specifier} \opt{\keyword{template}} \tcode{\~}
+\grammarterm{pack-indexing-specifier}
+or \grammarterm{pack-indexing-specifier} \tcode{::} \tcode{\~} \grammarterm{type-name}
+}
+.
+
+\pnum
+The result of a \grammarterm{qualified-id} $Q$ is
+the entity it denotes\iref{basic.lookup.qual}.
+The type of the expression is the type of the result.
+The result is an lvalue if the member is
+\begin{itemize}
+    \item
+    a function other than a non-static member function,
+    \item
+    a non-static member function
+    if $Q$ is the operand of a unary \tcode{\&} operator,
+    \item
+    a variable,
+    \item
+    a structured binding\iref{dcl.struct.bind}, or
+    \item
+    a data member,
+\end{itemize}
+and a prvalue otherwise.
+
+\begin{addedblock}
+\ednote{Add a new section after [expr.prim.id.qual]}
+
+\rSec3[expr.prim.pack.index]{Pack Indexing Expression}
+
+\begin{bnf}
+    \nontermdef{pack-indexing-expression}\br
+    id-expression \terminal{...} \terminal{[} constant-expression \terminal{]}  \br
+\end{bnf}
+
+The \grammarterm{id-expression} in a \grammarterm{pack-indexing-expression} shall denote a pack.
+
+The \grammarterm{constant-expression} shall be an integral constant expression.
+The \grammarterm{constant-expression} shall evaluate to a value $V$ such that 0 <= $V$ < \tcode{sizeof...(id-expression)}.
+
+The index of a \grammarterm{pack-indexing-expression} is the value of its \grammarterm{constant-expression}.
+
+A \grammarterm{pack-indexing-expression} denotes the ${index}$\textsuperscript{th} expression in a pack ([temp.variadic]).
+A \grammarterm{pack-indexing-expression} is a pack expansion ([temp.variadic]).
+
+\end{addedblock}
+
+\rSec3[dcl.type.simple]{Simple type specifiers}%
+\indextext{type specifier!simple}
+
+\pnum
+The simple type specifiers are
+
+
+\begin{bnf}
+\nontermdef{simple-type-specifier}\br
+\opt{nested-name-specifier} type-name\br
+nested-name-specifier \keyword{template} simple-template-id\br\textbf{}
+decltype-specifier\br
+\added{pack-indexing-specifier}\br
+placeholder-type-specifier\br
+\opt{nested-name-specifier} template-name\br
+\end{bnf}
+
+\textcolor{noteclr}{[...]}
+
+\begin{simpletypetable}
+    {\grammarterm{simple-type-specifier}{s} and the types they specify}
+    {dcl.type.simple}
+    {ll}
+    \topline
+    \hdstyle{Specifier(s)}            &   \hdstyle{Type}                  \\ \capsep
+    \grammarterm{type-name}           & the type named                    \\
+    \grammarterm{simple-template-id}  & the type as defined in [temp.names]\\
+    \added{\grammarterm{pack-indexing-specifier}} & \added{the type as defined in [dcl.type.pack.indexing]} \\
+    \grammarterm{decltype-specifier}  & the type as defined in [dcl.type.decltype]\\
+    \grammarterm{placeholder-type-specifier}
+    & the type as defined in [dcl.spec.auto]\\
+    \grammarterm{template-name}       & the type as defined in [dcl.type.class.deduct]\\
+    \tcode{char}                      & ``\tcode{char}''                  \\
+    \tcode{unsigned char}             & ``\tcode{unsigned char}''         \\
+    \tcode{signed char}               & ``\tcode{signed char}''           \\
+    \keyword{char8_t}                   & ``\tcode{char8_t}''               \\
+    \keyword{char16_t}                  & ``\tcode{char16_t}''              \\
+\end{simpletypetable}
+
+\pnum
+When multiple \grammarterm{simple-type-specifier}{s} are allowed, they can be
+freely intermixed with other \grammarterm{decl-specifier}{s} in any order.
+\begin{note}
+    It is \impldef{signedness of \tcode{char}} whether objects of \tcode{char} type are
+    represented as signed or unsigned quantities. The \tcode{signed} specifier
+    forces \tcode{char} objects to be signed; it is redundant in other contexts.
+\end{note}
+
+
+\ednote{Add a new section after [dcl.type.simple]}
+
+
+\begin{addedblock}
+
+\rSec3[dcl.type.pack.indexing]{Pack Indexing Specifier}
+
+\begin{bnf}
+    \nontermdef{pack-indexing-specifier}\br
+    typedef-name \terminal{...} \terminal{[} constant-expression \terminal{]}  \br
+\end{bnf}
+
+The \grammarterm{typedef-name} in a \grammarterm{pack-indexing-specifier} shall denote a pack.
+
+The \grammarterm{constant-expression} shall be an integral constant expression.
+The \grammarterm{constant-expression} shall evaluate to a value $V$ such that 0 <= $V$ < \tcode{sizeof...(typedef-name)}.
+
+The index of a \grammarterm{pack-indexing-specifier} is the value of its \grammarterm{constant-expression}.
+
+A \grammarterm{pack-indexing-specifier} denotes the type of the ${index}$\textsuperscript{th} \tcode{typedef-name} in a pack ([temp.variadic]).
+A \grammarterm{pack-indexing-specifier} is a pack expansion ([temp.variadic]).
+
+\end{addedblock}
+
+
+
+\rSec3[dcl.type.decltype]{Decltype specifiers}%
+\indextext{type specifier!\idxcode{decltype}}%
+
+\begin{bnf}
+    \nontermdef{decltype-specifier}\br
+    \keyword{decltype} \terminal{(} expression \terminal{)}
+\end{bnf}
+
+\pnum
+\indextext{type specifier!\idxcode{decltype}}%
+For an expression $E$, the type denoted by \tcode{decltype($E$)} is defined as follows:
+\begin{itemize}
+\item if $E$ is an unparenthesized \grammarterm{id-expression}
+naming a structured binding\iref{dcl.struct.bind},
+\tcode{decltype($E$)} is the referenced type as given in
+the specification of the structured binding declaration;
+
+\item otherwise, if $E$ is an unparenthesized \grammarterm{id-expression}
+naming a non-type \grammarterm{template-parameter}\iref{temp.param},
+\tcode{decltype($E$)} is the type of the \grammarterm{template-parameter}
+after performing any necessary
+type deduction\iref{dcl.spec.auto,dcl.type.class.deduct};
+
+\item otherwise, if $E$ is an unparenthesized \grammarterm{id-expression} or
+an unparenthesized
+class
+member access\iref{expr.ref}, \tcode{decltype($E$)} is the
+type of the entity named by $E$.
+If there is no such entity, the program is ill-formed;
+
+\begin{addedblock}
+\begin{note}
+A \grammarterm{pack-indexing-expression} is an \grammarterm{id-expression}.
+\end{note}
+\end{addedblock}
+
+\item otherwise, if $E$ is
+an xvalue, \tcode{decltype($E$)} is \tcode{T\&\&}, where \tcode{T} is the type
+of $E$;
+
+\item otherwise, if $E$ is an lvalue, \tcode{decltype($E$)}
+is \tcode{T\&}, where \tcode{T} is the type of $E$;
+
+\item otherwise, \tcode{decltype($E$)} is the type of $E$.
+\end{itemize}
+
+The operand of the \keyword{decltype} specifier is an unevaluated
+operand\iref{term.unevaluated.operand}.
+
+\begin{example}
+    \begin{codeblock}
+        const int&& foo();
+        int i;
+        struct A { double x; };
+        const A* a = new A();
+        decltype(foo()) x1 = 17;        // type is \tcode{const int\&\&}
+        decltype(i) x2;                 // type is \tcode{int}
+        decltype(a->x) x3;              // type is \tcode{double}
+        decltype((a->x)) x4 = x3;       // type is \tcode{const double\&}
+        \end{codeblock}
+        \begin{addedblock}
+        \begin{codeblock}
+        [](auto... pack){
+            decltype(pack...[0]); // // type is \tcode{int}
+            decltype((pack...[0]));  // type is \tcode{int\&}
+        }(0);
+        \end{codeblock}
+        \end{addedblock}
+\end{example}
+
+
+\rSec1[class]{Classes}
+
+\rSec2[class.dtor]{Destructors}%
+
+
+\pnum
+\indextext{destructor!explicit call}%
+In an explicit destructor call, the destructor is specified by a
+\tcode{\~{}}
+followed by a
+\grammarterm{type-name}\added{, \grammarterm{pack-index-specifier},} or \grammarterm{decltype-specifier}
+that denotes the destructor's class type.
+The invocation of a destructor is subject to the usual rules for member
+functions\iref{class.mfct};
+that is, if the object is not of the destructor's class type and
+not of a class derived from the destructor's class type (including when
+the destructor is invoked via a null pointer value), the program has
+undefined behavior.
+
+\rSec1[class.derived]{Derived classes}%
+
+\rSec2[class.derived.general]{General}%
+\indextext{derived class|(}
+
+\indextext{virtual base class|see{base class, virtual}}
+\indextext{virtual function|see{function, virtual}}
+\indextext{dynamic binding|see{function, virtual}}
+
+\pnum
+\indextext{base class}%
+\indextext{inheritance}%
+\indextext{multiple inheritance}%
+A list of base classes can be specified in a class definition using
+the notation:
+
+\begin{bnf}
+    \nontermdef{base-clause}\br
+    \terminal{:} base-specifier-list
+\end{bnf}
+
+
+\begin{bnf}
+    \nontermdef{base-specifier-list}\br
+    base-specifier \opt{\terminal{...}}\br
+    base-specifier-list \terminal{,} base-specifier \opt{\terminal{...}}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{base-specifier}\br
+    \opt{attribute-specifier-seq} class-or-decltype\br
+    \opt{attribute-specifier-seq} \keyword{virtual} \opt{access-specifier} class-or-decltype\br
+    \opt{attribute-specifier-seq} access-specifier \opt{\keyword{virtual}} class-or-decltype
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{class-or-decltype}\br
+    \opt{nested-name-specifier} type-name\br
+    nested-name-specifier \keyword{template} simple-template-id\br
+    decltype-specifier\br
+    \added{pack-index-specifier}
+\end{bnf}
+
+\indextext{specifier access|see{access specifier}}%
+%
+\begin{bnf}
+    \nontermdef{access-specifier}\br
+    \keyword{private}\br
+    \keyword{protected}\br
+    \keyword{public}
+\end{bnf}
+
+
+\rSec1[temp.type]{Type equivalence}
+
+\pnum
+If an expression $e$ is type-dependent\iref{temp.dep.expr},
+\tcode{decltype($e$)}
+denotes a unique dependent type. Two such \grammarterm{decltype-specifier}{s}
+refer to the same type only if their \grammarterm{expression}{s} are
+equivalent\iref{temp.over.link}.
+\begin{note}
+    However, such a type might be aliased,
+    e.g., by a \grammarterm{typedef-name}.
+\end{note}
+
+\begin{addedblock}
+For a template argument \tcode{T}, if the \grammarterm{constant-expression} of a \grammarterm{pack-index-specifier} is type-dependent
+\tcode{T...[\grammarterm{constant-expression}]} denotes a unique dependent type.
+Two such \grammarterm{pack-index-specifier}{s} refer to the same type only if their \grammarterm{constant-expression}{s} are
+equivalent\iref{temp.over.link} and their type are the same.
+\end{addedblock}
+
+\rSec2[temp.variadic]{Variadic templates}
+
+\textcolor{noteclr}{[...]}
+
+\pnum
+\indextext{pattern|see{pack expansion, pattern}}%
+A \defn{pack expansion}
+consists of a \defnx{pattern}{pack expansion!pattern} and an ellipsis, the instantiation of which
+produces zero or more instantiations of the pattern in a list (described below).
+The form of the pattern
+depends on the context in which the expansion occurs. Pack
+expansions can occur in the following contexts:
+
+\begin{itemize}
+    \item In a function parameter pack\iref{dcl.fct}; the pattern is the
+    \grammarterm{parameter-declaration} without the ellipsis.
+
+    \item In a \grammarterm{using-declaration}\iref{namespace.udecl};
+    the pattern is a \grammarterm{using-declarator}.
+
+    \item In a template parameter pack that is a pack expansion\iref{temp.param}:
+    \begin{itemize}
+        \item
+        if the template parameter pack is a \grammarterm{parameter-declaration};
+        the pattern is the \grammarterm{parameter-declaration} without the ellipsis;
+
+        \item
+        if the template parameter pack is a \grammarterm{type-parameter};
+        the pattern is the corresponding \grammarterm{type-parameter}
+        without the ellipsis.
+    \end{itemize}
+
+    \item In an \grammarterm{initializer-list}\iref{dcl.init};
+    the pattern is an \grammarterm{initializer-clause}.
+
+    \item In a \grammarterm{base-specifier-list}\iref{class.derived};
+    the pattern is a \grammarterm{base-specifier}.
+
+    \item In a \grammarterm{mem-initializer-list}\iref{class.base.init} for a
+    \grammarterm{mem-initializer} whose \grammarterm{mem-initializer-id} denotes a
+    base class; the pattern is the \grammarterm{mem-initializer}.
+
+    \item In a \grammarterm{template-argument-list}\iref{temp.arg};
+    the pattern is a \grammarterm{template-argument}.
+
+    \item In an \grammarterm{attribute-list}\iref{dcl.attr.grammar}; the pattern is
+    an \grammarterm{attribute}.
+
+    \item In an \grammarterm{alignment-specifier}\iref{dcl.align}; the pattern is
+    the \grammarterm{alignment-specifier} without the ellipsis.
+
+    \item In a \grammarterm{capture-list}\iref{expr.prim.lambda.capture}; the pattern is
+    the \grammarterm{capture} without the ellipsis.
+
+    \item In a \tcode{sizeof...} expression\iref{expr.sizeof}; the pattern is an
+    \grammarterm{identifier}.
+
+    \begin{addedblock}
+    \item In a \grammarterm{pack-indexing-expression} ; the pattern is an
+    \grammarterm{id-expression}.
+    \item In a \grammarterm{pack-indexing-specifier} ; the pattern is an
+    \grammarterm{identifier}.
+    \end{addedblock}
+
+    \item In a \grammarterm{fold-expression}\iref{expr.prim.fold};
+    the pattern is the \grammarterm{cast-expression}
+    that contains an unexpanded pack.
+\end{itemize}
+
+\begin{example}
+    \begin{codeblock}
+        template<class ... Types> void f(Types ... rest);
+        template<class ... Types> void g(Types ... rest) {
+            f(&rest ...);     // ``\tcode{\&rest ...}'' is a pack expansion; ``\tcode{\&rest}'' is its pattern
+        }
+    \end{codeblock}
+\end{example}
+
+\pnum
+For the purpose of determining whether a pack satisfies a rule
+regarding entities other than packs, the pack is
+considered to be the entity that would result from an instantiation of
+the pattern in which it appears.
+
+\pnum
+A pack whose name appears within the pattern of a pack
+expansion is expanded by that pack expansion. An appearance of the name of
+a pack is only expanded by the innermost enclosing pack expansion.
+The pattern of a pack expansion shall name one or more packs that
+are not expanded by a nested pack expansion; such packs are called
+\defnx{unexpanded packs}{pack!unexpanded} in the pattern. All of the packs expanded
+by a pack expansion shall have the same number of arguments specified. An
+appearance of a name of a pack that is not expanded is
+ill-formed.
+\begin{example}
+    \begin{codeblock}
+        template<typename...> struct Tuple {};
+        template<typename T1, typename T2> struct Pair {};
+
+        template<class ... Args1> struct zip {
+            template<class ... Args2> struct with {
+                typedef Tuple<Pair<Args1, Args2> ... > type;
+            };
+        };
+
+        typedef zip<short, int>::with<unsigned short, unsigned>::type T1;
+        // \tcode{T1} is \tcode{Tuple<Pair<short, unsigned short>, Pair<int, unsigned>>}
+        typedef zip<short>::with<unsigned short, unsigned>::type T2;
+        // error: different number of arguments specified for \tcode{Args1} and \tcode{Args2}
+
+        template<class ... Args>
+        void g(Args ... args) {                   // OK, \tcode{Args} is expanded by the function parameter pack \tcode{args}
+            f(const_cast<const Args*>(&args)...);   // OK, ``\tcode{Args}'' and ``\tcode{args}'' are expanded
+            f(5 ...);                               // error: pattern does not contain any packs
+            f(args);                                // error: pack ``\tcode{args}'' is not expanded
+            f(h(args ...) + args ...);              // OK, first ``\tcode{args}'' expanded within \tcode{h},
+            // second ``\tcode{args}'' expanded within \tcode{f}
+        }
+    \end{codeblock}
+\end{example}
+
+\pnum
+The instantiation of a pack expansion considers
+items $\tcode{E}_1, \tcode{E}_2, \dotsc, \tcode{E}_N$,
+where
+$N$ is the number of elements in the pack expansion parameters.
+Each $\tcode{E}_i$ is generated by instantiating the pattern and
+replacing each pack expansion parameter with its $i^\text{th}$ element.
+Such an element, in the context of the instantiation, is interpreted as
+follows:
+\begin{itemize}
+    \item
+    if the pack is a template parameter pack, the element is
+    an \grammarterm{id-expression}
+    (for a non-type template parameter pack),
+    a \grammarterm{typedef-name}
+    (for a type template parameter pack declared without \tcode{template}), or
+    a \grammarterm{template-name}
+    (for a type template parameter pack declared with \tcode{template}),
+    designating the $i^\text{th}$ corresponding type or value template argument;
+
+    \item
+    if the pack is a function parameter pack, the element is an
+    \grammarterm{id-expression}
+    designating the $i^\text{th}$ function parameter
+    that resulted from instantiation of
+    the function parameter pack declaration;
+    otherwise
+
+    \item
+    if the pack is an \grammarterm{init-capture} pack,
+    the element is an \grammarterm{id-expression}
+    designating the variable introduced by
+    the $i^\text{th}$ \grammarterm{init-capture}
+    that resulted from instantiation of
+    the \grammarterm{init-capture} pack.
+\end{itemize}
+When $N$ is zero, the instantiation of a pack expansion
+does not alter the syntactic interpretation of the enclosing construct,
+even in cases where omitting the pack expansion entirely would
+otherwise be ill-formed or would result in an ambiguity in the grammar.
+
+\pnum
+The instantiation of a \tcode{sizeof...} expression\iref{expr.sizeof} produces
+an integral constant with value $N$.
+
+\begin{addedblock}
+\pnum
+
+When instantiating a \grammarterm{pack-indexing-expression} $P$,
+let $K$ be the index of $P$.
+The instantiation of $P$ is the \grammarterm{id-expression} \tcode{$\mathtt{E}_K$}.
+
+
+When instantiating a \grammarterm{pack-indexing-specifier} $P$,
+let $K$ be the index of $P$.
+The instantiation of $P$ is the \grammarterm{typedef-name} \tcode{$\mathtt{E}_K$}.
+\end{addedblock}
+
+
+\textcolor{noteclr}{[...]}
+
+\rSec3[temp.deduct.type]{Deducing template arguments from a type}
+
+
+\pnum
+The non-deduced contexts are:
+
+\indextext{context!non-deduced}%
+\begin{itemize}
+    \item
+    The
+    \grammarterm{nested-name-specifier}
+    of a type that was specified using a
+    \grammarterm{qualified-id}.
+    \begin{addedblock}
+    \item A \grammarterm{pack-index-specifier,}
+    \end{addedblock}
+    \item
+    The \grammarterm{expression} of a \grammarterm{decltype-specifier}.
+    \item
+    A non-type template argument or an array bound in which a subexpression
+    references a template parameter.
+    \item
+    A template parameter used in the parameter type of a function parameter that
+    has a default argument that is being used in the call for which argument
+    deduction is being done.
+    \item
+    A function parameter for which the associated argument is an
+    overload set\iref{over.over}, and one or more of the following apply:
+    \begin{itemize}
+        \item
+        more than one function matches the function parameter type (resulting in
+        an ambiguous deduction), or
+        \item
+        no function matches the function parameter type, or
+        \item
+        the overload set supplied as an argument contains one or more function templates.
+    \end{itemize}
+    \item A function parameter for which the associated argument is an initializer
+    list\iref{dcl.init.list} but the parameter does not have
+    a type for which deduction from an initializer list is specified\iref{temp.deduct.call}.
+    \begin{example}
+        \begin{codeblock}
+            template<class T> void g(T);
+            g({1,2,3});                 // error: no argument deduced for \tcode{T}
+        \end{codeblock}
+    \end{example}
+    \item A function parameter pack that does not occur at the end of the
+    \grammarterm{parameter-declaration-list}.
+\end{itemize}
+
+
+\begin{addedblock}
+
+\rSec1[diff.cpp23]{C++ and ISO C++23}
+
+\rSec2[diff.cpp23.dcl.dcl]{Declarations}
+
+\rSec3[decl.array]
+\change
+Previously, \tcode{T...[$n$]} would declarare a pack of function parameters of type "array of \tcode{T} of size \tcode{$n$}".
+\tcode{T...[$n$]} is now a \grammarterm{pack-indexing-specifier}.
+\rationale
+Improve the handling of packs.
+\effect
+Valid C++ 2023 code that declares pack of arrays parameter without specifying a \tcode{declarator-id} may become ill-formed.
+
+\begin{codeblock}
+template <typename... T>
+void f(T... [1]);
+template <typename... T>
+void g(T... ptr[1]);
+
+int main() {
+    f<int, double>(nullptr, nullptr); // ill-formed, previously void f<int, double>(int [1], double [1])
+    g<int, double>(nullptr, nullptr); // ok
+}
+\end{codeblock}
+
+\begin{colorblock}
+
+\end{colorblock}
+
+\end{addedblock}
+
+\section{Feature test macros}
+
+\ednote{Add a new macro in \tcode{[tab:cpp.predefined.ft]} : \tcode{__cpp_pack_indexing} set to the date of adoption}.
+
+
+\section{Acknowledgments}
+
+We would like to thank Bloomberg for sponsoring this work.\\
+
+Sean Baxter for his work on Circle and Barry Revzin, for his work on \paper{P1858R2}, both works being the foundation of the design presented here.
+
+Also Thanks to Lewis Baker, for his valuable feedback on this paper.
+
+\section{References}
+
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21, extra}
+
+\begin{thebibliography}{9}
+
+\bibitem[P2632R0]{P2632R0}
+Corentin Jabot, Pablo Halpern, John Lakos, Alisdair Meredith, Joshua Berne, and Gašper Ažman\newline
+\emph{A plan for better template meta programming facilities in C++26}\newline
+\url{https://wg21.link/P2632R0}\newline
+October 2022
+
+\bibitem[N4885]{N4885}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4885}
+
+
+\end{thebibliography}
+
+\end{document}

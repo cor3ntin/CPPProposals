@@ -101,7 +101,7 @@
 \newcommand*{\authorthree}[2]{\def\@authorthree{#1} \def\@emailthree{#2}}
 \newcommand*{\authorfour}[2]{\def\@authorfour{#1} \def\@emailfour{#2}}
 \newcommand*{\authorfive}[2]{\def\@authorfive{#1} \def\@emailfive{#2}}
-\newcommand*{\authorsix}[2]{\def\@authorfive{#1} \def\@emailsix{#2}}
+\newcommand*{\authorsix}[2]{\def\@authorsix{#1} \def\@emailsix{#2}}
 
 
 \renewcommand{\maketitle}{%

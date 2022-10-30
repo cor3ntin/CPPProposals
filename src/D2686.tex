@@ -1,0 +1,255 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{Updated wording and implementation experience for P1481 (constexpr structured bindings)}
+\docnumber{P2686R0}
+\audience{EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\usepackage{color, colortbl}
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+\paper{P1481R0} proposed to allow reference to constant expressions to be themselves constant expressions,
+as a means to support \tcode{constexpr} structured bindings.
+This paper reports implementation experience on this proposal and provides updated wording.
+
+\subsection{Context}
+
+The context for this paper can be found in \paper{P1481R0}.
+I was not aware to reach the original author, nor do I have the possibility to reproduce the original paper.
+
+The gist of it is that the original author proposed to support \tcode{constexpr} structured binding by making
+
+\begin{colorblock}
+constexpr auto[a] = std::tuple(1);
+\end{colorblock}
+
+Equivalent to
+\begin{colorblock}
+constexpr auto __sb = std::tuple(1);
+const int& __a = std::get<0>(__sb);
+\end{colorblock}
+
+\subsection{Additional motivation}
+
+In addition to the original motivation, if we believe structured bindings are useful (they are, great feature!)
+and we also believe in constexpr (as a means to increase type safety, improve runtime performance, etc),
+then both features ought to work together.
+
+In addition to that, Expansion Statements (\paper{P1306R1}) aim to add a new kind of for loop
+with the express purpose to loop over tuples at compile time.
+
+\begin{colorblock}
+auto tup = std::make_tuple(0, ‘a’, 3.14);
+// ill-formed without this paper
+template for (constexpr auto [idx, member] : std::views::enumerate(meta::data_members_of(^T)) )
+    fmt::print("{} {}", idx, foo.[:member:]);
+\end{colorblock}
+
+
+\subsection{History}
+
+Interestingly, this paper was last seen in Kona in 2020.
+The concerns were
+\begin{itemize}
+    \item Lack of implementation
+    \item It was presented late in the C++20 cycle
+\end{itemize}
+
+
+\begin{quoteblock}
+Encourage further work on this proposal
+
+\begin{tabular}{|c|c|c|c|c|}
+    \hline
+    SF & F & N & A & SA\\
+    \hline
+    9 & 16 & 4 & 0 & 0 \\
+    \hline
+\end{tabular}
+\end{quoteblock}
+
+This paper thereby provides an implementation.
+I've also update the wording as CWG rewrote the impacted section, and added the wording to support the constexpr keyword
+on structured bindings declarations.
+
+\section{Implementation}
+
+\subsection{Circle}
+
+Circle implements constexpr structured bindings - and generally supports initializing references with constant expressions,
+and Sean Baxter was not aware that the standard didn't support it.
+Sean further observed that this is a core language syntactic sugar and as such, users could expect it to work everywhere.
+
+\subsection{Clang}
+I implemented a prototype implementation in the hope to weed out issues.
+It is available on \href{https://godbolt.org/z/dWWxcEEf9}{Compiler Explorer}.
+
+Please note that by lack of time, I have not yet published the last version of the implementation, but that should hopefully be
+done before Kona.
+
+
+I don't think the implementation revealed particular issues (my own inaptitudes non-withstanding), I, however, believe \tcode{[basic.odr]}
+might need to be tweaked.
+
+\begin{quoteblock}
+A variable \tcode{x} that is named by a potentially-evaluated expression \tcode{E} is odr-used by \tcode{E} unless x is a reference that is usable in constant expressions ([expr.const]).
+\end{quoteblock}
+
+I don't think this is sufficient. Consider for example,
+
+\begin{colorblock}
+void foo() {
+    const int a = 1;
+    const int& b = a;
+    auto l = [] { return b; }; // we should not capture b implicitly here,
+                               // even if b is usable in constant expressions
+}
+\end{colorblock}
+
+In my prototype, I check that the initializer of the reference is itself a constant expression, and that seems to work.
+
+\section{Wording}
+
+\rSec1[expr.const]{Constant expressions}%
+
+\pnum
+A variable is \defn{potentially-constant} if
+it is constexpr or
+it has reference or const-qualified integral or enumeration type.
+
+\pnum
+A constant-initialized potentially-constant variable $V$ is
+\defn{usable in constant expressions} at a point $P$ if
+$V$'s initializing declaration $D$ is reachable from $P$ and
+\begin{itemize}
+    \item $V$ is constexpr \added{or it is of reference type initialized with a core constant expression},
+    \item $V$ is not initialized to a TU-local value, or
+    \item $P$ is in the same translation unit as $D$.
+\end{itemize}
+An object or reference is \defn{usable in constant expressions} if it is
+\begin{itemize}
+    \item a variable that is usable in constant expressions, or
+    \item a template parameter object\iref{temp.param}, or
+    \item a string literal object\iref{lex.string}, or
+    \item a temporary object of non-volatile const-qualified literal type
+    whose lifetime is extended\iref{class.temporary}
+    to that of a variable that is usable in constant expressions, or
+    \item a non-mutable subobject or reference member of any of the above.
+\end{itemize}
+
+\rSec1[dcl.struct.bind]{Structured binding declarations}%
+\indextext{structured binding declaration}%
+\indextext{declaration!structured binding|see{structured binding declaration}}%
+
+\pnum
+A structured binding declaration introduces the \grammarterm{identifier}{s}
+$\tcode{v}_0$, $\tcode{v}_1$, $\tcode{v}_2, \dotsc$
+of the
+\grammarterm{identifier-list} as names
+of \defn{structured binding}{s}.
+Let \cv{} denote the \grammarterm{cv-qualifier}{s} in
+the \grammarterm{decl-specifier-seq} and
+\placeholder{S} consist of the \added{\tcode{constexpr} and }\grammarterm{storage-class-specifier}{s} of
+the \grammarterm{decl-specifier-seq} (if any).
+A \cv{} that includes \tcode{volatile} is deprecated;
+see~\ref{depr.volatile.type}.
+First, a variable with a unique name \exposid{e} is introduced. If the
+\grammarterm{assignment-expression} in the \grammarterm{initializer}
+has array type \cvqual{cv1} \tcode{A} and no \grammarterm{ref-qualifier} is present,
+\exposid{e} is defined by
+\begin{ncbnf}
+    \opt{attribute-specifier-seq} \placeholder{S} \cv{} \terminal{A} \exposid{e} \terminal{;}
+\end{ncbnf}
+and each element is copy-initialized or direct-initialized
+from the corresponding element of the \grammarterm{assignment-expression} as specified
+by the form of the \grammarterm{initializer}.
+Otherwise, \exposid{e}
+is defined as-if by
+\begin{ncbnf}
+    \opt{attribute-specifier-seq} decl-specifier-seq \opt{ref-qualifier} \exposid{e} initializer \terminal{;}
+\end{ncbnf}
+where
+the declaration is never interpreted as a function declaration and
+the parts of the declaration other than the \grammarterm{declarator-id} are taken
+from the corresponding structured binding declaration.
+The type of the \grammarterm{id-expression}
+\exposid{e} is called \tcode{E}.
+\begin{note}
+    \tcode{E} is never a reference type\iref{expr.prop}.
+\end{note}
+
+\pnum
+If the \grammarterm{initializer} refers to
+one of the names introduced by the structured binding declaration,
+the program is ill-formed.
+
+\pnum
+If \tcode{E} is an array type with element type \tcode{T}, the number
+of elements in the \grammarterm{identifier-list} shall be equal to the
+number of elements of \tcode{E}. Each $\tcode{v}_i$ is the name of an
+lvalue that refers to the element $i$ of the array and whose type
+is \tcode{T}; the referenced type is \tcode{T}.
+\begin{note}
+    The top-level cv-qualifiers of \tcode{T} are \cv.
+\end{note}
+\begin{example}
+    \begin{codeblock}
+        auto f() -> int(&)[2];
+        auto [ x, y ] = f();            // \tcode{x} and \tcode{y} refer to elements in a copy of the array return value
+        auto& [ xr, yr ] = f();         // \tcode{xr} and \tcode{yr} refer to elements in the array referred to by \tcode{f}'s return value
+    \end{codeblock}
+\end{example}
+
+
+\rSec2[dcl.constexpr]{The \keyword{constexpr} and \keyword{consteval} specifiers}%
+\indextext{specifier!\idxcode{constexpr}}
+\indextext{specifier!\idxcode{consteval}}
+
+\pnum
+The \keyword{constexpr} specifier shall be applied only to
+the definition of a variable or variable template\added{, a structured binding, } or
+the declaration of a function or function template.
+The \keyword{consteval} specifier shall be applied only to
+the declaration of a function or function template.
+A function or static data member
+declared with the \keyword{constexpr} or \keyword{consteval} specifier
+is implicitly an inline function or variable\iref{dcl.inline}.
+If any declaration of a function or function template has
+a \keyword{constexpr} or \keyword{consteval} specifier,
+then all its declarations shall contain the same specifier.
+
+
+\section{Feature test macros}
+
+\ednote{ In \tcode{[tab:cpp.predefined.ft]}, bump \tcode{__cpp_structured_bindings} to the date of adoption}.
+
+
+\section{Acknowledgments}
+
+We would like to thank Bloomberg for sponsoring this work.
+Thanks to Nicolas Lesser for the original work on \paper{P1481R0}.
+
+\section{References}
+
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21, extra}
+
+\begin{thebibliography}{9}
+
+\bibitem[N4885]{N4885}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4885}
+
+
+\end{thebibliography}
+
+\end{document}

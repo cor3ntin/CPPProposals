@@ -1,0 +1,438 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{Formatting \tcode{thread::id} and \tcode{stacktrace}}
+\docnumber{P2693R0}
+\audience{EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Victor Zverovich}{victor.zverovich@gmail.com}
+
+\usepackage{color, colortbl}
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+This paper provides wording in reply to NB comments suggesting to adopt \paper{P1636R2} (Formatters for library types)
+and to add formatters for \tcode{std::stacktrace}.
+
+\section{History}
+
+LEWG approved \paper{P1636R2} in 2019 (cologne) for C++20.
+The paper was subsequently reviewed in 2021 by LWG, who requested wording changes.
+
+SG16 had significant concerns with the formatting of \tcode{filesystem::path} and asked for that formatter to be removed.
+
+Another paper \paper{P2197R0} explored different options for formatting \tcode{std::complex} but was not pursued, nor was it warmly
+received by LEWG when presented (summer 2020 telecon).
+
+\paper{P1636R2} has been stuck in need of a revision and attempts to contact the author have failed.
+
+
+\section{Design}
+
+This paper provides wording for
+\begin{itemize}
+\item \tcode{std::thread::id}
+\item \tcode{std::basic_stacktrace}
+\item \tcode{std::stacktrace_entry}
+\end{itemize}
+
+Note that \paper{P1636R2} additionally proposed to support
+
+\begin{itemize}
+\item \tcode{std::complex}
+\item \tcode{std::bitset}
+\item \tcode{std::error_code}
+\item \tcode{std::unique_ptr}
+\item \tcode{std::shared_ptr}
+\end{itemize}
+
+Which we decided not to pursue as part of this NB comment resolution.
+
+\subsection{Why do we need \tcode{thread::id} formatting in C++23?}
+
+Two reasons. First, it is very commonly used by loggers. But most importantly that information is not exposed by any other means
+than a \tcode{ostream} \tcode{<<} overload. There is no accessor of any kind, so the only well-defined way to extract a \tcode{thread::id}
+is to use streams
+
+\begin{colorblock}
+std::ostringstream ss;
+ss << thread.get_id();
+std::print("called a nice API on thread {}", ss.c_str());
+\end{colorblock}
+
+Note that a quick search on GitHub reveals that users, when their expectations are subverted,  will hm... find a way, and won't let such thing as well-definedness stop them. They will, for example, exploit the amazing flexibility of \tcode{printf}
+to get what they want:
+
+\begin{colorblock}
+printf("[Thread %d Profiling: %ld microseconds] ",
+    std::this_thread::get_id(), microseconds);
+\end{colorblock}
+
+By properly supporting \tcode{thread::id} in \tcode{format}, we can avoid the proliferation of undefined, non portable, and dangerous code.
+
+\subsection{Why not std::complex?}
+
+Formatting of \tcode{std::complex} is more... complex.
+In particular, \paper{P1636R2} (which, to be fair, was approved by LEWG) proposed to use the same notation as \tcode{ostream},
+Given the wide variance in how \tcode{complex} are formatted in other programming languages and the interaction with locales
+(including the need to support the \tcode{L} specifier), it seems wise to punt this question to a later C++ version.
+
+\begin{tabular}{|c|c|}
+    \hline
+    ostream & (1.0, 2.0) \\
+    \paper{P1636R2} & (1.0, 2.0) \\
+    \hline
+    \paper{P2197R0} & (1.0, 2.0i) \\
+    \hline
+    Rust & 1+2i \\
+    \hline
+    Python & 1+2j \\
+    \hline
+    Julia &  1.0+ 2.0im \\
+    \hline
+    Nim & (1.0, 2.0) \\
+    \hline
+    R &  1+2i \\
+    \hline
+    Swift & (1.0, 2.0) \\
+    \hline
+    C\# & 1 + 2i\\
+    \hline
+\end{tabular}
+
+\subsection{Why not \tcode{std::error_code}/\tcode{bitset}/smart pointers?}
+
+These don't seem sufficiently useful to be processed as part of NB comments.
+
+\subsection{Stacktrace}
+
+\tcode{std::stacktrace} and \tcode{std::stacktrace_entry} would have both a formatter and a \tcode{to_string} methods,
+such that the following would be equivalent:
+
+\begin{colorblock}
+to_string(a_stacktrace);
+std::format("{}", a_stacktrace);
+\end{colorblock}
+
+Do we really need both?
+Beside arithmetic types, the only other type to have a \tcode{std::to_string} method is \tcode{std::bitset}.
+
+\subsubsection{Should \tcode{stacktrace} be formatted as a range?}
+
+This would add a lot of complexity to something that would probably never be used.
+The range behavior can be opt-in this way instead:
+
+\begin{colorblock}
+std::format("{}", std::views::all(a_stacktrace));
+\end{colorblock}
+
+\section{Wording}
+
+
+\rSec2[stacktrace.syn]{Header \tcode{<stacktrace>} synopsis}\
+\begin{codeblock}
+#include <compare>              // see \ref{compare.syn}
+
+namespace std {
+    // \ref{stacktrace.entry}, class \tcode{stacktrace_entry}
+    class stacktrace_entry;
+
+    // \ref{stacktrace.basic}, class template \tcode{basic_stacktrace}
+    template<class Allocator>
+    class basic_stacktrace;
+
+    // \tcode{basic_stacktrace} \grammarterm{typedef-name}s
+    using stacktrace = basic_stacktrace<allocator<stacktrace_entry>>;
+
+    // \ref{stacktrace.basic.nonmem}, non-member functions
+    template<class Allocator>
+    void swap(basic_stacktrace<Allocator>& a, basic_stacktrace<Allocator>& b)
+    noexcept(noexcept(a.swap(b)));
+
+    string to_string(const stacktrace_entry& f);
+
+    template<class Allocator>
+    string to_string(const basic_stacktrace<Allocator>& st);
+
+    template<class charT, class traits>
+    basic_ostream<charT, traits>&
+    operator<<(basic_ostream<charT, traits>& os, const stacktrace_entry& f);
+
+    template<class charT, class traits, class Allocator>
+    basic_ostream<charT, traits>&
+    operator<<(basic_ostream<charT, traits>& os, const basic_stacktrace<Allocator>& st);
+
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+    template<class charT>
+    requires std::same_as<char, charT>
+    struct formatter<stacktrace_entry, charT>
+
+    template<class Allocator, class charT>
+    requires std::same_as<char, charT>
+    struct formatter<basic_stacktrace<Allocator>, charT>;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+    namespace pmr {
+        using stacktrace = basic_stacktrace<polymorphic_allocator<stacktrace_entry>>;
+    }
+
+    // \ref{stacktrace.basic.hash}, hash support
+    template<class T> struct hash;
+    template<> struct hash<stacktrace_entry>;
+    template<class Allocator> struct hash<basic_stacktrace<Allocator>>;
+}
+\end{codeblock}
+
+\indexlibrarymember{operator<<}{basic_stacktrace}%
+\begin{itemdecl}
+    template<class charT, class traits, class Allocator>
+    basic_ostream<charT, traits>&
+    operator<<(basic_ostream<charT, traits>& os, const basic_stacktrace<Allocator>& st);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Equivalent to: \tcode{return os << to_string(st);}
+\end{itemdescr}
+
+\textcolor{noteclr}{[...]}
+
+\begin{addedblock}
+
+\rSec3[stacktrace.format]{Formatting support}
+\begin{codeblock}
+template<class charT>
+requires (std::same_as<char, charT>)
+struct formatter<stacktrace_entry, charT>  {
+    template<class ParseContext>
+    constexpr ParseContext::iterator parse(ParseContext& ctx) const {
+        return ctx.begin();
+    }
+    template<class FormatContext>
+    FormatContext::iterator format(const stacktrace_entry& ste, FormatContext& ctx) const;
+};
+\end{codeblock}
+
+\begin{itemdecl}
+template<class FormatContext>
+FormatContext::iterator format(const stacktrace_entry& ste, FormatContext& ctx) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\effects Writes the same description that would be produced by \tcode{to_string(ste)} into \tcode{ctx.out()}.
+
+\returns An iterator past the end of the output range.
+
+\end{itemdescr}
+
+
+\begin{codeblock}
+template<class Allocator, class charT>
+requires (std::same_as<char, charT>)
+struct formatter<basic_stacktrace<Allocator>, charT> {
+    template<class ParseContext>
+    constexpr ParseContext::iterator parse(ParseContext& ctx) const {
+        return ctx.begin();
+    }
+    template<class FormatContext>
+    FormatContext::iterator format(const basic_stacktrace<Allocator>& st, FormatContext& ctx) const;
+};
+\end{codeblock}
+
+\begin{itemdecl}
+template<class FormatContext>
+FormatContext::iterator format(const stacktrace_entry& ste, FormatContext& ctx) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\effects Writes the same description that would be produced by \tcode{to_string(st)} into \tcode{ctx.out()}.
+
+\returns An iterator past the end of the output range.
+\end{itemdescr}
+
+
+
+\end{addedblock}
+
+
+\rSec3[stacktrace.basic.hash]{Hash support}
+
+\begin{itemdecl}
+    template<> struct hash<stacktrace_entry>;
+    template<class Allocator> struct hash<basic_stacktrace<Allocator>>;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    The specializations are enabled\iref{unord.hash}.
+\end{itemdescr}
+
+\rSec1[thread]{Concurrency support library}
+
+\rSec3[thread.thread.id]{Class \tcode{thread::id}}
+
+\indexlibraryglobal{thread::id}%
+\indexlibrarymember{thread}{id}%
+\begin{codeblock}
+    namespace std {
+        class thread::id {
+            public:
+            id() noexcept;
+        };
+
+        bool operator==(thread::id x, thread::id y) noexcept;
+        strong_ordering operator<=>(thread::id x, thread::id y) noexcept;
+
+        template<class charT, class traits>
+        basic_ostream<charT, traits>&
+        operator<<(basic_ostream<charT, traits>& out, thread::id id);
+
+        // hash support
+        template<class T> struct hash;
+        template<> struct hash<thread::id>;
+
+        @\added{template<class charT>}@
+        @\added{struct formatter<thread::id, charT>;}@
+    }
+\end{codeblock}
+
+\pnum
+An object of type \tcode{thread::id} provides a unique identifier for
+each thread of execution and a single distinct value for all \tcode{thread}
+objects that do not represent a thread of
+execution\iref{thread.thread.class}. Each thread of execution has an
+associated \tcode{thread::id} object that is not equal to the
+\tcode{thread::id} object of any other thread of execution and that is not
+equal to the \tcode{thread::id} object of any \tcode{thread} object that
+does not represent threads of execution.
+
+\begin{addedblock}
+The \defn{text representation} of an object of type \tcode{thread::id}
+is an unspecified value such that, for two objects of type \tcode{thread::id} \tcode{x} and \tcode{y},
+if \tcode{x == y} the \tcode{thread::id} objects have the same text
+representation and if \tcode{x != y} the \tcode{thread::id} objects have
+distinct text representations.
+\end{addedblock}
+
+\pnum
+\tcode{thread::id} is a trivially copyable class\iref{class.prop}.
+The library may reuse the value of a \tcode{thread::id} of a terminated thread that can no longer be joined.
+
+
+\begin{itemdescr}
+    \pnum
+    Let $P(\tcode{x}, \tcode{y})$ be
+    an unspecified total ordering over \tcode{thread::id}
+    as described in \ref{alg.sorting}.
+
+    \pnum
+    \returns
+    \tcode{strong_ordering::less} if $P(\tcode{x}, \tcode{y})$ is \tcode{true}.
+    Otherwise, \tcode{strong_ordering::greater}
+    if $P(\tcode{y}, \tcode{x})$ is \tcode{true}.
+    Otherwise, \tcode{strong_ordering::equal}.
+\end{itemdescr}
+
+\indexlibrarymember{operator<<}{thread::id}%
+\begin{itemdecl}
+    template<class charT, class traits>
+    basic_ostream<charT, traits>&
+    operator<< (basic_ostream<charT, traits>& out, thread::id id);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Inserts \changed{an unspecified}{the} text representation of \tcode{id} into
+    \tcode{out}. \removed{For two objects of type \tcode{thread::id} \tcode{x} and \tcode{y},
+    if \tcode{x == y} the \tcode{thread::id} objects have the same text
+    representation and if \tcode{x != y} the \tcode{thread::id} objects have
+    distinct text representations.}
+
+    \pnum
+    \returns
+    \tcode{out}.
+\end{itemdescr}
+
+\begin{addedblock}
+\rSec3[thread.thread.id.formatter]{\tcode{thread::id} \tcode{formatter} specialization}
+
+\begin{codeblock}
+template<class charT>
+requires (std::same_as<char, charT> || std::same_as<char, wchar_t>)
+class formatter<thread::id, charT>  {
+public:
+    template<class ParseContext>
+    constexpr ParseContext::iterator parse(ParseContext& ctx);
+
+    template<class FormatContext>
+    FormatContext::iterator format(const thread::id& t, FormatContext& ctx) const;
+};
+\end{codeblock}
+
+\begin{itemdecl}
+template<class ParseContext>
+constexpr ParseContext::iterator parse(ParseContext& ctx);
+\end{itemdecl}
+
+\begin{itemdescr}
+\effects Parses the format specifier as a \grammarterm{std-format-spec} and stores the parsed specifiers in \tcode{*this}.
+
+If no \tcode{align} option is specified, it is defaulted to \tcode{">"}.
+
+\begin{note}
+The formatting options applying only to arithmetic types are not supported.
+\end{note}
+
+\returns An iterator past the end of the \grammarterm{std-format-spec}.
+\end{itemdescr}
+
+\begin{itemdecl}
+template<class FormatContext>
+FormatContext::iterator format(const thread::id& id, FormatContext& ctx) const;
+\end{itemdecl}
+
+
+\begin{itemdescr}
+\effects: Writes the \defn{text representation} of \tcode{id} into \tcode{ctx.out()}, adjusted according to the \grammarterm{std-format-spec}.
+
+\returns An iterator past the end of the output range.
+\end{itemdescr}
+
+\end{addedblock}
+
+\subsection{Feature test macro}
+
+\ednote{define \tcode{__cpp_lib_formatters} set to the date of adoption in \tcode{<version>}, \tcode{<stacktrace>} and \tcode{<thread>}}.
+
+\section{Acknowledgments}
+
+Thanks to Lars Gullik Bjønnes for their initial work on P1636!
+
+\section{References}
+
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21, extra}
+
+\begin{thebibliography}{9}
+
+
+\bibitem[N4885]{N4885}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4885}
+
+
+\end{thebibliography}
+
+\end{document}
