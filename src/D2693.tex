@@ -334,48 +334,21 @@ The library may reuse the value of a \tcode{thread::id} of a terminated thread t
 \end{itemdescr}
 
 \begin{addedblock}
-\rSec3[thread.thread.id.formatter]{\tcode{thread::id} \tcode{formatter} specialization}
 
-\begin{codeblock}
+\begin{itemdecl}
 template<class charT>
-requires (std::same_as<char, charT> || std::same_as<char, wchar_t>)
-class formatter<thread::id, charT>  {
-public:
-    template<class ParseContext>
-    constexpr ParseContext::iterator parse(ParseContext& ctx);
-
-    template<class FormatContext>
-    FormatContext::iterator format(const thread::id& t, FormatContext& ctx) const;
-};
-\end{codeblock}
-
-\begin{itemdecl}
-template<class ParseContext>
-constexpr ParseContext::iterator parse(ParseContext& ctx);
+class formatter<thread::id, charT>;
 \end{itemdecl}
 
 \begin{itemdescr}
-\effects Parses the format specifier as a \grammarterm{std-format-spec} and stores the parsed specifiers in \tcode{*this}.
+\tcode{formatter<thread::id, charT>} meets the \defn{Formatter} requirements ([formatter.requirements]). The \tcode{parse} member functions of this formatter interpret the format specification as a \grammarterm{thread-id-format-spec} according to the following syntax:
 
-If no \tcode{align} option is specified, it is defaulted to \tcode{">"}.
+\grammarterm{thread-id-format-spec}:
+  \grammarterm{fill-and-align_{opt}} \grammarterm{width_{opt}}
 
-\begin{note}
-The formatting options applying only to arithmetic types are not supported.
-\end{note}
+The productions \grammarterm{fill-and-align} and \grammarterm{width} are described in [format.string]. If the \grammarterm{align} option is omitted it is defaulted to \tcode{>}.
 
-\returns An iterator past the end of the \grammarterm{std-format-spec}.
-\end{itemdescr}
-
-\begin{itemdecl}
-template<class FormatContext>
-FormatContext::iterator format(const thread::id& id, FormatContext& ctx) const;
-\end{itemdecl}
-
-
-\begin{itemdescr}
-\effects: Writes the \defn{text representation} of \tcode{id} into \tcode{ctx.out()}, adjusted according to the \grammarterm{std-format-spec}.
-
-\returns An iterator past the end of the output range.
+A \tcode{thread::id} object is formatted by writing the \defn{text representation} to the output with \grammarterm{thread-id-format-spec} applied.
 \end{itemdescr}
 
 \end{addedblock}
