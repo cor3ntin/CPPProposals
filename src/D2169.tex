@@ -7,7 +7,7 @@
 
 
 \title{A nice placeholder with no name}
-\docnumber{P2169R2}
+\docnumber{D2169R3}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Michael Park}{mcypark@gmail.com}
@@ -20,7 +20,7 @@
 
 In [P1110]\cite{P1110R0} Jeffrey Yesskin and JF Bastien explore the design space of placeholders
 with the goal of not naming entities for which a name would provide no additional information.
-In this paper, we propose a concrete solution for the use of \tcode{_} (\tcode{U+005F _ LOW LINE}) as such placeholder 
+In this paper, we propose a concrete solution for the use of \tcode{_} (\tcode{U+005F _ LOW LINE}) as such placeholder
 for variable declarations and pattern matching textbf{in a fully backward compatible manner}.
 
 \section{Tony tables}
@@ -56,6 +56,13 @@ inspect(foo) { _  => bar; };
 
 \section{Revisions}
 
+\subsection{Revision 3}
+
+\begin{itemize}
+\item Add wording
+\item R2 mentioned that we could allow _ for global variables at namespace scope in module implement units. While true, this seems to much of a weird allowance.
+\end{itemize}
+
 \subsection{Revision 2}
 
 \begin{itemize}
@@ -66,7 +73,7 @@ inspect(foo) { _  => bar; };
 
 \begin{itemize}
    \item Specify that placeholders can appear as class members
-   \item Make use of \tcode{_} ill-formed once a placeholder has been declared in the same scope 
+   \item Make use of \tcode{_} ill-formed once a placeholder has been declared in the same scope
 \end{itemize}
 
 \section{Motivation}
@@ -125,7 +132,7 @@ auto _ = foo(); // equivalent to [[maybe_unused]] auto _  = f();
 \end{example}
 
 When a variable, function parameter, non-static class member variablem, structured binding or lambda capture is introduced by the identifier \tcode{_}
-at function scope, or at namespace scope within the purview of a module implementation unit, it can redefine an existing declaration, [basic.scope.declarative] in the same scope. After redeclaration, if the variable is used, the programm is ill-formed.
+at function scope, it can redefine an existing declaration, [basic.scope.declarative] in the same scope. After redeclaration, if the variable is used, the programm is ill-formed.
 
 \begin{example}
 \begin{lstlisting}[style=color]
@@ -148,7 +155,7 @@ void f() {
 In contexts where the grammar expects a pattern matching pattern, \tcode{_} represents the wildcard pattern.
 
 \begin{lstlisting}[style=color]
-inspect(i) {   
+inspect(i) {
     0  => 0;
     _  => 1;   // wildcard pattern
 };
@@ -163,12 +170,12 @@ We do however think that such depreciation may be useful to consider in a longer
 \subsection{Alternative Design}
 
 A previous version of this proposal suggested that \tcode{_} should refer to the first declaration in scope,
-but many prefered the approach in this current revision.  
+but many prefered the approach in this current revision.
 
 \subsection{Pattern matching}
 
 Citing [P1371R0]{\cite{P1371R0}, \tcode{_} can be used as a pattern matching wilcard without ambiguities
-    
+
 \begin{quoteblock}
 Even though \tcode{_} is a valid identifier, it does not introduce a name as doing so would result in redeclaration
 errors in the case where multiple wildcard \tcode{_} identifiers are used.
@@ -193,7 +200,7 @@ Independently of P2169, P2011 makes the following ambiguous
 
 \begin{lstlisting}[style=color]
 int _ = 0; // Not a placeholder
-f() |> g(_, _); // placeholder or variable ? 
+f() |> g(_, _); // placeholder or variable ?
 \end{lstlisting}
 
 This is simply resolved by having \tcode{_} always be a placeholder in pipeline expression,
@@ -204,7 +211,7 @@ int _ = 0; // Not a placeholder
 auto & placeholder = _;
 f() |> g(_, placeholder); // OK
 f() |> g(_, (_)); // OK
-\end{lstlisting} 
+\end{lstlisting}
 
 
 And so,
@@ -253,7 +260,7 @@ But, regardless, defining this macro would not prevent the use of the proposed s
 expanded by the preprocessor in this case if followed by parentheses:
 
 \begin{lstlisting}[style=color]
-constexpr const char* gettext(int) { return nullptr;} 
+constexpr const char* gettext(int) { return nullptr;}
 #define _(msgid) gettext (msgid)
 
 int main() {
@@ -279,7 +286,96 @@ The current version of this proposal can be emulaterd with the \tcode{-Werror} f
 
 \section{Wording}
 
-// TODO
+\rSec2[basic.scope.scope]{General}
+
+\begin{addedblock}
+A declaration is a \grammarterm{redeclarable placeholder entity} if its name is \tcode{_},
+and it declares a variable with automatic storage duration, a structured binding, a function parameter, the variable introduced by an \grammarterm{init-capture}, or a non-static data member.
+
+
+\recommended
+An implementation should not emit a warning that
+a \grammarterm{redeclarable placeholder entity}
+is unused.
+\end{addedblock}
+
+Two declarations \defn{potentially conflict}
+if they correspond and
+cause their shared name to denote different entities\iref{basic.link}.
+The program is ill-formed
+if, in any scope, a name is bound to two declarations
+that potentially conflict and one precedes the other\iref{basic.lookup} \added{unless both declarations are \grammarterm{redeclarable placeholder entities}}.
+
+\begin{addedblock}
+\begin{note}
+Because two \grammarterm{redeclarable placeholder entity} in the same scope
+are \grammarterm{ambiguous}, an \grammarterm{id-expression} that denotes a
+\grammarterm{redeclarable placeholder entity} is ill-formed.
+\end{note}
+\end{addedblock}
+
+
+\begin{note}
+	Overload resolution can consider potentially conflicting declarations
+	found in multiple scopes
+	(e.g. via \grammarterm{using-directive}s or for operator functions),
+	in which case it is often ambiguous.
+\end{note}
+\begin{example}
+	\begin{codeblock}
+		void f() {
+			int x,y;
+			void x();             // error: different entity for \tcode{x}
+			int y;                  // error: redefinition
+			@\added{    int _;}@
+			@\added{    int _;                  // ok}@
+			@\added{    _ = 0;                 // error: id-expression '_' denoting a \grammarterm{redeclarable placeholder entity}}@
+		}
+		enum { f };             // error: different entity for \tcode{::f}
+		namespace A {}
+		namespace B = A;
+		namespace B = A;        // OK, no effect
+		namespace B = B;        // OK, no effect
+		namespace A = B;        // OK, no effect
+		namespace B {}          // error: different entity for \tcode{B}
+	\end{codeblock}
+\end{example}
+
+%\rSec2[basic.lookup.general]{General}%
+%\pnum
+%The name lookup rules apply uniformly to all names (including
+%\grammarterm{typedef-name}{s}\iref{dcl.typedef},
+%\grammarterm{namespace-name}{s}\iref{basic.namespace}, and
+%\grammarterm{class-name}{s}\iref{class.name}) wherever the grammar allows
+%such names in the context discussed by a particular rule. Name lookup
+%associates the use of a name with a set of declarations\iref{basic.def} of
+%that name.
+%Unless otherwise specified,
+%the program is ill-formed if no declarations are found.
+%If the declarations found by name lookup
+%all denote functions or function templates,
+%the declarations are said to form an \defn{overload set}.
+%
+%\begin{addedblock}
+%Otherwise, declarations found by name lookup are ambiguous unless they either:
+%\begin{itemize}
+%\item all denote the same entity, or
+%\item all denote \grammarterm{redeclarable placeholder entities} in the same scope.
+%\end{itemize}
+%If name lookup finds ambiguous declarations, the program is ill-formed.
+%\end{addedblock}
+%
+%\removed{Otherwise, if the declarations found by name lookup do not all denote the same entity,
+%\indextext{lookup!ambiguous}%
+%they are \defn{ambiguous} and the program is ill-formed.}
+%Overload resolution\iref{over.match,over.over}
+%takes place after name lookup has succeeded. The access rules\iref{class.access}
+%are considered only once name lookup and
+%function overload resolution (if applicable) have succeeded. Only after
+%name lookup, function overload resolution (if applicable) and access
+%checking have succeeded
+%are the semantic properties introduced by the declarations
+%used in further processing.
 
 \section{Rebuttal some wilder ideas explored by P1110}
 
@@ -288,7 +384,7 @@ The current version of this proposal can be emulaterd with the \tcode{-Werror} f
 
 \subsection{Enums}
 
-The code on the left (P1110) can be written in standard C++ in a way that expresses the intent as clearly, if not more. 
+The code on the left (P1110) can be written in standard C++ in a way that expresses the intent as clearly, if not more.
 
 \begin{center}
 \begin{tabular}{l|l}
@@ -303,7 +399,7 @@ enum MmapBits {
     Rename,
     //...
 };
-    
+
 \end{lstlisting}
 \end{minipage}
 &
@@ -316,7 +412,7 @@ enum MmapBits {
     Rename,
     //...
 };
-    
+
 \end{lstlisting}
 \end{minipage}
 \end{tabular}
@@ -324,7 +420,7 @@ enum MmapBits {
 
 \subsection{Concept-constrained declarations}
 
-The following example from P1110 is a historical artifact as C++20 uniformizes \tcode{auto} for this purpose. 
+The following example from P1110 is a historical artifact as C++20 uniformizes \tcode{auto} for this purpose.
 
 \begin{lstlisting}[style=color]
 template<Integral __ N> class integral_constant { ... };
