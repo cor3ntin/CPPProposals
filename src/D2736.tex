@@ -1,0 +1,1121 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{Referencing the Unicode Standard}
+\docnumber{D2736R0}
+\audience{SG-16}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\newcommand{\replaceucs}{\changed{UCS}{Unicode}}
+
+\usepackage{color, colortbl}
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+
+\section{Revisions}
+
+\subsection{R0}
+
+Initial revision
+
+\subsection{Motivation}
+
+Unicode is developed as The Unicode Standard by The Unicode Consortium.
+From that is derived the ISO 10446 standard.
+However, Unicode has a much larger scope as it describes algorithms for normalization,
+clusterization, comparison, case transformation, bi-directional text handling, and more.
+C++ makes use of these features.
+
+As such, in the current state, we reference ISO 10646 and Unicode, and the Unicode annexes.
+Care must be taken that the versions referenced are coherent as Unicode algorithms
+are designed to work with a matching specification and accompanying Unicode data.
+This is challenging as Unicode and ISO 10646 have different release cycles.
+
+Additionally, there are subtle differences in terminology, the main impact of which
+is to consume time in study groups.
+It is also an issue for implementers who usually reference
+Unicode directly as Unicode delivers the necessary Unicode data in an easily extractible
+and toolable format (whereas 1SO 10646 is just a PDF).
+
+By referring to a single Unicode Standard, we can reduce the number of references
+that we have to maintain (and thereby the number of dependencies the standard carries),
+as well as making the standard clearer.
+
+\subsection{Difference between Unicode and ISO 10646}
+
+The Unicode standard explains:
+
+\begin{quoteblock}
+The Unicode Consortium maintains a strong working relationship with ISO/IEC
+JTC1/SC2/WG2, the working group developing International Standard 10646. Today both
+organizations are firmly committed to maintaining the synchronization between the Unicode Standard and ISO/IEC 10646. Each standard nevertheless uses its own form of reference and, to some degree, separate terminology.
+\end{quoteblock}
+
+\begin{quoteblock}
+ISO/IEC 10646:2011 has significantly revised its discussion of encoding forms, compared
+to earlier editions of that standard. The terminology for encoding forms (and encoding
+schemes) in 10646 now matches exactly the terminology used in the Unicode Standard.
+Furthermore, 10646 is now described in terms of a codespace U+0000..U+10FFFF, instead
+of a 31-bit codespace, as in earlier editions. This convergence in codespace description has
+eliminated any discrepancies in possible interpretation of the numeric values greater than
+0x10FFFF.
+\end{quoteblock}
+
+As such, the definition of UTF-8, UTF-16, and UTF-32, as well as the set of supported abstract characters and their code point value is the same.
+Most of the terminology changes operated consist of replacing "UCS" with "Unicode".
+
+There are, however, a few points to mention.
+
+ISO 10646 defines "character" as
+\begin{quoteblock}
+member of a set of elements used for the organization, control, or representation of textual data
+Note 1 to entry – A graphic symbol can be represented by a sequence of one or several coded characters.
+\end{quoteblock}
+
+Unicode defines instead "abstract character"
+\begin{quoteblock}
+A unit of information used for the organization, control, or representation of textual data.
+\end{quoteblock}
+
+This is a positive change as the term character is both defined by the C++ standard and constantly misused.
+in the long term, having a term to talk about an abstract character when we mean it is a positive change.
+
+\subsection{Conformance with Unicode}
+
+Unicode specifies a list of conformance requirements (Chapter 3.2)
+
+\begin{itemize}
+    \item C1: \emph{A process shall not interpret a high-surrogate code point or a low-surrogate code point as an abstract character.}\\
+    C++ satisfies this requirement.
+
+    \item C2: \emph{A process shall not interpret a noncharacter code point as an abstract character}
+    \item C3: \emph{A process shall not interpret an unassigned code point as an abstract character.}\\
+
+    We create characters out of thin air for specifying the translation set.
+    However, we never exchange or materialize, or use these things except for specification purposes.
+
+    \item C4: \emph{A process shall interpret a coded character sequence according to the character semantics established by this standard if that process does interpret that coded character sequence.}
+    \item C4: \emph{A process shall not assume that it is required to interpret any particular coded character sequence.}
+    \item C6: \emph{A process shall not assume that the interpretations of two canonical-equivalent character sequences are distinct}
+    \item C7: \emph{When a process purports not to modify the interpretation of a valid coded character
+        sequence, it shall make no change to that coded character sequence other than the possible replacement of character sequences by their canonical-equivalent sequences.}
+
+    C++ satisfies these requirements.
+
+    \item C8: \emph{When a process interprets a code unit sequence which purports to be in a Unicode
+        character encoding form, it shall interpret that code unit sequence according to the
+        corresponding code point sequence.}
+    \item C9: \emph{When a process generates a code unit sequence which purports to be in a Unicode
+        character encoding form, it shall not emit ill-formed code unit sequences.}
+
+    C++ satisfies these requirements.
+
+    \item C10: \emph{When a process interprets a code unit sequence which purports to be in a Unicode
+        character encoding form, it shall treat ill-formed code unit sequences as an error condition and shall not interpret such sequences as characters}
+
+    C++ satisfies this requirement, arguably. The C functions do behave weirdly in the presence of invalid code units, but do they actually purports to support Unicode if they don't support multi bytes encodings?
+
+    \item C11: \emph{When a process interprets a byte sequence which purports to be in a Unicode character
+        encoding scheme, it shall interpret that byte sequence according to the byte order and
+        specifications for the use of the byte order mark established by this standard for that
+        character encoding scheme}
+
+    I think we do.
+
+    \item C14: \emph{A process that tests Unicode text to determine whether it is in a Normalization Form
+        shall do so in accordance with the specifications in Section 3.11, Normalization Forms}
+
+
+    \item C16: \emph{Normative references to the Unicode Standard itself, to property aliases, to property
+        value aliases, or to Unicode algorithms shall follow the formats specified in Section 3.1,
+        Versions of the Unicode Standard.}
+
+    This requirement should be satisfied with the adoption of this paper.
+    Care must be taken when referencing properties.
+
+    \item C17: \emph{Higher-level protocols shall not make normative references to provisional properties.}
+    • Higher-level protocols may make normative references to informative properties.
+
+    \item C17: \emph{If a process purports to implement a Unicode algorithm, it shall conform to the specification of that algorithm in the standard, including any tailoring by a higher-level protocol as permitted by the specification.}
+
+    Yes.
+\end{itemize}
+Omitted requirements are not applicable.
+
+\subsection{Terminology}
+\begin{itemize}
+\item D4 Character name: A unique string used to identify each abstract character encoded in
+the standard.
+\item D5 Character name alias: An additional unique string identifier, other than the character name, associated with an encoded character in the standard.
+\item D7 Abstract character: A unit of information used for the organization, control, or representation of textual data.
+\item D10 Code point: Any value in the Unicode codespace.
+\item D11 Encoded character: An association (or mapping) between an abstract character and
+a code point.
+\item D76 Unicode scalar value: Any Unicode code point except high-surrogate and low-surrogate code points.
+\item D77 Code unit: The minimal bit combination that can represent a unit of encoded text for processing or interchange.
+\item D78 Code unit sequence: An ordered sequence of one or more code units.
+\item D79 A Unicode encoding form assigns each Unicode scalar value to a unique code unit sequence.
+\item D94 Unicode encoding scheme: A specified byte serialization for a Unicode encoding
+form, including the specification of the handling of a byte order mark (BOM), if
+allowed.
+\item D16 Higher-level protocol: Any agreement on the interpretation of Unicode characters
+that extends beyond the scope of this standard
+\end{itemize}
+
+\subsection{Character names}
+
+Consistently refering to Unicode resolves the observation made by NB comment FR-021-01
+that the set of character that can be spelled by named escape sequences \tcode{\textbackslash{N}\{\}} was, in the standard,
+a subset of the set of code point with the XID_Continue or XID_Start properties, as the names were derived from ISO
+and the list of elligible code points from Unicode.
+
+\subsection{\tcode{__STDC_ISO_10646__}}
+
+This macro, defined in [cpp] was the most difficult change.
+Indeed its \tcode{yyyymm} is supposed to refer to the publication date of an ISO1646 revision.
+Here is the thing though.
+Past discussions in LLVM and the WG14 reflector have established that the wide execution encoding
+may depend on the C library, and that macro is therefore defined by the C library.
+On some platforms, the \tcode{wchar_t} is actually a runtime property, such that the use of a macro
+is not suitable.
+
+In addition, its value is not always updated and doesn't indicate much.
+Indeed, all ISO1646 publications require a 4 bytes \tcode{wchar_t} for the storing of code points.
+
+Therefore, we change the wording of that macro to state that its value is implementation-defined,
+such that we do not have to reference ISO10646 and reword it slightly.
+
+Further work is encouraged to maybe deprecate this macro.
+Inspecting a large amount of open source code, the only use of the value we found was \tcode{(__STDC_ISO_10646__ <= 198700L)}.
+Of course, there are numerous uses of the macro for its presence.
+
+Note that we don't expect implementers to change the value of that macro, but it lets us not mention ISO 10646 there
+
+\subsection{Removing the reference to ISO1646:2003}
+
+The deprecated \tcode{codecvt_utf8} and \tcode{codecvt_utf16} refers to UCS-2.
+Because this has long been obsoleted and removed from ISO 10646, we carry a dependency on ISO 10646:2003.
+
+But, UCS-2 is a strict subset of UTF-16. So we reword the appropriate paragraph to say
+"code points in the range U+0000-U+FFFF encoded as UTF-16" instead.
+
+Any code point outside that range doesn't satisfy that requirement, and therefore cannot be encoded and causes the conversion to fail with \tcode{result::error}, preserving the existing behavior.
+
+\subsection{Non-Normative reference to UAX \#29, Unicode Text Segmentation}
+
+Revision 35 (Unicode 12) -> Revision 41 (Unicode 15)
+
+This is used in [format.string.std] for the purpose of width estimation.
+The only non-editorial applicable change in that document between that version and the last were
+\begin{itemize}
+\item Moved surrogate code points from Control to XX
+\item Excluded prepended concatenation marks from Control.
+\end{itemize}
+
+Both are bug fixes.
+Referencing version 15 ensures that the width of recent code points can be correctly estimated.
+Some implementations refer to Unicode 15 already.
+
+Once we can use the same version, we can remove the reference entierly, as unicode mentions
+\begin{quoteblock}
+This core specification, together with the Unicode code charts, the Unicode Character Database, and the Unicode Standard Annexes, defines the Unicode Standard.
+The Unicode Standard Annexes form an integral part of the Unicode Standard.
+\end{quoteblock}
+
+\subsection{Non-Normative reference to UAX \#31}
+
+Left untouched, someone needs to go through the UAX31 Annex in the C++ standard to ensure consistency.
+Given this UAX is changing a lot to support source code spoofing mitigation over the next year, we may consider
+delaying that work?
+If we do decided to delay that work, we should make sure UAX31 constently refer to the referenced version in the annex.
+
+
+\section{Wording}
+
+\rSec1[intro.refs]{Normative references}%
+\indextext{normative references|see{references, normative}}%
+
+\pnum
+\indextext{references!normative|(}%
+The following documents are referred to in the text
+in such a way that some or all of their content
+constitutes requirements
+of this document. For dated references, only the edition cited applies.
+For undated references, the latest edition of the referenced document
+(including any amendments) applies.
+\begin{itemize}
+    % ISO documents in numerical order.
+    \item ISO/IEC 2382, \doccite{Information technology --- Vocabulary}
+    \item ISO 8601:2004, \doccite{Data elements and interchange formats ---
+        Information interchange --- Representation of dates and times}
+    \item ISO/IEC 9899:2018, \doccite{Programming languages --- C}
+    \item ISO/IEC/IEEE 9945:2009, \doccite{Information Technology --- Portable
+        Operating System Interface (POSIX)}
+    \item ISO/IEC/IEEE 9945:2009/Cor 1:2013, \doccite{Information Technology --- Portable
+        Operating System Interface (POSIX), Technical Corrigendum 1}
+    \item ISO/IEC/IEEE 9945:2009/Cor 2:2017, \doccite{Information Technology --- Portable
+        Operating System Interface (POSIX), Technical Corrigendum 2}
+    \begin{removedblock}
+    \item ISO/IEC 10646, \doccite{Information technology ---
+        Universal Coded Character Set (UCS)}
+    \item ISO/IEC 10646:2003,
+    \doccite{Information technology ---
+        Universal Multiple-Octet Coded Character Set (UCS)}
+    \end{removedblock}
+    \item ISO/IEC/IEEE 60559:2020, \doccite{Information technology ---
+        Microprocessor Systems --- Floating-Point arithmetic}
+    \item ISO 80000-2:2009, \doccite{Quantities and units ---
+        Part 2: Mathematical signs and symbols
+        to be used in the natural sciences and technology}
+    % Other international standards.
+    \item Ecma International, \doccite{ECMAScript Language Specification},
+    Standard Ecma-262, third edition, 1999.
+    \begin{addedblock}
+    \item
+    The Unicode Consortium.
+    The Unicode Standard.
+    Available from: \url{https://www.unicode.org/versions/latest/}
+    \end{addedblock}
+
+    \ednote{Using recommandation from https://unicode.org/versions/}
+
+    \begin{removedblock}
+    \item
+    The Unicode Consortium.
+    Unicode Standard Annex, UAX \#44, \doccite{Unicode Character Database}.
+    Edited by Ken Whistler and Lauren\c{t}iu Iancu.
+    Available from: \tcode{http://www.unicode.org/reports/tr44/}
+    \item
+    The Unicode Consortium.
+    The Unicode Standard, \doccite{Derived Core Properties}.
+    Available from: \tcode{https://www.unicode.org/Public/UCD/latest/ucd/DerivedCoreProperties.txt}
+    \end{removedblock}
+
+    \ednote{The reference to the Unicode standard encompasses its annexes and associated}
+\end{itemize}
+
+\pnum
+The library described in ISO/IEC 9899:2018, Clause 7,
+is hereinafter called the
+\defnx{C standard library}{C!standard library}.
+
+\pnum
+The operating system interface described in ISO/IEC 9945:2009 is
+hereinafter called \defn{POSIX}.
+
+\pnum
+The ECMAScript Language Specification described in Standard Ecma-262 is
+hereinafter called \defn{ECMA-262}.
+\indextext{references!normative|)}
+
+
+\pnum
+\begin{removedblock}
+\begin{note}
+    References to ISO/IEC 10646:2003 are used only
+    to support deprecated features\iref{depr.locale.stdcvt}.
+\end{note}
+\end{removedblock}
+
+\textcolor{noteclr}{[...]}
+
+\rSec1[lex.phases]{Phases of translation}%
+
+\pnum
+\indextext{translation!phases|(}%
+The precedence among the syntax rules of translation is specified by the
+following phases.
+\begin{footnote}
+    Implementations behave as if these separate phases
+    occur, although in practice different phases can be folded together.
+\end{footnote}
+
+\begin{enumerate}
+    \item
+    \indextext{character!source file}%
+    \indextext{character set!basic source}%
+    An implementation shall support input files
+    that are a sequence of UTF-8 code units (UTF-8 files).
+    It may also support
+    an \impldef{supported input files} set of other kinds of input files, and,
+    if so, the kind of an input file is determined in
+    an \impldef{determination of kind of input file} manner
+    that includes a means of designating input files as UTF-8 files,
+    independent of their content.
+    \begin{note}
+        In other words,
+        recognizing the U+feff byte order mark is not sufficient.
+    \end{note}
+    If an input file is determined to be a UTF-8 file,
+    then it shall be a well-formed UTF-8 code unit sequence and
+    it is decoded to produce a sequence of \replaceucs{} scalar values
+    that constitutes the sequence of elements of the translation character set.
+
+    For any other kind of input file supported by the implementation,
+    characters are mapped, in an
+    \impldef{mapping physical source file characters to translation character set} manner,
+    to a sequence of translation character set elements\iref{lex.charset}
+    (introducing new-line characters for end-of-line indicators).
+\end{enumerate}
+
+\rSec1[lex.charset]{Character sets}
+
+\pnum
+\indextext{character set|(}%
+The \defnadj{translation}{character set} consists of the following elements:
+\begin{itemize}
+    \item
+    each \added{abstract} character \changed{named by ISO/IEC 10646,
+    as identified by its unique UCS scalar value}{assigned a code point in the Unicode codespace}, and
+    \item
+    a distinct character for each \replaceucs{} scalar value
+    \changed{where no named character is assigned}{not assigned to an abstract character}.
+\end{itemize}
+\begin{note}
+    \changed{ISO/IEC 10646}{Unicode} code points are integers
+    in the range $[0, \mathrm{10FFFF}]$ (hexadecimal).
+    A surrogate code point is a value
+    in the range $[\mathrm{D800}, \mathrm{DFFF}]$ (hexadecimal).
+    A \replaceucs{} scalar value is any code point that is not a surrogate code point.
+\end{note}
+
+\pnum
+The \defnadj{basic}{character set} is a subset of the translation character set,
+consisting of 96 characters as specified in \tref{lex.charset.basic}.
+\begin{note}
+    Unicode short names are given only as a means to identifying the character;
+    the numerical value has no other meaning in this context.
+\end{note}
+
+%%
+
+\begin{floattable}{Basic character set}{lex.charset.basic}{lll}
+    \topline
+    \lhdrx{2}{character} & \rhdr{glyph} \\ \capsep
+    \ucode{0009} & \uname{character tabulation} & \\
+    \ucode{000b} & \uname{line tabulation} & \\
+    \ucode{000c} & \uname{form feed} & \\
+    \ucode{0020} & \uname{space} & \\
+    \ucode{000a} & \uname{line feed} & new-line \\
+    \ucode{0021} & \uname{exclamation mark} & \tcode{!} \\
+    \ucode{0022} & \uname{quotation mark} & \tcode{"} \\
+    \ucode{0023} & \uname{number sign} & \tcode{\#} \\
+    \ucode{0025} & \uname{percent sign} & \tcode{\%} \\
+    \ucode{0026} & \uname{ampersand}  & \tcode{\&} \\
+    \ucode{0027} & \uname{apostrophe} & \tcode{'} \\
+    \ucode{0028} & \uname{left parenthesis} & \tcode{(} \\
+    \ucode{0029} & \uname{right parenthesis} & \tcode{)} \\
+    \ucode{002a} & \uname{asterisk} & \tcode{*} \\
+    \ucode{002b} & \uname{plus sign} & \tcode{+} \\
+    \ucode{002c} & \uname{comma} & \tcode{,} \\
+    \ucode{002d} & \uname{hyphen-minus} & \tcode{-} \\
+    \ucode{002e} & \uname{full stop} & \tcode{.} \\
+    \ucode{002f} & \uname{solidus} & \tcode{/} \\
+    \ucode{0030} .. \ucode{0039} & \uname{digit zero .. nine} & \tcode{0 1 2 3 4 5 6 7 8 9} \\
+    \ucode{003a} & \uname{colon} & \tcode{:} \\
+    \ucode{003b} & \uname{semicolon} & \tcode{;} \\
+    \ucode{003c} & \uname{less-than sign} & \tcode{<} \\
+    \ucode{003d} & \uname{equals sign} & \tcode{=} \\
+    \ucode{003e} & \uname{greater-than sign} & \tcode{>} \\
+    \ucode{003f} & \uname{question mark} & \tcode{?} \\
+    \ucode{0041} .. \ucode{005a} & \uname{latin capital letter a .. z} & \tcode{A B C D E F G H I J K L M} \\
+    & & \tcode{N O P Q R S T U V W X Y Z} \\
+    \ucode{005b} & \uname{left square bracket} & \tcode{[} \\
+    \ucode{005c} & \uname{reverse solidus} & \tcode{\textbackslash} \\
+    \ucode{005d} & \uname{right square bracket} & \tcode{]} \\
+    \ucode{005e} & \uname{circumflex accent} & \tcode{\caret} \\
+    \ucode{005f} & \uname{low line} & \tcode{_} \\
+    \ucode{0061} .. \ucode{007a} & \uname{latin small letter a .. z} & \tcode{a b c d e f g h i j k l m} \\
+    & & \tcode{n o p q r s t u v w x y z} \\
+    \ucode{007b} & \uname{left curly bracket} & \tcode{\{} \\
+    \ucode{007c} & \uname{vertical line} & \tcode{|} \\
+    \ucode{007d} & \uname{right curly bracket} & \tcode{\}} \\
+    \ucode{007e} & \uname{tilde} & \tcode{\textasciitilde} \\
+\end{floattable}
+
+\pnum
+The \grammarterm{universal-character-name} construct provides a way to name
+other characters.
+
+\begin{bnf}
+    \nontermdef{n-char} \textnormal{one of}\br
+    \terminal{A B C D E F G H I J K L M N O P Q R S T U V W X Y Z}\br
+    \terminal{0 1 2 3 4 5 6 7 8 9}\br
+    \textnormal{\unicode{002d}{hyphen-minus}}\br
+    \textnormal{\unicode{0020}{space}}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{n-char-sequence}\br
+    n-char\br
+    n-char-sequence n-char
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{named-universal-character}\br
+    \terminal{\textbackslash N\{} n-char-sequence \terminal{\}}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{hex-quad}\br
+    hexadecimal-digit hexadecimal-digit hexadecimal-digit hexadecimal-digit
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{simple-hexadecimal-digit-sequence}\br
+    hexadecimal-digit\br
+    simple-hexadecimal-digit-sequence hexadecimal-digit
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{universal-character-name}\br
+    \terminal{\textbackslash u} hex-quad\br
+    \terminal{\textbackslash U} hex-quad hex-quad\br
+    \terminal{\textbackslash u\{} simple-hexadecimal-digit-sequence \terminal{\}}\br
+    named-universal-character
+\end{bnf}
+
+\pnum
+A \grammarterm{universal-character-name}
+of the form \tcode{\textbackslash u} \grammarterm{hex-quad},
+\tcode{\textbackslash U} \grammarterm{hex-quad} \grammarterm{hex-quad}, or
+\tcode{\textbackslash u\{\grammarterm{simple-hexadecimal-digit-sequence}\}}
+designates the character in the translation character set
+whose \replaceucs{} scalar value is the hexadecimal number represented by
+the sequence of \grammarterm{hexadecimal-digit}s
+in the \grammarterm{universal-character-name}.
+The program is ill-formed if that number is not a \replaceucs{} scalar value.
+
+\pnum
+A \grammarterm{universal-character-name}
+that is a \grammarterm{named-universal-character}
+designates the character named by its \grammarterm{n-char-sequence}.
+A character is so named if the \grammarterm{n-char-sequence} is equal to
+\begin{itemize}
+    \item
+    \changed{the associated character name or associated character name alias}{its name or its normative alias}
+    specified in \changed{ISO/IEC 10646}{The Unicode Standard} subclause ``\changed{Code charts and lists of character names}{Character Names List}''
+    or
+    \item
+    the control code alias given in [lex.charset.ucn].
+    \begin{note}
+        The aliases in [lex.charset.ucn] are provided for control characters
+        which otherwise have no associated character name or character name alias.
+        These names are derived from
+        the Unicode Character Database's \tcode{NameAliases.txt}.
+        For historical reasons, control characters are formally unnamed.
+    \end{note}
+\end{itemize}
+\begin{note}
+    None of the \changed{associated}{Unicode} character names,
+    \changed{associated}{Unicode} character name aliases, or
+    control code aliases
+    have leading or trailing spaces.
+\end{note}
+
+\pnum
+If a \grammarterm{universal-character-name} outside
+the \grammarterm{c-char-sequence}, \grammarterm{s-char-sequence}, or
+\grammarterm{r-char-sequence} of
+a \grammarterm{character-literal} or \grammarterm{string-literal}
+(in either case, including within a \grammarterm{user-defined-literal})
+corresponds to a control character or
+to a character in the basic character set, the program is ill-formed.
+\begin{note}
+    A sequence of characters resembling a \grammarterm{universal-character-name} in an
+    \grammarterm{r-char-sequence}\iref{lex.string} does not form a
+    \grammarterm{universal-character-name}.
+\end{note}
+
+\pnum
+The \defnadj{basic literal}{character set} consists of
+all characters of the basic character set,
+plus the control characters specified in \tref{lex.charset.literal}.
+\begin{note}
+    The alias \uname{bell} for \ucode{0007} shown in \changed{ISO 10646}{the Unicode Standard}
+    is ambiguous with \unicode{1f514}{bell}.
+\end{note}
+
+\begin{floattable}{Additional control characters in the basic literal character set}{lex.charset.literal}{ll}
+    \topline
+    \ohdrx{2}{character} \\ \capsep
+    \ucode{0000} & \uname{null} \\
+    \ucode{0007} & \uname{alert} \\
+    \ucode{0008} & \uname{backspace} \\
+    \ucode{000d} & \uname{carriage return} \\
+\end{floattable}
+
+\pnum
+A \defn{code unit} is an integer value
+of character type\iref{basic.fundamental}.
+Characters in a \grammarterm{character-literal}
+other than a multicharacter or non-encodable character literal or
+in a \grammarterm{string-literal} are encoded as
+a sequence of one or more code units, as determined
+by the \grammarterm{encoding-prefix}\iref{lex.ccon,lex.string};
+this is termed the respective \defnadj{literal}{encoding}.
+The \defnadj{ordinary literal}{encoding} is
+the encoding applied to an ordinary character or string literal.
+The \defnadj{wide literal}{encoding} is the encoding applied
+to a wide character or string literal.
+
+\pnum
+A literal encoding or a locale-specific encoding of one of
+the execution character sets\iref{character.seq}
+encodes each element of the basic literal character set as
+a single code unit with non-negative value,
+distinct from the code unit for any other such element.
+\begin{note}
+    A character not in the basic literal character set
+    can be encoded with more than one code unit;
+    the value of such a code unit can be the same as
+    that of a code unit for an element of the basic literal character set.
+\end{note}
+\indextext{character!null}%
+\indextext{wide-character!null}%
+The \unicode{0000}{null} character is encoded as the value \tcode{0}.
+No other element of the translation character set
+is encoded with a code unit of value \tcode{0}.
+The code unit value of each decimal digit character after the digit \tcode{0} (\ucode{0030})
+shall be one greater than the value of the previous.
+The ordinary and wide literal encodings are otherwise
+\impldef{ordinary and wide literal encodings}.
+\indextext{UTF-8}%
+\indextext{UTF-16}%
+\indextext{UTF-32}%
+For a UTF-8, UTF-16, or UTF-32 literal,
+the \replaceucs{} scalar value
+corresponding to each character of the translation character set
+is encoded as specified in \changed{ISO/IEC 10646}{the Unicode Standard} for the respective \replaceucs{} encoding form.
+\indextext{character set|)}
+
+\textcolor{noteclr}{[...]}
+
+\rSec1[lex.name]{Identifiers}
+
+\indextext{identifier|(}%
+\begin{bnf}
+    \nontermdef{identifier}\br
+    identifier-start\br
+    identifier identifier-continue
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{identifier-start}\br
+    nondigit\br
+    \textnormal{an element of the translation character set \changed{of class XID_Start}{with the Unicode property XID_Start}}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{identifier-continue}\br
+    digit\br
+    nondigit\br
+    \textnormal{an element of the translation character set \changed{of class XID_Continue}{with the Unicode property XID_Continue}}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{nondigit} \textnormal{one of}\br
+    \terminal{a b c d e f g h i j k l m}\br
+    \terminal{n o p q r s t u v w x y z}\br
+    \terminal{A B C D E F G H I J K L M}\br
+    \terminal{N O P Q R S T U V W X Y Z _}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{digit} \textnormal{one of}\br
+    \terminal{0 1 2 3 4 5 6 7 8 9}
+\end{bnf}
+
+\pnum
+\indextext{name!length of}%
+\indextext{name}%
+\removed{The character classes XID_Start and XID_Continue
+are Derived Core Properties as described by UAX \#44.}
+The program is ill-formed
+if an \grammarterm{identifier} does not conform to
+Normalization Form C as specified in \changed{ISO/IEC 10646}{The Unicode Standard}.
+\begin{note}
+    Identifiers are case-sensitive.
+\end{note}
+\begin{note}
+    In translation phase 4,
+    \grammarterm{identifier} also includes
+    those \grammarterm{preprocessing-token}s\iref{lex.pptoken}
+    differentiated as keywords\iref{lex.key}
+    in the later translation phase 7\iref{lex.token}.
+\end{note}
+
+\textcolor{noteclr}{[...]}
+
+\rSec2[lex.string]{String literals}
+
+\textcolor{noteclr}{[...]}
+
+
+\pnum
+Evaluating a \grammarterm{string-literal} results in a string literal object
+with static storage duration\iref{basic.stc}.
+\indextext{string!distinct}%
+Whether all \grammarterm{string-literal}s are distinct (that is, are stored in
+nonoverlapping objects) and whether successive evaluations of a
+\grammarterm{string-literal} yield the same or a different object is
+unspecified.
+\begin{note}
+    \indextext{literal!string!undefined change to}%
+    The effect of attempting to modify a string literal object is undefined.
+\end{note}
+
+\pnum
+\indextext{\idxcode{0}|seealso{zero, null}}%
+\indextext{\idxcode{0}!string terminator}%
+\indextext{\idxcode{0}!null character|see {character, null}}%
+String literal objects are initialized with
+the sequence of code unit values
+corresponding to the \grammarterm{string-literal}'s sequence of
+\grammarterm{s-char}s (originally from non-raw string literals) and
+\grammarterm{r-char}s (originally from raw string literals),
+plus a terminating \unicode{0000}{null} character,
+in order as follows:
+\begin{itemize}
+    \item
+    The sequence of characters denoted by each contiguous sequence of
+    \grammarterm{basic-s-char}s,
+    \grammarterm{r-char}s,
+    \grammarterm{simple-escape-sequence}s\iref{lex.ccon}, and
+    \grammarterm{universal-character-name}s\iref{lex.charset}
+    is encoded to a code unit sequence
+    using the \grammarterm{string-literal}'s associated character encoding.
+    If a character lacks representation in the associated character encoding,
+    then the \grammarterm{string-literal} is conditionally-supported and
+    an
+    \impldef{code unit sequence for non-representable \grammarterm{string-literal}}
+    code unit sequence is encoded.
+    \begin{note}
+        No character lacks representation in any of the \replaceucs{} encoding forms.
+    \end{note}
+    When encoding a stateful character encoding,
+    implementations should encode the first such sequence
+    beginning with the initial encoding state and
+    encode subsequent sequences
+    beginning with the final encoding state of the prior sequence.
+    \begin{note}
+        The encoded code unit sequence can differ from
+        the sequence of code units that would be obtained by
+        encoding each character independently.
+    \end{note}
+    \item
+\end{itemize}
+
+
+\rSec1[cpp.predefined]{Predefined macro names}
+\begin{itemize}
+\item
+\indextext{__stdc_version__@\mname{STDC_VERSION}}%
+\mname{STDC_VERSION}\\
+Whether \mname{STDC_VERSION} is predefined and if so, what its value is,
+are \impldef{definition and meaning of \mname{STDC_VERSION}}.
+
+\item
+\indextext{__stdc_iso_10646__@\mname{STDC_ISO_10646}}%
+\mname{STDC_ISO_10646}\\
+An integer literal of the form \tcode{yyyymmL} (for example,
+\tcode{199712L}).
+If this symbol is defined, then every \changed{character in the Unicode required set, when
+stored in an object of type \keyword{wchar_t}, has the same value as the code point
+of that character. The \defn{Unicode required set} consists of all the characters
+that are defined by ISO/IEC 10646, along with all amendments and technical corrigenda
+as of the specified year and month.}{Unicode code point can be stored as a single object of type \keyword{wchar_t}.\\
+The specified year and month are implementation-defined.}
+\end{itemize}
+
+\ednote{
+-----
+Library wording below
+-----
+}
+
+
+\rSec3[format.string.escaped]{Formatting escaped characters and strings}
+
+\pnum
+\indextext{string!formatted as escaped}%
+\indextext{character!formatted as escaped}%
+A character or string can be formatted as \defn{escaped}
+to make it more suitable for debugging or for logging.
+
+\pnum
+The escaped string \placeholder{E} representation of a string \placeholder{S}
+is constructed by encoding a sequence of characters as follows.
+The associated character encoding \placeholder{CE}
+for \tcode{charT}~(\tref{lex.string.literal})
+is used to both interpret \placeholder{S} and construct \placeholder{E}.
+
+\begin{itemize}
+    \item
+    \unicode{0022}{quotation mark} (\tcode{"}) is appended to \placeholder{E}.
+
+    \item
+    For each code unit sequence \placeholder{X} in \placeholder{S} that either
+    encodes a single character,
+    is a shift sequence, or
+    is a sequence of ill-formed code units,
+    processing is in order as follows:
+
+    \begin{itemize}
+        \item
+        If \placeholder{X} encodes a single character \placeholder{C}, then:
+
+        \begin{itemize}
+            \item
+            If \placeholder{C} is one of the characters in \tref{format.escape.sequences},
+            then the two characters shown as the corresponding escape sequence
+            are appended to \placeholder{E}.
+
+            \item
+            Otherwise, if \placeholder{C} is not \unicode{0020}{space} and
+
+            \begin{itemize}
+                \item
+                \placeholder{CE} is a Unicode encoding and
+                \placeholder{C} corresponds to either
+                a \changed{UCS scalar value whose Unicode property}{Unicode scalar value whose Unicode property} \tcode{General_Category}
+                has a value in the groups \tcode{Separator} (\tcode{Z}) or \tcode{Other} (\tcode{C}) or to
+                a \changed{UCS scalar value whose Unicode property}{Unicode scalar value with the Unicode property} \tcode{Grapheme_Extend=Yes},
+                as described by table 12 of UAX \#44, or
+
+                \item
+                \placeholder{CE} is not a Unicode encoding and
+                \placeholder{C} is one of an implementation-defined set
+                of separator or non-printable characters
+            \end{itemize}
+
+            then the sequence \tcode{\textbackslash u\{\placeholder{hex-digit-sequence}\}}
+            is appended to \placeholder{E},
+            where \tcode{\placeholder{hex-digit-sequence}}
+            is the shortest hexadecimal representation
+            of \placeholder{C} using lower-case hexadecimal digits.
+
+            \item
+            Otherwise, \placeholder{C} is appended to \placeholder{E}.
+        \end{itemize}
+
+        \item
+        Otherwise, if \placeholder{X} is a shift sequence,
+        the effect on \placeholder{E} and further decoding of \placeholder{S}
+        is unspecified.
+
+        \recommended
+        A shift sequence should be represented in \placeholder{E}
+        such that the original code unit sequence of \placeholder{S}
+        can be reconstructed.
+
+        \item
+        Otherwise (\placeholder{X} is a sequence of ill-formed code units),
+        each code unit \placeholder{U} is appended to \placeholder{E} in order
+        as the sequence \tcode{\textbackslash x\{\placeholder{hex-digit-sequence}\}},
+        where \tcode{\placeholder{hex-digit-sequence}}
+        is the shortest hexadecimal representation of \placeholder{U}
+        using lower-case hexadecimal digits.
+    \end{itemize}
+
+    \item
+    Finally, \unicode{0022}{quotation mark} (\tcode{"})
+    is appended to \placeholder{E}.
+\end{itemize}
+
+\textcolor{noteclr}{[...]}
+
+\rSec3[ostream.formatted.print]{Print}{}
+
+\textcolor{noteclr}{[...]}
+
+
+\indexlibraryglobal{vprint_unicode}%
+\indexlibraryglobal{vprint_nonunicode}%
+\begin{itemdecl}
+    void vprint_unicode(ostream& os, string_view fmt, format_args args);
+    void vprint_nonunicode(ostream& os, string_view fmt, format_args args);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Behaves as a formatted output function\iref{ostream.formatted.reqmts}
+    of \tcode{os}, except that:
+    \begin{itemize}
+        \item
+        failure to generate output is reported as specified below, and
+        \item
+        any exception thrown by the call to \tcode{vformat} is propagated
+        without regard to the value of \tcode{os.exceptions()} and
+        without turning on \tcode{ios_base::badbit} in the error state of \tcode{os}.
+    \end{itemize}
+    After constructing a \tcode{sentry} object,
+    the function initializes an automatic variable via
+    \begin{codeblock}
+        string out = vformat(os.getloc(), fmt, args);
+    \end{codeblock}
+    If the function is \tcode{vprint_unicode} and
+    \tcode{os} is a stream that refers to a terminal capable of displaying Unicode
+    which is determined in an implementation-defined manner,
+    writes \tcode{out} to the terminal using the native Unicode API;
+    if \tcode{out} contains invalid code units,
+    \indextext{undefined}%
+    the behavior is undefined and
+    implementations are encouraged to diagnose it.
+    Otherwise (if \tcode{os} is not such a stream or
+    the function is \tcode{vprint_nonunicode}),
+    inserts the character sequence
+    \range{out.begin()}{out.end()} into \tcode{os}.
+    If writing to the terminal or inserting into \tcode{os} fails,
+    calls \tcode{os.setstate(ios_base::badbit)}
+    (which may throw \tcode{ios_base::failure}).
+
+    \pnum
+    \recommended
+    For \tcode{vprint_unicode},
+    if invoking the native Unicode API requires transcoding,
+    implementations should substitute invalid code units
+    with \unicode{fffd}{replacement character} per
+    The Unicode Standard \removed{Version 14.0 - Core Specification}, Chapter \changed{3.9}{U+FFFD Substitution in Conversion}.
+\end{itemdescr}
+
+\textcolor{noteclr}{[...]}
+
+\indexlibraryglobal{vprint_unicode}%
+\begin{itemdecl}
+    void vprint_unicode(FILE* stream, string_view fmt, format_args args);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \expects
+    \tcode{stream} is a valid pointer to an output C stream.
+
+    \pnum
+    \effects
+    The function initializes an automatic variable via
+    \begin{codeblock}
+        string out = vformat(fmt, args);
+    \end{codeblock}
+    If \tcode{stream} refers to a terminal capable of displaying Unicode,
+    writes \tcode{out} to the terminal using the native Unicode API;
+    if \tcode{out} contains invalid code units,
+    \indextext{undefined}%
+    the behavior is undefined and
+    implementations are encouraged to diagnose it.
+    Otherwise writes \tcode{out} to \tcode{stream} unchanged.
+    \begin{note}
+        On POSIX and Windows, \tcode{stream} referring to a terminal means that,
+        respectively,
+        \tcode{isatty(fileno(\linebreak{}stream))} and
+        \tcode{GetConsoleMode(_get_osfhandle(_fileno(stream)), ...)}
+        return nonzero.
+    \end{note}
+    \begin{note}
+        On Windows, the native Unicode API is \tcode{WriteConsoleW}.
+    \end{note}
+
+    \pnum
+    \throws
+    Any exception thrown by the call to \tcode{vformat}\iref{format.err.report}.
+    \tcode{system_error} if writing to the terminal or \tcode{stream} fails.
+    May throw \tcode{bad_alloc}.
+
+    \pnum
+    \recommended
+    If invoking the native Unicode API requires transcoding,
+    implementations should substitute invalid code units
+    with \unicode{fffd}{replacement character} per
+    The Unicode Standard \removed{Version 14.0 - Core Specification}, Chapter \changed{3.9}{U+FFFD Substitution in Conversion}.
+\end{itemdescr}
+
+\rSec1[depr]{Annex D}
+\rSec2[depr.locale.stdcvt.req]{Requirements}
+
+\pnum
+For each of the three code conversion facets \tcode{codecvt_utf8},
+\tcode{codecvt_utf16}, and \tcode{codecvt_utf8_utf16}:
+\begin{itemize}
+    \item
+    \tcode{Elem} is the wide-character type, such as
+    \keyword{wchar_t}, \keyword{char16_t}, or \keyword{char32_t}.
+    \item
+    \tcode{Maxcode} is the largest wide-character code that the facet
+    will read or write without reporting a conversion error.
+    \item
+    If \tcode{(Mode \& consume_header)}, the facet shall consume an
+    initial header sequence, if present, when reading a multibyte sequence
+    to determine the endianness of the subsequent multibyte sequence to be read.
+    \item
+    If \tcode{(Mode \& generate_header)}, the facet shall generate an
+    initial header sequence when writing a multibyte sequence to advertise
+    the endianness of the subsequent multibyte sequence to be written.
+    \item
+    If \tcode{(Mode \& little_endian)}, the facet shall generate a
+    multibyte sequence in little-endian order,
+    as opposed to the default big-endian order.
+\end{itemize}
+
+\pnum
+\indextext{UTF-8}%
+\indextext{UCS-2}%
+\indextext{UTF-32}%
+For the facet \tcode{codecvt_utf8}\indexlibraryglobal{codecvt_utf8}:
+\begin{itemize}
+    \item
+    The facet shall convert between UTF-8 multibyte sequences
+    and \removed{UCS-2 or UTF-32} (depending on the size of \tcode{Elem})
+    \removed{within the program.}
+    \begin{addedblock}
+    \begin{itemize}
+        \item code points in the range U+0000-U+FFFF (Basic Multilingual Plane) encoded as UTF-16 or,
+        \item UTF-32.
+    \end{itemize}
+    \end{addedblock}
+    \item
+    Endianness shall not affect how multibyte sequences are read or written.
+    \item
+    The multibyte sequences may be written as either a text or a binary file.
+\end{itemize}
+
+\pnum
+\indextext{UTF-16}%
+\indextext{UCS-2}%
+\indextext{UTF-32}%
+For the facet \tcode{codecvt_utf16}\indexlibraryglobal{codecvt_utf16}:
+\begin{itemize}
+    \item
+    The facet shall convert between UTF-16 multibyte sequences
+    and \removed{UCS-2 or UTF-32} (depending on the size of \tcode{Elem})
+    \removed{within the program.}
+    \begin{addedblock}
+        \begin{itemize}
+            \item code points in the range U+0000-U+FFFF (Basic Multilingual Plane) encoded as UTF-16 or,
+            \item UTF-32.
+        \end{itemize}
+    \end{addedblock}
+    \item
+    Multibyte sequences shall be read or written
+    according to the \tcode{Mode} flag, as set out above.
+    \item
+    The multibyte sequences may be written only as a binary file.
+    Attempting to write to a text file produces undefined behavior.
+\end{itemize}
+
+\pnum
+\indextext{UTF-8}%
+\indextext{UTF-16}%
+For the facet \tcode{codecvt_utf8_utf16}\indexlibraryglobal{codecvt_utf8_utf16}:
+\begin{itemize}
+    \item
+    The facet shall convert between UTF-8 multibyte sequences
+    and UTF-16 (one or two 16-bit codes) within the program.
+    \item
+    Endianness shall not affect how multibyte sequences are read or written.
+    \item
+    The multibyte sequences may be written as either a text or a binary file.
+\end{itemize}
+
+\pnum
+\removed{The encoding forms UTF-8, UTF-16, and UTF-32 are specified in ISO/IEC 10646.
+The encoding form UCS-2 is specified in ISO/IEC 10646:2003.}
+
+
+\subsection{Bibliography}
+
+\begin{itemize}
+    \renewcommand{\labelitemi}{---}
+    % ISO documents in numerical order.
+    \item
+    ISO 4217:2015,
+    \doccite{Codes for the representation of currencies}
+    \item
+    ISO/IEC 10967-1:2012,
+    \doccite{Information technology --- Language independent arithmetic ---
+        Part 1: Integer and floating point arithmetic}
+    \item
+    ISO/IEC TS 18661-3:2015,
+    \doccite{Information Technology ---
+        Programming languages, their environments, and system software interfaces ---
+        Floating-point extensions for C --- Part 3: Interchange and extended types}
+    % Other international standards.
+    \item
+    %%% Format for the following entry is based on that specified at
+    %%% http://www.iec.ch/standardsdev/resources/draftingpublications/directives/principles/referencing.htm
+    \begin{removedblock}
+    The Unicode Consortium. Unicode Standard Annex, UAX \#29,\\
+    \doccite{Unicode Text Segmentation} [online].\\
+    Edited by Mark Davis. Revision 35; issued for Unicode 12.0.0. 2019-02-15 [viewed 2020-02-23].\\
+    Available from: tcode{http://www.unicode.org/reports/tr29/tr29-35.html}
+    \end{removedblock}\\ \begin{addedblock}
+    %Edited by Christopher Chapman, an integral part of The Unicode Standard.\\
+    %Version Unicode 15.0.0. 2022-08-26 [viewed 2022-12-02].\\
+    %Available from: \tcode{https://www.unicode.org/reports/tr29/tr29-41.html}
+    \end{addedblock}
+    \ednote{Referencing Unicode encompasses the annexes and the motivation explains that we can and should reference the version of the annex that correspond to the Unicode Standard}
+    \item
+    The Unicode Consortium. Unicode Standard Annex, UAX \#31,\\
+    \doccite{Unicode Identifier and Pattern Syntax} [online].\\
+    %\begin{removedblock}
+    %Edited by Mark Davis. Revision 33; issued for Unicode 13.0.0.\\
+    %2020-02-13 [viewed 2021-06-08].\\
+    %Available from: \tcode{https://www.unicode.org/reports/tr31/tr31-33.html}
+    %\end{removedblock}\\ \begin{addedblock}
+    %Edited by Mark Davis and Robin Leroy, an integral part of The Unicode Standard.\\
+    %Version Unicode 15.0.0. 2022-08-31 [viewed 2022-12-02].\\
+    %Available from: \tcode{https://www.unicode.org/reports/tr31/tr31-37.html}\\
+    %\end{addedblock}
+    \begin{removedblock}
+    \item
+    The Unicode Standard Version 14.0,
+    \doccite{Core Specification}.
+    Unicode Consortium, ISBN 978-1-936213-29-0, copyright \copyright 2021 Unicode, Inc.\\
+    Available from: \tcode{https://www.unicode.org/versions/Unicode14.0.0/UnicodeStandard-14.0.pdf}
+    \end{removedblock}
+    \item
+    IANA Time Zone Database.
+    Available from: \url{https://www.iana.org/time-zones}
+    % Literature references.
+    \item
+    Bjarne Stroustrup,
+    \doccite{The \Cpp{} Programming Language, second edition}, Chapter R.
+    Addison-Wesley Publishing Company, ISBN 0-201-53992-6, copyright \copyright 1991 AT\&T
+    \item
+    Brian W. Kernighan and Dennis M. Ritchie,
+    \doccite{The C Programming Language}, Appendix A.
+    Prentice-Hall, 1978, ISBN 0-13-110163-3, copyright \copyright 1978 AT\&T
+    \item
+    P.J. Plauger,
+    \doccite{The Draft Standard \Cpp{} Library}.
+    Prentice-Hall, ISBN 0-13-117003-1, copyright \copyright 1995 P.J. Plauger
+\end{itemize}
+
+The arithmetic specification described in ISO/IEC 10967-1:2012 is
+called \defn{LIA-1} in this document.
+
+
+
+\section{References}
+
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21, extra}
+
+\begin{thebibliography}{9}
+
+\bibitem[N4892]{N4892}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4892}
+
+
+\end{thebibliography}
+
+\end{document}
