@@ -60,6 +60,8 @@
 \usepackage{makecell}
 \usepackage{longtable}
 \usepackage[normalem]{ulem}
+\usepackage{xparse}
+\usepackage{xstring}
 
 
 \setmainfont{Noto Sans}
@@ -551,6 +553,40 @@
 
 \newcommand{\EXPLICIT}{\textit{\texttt{EXPLICIT}}}
 
+\verbtocs{\StrTextsmaller}|\textsmaller[1]{|
+\verbtocs{\StrTextsc}|\textsc{|
+\verbtocs{\StrClosingbrace}|}|
+\newcommand{\ucode}[1]{%
+  \textsc{u}%
+  \textsmaller[2]{\kern-0.05em\protect\raisebox{.25ex}{+}}%
+  \begingroup%
+  \def\temp{#1}%
+  \StrSubstitute{\temp}{0}{X0Z}[\temp]%
+  \StrSubstitute{\temp}{1}{X1Z}[\temp]%
+  \StrSubstitute{\temp}{2}{X2Z}[\temp]%
+  \StrSubstitute{\temp}{3}{X3Z}[\temp]%
+  \StrSubstitute{\temp}{4}{X4Z}[\temp]%
+  \StrSubstitute{\temp}{5}{X5Z}[\temp]%
+  \StrSubstitute{\temp}{6}{X6Z}[\temp]%
+  \StrSubstitute{\temp}{7}{X7Z}[\temp]%
+  \StrSubstitute{\temp}{8}{X8Z}[\temp]%
+  \StrSubstitute{\temp}{9}{X9Z}[\temp]%
+  \StrSubstitute{\temp}{a}{YaZ}[\temp]%
+  \StrSubstitute{\temp}{b}{YbZ}[\temp]%
+  \StrSubstitute{\temp}{c}{YcZ}[\temp]%
+  \StrSubstitute{\temp}{d}{YdZ}[\temp]%
+  \StrSubstitute{\temp}{e}{YeZ}[\temp]%
+  \StrSubstitute{\temp}{f}{YfZ}[\temp]%
+  \StrSubstitute{\temp}{X}{\StrTextsmaller}[\temp]%
+  \StrSubstitute{\temp}{Y}{\StrTextsc}[\temp]%
+  \StrSubstitute{\temp}{Z}{\StrClosingbrace}[\temp]%
+  \tokenize\temp{\temp}%
+  \temp%
+  \endgroup%
+}
+\newcommand{\uname}[1]{\textsc{#1}}
+\newcommand{\unicode}[2]{\ucode{#1} \uname{#2}}
+
 %% Manual insertion of italic corrections, for aligning in the presence
 %% of the above annotations.
 \newlength{\itcorrwidth}
@@ -607,6 +643,8 @@
         showstringspaces=false,
         columns=flexible,
         keepspaces=true,
+        extendedchars=true,
+        breaklines=true,
         texcl=true}
 
 % Our usual abbreviation for 'listings'.  Comments are in
@@ -1572,5 +1610,4 @@
  \end{mcftcol} \\
  \end{floattable}
 }
-
 \endinput

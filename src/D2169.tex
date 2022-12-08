@@ -131,8 +131,8 @@ auto _ = foo(); // equivalent to [[maybe_unused]] auto _  = f();
 \end{lstlisting}
 \end{example}
 
-When a variable, function parameter, non-static class member variablem, structured binding or lambda capture is introduced by the identifier \tcode{_}
-at function scope, it can redefine an existing declaration, [basic.scope.declarative] in the same scope. After redeclaration, if the variable is used, the programm is ill-formed.
+When a variable with automatic storage duration, a function parameter, a non-static class member variable, structured binding or lambda capture is introduced by the identifier \tcode{_}
+it can redefine an existing declaration, [basic.scope.declarative] in the same scope. After redeclaration, if the variable is used, the programm is ill-formed.
 
 \begin{example}
 \begin{lstlisting}[style=color]
@@ -289,28 +289,27 @@ The current version of this proposal can be emulaterd with the \tcode{-Werror} f
 \rSec2[basic.scope.scope]{General}
 
 \begin{addedblock}
-A declaration is a \grammarterm{redeclarable placeholder entity} if its name is \tcode{_},
+A declaration is \grammarterm{name independant} if its name is \tcode{_},
 and it declares a variable with automatic storage duration, a structured binding, a function parameter, the variable introduced by an \grammarterm{init-capture}, or a non-static data member.
 
+The \grammarterm{attribute-token} \tcode{maybe_unused} is applied to name independant declarations.
 
-\recommended
-An implementation should not emit a warning that
-a \grammarterm{redeclarable placeholder entity}
-is unused.
+%\recommended
+%An implementation should not emit a warning that
+%a \grammarterm{redefinable underscore entity}
+%is unused.
 \end{addedblock}
 
 Two declarations \defn{potentially conflict}
 if they correspond and
 cause their shared name to denote different entities\iref{basic.link}.
 The program is ill-formed
-if, in any scope, a name is bound to two declarations
-that potentially conflict and one precedes the other\iref{basic.lookup} \added{unless both declarations are \grammarterm{redeclarable placeholder entities}}.
+if, in any scope, a name is bound to two declarations \added{A and B}
+that potentially conflict and \changed{one}{A} precedes \changed{the other}{B} \iref{basic.lookup}\added{, unless B is name independant}.
 
 \begin{addedblock}
 \begin{note}
-Because two \grammarterm{redeclarable placeholder entity} in the same scope
-are \grammarterm{ambiguous}, an \grammarterm{id-expression} that denotes a
-\grammarterm{redeclarable placeholder entity} is ill-formed.
+An \grammarterm{id-expression} that denotes a name independant declaration is ill-formed when another declaration with the same name inhabits the same scope.
 \end{note}
 \end{addedblock}
 
@@ -327,9 +326,11 @@ are \grammarterm{ambiguous}, an \grammarterm{id-expression} that denotes a
 			int x,y;
 			void x();             // error: different entity for \tcode{x}
 			int y;                  // error: redefinition
-			@\added{    int _;}@
-			@\added{    int _;                  // ok}@
-			@\added{    _ = 0;                 // error: id-expression '_' denoting a \grammarterm{redeclarable placeholder entity}}@
+
+                        @\added{    int _;}@
+			@\added{    _ = 0;                  // OK}@
+                        @\added{    int _;                  // OK}@
+			@\added{    _ = 0;                  // error: id-expression '_' denoting a \grammarterm{redefinable underscore entity}}@
 		}
 		enum { f };             // error: different entity for \tcode{::f}
 		namespace A {}
@@ -340,6 +341,87 @@ are \grammarterm{ambiguous}, an \grammarterm{id-expression} that denotes a
 		namespace B {}          // error: different entity for \tcode{B}
 	\end{codeblock}
 \end{example}
+
+\textcolor{noteclr}{[...]}
+
+\rSec2[basic.scope.block]{Block scope}
+
+\textcolor{noteclr}{[...]}
+
+\pnum
+If a declaration \added{that is not a name independant declaration and} whose target scope is the block scope $S$ of a
+\begin{itemize}
+    \item
+    \grammarterm{compound-statement} of a \grammarterm{lambda-expression},
+    \grammarterm{function-body}, or \grammarterm{function-try-block},
+    \item
+    substatement of a selection or iteration statement
+    that is not itself a selection or iteration statement, or
+    \item
+    \grammarterm{handler} of a \grammarterm{function-try-block}
+\end{itemize}
+potentially conflicts with a declaration
+whose target scope is the parent scope of $S$,
+the program is ill-formed.
+\begin{example}
+    \begin{codeblock}
+        if (int x = f()) {
+            int x;            // error: redeclaration of \tcode{x}
+        }
+        else {
+            int x;            // error: redeclaration of \tcode{x}
+        }
+    \end{codeblock}
+\end{example}
+
+\textcolor{noteclr}{[...]}
+
+\rSec1[basic.link]{Program and linkage}%
+
+\ednote{Modify [basic.link]/p8 as follow}
+
+\pnum
+Two declarations of entities declare the same entity
+if, considering declarations of unnamed types to introduce their names
+for linkage purposes, if any\iref{dcl.typedef,dcl.enum},
+they correspond\iref{basic.scope.scope},
+have the same target scope that is not a function or template parameter scope,
+\added{neither is a name independant declaration, }
+and either
+\begin{itemize}
+    \item
+    they appear in the same translation unit, or
+    \item
+    they both declare names with module linkage and are attached to the same module, or
+    \item
+    they both declare names with external linkage.
+\end{itemize}
+\begin{note}
+    There are other circumstances in which declarations declare the same entity%
+    \iref{dcl.link,temp.type,temp.spec.partial}.
+\end{note}
+
+\textcolor{noteclr}{[...]}
+
+\rSec1[namespace.udecl]{The \tcode{using} declaration}%
+
+\textcolor{noteclr}{[...]}
+
+\pnum
+If a declaration \added{A} named by a \grammarterm{using-declaration}
+that inhabits the target scope of another declaration \added{B}
+potentially conflicts with it \added{, either B is not name independant or A doesn't precedes B}\iref{basic.scope.scope}, and
+either is reachable from the other, the program is ill-formed.
+If two declarations named by \grammarterm{using-declaration}{s}
+that inhabit the same scope potentially conflict,
+either is reachable from the other, and
+they do not both declare functions or function templates,
+the program is ill-formed.
+\begin{note}
+    Overload resolution possibly cannot distinguish
+    between conflicting function declarations.
+\end{note}
+
 
 %\rSec2[basic.lookup.general]{General}%
 %\pnum
