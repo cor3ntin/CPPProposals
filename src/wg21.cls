@@ -474,7 +474,7 @@
 %% Notes and examples
 \newcommand{\noteintro}[1]{[\,\textit{#1:}\space}
 \newcommand{\noteoutro}[1]{\textit{\,---\,end #1}\,]}
-\newenvironment{wfootnote}[1][Footnote]{\noteintro{#1}}{\noteoutro{wgfootnote}\xspace}
+\newenvironment{wfootnote}[1][Footnote]{\noteintro{#1}}{\noteoutro{note}\xspace}
 \newenvironment{note}[1][Note]{\noteintro{#1}}{\noteoutro{note}\xspace}
 
 \newenvironment{example}[1][Example]{\noteintro{#1}}{\noteoutro{example}\xspace}
@@ -521,9 +521,9 @@
 %% Cross reference
 \newcommand{\xref}{\textsc{See also:}\xspace}
 \newcommand{\xsee}{\textsc{See:}\xspace}
-\newcommand{\tref}[1]{}
-\newcommand{\iref}[1]{}
-\newcommand{\indexhdr}[1]{}
+\newcommand{\tref}[1]{[#1]}
+\newcommand{\iref}[1]{[#1]}
+\newcommand{\indexhdr}[1]{[#1]}
 
 %% NTBS, etc.
 \newcommand{\NTS}[1]{\textsc{#1}\xspace}
