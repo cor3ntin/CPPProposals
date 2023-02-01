@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Formatting \tcode{thread::id} and \tcode{stacktrace}}
-\docnumber{P2693R0}
+\docnumber{D2693R1}
 \audience{LEWG, LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Victor Zverovich}{victor.zverovich@gmail.com}
@@ -13,11 +13,23 @@
 \usepackage{color, colortbl}
 \begin{document}
 \maketitle
+\newcommand{\addedAlign}[1]{\textcolor{addclrTwo}{\uline{#1}}}
 
 \section{Abstract}
 
 This paper provides wording in reply to NB comments suggesting to adopt \paper{P1636R2} (Formatters for library types)
 and to add formatters for \tcode{std::stacktrace}.
+
+\section{Revisions}
+
+\subsection{R1}
+\begin{itemize}
+\item Wording fixes following LWG feedback
+\item Question to LEWG: should stacktrace_entry formatting support align an fill options? LWG argue that it may be useful. Because it requires adding state to the formatter it would be an ABI break if added later.
+Adding it now cost very little so if it may be useful to someone, we might as well (even if we don't have a compelling use case to illustrate).
+
+We provide wording for both options.
+\end{itemize}
 
 \section{History}
 
@@ -212,10 +224,36 @@ template <> struct formatter<stacktrace_entry>;
 \end{itemdecl}
 
 \begin{itemdescr}
+
+\ednote{Option 1:}
+
+\begin{addedblockTwo}
 For \tcode{formatter<stacktrace_entry>}, \grammarterm{format-spec} is empty.
 
 A \tcode{stacktrace_entry} object \tcode{se} is formatted as if by passing it to \tcode{to_string(se)} and copying the returned string through the output iterator of the context.
+\end{addedblockTwo}
+
+\ednote{Option 2 (support padding an alignement)}
+
+\begin{addedblockThree}
+
+\tcode{formatter<stacktrace_entry>} interprets \grammarterm{format-spec} as a \grammarterm{stacktrace-entry-format-spec}. The syntax of format specifications is as follows:
+
+\begin{bnf}
+    stacktrace-entry-format-spec:\br
+    \opt{fill-and-align} 	\opt{width}
+\end{bnf}
+
+\begin{note}
+    The productions \grammarterm{fill-and-align} and \grammarterm{width} are described in [format.string].
+\end{note}
+
+A \tcode{stacktrace_entry} object is formatted as if by passing it to \tcode{to_string(se)} to the output iterator with \grammarterm{stacktrace-entry-format-spec} applied.
+
+\end{addedblockThree}
+
 \end{itemdescr}
+
 
 
 
@@ -351,7 +389,7 @@ thread-id-format-spec:\br
 
 If the \grammarterm{align} option is omitted it defaults to \tcode{>}.
 
-A \tcode{thread::id} object is formatted by writing its text representation \added{for \tcode{charT}} to the output with \grammarterm{thread-id-format-spec} applied.
+A \tcode{thread::id} object is formatted by writing its text representation for \tcode{charT} to the output with \grammarterm{thread-id-format-spec} applied.
 \end{itemdescr}
 
 \end{addedblock}

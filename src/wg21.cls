@@ -183,6 +183,7 @@
 %% Difference markups
 \definecolor{addclr}{rgb}{0,.6,.6}
 \definecolor{addclrTwo}{rgb}{0.01, 0.28, 1.0}
+\definecolor{addclrThree}{rgb}{0.4, 0.6, 0.8}
 \definecolor{remclr}{rgb}{1,0,0}
 \definecolor{remclr2}{rgb}{0.71, 0.4, 0.11}
 \definecolor{noteclr}{rgb}{0.55,0,55}
@@ -221,6 +222,14 @@
 \newenvironment{addedblockTwo}
 {
 \color{addclrTwo}
+}
+{
+\color{black}
+}
+
+\newenvironment{addedblockThree}
+{
+\color{addclrThree}
 }
 {
 \color{black}

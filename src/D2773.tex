@@ -38,7 +38,7 @@ This is an opinion piece derived from my own experiences with the implementation
 \item ICU4x is most certainly the best answer to tailored algorithms in the long term
 \item We should avoid exposing assumptions that may change in future Unicode versions
 \item Optimizing property lookups and cleverly reserving memory for non-sized ranges is how we can provide performance more than competitive with existing frameworks.
-\item Unicode algorithms do not benefit from in-place transformation and containers
+\item Unicode algorithms do not benefit from in-place transformation and theorical text-specific containers.
 \item Trying to avoid UTF decoding/encoding does not lead to obvious performance benefits.
 \end{itemize}
 
@@ -104,7 +104,7 @@ in Turkish, but 5 or 6 languages are also affected, such as Greek, Dutch, Armeni
 Unicode provides a specification for the default (non-tailored) version of the algorithms and recommends an implementation to tailor them according to local, tailoring information being provided by the \href{https://cldr.Unicode.org/}{Common Locale Data Repository}.
 
 Whether to use a tailored algorithm and which locale to use then is highly use-case dependent. Ideally, for user-facing uses cases, such as some UI,
-the data should be rendered to a locale appropriate for the user (which may or may not be the system's locale), and for some other use cases, like searching some data in
+the data should be rendered per a locale appropriate for the user (which may or may not be the system's locale), and for some other use cases, like searching some data in
 a database, locale awareness may not be desirable.
 
 \section{Order of operations: Walking before we can run}
@@ -130,13 +130,15 @@ the CLDR improves, or government recommendations and usage and customs change.
 
 Worse, we run the risk of having second-class locales. Sure, SG-16 does love to talk about the dotted İ, but are we really crossing our İs if we support Turkish correctly, but fail to equally support Lithuanian or Tibetan?
 
+Users would have to map std::local to these enum themselves, which is fraught with peril as no one specify the format of ""standard"" locale identifiers.
+
 I should be very clear that I am not saying tailoring is not useful, it certainly is and we should work toward a solution that is workable, one that meets user expectations and has a reasonable implementability.
 
 We are not there yet, so let's focus on untailored algorithms first, and go from there.
 
 Similarly, we ought to prioritize which algorithms we work on.
 
-Collation only really makes sense when tailored, so we should punt that problem to later.
+Collation in addition of being hugely complex, only really makes sense when tailored, so we should punt that problem to later.
 
 BiDi is not universally useful - applications that do need it are usually based on rendering frameworks such as Qt, win32, cocoa, or web browsers that already have the necessary support.
 We could make the case for standardization given the applicability to source code spoofing, for example, however, the implementation complexity of this algorithm should make it a lesser priority.
@@ -145,19 +147,20 @@ On the other hand, normalization is very fundamental to any Unicode handling and
 
 Casing (both transformations and comparison), are common operation in both user-facing and server applications dealing with for example user databases, and seems a good candidate for standardization, especially as it would allow us to deprecate some of the \tcode{<ctypes>} facilities, with prejudice (their interface cannot be used correctly).
 
-Clusterization presents little complexity, and we should establish grapheme as a vocabulary type. Plus, word clusterization is a prerequisite to Title casing, and grapheme clusterization is already implemented even if the implementation is hidden behind \tcode{std::format}.
+Clusterization presents little complexity, and we should establish grapheme as a vocabulary type. Plus, word clusterization is a prerequisite to Title Casing, and grapheme clusterization is already implemented even if the implementation is hidden behind \tcode{std::format}.
 
 Sentence clusterization may have fewer uses outside of text editors and text layout engines, so we should not prioritize it, but at the same time, it shares a lot of similarities and implementation with word clusterization so it's a rather cheap facility to add, once we have everything else.
 
 \section{Understanding Unicode algorithms}
 
 At a high level, Unicode algorithms act on Unicode code points.
-They look at various properties of the Unicode point at the current point (each Unicode algorithm relies on one or more - often dedicated - properties), or of its neighbors (either the code points before, or the code points after), and, for algorithms that are transformations produce a new code point, or set of code points.
+They look at various properties of the Unicode point at the current position (each Unicode algorithm relies on one or more - often dedicated - properties), or of its neighbors (either the code points before, or the code points after), and, for algorithms that are transformations produce a new code point, or set of code points.
 
 This has interesting consequences:
 \begin{itemize}
 \item All of these algorithms have similar interfaces, in particular, they all operate on code points.
-\item They can operate on forward iterators and bidirectional iterators. Because they require to look ahead, they can usually not operate on non-forward iterators, and because they are $N->M$ transformations, they cannot produce random access iterators.
+\item They can operate on forward iterators and bidirectional iterators. Because they require lookaheads, and lookbacks, they can usually not operate on non-forward iterators, and because they are $N->M$ transformations, they cannot produce random access iterators.
+\item They can all provide bidirectional access which - at the cost of some implementation complexity - allows a greater composability with existing algorithms.
 \end{itemize}
 
 \subsection{Failure modes and preconditions}
@@ -168,16 +171,15 @@ In particular, they are well defined for lone surrogate, reserved, unassigned an
 Note that producing lone surrogates is a violation of transcoding post conditions, and transcoding facilities should be aware of that.
 
 Normalization could allocate, which could introduce additional failure modes
-(more in that later), and, depending on implementation, tailored algorithms could potentially read data stored out of process or use third party libraries with their own sometimes opaque failure modes.
+(more in that later), and, depending on implementation, tailored algorithms could potentially read data stored out of process or use third party libraries with their own, sometimes opaque, failure modes.
 
 \subsection{On text containers}
 
-That second point, in particular, is important. In-place Unicode transformations cannot be implemented efficiently: because the input and output size, in the arbitrary case, do not match, a hypothetical container that would provide in-place Unicode transformations would be forced to do insertions and therefore allocations in the middle which is not efficient. This, among other considerations, negates previous discussions in SG16 about adding some "text" containers.
+The $N->M$ nature of Unicode transformations, in particular, is important. In-place Unicode transformations cannot be implemented efficiently: because the input and output size, in the arbitrary case, do not match, a hypothetical container that would provide in-place Unicode transformations would be forced to do insertions and therefore allocations in the middle which is not efficient. This, among other considerations, negates previous discussions in SG16 about adding some "text" containers.
 
-It doesn't mean that there isn't value in some containers that would be targeted toward text manipulation. For example, ropes are useful based on the observation
-that text editors perform a lot of insertions and deletions in the middle. But this has more to do with the nature of text editors than it has to do with any Unicode algorithms. And I'm not sure how much we would want to put text-editor-specific building blocks in the standard libraries.
+It doesn't mean that there isn't value in some containers that would be targeted toward text manipulation. For example, ropes are useful based on the observation that text editors perform a lot of insertions and deletions in the middle. But this has more to do with the nature of text editors than it has to do with any Unicode algorithms. And I'm not sure how much we would want to put text-editor-specific building blocks in the standard libraries.
 
-Unicode algorithms are transformations. There is usually very little value in trying to maintain an invariant such as "uppercased", as it would be, in the general case, less efficient than building whatever text, and then uppercase it as a whole (again because in the general case, such transformation is $N->M$).
+Unicode algorithms are transformations. There is usually very little value in trying to maintain an invariant such as "uppercased" (in which locale?), as it would be, in the general case, less efficient than building whatever text, and then uppercase it as a whole (again because in the general case, such transformation is $N->M$).
 
 Moreover, given the whole set of Unicode algorithms, plus related facilities (such as decoding), which invariants should such a container maintain?
 And, if the answer is none, why would we want more containers? (Standardizing and maintaining containers is not a small endeavor for the committee, implementers, and our users).
@@ -195,7 +197,7 @@ There are algorithm-specific considerations but in the general case, we have 3 c
     \item We can entertain doing both.
 \end{itemize}
 
-In my experience, providing views for transformations is enough, easier, and consistent with the direction C++ has been going towards over the past 2 cycles, so it should hopefully be more intuitive for users.
+In my experience, providing views for transformations is enough, easier, and consistent with the direction C++ has been persuing over the past 2 cycles, so it should hopefully be more intuitive for users.
 
 \section{Observations applicable to all Unicode algorithms}
 
@@ -258,7 +260,7 @@ Assuming an \tcode{uppercase} that takes a sequence of \tcode{char32_t}, we coul
 
 \begin{colorblock}
 std::u8string str = u8"Hello";
-str = str | to_code points |  views::uppercase | to_utf8 | to<std::u8string>();
+str = str | to_code_points |  views::uppercase | to_utf8 | to<std::u8string>();
 \end{colorblock}
 
 
@@ -306,7 +308,7 @@ In practice, views are more often use trough range adaptors (pipe syntax), which
 (because of the natural reading order, the conversion of range to views, and the support for partial applications).
 
 And if we are going to provide views for Unicode algorithms, we are going to provide range adaptors for these views.
-And here is the key inside: we can add support for different UTF encodings in the range adaptors, and only there.
+And here is the key insight: we can add support for different UTF encodings in the range adaptors, and only there.
 
 The idea is that
 
@@ -317,7 +319,7 @@ auto str = as_utf8("Hello") | views::uppercase | ranges::to<std::u8string>();
 is equivalent to
 
 \begin{colorblock}
-auto str = utf8_view(uppercase_view(code point_view(views::all(as_utf8("Hello")))))
+auto str = utf8_view(uppercase_view(codepoint_view(views::all(as_utf8("Hello")))))
  | ranges::to<std::u8string>();
 \end{colorblock}
 
@@ -340,8 +342,8 @@ auto str = u8"Hello" | views::normalize | views::uppercase | ranges::to<std::u8s
 Naively this is equivalent to:
 
 \begin{colorblock}
-auto str = utf8_view(uppercase_view(code point_view(
-           utf8_view(normalize_view(code point_view(u8"Hello"))))))
+auto str = utf8_view(uppercase_view(codepoint_view(
+           utf8_view(normalize_view(codepoint_view(u8"Hello"))))))
           | ranges::to<std::u8string>();
 \end{colorblock}
 
@@ -369,8 +371,8 @@ Range adaptors are again a solution to these constraints.
 Indeed, we can envision 2 sets of views, for example
 
 \begin{colorblock}
-class uppercase_view {
-    uppercase_view(@\placeholder{view_of_char32_t}@);
+class default_uppercase_view {
+    default_uppercase_view(@\placeholder{view_of_char32_t}@);
 };
 class tailored_uppercase_view {
     uppercase_view(std::ulocale, @\placeholder{view_of_char32_t}@);
@@ -489,10 +491,10 @@ I plan to work on that shortly.
 
 One of the operations done by normalization is to sort combining code points according to their class.
 As such an implementation must maintain an internal buffer of code points.
-Alas, sequences of combining code points are unbounded, so normalization algorithms can allocate.
+Alas, sequences of combining code points are unbounded, so normalization algorithms can be forced to allocate to grow that buffer.
 
-But. Long diacritics sequences while technically possible do not appear in normal text (we get into zalgo territory), and there is a spec
-to limit the sequences of combining code points.
+But. Long diacritics sequences while technically possible do not appear in normal text (we get into zalgo territory), and there is a "safe stream" specification
+to limit the sequences of combining code points to something more than large enought to account for all natural languages.
 
 While that spec was developed for safety reasons (this peculiarity can be exploited and turned into a denial of service), it also allows a non-allocating normalization implementation.
 
