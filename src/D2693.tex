@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Formatting \tcode{thread::id} and \tcode{stacktrace}}
-\docnumber{D2693R1}
+\docnumber{P2693R1}
 \audience{LEWG, LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Victor Zverovich}{victor.zverovich@gmail.com}
@@ -27,8 +27,6 @@ and to add formatters for \tcode{std::stacktrace}.
 \item Wording fixes following LWG feedback
 \item Question to LEWG: should stacktrace_entry formatting support align an fill options? LWG argue that it may be useful. Because it requires adding state to the formatter it would be an ABI break if added later.
 Adding it now cost very little so if it may be useful to someone, we might as well (even if we don't have a compelling use case to illustrate).
-
-We provide wording for both options.
 \end{itemize}
 
 \section{History}
@@ -225,17 +223,6 @@ template <> struct formatter<stacktrace_entry>;
 
 \begin{itemdescr}
 
-\ednote{Option 1:}
-
-\begin{addedblockTwo}
-For \tcode{formatter<stacktrace_entry>}, \grammarterm{format-spec} is empty.
-
-A \tcode{stacktrace_entry} object \tcode{se} is formatted as if by passing it to \tcode{to_string(se)} and copying the returned string through the output iterator of the context.
-\end{addedblockTwo}
-
-\ednote{Option 2 (support padding an alignement)}
-
-\begin{addedblockThree}
 
 \tcode{formatter<stacktrace_entry>} interprets \grammarterm{format-spec} as a \grammarterm{stacktrace-entry-format-spec}. The syntax of format specifications is as follows:
 
@@ -248,9 +235,7 @@ A \tcode{stacktrace_entry} object \tcode{se} is formatted as if by passing it to
     The productions \grammarterm{fill-and-align} and \grammarterm{width} are described in [format.string].
 \end{note}
 
-A \tcode{stacktrace_entry} object is formatted as if by passing it to \tcode{to_string(se)} to the output iterator with \grammarterm{stacktrace-entry-format-spec} applied.
-
-\end{addedblockThree}
+A \tcode{stacktrace_entry} object \tcode{se}  is formatted as if by copying \tcode{to_string(se)} through the output iterator of the context with additional padding and adjustments as specified by the format specifiers.
 
 \end{itemdescr}
 
@@ -264,7 +249,7 @@ template<class Allocator> struct formatter<basic_stacktrace<Allocator>>;
 \begin{itemdescr}
 For \tcode{formatter<basic_stacktrace<Allocator>>}, \grammarterm{format-spec} is empty.
 
-A \tcode{basic_stacktrace} object \tcode{s} is formatted as if by passing it to \tcode{to_string(s)} and copying the returned string through the output iterator of the context.
+A \tcode{basic_stacktrace} object \tcode{s} is formatted as if by copying \tcode{to_string(s)} through the output iterator of the context.
 \end{itemdescr}
 
 \end{addedblock}
@@ -389,7 +374,7 @@ thread-id-format-spec:\br
 
 If the \grammarterm{align} option is omitted it defaults to \tcode{>}.
 
-A \tcode{thread::id} object is formatted by writing its text representation for \tcode{charT} to the output with \grammarterm{thread-id-format-spec} applied.
+A \tcode{thread::id} object is formatted by writing its text representation for \tcode{charT} to the output with  additional padding and adjustments as specified by the format specifiers.
 \end{itemdescr}
 
 \end{addedblock}

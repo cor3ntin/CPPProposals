@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Referencing The Unicode Standard}
-\docnumber{D2736R1}
+\docnumber{P2736R2}
 \audience{SG-16}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -19,16 +19,24 @@
 
 We propose to reference The Unicode Standard instead of ISO 10646.
 This proposal has no impact on implementations.
+This resolves NB comments FR-010-133 and FR-021-013
+
 
 \section{Revisions}
+
+\subsection{R2}
+
+- Wording improvements following SG16 feedback.\\
+- Provide editorial guidance to resolve the merge conflict with \paper{P2713R1}.
+- Applied Feedback from Core.
+
+\subsection{R1}
+
+- Wording improvements following SG16 feedback.
 
 \subsection{R0}
 
 Initial revision
-
-\subsection{R1}
-
-Wording improvements following SG16 feedback.
 
 \subsection{Motivation}
 
@@ -160,7 +168,7 @@ Omitted requirements are not applicable.
 the standard.
 \item D5 Character name alias: An additional unique string identifier, other than the character name, associated with an encoded character in the standard.
 \item D7 Abstract character: A unit of information used for the organization, control, or representation of textual data.
-\item D10 Code point: Any value in The Unicode codespace.
+\item D10 Code point: Any value in the Unicode codespace.
 \item D11 Encoded character: An association (or mapping) between an abstract character and
 a code point.
 \item D76 Unicode scalar value: Any Unicode code point except high-surrogate and low-surrogate code points.
@@ -337,10 +345,10 @@ hereinafter called \defn{ECMA-262}.
 \indextext{translation!phases|(}%
 The precedence among the syntax rules of translation is specified by the
 following phases.
-\begin{footnote}
+\begin{wfootnote}
     Implementations behave as if these separate phases
     occur, although in practice different phases can be folded together.
-\end{footnote}
+\end{wfootnote}
 
 \begin{enumerate}
     \item
@@ -360,8 +368,8 @@ following phases.
     \end{note}
     If an input file is determined to be a UTF-8 file,
     then it shall be a well-formed UTF-8 code unit sequence and
-    it is decoded to produce a sequence of \replaceucs{} scalar values
-    that constitutes the sequence of elements of the translation character set.
+    it is decoded to produce a sequence of \replaceucs{} scalar values\changed{
+    that constitutes the sequence of elements of the translation character set}{. A sequence of translation character set elements is then formed by mapping each Unicode scalar value to the corresponding translation character set element.}.
 
     For any other kind of input file supported by the implementation,
     characters are mapped, in an
@@ -378,7 +386,7 @@ The \defnadj{translation}{character set} consists of the following elements:
 \begin{itemize}
     \item
     each \added{abstract} character \changed{named by ISO/IEC 10646,
-    as identified by its unique UCS scalar value}{assigned a code point in The Unicode codespace}, and
+    as identified by its unique UCS scalar value}{assigned a code point in the Unicode codespace}, and
     \item
     a distinct character for each \replaceucs{} scalar value
     \changed{where no named character is assigned}{not assigned to an abstract character}.
@@ -499,17 +507,17 @@ in the \grammarterm{universal-character-name}.
 The program is ill-formed if that number is not a \replaceucs{} scalar value.
 
 \pnum
+\begin{removedblock}
 A \grammarterm{universal-character-name}
 that is a \grammarterm{named-universal-character}
 designates the character named by its \grammarterm{n-char-sequence}.
 A character is so named if the \grammarterm{n-char-sequence} is equal to
 \begin{itemize}
     \item
-    \changed{the associated character name or associated character name alias}{its character name, as specified in The Unicode Standard (chapter 4.8 Name)}
-    \removed{specified in ISO/IEC 10646 subclause 'Code charts and lists of character names'}
+    the associated character name or associated character name alias
     or
     \item
-    \begin{removedblock}the control code alias given in [lex.charset.ucn].
+    the control code alias given in [lex.charset.ucn].
     \begin{note}
         The aliases in [lex.charset.ucn] are provided for control characters
         which otherwise have no associated character name or character name alias.
@@ -517,17 +525,21 @@ A character is so named if the \grammarterm{n-char-sequence} is equal to
         the Unicode Character Database's \tcode{NameAliases.txt}.
         For historical reasons, control characters are formally unnamed.
     \end{note}
-    \end{removedblock}\\
-    \begin{addedblock}
-        one of its character name aliases as specified in The Unicode Standard (chapter 4.8 Name), if that character name alias is of type "control", "correction", or "alternate".\\\begin{note}These aliases are listed in the Unicode Character Database's \tcode{NameAliases.txt}.\end{note}
-    \end{addedblock}
 \end{itemize}
 \begin{note}
-    None of the \changed{associated}{Unicode} character names,
-    \changed{associated}{Unicode} character name aliases, or
-    control code aliases
-    have leading or trailing spaces.
+    None of the associated character names,
+    associated character name aliases,
+    control code aliases have leading or trailing spaces.
 \end{note}
+\end{removedblock}
+
+\begin{addedblock}
+A \grammarterm{universal-character-name} that is a \grammarterm{named-universal-character} designates the corresponding character in the Unicode Standard (chapter 4.8 Name) if the \grammarterm{n-char-sequence} is equal to its character name or to one of its character name aliases of type “control”, “correction”, or “alternate”; otherwise, the program is ill-formed.
+
+\begin{note}
+	These aliases are listed in the Unicode Character Database’s \tcode{NameAliases.txt}. None of these names or aliases have leading or trailing spaces
+\end{note}
+\end{addedblock}
 
 \ednote{Remove the table "Table 2: Control code aliases [tab:lex.charset.ucn]"}
 
@@ -606,7 +618,7 @@ The ordinary and wide literal encodings are otherwise
 For a UTF-8, UTF-16, or UTF-32 literal,
 the \replaceucs{} scalar value
 corresponding to each character of the translation character set
-is encoded as specified in \changed{ISO/IEC 10646}{The Unicode Standard} for the respective \replaceucs{} encoding form.
+is encoded as specified in \changed{ISO/IEC 10646}{the Unicode Standard} for the respective \replaceucs{} encoding form.
 \indextext{character set|)}
 
 \textcolor{noteclr}{[...]}
@@ -650,10 +662,10 @@ is encoded as specified in \changed{ISO/IEC 10646}{The Unicode Standard} for the
 \indextext{name!length of}%
 \indextext{name}%
 \added{[Note:}The character classes XID_Start and XID_Continue
-are Derived Core Properties as described by UAX \#44 \added{of The Unicode Standard}.\added{]}
+are Derived Core Properties as described by UAX \#44 \added{of the Unicode Standard}.\added{--end note]}
 The program is ill-formed
 if an \grammarterm{identifier} does not conform to
-Normalization Form C as specified in \changed{ISO/IEC 10646}{The Unicode Standard}.
+Normalization Form C as specified in \changed{ISO/IEC 10646}{the Unicode Standard}.
 \begin{note}
     Identifiers are case-sensitive.
 \end{note}
@@ -711,7 +723,7 @@ in order as follows:
     \impldef{code unit sequence for non-representable \grammarterm{string-literal}}
     code unit sequence is encoded.
     \begin{note}
-        No character lacks representation in any of the \replaceucs{} encoding forms.
+        No character lacks representation in any \removed{of the} \replaceucs{} encoding form\removed{s}.
     \end{note}
     When encoding a stateful character encoding,
     implementations should encode the first such sequence
@@ -744,7 +756,7 @@ An integer literal of the form \tcode{yyyymmL} (for example,
 stored in an object of type \keyword{wchar_t}, has the same value as the code point
 of that character. The \defn{Unicode required set} consists of all the characters
 that are defined by ISO/IEC 10646, along with all amendments and technical corrigenda
-as of the specified year and month}\added{Whether \mname{STDC_ISO_10646}  is predefined and if so, what its value is, are implementation defined}.
+as of the specified year and month}\added{Whether \mname{STDC_ISO_10646}  is predefined and if so, what its value is, are implementation-defined}.
 \end{itemize}
 
 \ednote{
@@ -800,13 +812,22 @@ is used to both interpret \placeholder{S} and construct \placeholder{E}.
                 a \changed{UCS scalar value whose Unicode property}{Unicode scalar value whose Unicode property} \tcode{General_Category}
                 has a value in the groups \tcode{Separator} (\tcode{Z}) or \tcode{Other} (\tcode{C}) or to
                 a \changed{UCS scalar value whose Unicode property}{Unicode scalar value with the Unicode property} \tcode{Grapheme_Extend=Yes},
-                as described by \removed{table 12 of} UAX \#44 \added{of The Unicode Standard}.
+                as described by \removed{table 12 of} UAX \#44 \added{of the Unicode Standard}.
+
+
+ \ednote{
+ Merging with \paper{P2713R1} should produce the following wording:
+ \item CE is UTF-8, UTF-16, or UTF-32 and C corresponds to a Unicode scalar value whose Unicode property \tcode{General_Category} has a value in the groups \tcode{Separator} (\tcode{Z}) or \tcode{Other} (\tcode{C}), as described by UAX \#44 of the Unicode Standard, or
+\item CE is UTF-8, UTF-16, or UTF-32 and C corresponds to a Unicode scalar value with the Unicode property \tcode{Grapheme_Extend=Yes} as described by UAX \#44 of the Unicode Standard and C is not immediately preceded in S by a character P appended to E without translation to an escape sequence, or \\
+}
+
 
                 \item
                 \placeholder{CE} is \changed{not a Unicode encoding}{neither UTF-8, UTF-16, nor UTF-32} and
                 \placeholder{C} is one of an implementation-defined set
                 of separator or non-printable characters
             \end{itemize}
+
 
             then the sequence \tcode{\textbackslash u\{\placeholder{hex-digit-sequence}\}}
             is appended to \placeholder{E},
@@ -841,6 +862,63 @@ is used to both interpret \placeholder{S} and construct \placeholder{E}.
     Finally, \unicode{0022}{quotation mark} (\tcode{"})
     is appended to \placeholder{E}.
 \end{itemize}
+
+\textcolor{noteclr}{[...]}
+
+\rSec3[format.string.std]{Standard format specifiers}
+
+\textcolor{noteclr}{[...]}
+
+\pnum
+For the purposes of width computation,
+a string is assumed to be in
+a locale-independent,
+\impldef{encoding assumption for \tcode{format} width computation} encoding.
+Implementations should use \changed{a Unicode encoding}{either UTF-8, UTF-16, or UTF-32},
+on platforms capable of displaying Unicode text in a terminal.
+
+\pnum
+For a string in \changed{a Unicode encoding}{UTF-8, UTF-16, or UTF-32},
+implementations should estimate the width of a string
+as the sum of estimated widths of
+the first code points in its extended grapheme clusters.
+The extended grapheme clusters of a string are defined by UAX 29.
+The estimated width of the following code points is 2:
+\begin{itemize}
+	\item \ucode{1100} -- \ucode{115f}
+	\item \ucode{2329} -- \ucode{232a}
+	\item \ucode{2e80} -- \ucode{303e}
+	\item \ucode{3040} -- \ucode{a4cf}
+	\item \ucode{ac00} -- \ucode{d7a3}
+	\item \ucode{f900} -- \ucode{faff}
+	\item \ucode{fe10} -- \ucode{fe19}
+	\item \ucode{fe30} -- \ucode{fe6f}
+	\item \ucode{ff00} -- \ucode{ff60}
+	\item \ucode{ffe0} -- \ucode{ffe6}
+	\item \ucode{1f300} -- \ucode{1f64f}
+	\item \ucode{1f900} -- \ucode{1f9ff}
+	\item \ucode{20000} -- \ucode{2fffd}
+	\item \ucode{30000} -- \ucode{3fffd}
+\end{itemize}
+The estimated width of other code points is 1.
+
+\pnum
+For a string in \changed{a non-Unicode encoding}{neither UTF-8, UTF-16, nor UTF-32}, the width of a string is unspecified.
+
+\pnum
+% FIXME: What if it's an arg-id?
+The \grammarterm{nonnegative-integer} in
+\grammarterm{precision} is a decimal integer defining
+the precision or maximum field size.
+It can only be used with floating-point and string types.
+For floating-point types this field specifies the formatting precision.
+For string types, this field provides an upper bound
+for the estimated width of the prefix of
+the input string that is copied into the output.
+For a string in \changed{a Unicode encoding}{UTF-8, UTF-16, or UTF-32},
+the formatter copies to the output
+the longest prefix of whole extended grapheme clusters
+whose estimated width is no greater than the precision.
 
 \textcolor{noteclr}{[...]}
 
@@ -896,7 +974,7 @@ is used to both interpret \placeholder{S} and construct \placeholder{E}.
     if invoking the native Unicode API requires transcoding,
     implementations should substitute invalid code units
     with \unicode{fffd}{replacement character} per
-    The Unicode Standard \removed{Version 14.0 - Core Specification}, Chapter 3.9 \added{U+FFFD Substitution in Conversion}.
+    the Unicode Standard \removed{Version 14.0 - Core Specification}, Chapter 3.9 \added{U+FFFD Substitution in Conversion}.
 \end{itemdescr}
 
 \textcolor{noteclr}{[...]}
@@ -946,7 +1024,7 @@ is used to both interpret \placeholder{S} and construct \placeholder{E}.
     If invoking the native Unicode API requires transcoding,
     implementations should substitute invalid code units
     with \unicode{fffd}{replacement character} per
-    The Unicode Standard \removed{Version 14.0 - Core Specification}, Chapter 3.9 \added{U+FFFD Substitution in Conversion}.
+    the Unicode Standard \removed{Version 14.0 - Core Specification}, Chapter 3.9 \added{U+FFFD Substitution in Conversion}.
 \end{itemdescr}
 
 \rSec1[depr]{Annex D}
@@ -1065,10 +1143,10 @@ The encoding form UCS-2 is specified in ISO/IEC 10646:2003.}
     %Version Unicode 15.0.0. 2022-08-26 [viewed 2022-12-02].\\
     %Available from: \tcode{https://www.unicode.org/reports/tr29/tr29-41.html}
     \end{addedblock}
-    \ednote{Referencing Unicode encompasses the annexes and the motivation explains that we can and should reference the version of the annex that correspond to The Unicode Standard}
+    \ednote{Referencing Unicode encompasses the annexes and the motivation explains that we can and should reference the version of the annex that correspond to The Unicode Standard}\\
     \item
-    The Unicode Consortium. Unicode Standard Annex, UAX \#31,\\
-    \doccite{Unicode Identifier and Pattern Syntax} [online].\\
+    \removed{The Unicode Consortium. Unicode Standard Annex, UAX \#31,\\
+    \doccite{Unicode Identifier and Pattern Syntax} [online].}
     %\begin{removedblock}
     %Edited by Mark Davis. Revision 33; issued for Unicode 13.0.0.\\
     %2020-02-13 [viewed 2021-06-08].\\

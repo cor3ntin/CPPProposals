@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{user-generated \tcode{static\_assert} messages}
-\docnumber{D2741R0}
+\docnumber{P2741R1}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -20,6 +20,14 @@
 We propose that \tcode{static_assert} should accept user-generated string-like objects as their diagnostic message.
 
 \section{Revisions}
+
+\subsection{R1}
+
+\begin{itemize}
+ \item Expand discussion on the encoding of compile time expressions.
+ \item Remove wording for volatile types as they cannot be constant-evaluated per \href{https://eel.is/c++draft/expr.const#5.9}{[expr.const]} (Thanks Jens!).
+\end{itemize}
+
 
 \subsection{R0}
 
@@ -201,10 +209,57 @@ Note however that, if an implementation did not have the ability to convert from
 properly rendering non-basic characters in a sequence of \tcode{char} might be the most involved part of this proposal. same if we were to support \tcode{wchar_t}.
 Supporting any of the UTF encodings is however a non-issue.
 
+Note that in the case of \tcode{char} and \tcode{wchar_t} there is very little room to treat these things as anything but strings in the (wide) ordinary literal encoding.
+character and string literals are in the literal encoding and so would be any expression that would concatenate or otherwise be composed from
+character and string literals in some way.
+Treating them in any other way would lead to mojibake (as it always does when interpreting a string in an encoding that is different from the one it is constructed with).
+
+We shouldn't either try to evaluate these expressions using an encoding, as they may refer to variables already evaluated.
+
+Should we want another encoding here (and we really should not, C++ has enough encodings as it is), we would need a new kind of literals and a new set of types from distinguishing them. Such type actually exist: \tcode{char8_t}!
+
+In other words, given the following code:
+
+\begin{colorblock}
+string_view str = "Hello";
+static_assert(false, str);
+\end{colorblock}
+
+The abstract machine leaves no room to consider \tcode{str} as anything but as a string literal in the ordinary literal as
+it was already evaluated at the point the variable is used.
+
+\subsubsection{What if the string literal encoding cannot represent the diagnostic message in some environments?}
+
+\paper{P1854R3} makes mojibake in literals ill-formed (as it already is on most platforms). It is still possible to produce mojibake using
+escape sequences, for example.
+
+Given there are 2 possibles opportunities for losses here, namely that the ordinary literal cannot encode some text, and that the
+output of the compiler may have a different encoding to, only one of these could theoretically be remedied, I do not think there is much of a concern here: compilers will, as QOI, present any potential encoding issues in a way that is useful to users, escaping invalid code units for example.
+They already do so.
+
+There isn't much value in trying to legislate more than that.
+If a \tcode{static_assert} fires, the program is ill-formed. If the diagnostic message has encoding errors, is it double ill-formed?
+Should we care about potential mojibake in \tcode{static_assert} that do not fire?
+
+\subsubsection{Should we expose the encoding of the compiler's output?}
+
+For completeness, as I was asked if i considered that: No
+
+Knowing the execution encoding is useful as it allows users to perform conversions.
+Knowing the encoding of the compiler output does not allow to do anything the compiler cannot do on its own:
+Having established that strings are in the ordinary encoding, the compiler can transcode that and the user could not do it better.
+And we'd have to make constexpr all the existing text manipulations facility to do anything useful EVEN if somehow we could form strings in that
+theoretical compiler encoding, which we can't do, short of some magic conversion from an u8 string of some form.
+At this point, why did we not use u8 to begin with?
+
+Maybe \tcode{std::format} cannot produce u8 and so we'd fail to support a motivating use case.
+Fair enough, but if we are concerned about that, we should add u8 support to \tcode{std::format} !
+
+
 \subsection{What about null-terminated strings?}
 
 Null-terminated strings are mostly useful to communicate with C libraries and systems and are rarely useful at compile time.
-While it would not be a huge effort to support them, we think it's best to keep the design simple.
+While it would not be a huge effort to support them, maybe it's best to keep the design simple.
 
 \subsection{Alternatives}
 
@@ -280,8 +335,8 @@ the converted expression shall be a constant expression\iref{expr.const}.
 If a second \grammarterm{constant-expression} $Msg$ is provided:
 \begin{itemize}
     \item \tcode{$Msg$.size()} shall be a well-formed integral constant expression,
-    \item \tcode{$Msg$.data()} shall be a well-formed constant expression whose type is \cv{} \tcode{char*} or \cv{} \tcode{char8_t*}, and
-    \item \tcode{[$Msg$.data(), $Msg$.data() + E.size())} shall denote a valid range.
+    \item \tcode{$Msg$.data()} shall be a well-formed constant expression whose possibly const-qualified type is \tcode{char*} or \tcode{char8_t*}, and
+    \item \tcode{[$Msg$.data(), $Msg$.data() + $Msg$.size())} shall denote a valid range.
 \end{itemize}
 \end{addedblock}
 
@@ -295,7 +350,7 @@ the \grammarterm{string-literal}, if one is supplied.}
 
 \begin{addedblock}
 \begin{itemize}
-\item the text formed by the sequence \tcode{[$Msg$.data(), $Msg$.data() + E.size())} if $Msg$ is suplied, or
+\item the text formed by the sequence \tcode{[$Msg$.data(), $Msg$.data() + $Msg$.size())} if $Msg$ is supplied, or
 \item the text of the \grammarterm{string-literal}, if one is supplied.
 \end{itemize}
 \end{addedblock}

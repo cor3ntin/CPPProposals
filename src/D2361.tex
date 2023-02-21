@@ -13,8 +13,8 @@
 \setmainfont{Noto Sans}
 
 \title{Unevaluated strings}
-\docnumber{P2361R5}
-\audience{EWG}
+\docnumber{P2361R6}
+\audience{CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Aaron Ballman}{aaron.ballman@gmail.com}
 
@@ -46,6 +46,14 @@ except that these strings can contain any Unicode characters.
 This proposal aims to identify contexts in which strings are not evaluated so that they can be handled consistently by compilers.
 
 \section{Revisions}
+
+\subsection{R6}
+Apply core feedback:
+\begin{itemize}
+\item Reword [over.literal]
+\item Revert the changes to [cpp]
+\item Rebase the wording in [dcl.pre]
+\end{itemize}
 
 \subsection{R5}
 \begin{itemize}
@@ -328,7 +336,7 @@ from the basic characters are displayed in diagnostic messages, which was not im
 An \grammarterm{unevaluated-string} shall have no  \grammarterm{encoding-prefix}.
 
 Each \grammarterm{universal-character-name} and each \grammarterm{simple-escape-sequence} in an \grammarterm{unevaluated-string} is replaced by the member of the translation character set it denotes.
-An \grammarterm{unevaluated-string} which contains a \grammarterm{numeric-escape-sequence}
+An \grammarterm{unevaluated-string} that contains a \grammarterm{numeric-escape-sequence}
 or a \grammarterm{conditional-escape-sequence} is ill-formed.
 
 An \grammarterm{unevaluated-string} is never evaluated and its interpretation depends on the context in which it appears.
@@ -359,17 +367,13 @@ An \grammarterm{unevaluated-string} is never evaluated and its interpretation de
 \pnum
 \indextext{\idxgram{static_assert}}%
 In a \grammarterm{static_assert-declaration}, the
-\grammarterm{constant-expression} shall be
-a contextually converted constant expression
-of type \tcode{bool}\iref{expr.const}.
+is contextually converted to \tcode{bool} and the converted expression shall be a constant expression ([expr.const]).
 If the value of the expression when
 so converted is \tcode{true}, the declaration has no
 effect. Otherwise, the program is ill-formed, and the resulting
-diagnostic message\iref{intro.compliance} shall include the text of
-the \grammarterm{\added{unevaluated-}string\removed{-literal}}, if one is supplied,
-except that characters not in the basic
-source character set\iref{lex.charset} are not required to appear in
-the diagnostic message.
+diagnostic message\iref{intro.compliance} should include the text of
+the \grammarterm{\added{unevaluated-}string\removed{-literal}}, if one is supplied.
+
 \begin{example}
 \begin{codeblock}
     static_assert(sizeof(int) == sizeof(void*), "wrong pointer size");
@@ -574,8 +578,8 @@ as the rationale for why the result should not be discarded.
 \pnum
 The \removed{\grammarterm{string-literal} or} \grammarterm{user-defined-string-literal}
 in a \grammarterm{literal-operator-id} shall have no
-\grammarterm{encoding-prefix} and shall contain no characters other than the
-implicit terminating \tcode{'\textbackslash 0'}.
+\grammarterm{encoding-prefix}\changed{and}{. The \grammarterm{unevaluated-string} or \grammarterm{user-defined-string-literal}} shall \changed{contain no characters other than the
+implicit terminating \tcode{'\textbackslash 0'}}{be empty}.
 The \grammarterm{ud-suffix} of the \grammarterm{user-defined-string-literal} or
 the \grammarterm{identifier} in a \grammarterm{literal-operator-id} is called a
 \defnx{literal suffix identifier}{literal!suffix identifier}.
@@ -586,119 +590,119 @@ such a literal suffix identifier is ill-formed, no diagnostic required.
 
 
 
-\rSec1[cpp]{Preprocessing directives}%
+%%\rSec1[cpp]{Preprocessing directives}%
 
 [...]
 
 
-\rSec1[cpp.line]{Line control}%
-\indextext{preprocessing directive!line control}%
-\indextext{\idxcode{\#line}|see{preprocessing directive, line control}}
+%\rSec1[cpp.line]{Line control}%
+%\indextext{preprocessing directive!line control}%
+%\indextext{\idxcode{\#line}|see{preprocessing directive, line control}}
+%
+%\pnum
+%The \grammarterm{string-literal} of a
+%\tcode{\#line}
+%directive, if present,
+%shall \changed{be a character string literal}{satisfy the semantic constraints of an \grammarterm{unevaluated-string} [lex.string.unevaluated]}.
+%
+%\ednote {
+%\grammarterm{string-literal} is prexisting wording, but the grammar refers to a quoted sequence of s-char. This is arguably a bug that CWG may want to address
+%as a drive-by when processing this paper.
+%}
+%
+%\pnum
+%The
+%\defn{line number}
+%of the current source line is one greater than
+%the number of new-line characters read or introduced
+%in translation phase 1\iref{lex.phases}
+%while processing the source file to the current token.
+%
+%\pnum
+%A preprocessing directive of the form
+%\begin{ncsimplebnf}
+%    \terminal{\# line} digit-sequence new-line
+%\end{ncsimplebnf}
+%causes the implementation to behave as if
+%the following sequence of source lines begins with a
+%source line that has a line number as specified
+%by the digit sequence (interpreted as a decimal integer).
+%If the digit sequence specifies zero
+%or a number greater than 2147483647,
+%the behavior is undefined.
+%
+%\pnum
+%A preprocessing directive of the form
+%
+%\begin{ncsimplebnf}
+%    \terminal{\# line} digit-sequence \terminal{"} \opt{s-char-sequence} \terminal{"} new-line
+%\end{ncsimplebnf}
+%
+%sets the presumed line number similarly and changes the
+%presumed name of the source file to be the contents
+%of the \removed{character} string literal.
+%
+%\pnum
+%A preprocessing directive of the form
+%
+%\begin{ncsimplebnf}
+%    \terminal{\# line} pp-tokens new-line
+%\end{ncsimplebnf}
+%
+%(that does not match one of the two previous forms)
+%is permitted.
+%The preprocessing tokens after
+%\tcode{line}
+%on the directive are processed just as in normal text
+%(each identifier currently defined as a macro name is replaced by its
+%replacement list of preprocessing tokens).
+%If the directive resulting after all replacements does not match
+%one of the two previous forms, the behavior is undefined;
+%otherwise, the result is processed as appropriate.
 
-\pnum
-The \grammarterm{string-literal} of a
-\tcode{\#line}
-directive, if present,
-shall \changed{be a character string literal}{satisfy the semantic constraints of an \grammarterm{unevaluated-string} [lex.string.unevaluated]}.
-
-\ednote {
-\grammarterm{string-literal} is prexisting wording, but the grammar refers to a quoted sequence of s-char. This is arguably a bug that CWG may want to address
-as a drive-by when processing this paper.
-}
-
-\pnum
-The
-\defn{line number}
-of the current source line is one greater than
-the number of new-line characters read or introduced
-in translation phase 1\iref{lex.phases}
-while processing the source file to the current token.
-
-\pnum
-A preprocessing directive of the form
-\begin{ncsimplebnf}
-    \terminal{\# line} digit-sequence new-line
-\end{ncsimplebnf}
-causes the implementation to behave as if
-the following sequence of source lines begins with a
-source line that has a line number as specified
-by the digit sequence (interpreted as a decimal integer).
-If the digit sequence specifies zero
-or a number greater than 2147483647,
-the behavior is undefined.
-
-\pnum
-A preprocessing directive of the form
-
-\begin{ncsimplebnf}
-    \terminal{\# line} digit-sequence \terminal{"} \opt{s-char-sequence} \terminal{"} new-line
-\end{ncsimplebnf}
-
-sets the presumed line number similarly and changes the
-presumed name of the source file to be the contents
-of the \removed{character} string literal.
-
-\pnum
-A preprocessing directive of the form
-
-\begin{ncsimplebnf}
-    \terminal{\# line} pp-tokens new-line
-\end{ncsimplebnf}
-
-(that does not match one of the two previous forms)
-is permitted.
-The preprocessing tokens after
-\tcode{line}
-on the directive are processed just as in normal text
-(each identifier currently defined as a macro name is replaced by its
-replacement list of preprocessing tokens).
-If the directive resulting after all replacements does not match
-one of the two previous forms, the behavior is undefined;
-otherwise, the result is processed as appropriate.
-
-\rSec1[cpp.pragma.op]{Pragma operator}%
-\indextext{macro!pragma operator}%
-\indextext{operator!pragma|see{macro, pragma operator}}
-
-\begin{addedblock}
-The \grammarterm{string-literal} of a Pragma operator shall satisfy the semantic constraints of an \grammarterm{unevaluated-string} [lex.string.unevaluated].
-\end{addedblock}
-
-\pnum
-A unary operator expression of the form:
-
-\begin{ncbnf}
-    \terminal{_Pragma} \terminal{(} string-literal \terminal{)}
-\end{ncbnf}
-
-is processed as follows: The \grammarterm{string-literal}
-is \defnx{destringized}{destringization} by
-\removed{deleting the \tcode{L} prefix, if present,} deleting the leading and trailing
-double-quotes,replacing each escape sequence \tcode{\textbackslash"} by a double-quote, and
-replacing each escape sequence \tcode{\textbackslash\textbackslash} by a single
-backslash. The resulting sequence of characters is processed through translation phase 3
-to produce preprocessing tokens that are executed as if they were the
-\grammarterm{pp-tokens} in a pragma directive. The original four preprocessing
-tokens in the unary operator expression are removed.
-
-\pnum
-\begin{example}
-\begin{codeblock}
-    #pragma listing on "..\listing.dir"
-\end{codeblock}
-can also be expressed as:
-\begin{codeblock}
-    _Pragma ( "listing on \"..\\listing.dir\"" )
-\end{codeblock}
-The latter form is processed in the same way whether it appears literally
-as shown, or results from macro replacement, as in:
-\begin{codeblock}
-    #define LISTING(x) PRAGMA(listing on #x)
-    #define PRAGMA(x) _Pragma(#x)
-
-    LISTING( ..\listing.dir )
-\end{codeblock}
-\end{example}
+%\rSec1[cpp.pragma.op]{Pragma operator}%
+%\indextext{macro!pragma operator}%
+%\indextext{operator!pragma|see{macro, pragma operator}}
+%
+%\begin{addedblock}
+%The \grammarterm{string-literal} of a Pragma operator shall satisfy the semantic constraints of an \grammarterm{unevaluated-string} [lex.string.unevaluated].
+%\end{addedblock}
+%
+%\pnum
+%A unary operator expression of the form:
+%
+%\begin{ncbnf}
+%    \terminal{_Pragma} \terminal{(} string-literal \terminal{)}
+%\end{ncbnf}
+%
+%is processed as follows: The \grammarterm{string-literal}
+%is \defnx{destringized}{destringization} by
+%\removed{deleting the \tcode{L} prefix, if present,} deleting the leading and trailing
+%double-quotes,replacing each escape sequence \tcode{\textbackslash"} by a double-quote, and
+%replacing each escape sequence \tcode{\textbackslash\textbackslash} by a single
+%backslash. The resulting sequence of characters is processed through translation phase 3
+%to produce preprocessing tokens that are executed as if they were the
+%\grammarterm{pp-tokens} in a pragma directive. The original four preprocessing
+%tokens in the unary operator expression are removed.
+%
+%\pnum
+%\begin{example}
+%\begin{codeblock}
+%    #pragma listing on "..\listing.dir"
+%\end{codeblock}
+%can also be expressed as:
+%\begin{codeblock}
+%    _Pragma ( "listing on \"..\\listing.dir\"" )
+%\end{codeblock}
+%The latter form is processed in the same way whether it appears literally
+%as shown, or results from macro replacement, as in:
+%\begin{codeblock}
+%    #define LISTING(x) PRAGMA(listing on #x)
+%    #define PRAGMA(x) _Pragma(#x)
+%
+%    LISTING( ..\listing.dir )
+%\end{codeblock}
+%\end{example}
 
 
 \section{Acknowledgments}

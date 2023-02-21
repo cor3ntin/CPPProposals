@@ -195,7 +195,7 @@
 \newcommand{\added}[1]{\textcolor{addclr}{\uline{#1}}}
 \newcommand{\addedTwo}[1]{\textcolor{addclrTwo}{\uline{#1}}}
 \newcommand{\removed}[1]{\textcolor{remclr}{\sout{#1}}}
-\newcommand{\removedprev}[1]{\textcolor{magenta}{\squiggly{#1}}}
+\newcommand{\removedprev}[1]{}
 \newcommand{\changed}[2]{\removed{#1} \added{#2}}
 
 \newenvironment{addedm}{\color{addclr}}{ }

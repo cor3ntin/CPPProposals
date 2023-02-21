@@ -59,7 +59,7 @@ The following code illustrates the totality of the proposed additions:
 \begin{colorblock}
 void f();
 int main() {
-    std::jthread thread(f,
+    auto thread = std::jthread::make_thread(f,
                        std::thread_name("Worker"),
                        std::thread_stack_size(512*1024));
     return 0;
@@ -362,7 +362,7 @@ by their identifiers. Giving them a name would make little sense.
 \subsection{I don't need that and don't want to pay for it}
 
 None of the proposed attributes is stored in the thread object nor in any object associated with the thread or its associated \tcode{thread} object.
-the proposed \tcode{thread::attribute} object can be destroyed after the thread creation.
+The proposed \tcode{thread::attribute} object can be destroyed after the thread creation.
 The behavior of preexisting constructors remains unchanged.
 
 On many implementations, including Linux, the space for the thread name is allocated regardless of whether it is used or not.
@@ -475,8 +475,8 @@ parties libraries to support thread priorities.
 
 \subsection{Design}
 
-We propose adding a new constructor to \tcode{std::thread} and \tcode{std::jthread}
-of the form \tcode{thread(invocable, \placeholder{thread-attribute}...)} where attribute is
+We propose adding a new factory function to \tcode{std::thread} and \tcode{std::jthread}
+of the form \tcode{thread::make_thread(invocable, \placeholder{thread-attribute}...)} where attribute is
 an instance of any type deriving from \tcode{std::thread_attribute} (where  \tcode{std::thread_attribute} serves no
 other purposes than tagging a type as a thread attribute. Attributes that the implementation does not know how to support
 are ignored, and the effects of known attributes are implementation-defined.
@@ -488,11 +488,57 @@ Individual attributes - which only serve to hold a value, have constexpr constru
 portably support environments with utf-8 execution encodings (Linux), environments where Unicode encodings can be preserved (Windows),
 and other environments.
 
-This interface is made possible by the realization that lambdas alleviate the needs for \tcode{(j)thread} to support parameter forwardings,
+This interface is made possible by the realization that lambdas alleviate the needs for \tcode{(j)thread} to support parameter forwarding,
 and so we don't need attributes + function + arguments but just function + attributes.
 
 The attributes are put after, which is a subpar choice that can be revisited if \paper{P2347R2} is adopted.
 A slightly different design would be to take a tuple of thread attributes as the first parameter.
+
+During Initial LEWG review, a slight preference was expressed for a factory function over a constructor, to avoid any possible
+user confusion between the existing arg-taking overloads and the overloads that were proposed (and are now replaced by a factory function).
+
+\subsubsection{What about using NTTP?}
+
+During this review of this paper, it was suggested we could pass thread attributes as NTTP.
+However, in many cases these attributes may depend on runtime values (thread names depending on a counter would be a good example of that).
+
+\subsubsection{Can we add setters/getters later?}
+
+As explained, this would not be portable, however it would be possible to add the interface to support these later:
+
+\begin{colorblock}
+class thread {
+          template <typename Attr>
+          auto get_attribute() -> optional<typename Attr>;
+          template <typename Attr>
+          auto set_attribute(Attr);
+};
+\end{colorblock}
+
+
+This might require to extend attributes with alias specifying
+\begin{itemize}
+	\item Whether they can be retrieved/read after construction
+	\item Whether they can be set
+	\item The type of the attribute (int, string, etc), as returning the attribute itself may not be the best way to interact with its value
+\end{itemize}
+
+This would allow to place better compile-time constraints:
+
+\begin{colorblock}
+	class thread {
+		template <typename Attr>
+		requires @\placeholder{is-readable-attribute}@
+		auto get_attribute() -> optional<typename Attr::value_type>;
+		template <typename Attr>
+		requires @\placeholder{is-settable-attribute}@
+		auto set_attribute(Attr);
+	};
+\end{colorblock}
+
+In that design, the attributes types are then only used by the \tcode{getter} as a tag to indicate to the implementation which attribute to return.
+
+This could be added later (and isn't ABI breaking).
 
 \section{Implementation}
 
