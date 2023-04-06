@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{UB? In My Lexer?}
-\docnumber{P2621R2}
+\docnumber{P2621R3}
 \audience{EWG, SG-22}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -20,6 +20,11 @@ Further work will be needed to remove all undefined behavior in [cpp].
 
 
 \section{Revisions}
+
+\subsection*{Revision 3}
+\begin{itemize}
+ \item Rebase and fix the context around the modified wording - the modified wording is left untouched
+\end{itemize}
 
 \subsection*{Revision 2}
 \begin{itemize}
@@ -81,6 +86,7 @@ special-casing this oddity.
 
 \pnum{2.}
 \indextext{line splicing}%
+If the first translation character is U+FEFF BYTE ORDER MARK, it is deleted.
 Each sequence of a backslash character (\textbackslash)
 immediately followed by
 zero or more whitespace characters other than new-line followed by
@@ -92,19 +98,19 @@ of such a splice.
 a character sequence that matches the
 syntax of a \grammarterm{universal-character-name}, the behavior is
 undefined}.
-
 \begin{addedblock}
 \begin{note}
 Line splicing can form a \grammarterm{universal-character-name} [lex.charset].
 \end{note}
 \end{addedblock}
-
 A source file that is not empty and that does not end in a new-line
 character, or that ends in a splice,
 shall be processed as if an additional new-line character were appended
 to the file.
 
-\pnum
+\rSec1[lex.pptoken]{Preprocessing tokens}
+
+\pnum{2.}
 A preprocessing token is the minimal lexical element of the language in translation
 phases 3 through 6.
 In this document,
@@ -126,21 +132,22 @@ the program is ill-formed.
 \indextext{\#\#1 operator@\tcode{\#\#} operator}%
 \indextext{concatenation!macro argument|see{\tcode{\#\#} operator}}
 
-\pnum
+\pnum{1.}
 A
 \tcode{\#\#}
 preprocessing token shall not occur at the beginning or
 at the end of a replacement list for either form
 of macro definition.
 
-\pnum
+\pnum{2.}
 If, in the replacement list of a function-like macro, a parameter is
 immediately preceded or followed by a
 \tcode{\#\#}
 preprocessing token, the parameter is replaced by the
 corresponding argument's preprocessing token sequence; however, if an argument consists of no preprocessing tokens, the parameter is
 replaced by a placemarker preprocessing token instead.
-\pnum
+
+\pnum{3.}
 For both object-like and function-like macro invocations, before the
 replacement list is reexamined for more macro names to replace,
 each instance of a
@@ -156,6 +163,7 @@ in the non-placemarker preprocessing token.
 \begin{removedblock}
  If the result begins with a sequence matching the syntax of \grammarterm{universal-character-name},
 the behavior is undefined.
+
 \begin{note}
     This determination does not consider the replacement of
     \grammarterm{universal-character-name}s in translation phase 3\iref{lex.phases}.
@@ -166,6 +174,7 @@ the behavior is undefined.
 Concatenation can form a \grammarterm{universal-character-name}.
 \end{note}
 \end{addedblock}
+
 If the result is not a valid preprocessing token,
 the behavior is undefined.
 The resulting token is available for further macro replacement.
