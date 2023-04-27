@@ -9,7 +9,7 @@
 
 
 \title{Thread attributes}
-\docnumber{D2019R3}
+\docnumber{P2019R3}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -37,6 +37,15 @@ The absence of these features make \tcode{std::thread} and \tcode{std::jthread} 
 
 \subsection{R3}
 
+We propose a \tcode{make_with_attributes} static factory function
+instead of an additional constructor.
+This is because LEWG expressed a slight preference for that design durting the 24th January 23 telecon.
+The new design, and the names should avoid confusion with the existing constructor, and make the intent clearer.
+
+The design section add a note on the viability of NTTP and getter and setters as these questions came up during the meeting.
+
+Fix some typos.
+
 \subsection{R2}
 
 Wording improvements.
@@ -59,7 +68,7 @@ The following code illustrates the totality of the proposed additions:
 \begin{colorblock}
 void f();
 int main() {
-    auto thread = std::jthread::make_thread(f,
+    auto thread = std::jthread::make_with_attributes(f,
                        std::thread_name("Worker"),
                        std::thread_stack_size(512*1024));
     return 0;
@@ -409,8 +418,9 @@ concept __thread_attribute = std::derived_from<T, thread_attribute>;
 
 class thread {
     template<class F, __thread_attribute... Attrs>
-    explicit thread(F&& f, Attrs&&...)
-    : thread(std::forward<F>(f)) {}
+    static make_with_attributes(F&& f, Attrs&&...) {
+     return thread(std::forward<F>(f));
+    }
 };
 
 
@@ -476,7 +486,7 @@ parties libraries to support thread priorities.
 \subsection{Design}
 
 We propose adding a new factory function to \tcode{std::thread} and \tcode{std::jthread}
-of the form \tcode{thread::make_thread(invocable, \placeholder{thread-attribute}...)} where attribute is
+of the form \tcode{thread::make_with_attributes(invocable, \placeholder{thread-attribute}...)} where attribute is
 an instance of any type deriving from \tcode{std::thread_attribute} (where  \tcode{std::thread_attribute} serves no
 other purposes than tagging a type as a thread attribute. Attributes that the implementation does not know how to support
 are ignored, and the effects of known attributes are implementation-defined.
@@ -516,7 +526,7 @@ class thread {
 \end{colorblock}
 
 
-This might require to extend attributes with alias specifying
+This might require to extend attributes with (static, constexpr) members specifying
 \begin{itemize}
 	\item Whether they can be retrieved/read after construction
 	\item Whether they can be set
@@ -578,33 +588,35 @@ This solves the problem of having to rewrite an entire thread class just to set 
 However, it would still be painful to do so portably, as described in P0484.
 A standard library that targets a limited number of platforms can set the attributes more easily than a library that may desire to work in an environment where C++ is deployed.
 
-\item A factory function for creating a thread with attributes
-\begin{codeblock}
-template <class F, class ... Args>
-unicorn<std::thread, ??> make_thread(thread::attributes, F && f, Args && ... args);
-\end{codeblock}
 \end{itemize}
 
-We think this is trying to solve two problems:
-
-\begin{itemize}
-\item  Threads cannot be used without exceptions support
-\item  Some users want the stack size to be guaranteed
-\end{itemize}
-
-We are sympathetic to the first concern, however, it seems orthogonal to thread attributes.
-If a unicorn type (\tcode{expected}?) or a cheaper exception mechanism is ever standardized,
-such a factory function will be welcome, but it doesn't prevent a thread constructor to support attributes.
-As for guaranteed stack size:
-
-\begin{itemize}
-\item  Some platforms do not support stack size at all - doesn't mean they won't use the desired amount
-\item  Some platforms may ignore stack size requests silently
-\item  Some platforms may allocate more than request to align with memory pages
-\item  Trying to check after the thread has started is not possible (aka it would throw an exception even though the new thread has started)
-\end{itemize}
-
-As such, we allow but do not require an implementation to throw when a stack size request cannot be fulfilled.
+%\item A factory function for creating a thread with attributes
+%\begin{codeblock}
+%template <class F, class ... Args>
+%unicorn<std::thread, ??> make_with_attributes(thread::attributes, F && f, Args && ... args);
+%\end{codeblock}
+%\end{itemize}
+%
+%We think this is trying to solve two problems:
+%
+%\begin{itemize}
+%\item  Threads cannot be used without exceptions support
+%\item  Some users want the stack size to be guaranteed
+%\end{itemize}
+%
+%We are sympathetic to the first concern, however, it seems orthogonal to thread attributes.
+%If a unicorn type (\tcode{expected}?) or a cheaper exception mechanism is ever standardized,
+%such a factory function will be welcome, but it doesn't prevent a thread constructor to support attributes.
+%As for guaranteed stack size:
+%
+%\begin{itemize}
+%\item  Some platforms do not support stack size at all - doesn't mean they won't use the desired amount
+%\item  Some platforms may ignore stack size requests silently
+%\item  Some platforms may allocate more than request to align with memory pages
+%\item  Trying to check after the thread has started is not possible (aka it would throw an exception even though the new thread has started)
+%\end{itemize}
+%
+%As such, we allow but do not require an implementation to throw when a stack size request cannot be fulfilled.
 
 
 \section{Wording}
@@ -747,131 +759,46 @@ execution.
 
 \begin{codeblock}
 namespace std {
-    class thread {
-        public:
-        class thread::id;
-        class id;
-        using native_handle_type = @\impdefnc@;         // see~\ref{thread.req.native}
+class thread {
+    public:
+    class thread::id;
+    class id;
+    using native_handle_type = @\impdefnc@;         // see~\ref{thread.req.native}
 
-        // construct/copy/destroy
-        thread() noexcept;
-        template<class F, class... Args> explicit thread(F&& f, Args&&... args);
+    // construct/copy/destroy
+    thread() noexcept;
+    template<class F, class... Args> explicit thread(F&& f, Args&&... args);
 
-        @\added{template <class F, class... Attrs>}@
-        @\added{explicit thread(F \&\& f, Attrs\&\&... attrs);}@
+    ~thread();
+    thread(const thread&) = delete;
+    thread(thread&&) noexcept;
+    thread& operator=(const thread&) = delete;
+    thread& operator=(thread&&) noexcept;
 
-        ~thread();
-        thread(const thread&) = delete;
-        thread(thread&&) noexcept;
-        thread& operator=(const thread&) = delete;
-        thread& operator=(thread&&) noexcept;
 
-        // \ref{thread.thread.member}, members
-        void swap(thread&) noexcept;
-        bool joinable() const noexcept;
-        void join();
-        void detach();
-        id get_id() const noexcept;
-        native_handle_type native_handle();                         // see~\ref{thread.req.native}
+    @\added{template <class F, class... Attrs>}@
+    @\added{static thread make_with_attributes(F \&\& f, Attrs\&\&... attrs);}@
 
-        // static members
-        static unsigned int hardware_concurrency() noexcept;
-    };
+
+    // \ref{thread.thread.member}, members
+    void swap(thread&) noexcept;
+    bool joinable() const noexcept;
+    void join();
+    void detach();
+    id get_id() const noexcept;
+    native_handle_type native_handle();                         // see~\ref{thread.req.native}
+
+    // static members
+    static unsigned int hardware_concurrency() noexcept;
+
+    @\added{private:}@
+    @\added{struct \placeholder{attribute-tag}\{\}; // \expos}@
+    @\added{template <class F, class... Attrs>}@
+    @\added{thread(\placeholder{attribute-tag}, F \&\& f, Attrs\&\&... attrs); // \expos}@
+};
 }
 \end{codeblock}
 
-%\rSec3[thread.thread.attr]{Class \tcode{thread::attributes}}
-%
-%
-%\begin{codeblock}
-%
-%class thread::attributes  {
-%public:
-%    attributes() noexcept = default;
-%    attributes(const attributes&);
-%    attributes(attributes&& other) = default;
-%
-%    attributes& stack_size(std::size_t size) noexcept;
-%    attributes& name(std::span<const char> name);
-%    attributes& name(std::span<const char8_t> name);
-%
-%    @\emph{implementation-defined}@ __name; // \expos
-%    std::size_t __size; // \expos
-%};
-%\end{codeblock}
-%
-%\pnum
-%An object of type \tcode{thread::attributes} provides a way to
-%set different parameters that may be used by the constructor of \tcode{std::thread} and \tcode{std::jhread}.
-%
-%The behavior of each attribute is implementation-defined.
-%Attributes that are not handled by the implementation are ignored.
-%
-%\begin{center}
-%\begin{footnotesize}
-%%\def\arraystretch{1.5}%
-%\begin{tabular}{ll}
-%    \hline
-%    Name & Description\\
-%    \hline
-%    \tcode{stack\_size} & \parbox{10cm}{
-%        \vspace{.5\baselineskip}
-%        \begin{note}
-%        The intent is to configure a stack size as if by POSIX \mbox{\tcode{pthread_attr_setstacksize()}}.\\
-%        \end{note}\\
-%        If a non-zero value is outside of the range of values supported by the implementation, \tcode{thread} and \tcode{jthread} constructors
-%        may throw \tcode{system_error}.\\
-%        \vspace{.5\baselineskip}
-%    }\\
-%    \hline
-%    \tcode{name} & \parbox{10cm}{\vspace{.5\baselineskip}
-%        \tcode{name} represents a string convertible to the native character encoding which may be used to non-uniquely identify a thread of execution.\\\\
-%        When the value of \tcode{name} is outside of the range of values supported by the implementation, an implementation\\
-%        can ignore the attribute entirely or use any \tcode{subspan} of the value to non-uniquely identify the thread of execution.
-%        \vspace{.5\baselineskip}
-%}\\
-%
-%    \hline
-%\end{tabular}
-%\end{footnotesize}
-%\end{center}
-%
-%
-%\begin{itemdecl}
-%attributes& stack_size(std::size_t size) noexcept;
-%\end{itemdecl}
-%\begin{itemdescr}
-%\effects Initialize the \tcode{stack_size} attribute with the value of \tcode{size}.
-%
-%\returns \tcode{*this;}
-%\end{itemdescr}
-%
-%
-%\begin{itemdecl}
-%attributes& name(std::span<const char> name);
-%\end{itemdecl}
-%\begin{itemdescr}
-%\preconditions \tcode{name} represents a valid string of character in the narrow literal encoding
-%
-%\effects Initialize the \tcode{name} attribute with the value of \tcode{name}.
-%
-%\throws \tcode{bad\_alloc}
-%
-%\returns \tcode{*this;}
-%\end{itemdescr}
-%
-%
-%\begin{itemdecl}
-%attributes& name(std::span<const char8_t> name);
-%\end{itemdecl}
-%\begin{itemdescr}
-%\effects Initialize the \tcode{name} attribute with the value of \tcode{name}.
-%
-%\returns \tcode{*this;}
-%
-%\throws \tcode{bad\_alloc}
-%\end{itemdescr}
-%%\end{addedblock}
 
 \rSec3[thread.thread.constr]{Constructors}
 
@@ -883,7 +810,7 @@ explicit thread(F&& f, Args&&... args);
 \begin{itemdecl}
 template<class F, class... Attrs>
 requires (sizeof...(Attrs) != 0)
-explicit thread(F&& f, Attrs&&... attrs);
+explicit thread(F&& f, Attrs&&... attrs); // \expos
 \end{itemdecl}
 \end{addedblock}
 
@@ -917,7 +844,7 @@ The following are all \tcode{true}:
     \item \tcode{is_invocable_v<decay_t<F>, decay_t<Args>...>}.
     \end{itemize}
 
-    \item For the second overload, the following are all true:
+    \item For the exposition-only overload, the following are all true:
     \begin{itemize}
         \item \tcode{(is_base_of_v<thread_attribute, Attrs>) \&\& ...)},
         \item \tcode{(is_invocable_v<decay_t<F>>}.
@@ -952,7 +879,7 @@ If the invocation of \tcode{invoke} terminates with an uncaught exception,
 \tcode{terminate} is called.
 
 \begin{addedblock}
-For the second overloads, \tcode{attrs} can be used to tailor the thread with additional implementation-defined behaviors. Thread attributes parameters unknown to the implementation are ignored. (see [thread.attributes]).
+For the second exposition overload, \tcode{attrs} can be used to tailor the thread with additional implementation-defined behaviors. Thread attributes parameters unknown to the implementation are ignored. (see [thread.attributes]).
 \end{addedblock}
 
 \pnum
@@ -977,6 +904,60 @@ synchronizes with the beginning of the invocation of the copy of \tcode{f}.
 \end{itemize}
 \end{itemdescr}
 
+
+\begin{addedblock}
+\rSec3[thread.thread.factory]{Factory functions}
+
+\indexlibraryctor{thread}%
+\begin{itemdecl}
+template<class F, class... Args>
+static thread make_with_attributes(F&& f, Args&&... args);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\pnum
+\mandates
+The following are all \tcode{true}:
+\begin{itemize}
+    \item \tcode{is_constructible_v<decay_t<F>, F>},
+    \item \tcode{(is_base_of_v<thread_attribute, Attrs>) \&\& ...)},
+    \item \tcode{(is_invocable_v<decay_t<F>>}.
+    \item \tcode{(is_base_of_v<thread_attribute, Attrs>) \&\& ...)},
+    \item \tcode{(is_invocable_v<decay_t<F>>}.
+\end{itemize}
+
+\returns \tcode{thread(\placeholder{attribute-tag}\{\}, std::forward<F>(f), std::forward<Args>(args)...));}
+
+    %The following are all \tcode{true}:
+    %\begin{itemize}
+    %    \item \tcode{is_constructible_v<decay_t<F>, F>},
+    %    \item \tcode{(is_constructible_v<decay_t<Args>, Args> \&\& ...)},
+    %    \item \tcode{is_move_constructible_v<decay_t<F>>},
+    %    \item \tcode{(is_move_constructible_v<decay_t<Args>> \&\& ...)}, and
+    %    \item \tcode{is_invocable_v<decay_t<F>, decay_t<Args>...>}.
+    %\end{itemize}
+    %\end{removedblock}
+    %\begin{addedblock}
+    %\begin{itemize}
+    %    \item \tcode{is_constructible_v<decay_t<F>, F>} is \tcode{true},
+    %    \item \tcode{is_move_constructible_v<decay_t<F>>} is \tcode{true}.
+    %
+    %    \item For the first overload, the following are all true:
+    %    \begin{itemize}
+        %    \item \tcode{(is_constructible_v<decay_t<Args>, Args> \&\& ...)},
+        %    \item \tcode{(is_move_constructible_v<decay_t<Args>> \&\& ...)}, and
+        %    \item \tcode{is_invocable_v<decay_t<F>, decay_t<Args>...>}.
+        %    \end{itemize}
+    %
+    %    \item For the second overload, the following are all true:
+    %    \begin{itemize}
+        %
+        %    \end{itemize}
+    %\end{itemize}
+\end{itemdescr}
+\end{addedblock}
 \section{\tcode{jthread}}
 
 \ednote{TODO: exact same wording as for thread}.
