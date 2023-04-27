@@ -32,7 +32,7 @@ Better explore the syntax choices and explore alternatives.
 
 Initial revision
 
-\subsection{Motivation}
+\section{Motivation}
 
 The motivation for pack indexing is covered in "Generalized pack declaration and usage" (\paper{P1858R2}) and
 "A plan for better template meta programming facilities in C++26" \cite{P2632R0}.
@@ -41,13 +41,11 @@ The short version is that packs are sequences of types/expressions, and indexing
 C++ and its users have so far relied on deduction or library facilities such as \tcode{index_sequence} or full-fledged template metaprogramming libraries such as
 mp11 and boost.hana to extract the Nth element of a pack, which has a high cost both in terms of code complexity and compiler throughput.
 
-Previous works in this area also include \paper{P0565R0}, \paper{P1803R0}, \paper{N3761} and \paper{N4235}.
-
-\section{Proposal}
-
 This paper proposes a new code language syntax to index packs of types (yielding a type), and packs of expressions (yielding an expression).
 
-\subsection{Syntax}
+Previous works in this area also include \paper{P0565R0}, \paper{P1803R0}, \paper{N3761} and \paper{N4235}.
+
+\section{Syntax}
 
 The general syntax is \tcode{\placeholder{name-of-a-pack} ... [constant-expression]}.
 The syntax has the benefit of reusing familiar elements (\tcode{...} usually denotes a pack expansion) and \tcode{[]} subscripts,
@@ -68,22 +66,46 @@ This is a syntax that is used by Circle and that was initially proposed by \pape
 
 \subsection{Other syntaxes considered}
 
-Over the years, different syntaxes have been considered by various authors:
+The pack...[index] syntax was selected for this proposal after considering a
+number of other possible syntaxes, some of which have been proposed by other
+committee members:
 
 \begin{itemize}
 \item \tcode{pack.[index]} - \paper{N4235}
+\item \tcode{pack<index>} or \tcode{pack...<index>}
 \item \tcode{packexpr(args, I)} - \paper{P1803R0}
 \item \tcode{[index]pack} - \paper{P0535R0}
+\item Pack Objects - \paper{P2671R0}
 \end{itemize}
+
+\subsection{So, which syntax to pick?}
+
+Any syntax would be better than
+\href{https://twitter.com/incomputable/status/1590733659694583808}{the status quo}.
+However, having done an analysis of different options, the original choice,
+\tcode{Pack...[N]}, still seems to be the best option, as it is straightforward
+and consistent with existing pack features.  What follows is a detailed
+analysis of the different options, but the reader may want to skip forward to
+the "Pack Index" section if the proposed syntax is acceptable to them.
 
 Before arguing what the best syntax is, which is ultimately subjective, we need to understand the constraints:
 \begin{itemize}
 \item An indexed pack can produce a type, an expression, and maybe in the future a template template parameter, a universal template, etc, so we need a syntax
 that can work in all contexts.
 \item We want a syntax that can be expanded to support slicing in the future.
-\item Pack elements can be array-like or tuple-like,  so we need to be careful about ambiguities. In particular, the subscript syntax is not viable.
-Indeed, indexing a pack of arrays and indexing each array in a pack are different operations (both of which are useful), and so using the subscript syntax would be ambiguous
-(or lead to code that cannot be expressed) [\href{https://compiler-explorer.com/z/E86h8eMG1}{See this example}].
+\item Pack elements can be array-like or tuple-like, so we need to be careful
+  about ambiguities.In particular, directly applying a subscript to a pack
+  (\tcode{P[i]}, where \tcode{P} is a pack) is not viable. Indeed, indexing a
+  pack of arrays (\tcode{ArrayPack...[index]}), indexing each array in a pack
+  (\tcode{ArrayPack[index]...}), indexing a single array with a pack of indexes
+  (\tcode{Array[IndexPack]...}), and indexing each array in a pack of arrays
+  with an index from an (equal-length) pack of indexes
+  (\tcode{ArrayPack[IndexPack]...}) are different operations, all of which are
+  useful. [\href{https://compiler-explorer.com/z/E86h8eMG1}{This example}]
+  shows how, using the proposed syntax, one can distinguish between indexing
+  the arrays from a pack with indexes from a pack
+  (\tcode{ArrayPack[IndexPack]...}) and indexing a pack of arrays with a pack
+  of indexes (\tcode{ArrayPack...[IndexPack]...}).
 \end{itemize}
 
 \subsubsection{pack.[index]}
@@ -166,28 +188,24 @@ However, it does make sense and it's readable in actual code \href{https://githu
 \item Using \tcode{...\placeholder{postfix-syntax}} for this feature, and future pack-related features (and nothing else), gives us a clear reserved design space for packs.
 \end{itemize}
 
-\subsection{So, which syntax to pick?}
+\section{Allowable values for the pack index}
 
-Any syntax would be better than \href{https://twitter.com/incomputable/status/1590733659694583808}{the status quo}.
-However, having done an analysis of different options, the original choice \tcode{Pack...[N]} still seems to be the better option, as it is consistent with existing pack features.
-
-\subsection{Pack Index}
-
-The index of a pack indexing expression or specifier is an integral constant expression between 0 and \tcode{sizeof...(pack)}.
+The index of a pack indexing expression or specifier is an integral constant expression between 0 and \tcode{sizeof...(pack) - 1}.
 Empty packs can't be indexed.
 
-This paper does not add support for indexing from the end (as an alias of \tcode{T...[sizeof...(T)-N]}).
-Indeed, a negative index (\tcode{T...[-1]}) would be surprising.
+In other proposals, a negative index, \tcode{-N}, would be interpreted as
+indexing from the end of the pack (as an alias of \tcode{T...[sizeof...(T)-N]}).
+However, a negative index could occur by accident, yielding surprising results.
 
 Consider:
 
 \begin{colorblock}
 // Return the index of the first type convertible to Needle in Pack
-@\textbf{or -1 if Pack does not contain a suitable type}@.
+// @\textbf{or -1 if Pack does not contain a suitable type}@.
 template <typename Needle, typename... Pack>
 auto find_convertible_in_pack;
 
- // if find_convertible_in_pack<Foo, Types> is -1, T will be the last type, erroneously.
+// if find_convertible_in_pack<Foo, Types> is -1, T will be the last type, erroneously.
 using T = Types...[find_convertible_in_pack<Foo, Types>];
 \end{colorblock}
 
@@ -196,18 +214,18 @@ yield an incorrect type.
 
 Note however that circle does support from-the-end indexing using a negative index, and Sean Baxter reports no surprise from using this feature.
 
-The solution for indexing from the end is to provide a specific syntax, for example, C\# uses \tcode{\^{}} to mean "from the end", and Dlang interprets \tcode{\${}}
-as the size of the array it appears in
+An alternative for indexing from the end is to provide a specific syntax; for example, C\# uses \tcode{\^{}} to mean "from the end", and Dlang interprets \tcode{\${}}
+as the size of the array
 \begin{colorblock}
 using Foo = T...[0];
 using Bar = T...[^1]; // First from the end
 using Bar = T...[$ - 1]; // First from the end
 \end{colorblock}
 
-Given that there are different alternatives, all of which can be added later, and for which we do not have usage experience, this proposal does not support
+Given that there are different alternatives, all of which can be added later, and for which we do not have usage experience, this paper does not propose
 from-the-end indexing.
 
-\subsection{Indexing a pack of types}
+\section{Indexing a pack of types}
 
 Indexing a pack of type is a type specifier that can, like \tcode{decltype} appear:
 \begin{itemize}
@@ -217,7 +235,7 @@ Indexing a pack of type is a type specifier that can, like \tcode{decltype} appe
     \item As the type of an explicit destructor call
 \end{itemize}
 
-\subsection{Type deduction}
+\section{Type deduction}
 
 Pack indexing specifiers should not allow deducing the pack from such an expression.
 
@@ -230,14 +248,14 @@ f(0);
 \end{colorblock}
 
 It doesn't really make sense to start thinking about how deduction would work here or what that code would possibly mean.
-We simply always consider packs indexing non-deduced contexts.
+We simply always consider pack indexing to be a non-deduced context.
 
-\subsection{Indexing a pack of expressions}
+\section{Indexing a pack of expressions}
 
 The intent is that a pack indexing expression behaves exactly as the underlying expression would.
 In particular, \tcode{decltype(id-dexpression) and \tcode{decltype(pack-index-expression)}} behave the same.
 
-\section{Future Evolutions}
+\section{Future Evolution}
 
 The syntax can be extended  in subsequent proposals to support:
 
@@ -252,7 +270,7 @@ The syntax can be extended  in subsequent proposals to support:
 
 \section{Potential impact on existing code}
 
-In C++11, \tcode{T... [N]} declares a pack of arrays of size \tcode{N};
+In C++23, \tcode{T... [N]} is a valid syntax for declaring a function parameter matching a pack of unnamed arrays of size N.
 
 \begin{colorblock}
 template <typename... T>
@@ -277,15 +295,10 @@ void f(T... foo[1]);
 \section{Implementation}
 
 This proposal is inspired by features implemented in the Circle compiler (with the same syntax).
-The provided wording is based on an implementation in a fork of clang, which is available on compiler explorer.
+The provided wording is based on an implementation in a fork of clang, which is available on \href{https://compiler-explorer.com/z/WKobTEq6x}{Compiler Explorer}.
 
-The implementation is available on \href{https://compiler-explorer.com/z/WKobTEq6x}{Compiler Explorer}.
-
-
-As of the writing of the paper, the implementation is known not to support pack indexing inside of the expansion of other template parameters.
-We hope to fix these issues before Kona.
-
-Ie, the following is intended to work but currently does not
+As of the writing of the paper, the Clang implementation is known not to support pack indexing inside of the expansion of other template parameters.
+I.e., the following is intended to work but currently does not
 
 \begin{colorblock}
 template <typename... Ts, int... N>
@@ -294,8 +307,9 @@ auto f(Ts... ts) {
 }
 \end{colorblock}
 
-\section{Wording}
+We hope to fix these issues before the Kona meeting in November.
 
+\section{Formal Wording}
 
 \rSec2[basic.lookup.qual]{Qualified name lookup}
 
@@ -650,8 +664,8 @@ operand\iref{term.unevaluated.operand}.
         \begin{addedblock}
         \begin{codeblock}
         [](auto... pack){
-            decltype(pack...[0]); // // type is \tcode{int}
-            decltype((pack...[0]));  // type is \tcode{int\&}
+            decltype(pack...[0])   x5;  // type is \tcode{int}
+            decltype((pack...[0])) x6;  // type is \tcode{int\&}
         }(0);
         \end{codeblock}
         \end{addedblock}
@@ -744,7 +758,7 @@ equivalent\iref{temp.over.link}.
 \end{note}
 
 \begin{addedblock}
-For a template argument \tcode{T}, if the \grammarterm{constant-expression} of a \grammarterm{pack-index-specifier} is type-dependent
+For a template argument \tcode{T}, if the \grammarterm{constant-expression} of a \grammarterm{pack-index-specifier} is type-dependent,
 \tcode{T...[\grammarterm{constant-expression}]} denotes a unique dependent type.
 Two such \grammarterm{pack-index-specifier}{s} refer to the same type only if their \grammarterm{constant-expression}{s} are
 equivalent\iref{temp.over.link} and their type are the same.
