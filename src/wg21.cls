@@ -64,14 +64,14 @@
 \usepackage{xstring}
 
 
-\setmainfont{Noto Sans}
-\newcommand{\emoji}[1]{ {\setmainfont{Noto Color Emoji}[Renderer=Harfbuzz]{#1}} }
+%\setmainfont{Noto Sans}
+%\newcommand{\emoji}[1]{ {\setmainfont{Noto Color Emoji}[Renderer=Harfbuzz]{#1}} }
 
 
-\setmonofont[
-  AutoFakeSlant,
-  BoldItalicFeatures={FakeSlant},
-]{Inconsolatazi4}
+%\setmonofont[
+%  AutoFakeSlant,
+%  BoldItalicFeatures={FakeSlant},
+%]{Inconsolatazi4}
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
