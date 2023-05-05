@@ -26,7 +26,7 @@ This paper expands on the pack indexing feature described in \paper{P1858R2} and
 
 \subsection{R1}
 
-Better explore the syntax choices and explore alternatives.
+Better explore the syntax choices and explore alternatives. Wording improvements.
 
 \subsection{R0}
 
@@ -82,7 +82,7 @@ committee members:
 
 Any syntax would be better than
 \href{https://twitter.com/incomputable/status/1590733659694583808}{the status quo}.
-However, having done an analysis of different options, the original choice,
+However, having analyzed different options, the original choice,
 \tcode{Pack...[N]}, still seems to be the best option, as it is straightforward
 and consistent with existing pack features.  What follows is a detailed
 analysis of the different options, but the reader may want to skip forward to
@@ -93,19 +93,15 @@ Before arguing what the best syntax is, which is ultimately subjective, we need 
 \item An indexed pack can produce a type, an expression, and maybe in the future a template template parameter, a universal template, etc, so we need a syntax
 that can work in all contexts.
 \item We want a syntax that can be expanded to support slicing in the future.
-\item Pack elements can be array-like or tuple-like, so we need to be careful
-  about ambiguities.In particular, directly applying a subscript to a pack
-  (\tcode{P[i]}, where \tcode{P} is a pack) is not viable. Indeed, indexing a
-  pack of arrays (\tcode{ArrayPack...[index]}), indexing each array in a pack
-  (\tcode{ArrayPack[index]...}), indexing a single array with a pack of indexes
-  (\tcode{Array[IndexPack]...}), and indexing each array in a pack of arrays
-  with an index from an (equal-length) pack of indexes
-  (\tcode{ArrayPack[IndexPack]...}) are different operations, all of which are
-  useful. [\href{https://compiler-explorer.com/z/E86h8eMG1}{This example}]
-  shows how, using the proposed syntax, one can distinguish between indexing
-  the arrays from a pack with indexes from a pack
-  (\tcode{ArrayPack[IndexPack]...}) and indexing a pack of arrays with a pack
-  of indexes (\tcode{ArrayPack...[IndexPack]...}).
+\item Pack elements can be array-like or tuple-like, so we need to be careful about ambiguities.
+
+In particular, directly applying a subscript to a pack (\tcode{P[i]}, where \tcode{P} is a pack) is not viable.
+Indeed, indexing a pack of arrays (\tcode{ArrayPack...[index]}), indexing each array in a pack (\tcode{ArrayPack[index]...}),
+indexing a single array with a pack of indexes (\tcode{Array[IndexPack]...}), and indexing each array in a pack of array with an index from an (equal-length) pack of indexes
+(\tcode{ArrayPack[IndexPack]...}) are different operations, all of which are useful.
+
+[\href{https://compiler-explorer.com/z/E86h8eMG1}{This example}] shows how, using the proposed syntax, one can distinguish between indexing
+the arrays from a pack with indexes from a pack (\tcode{ArrayPack[IndexPack]...}) and indexing a pack of arrays with a pack of indexes (\tcode{ArrayPack...[IndexPack]...}).
 \end{itemize}
 
 \subsubsection{pack.[index]}
@@ -144,7 +140,7 @@ Besides, pack indexing will often occur in angle-bracket-heavy code, so using br
 
 \paper{P1803R0} proposed \tcode{packexpr(pack, N)}. ie \tcode{reserved-identifier(pack, N)}.
 We'd need to find an identifier that is meaningful for all types of packs (not just expressions) and is not widely used.
-It would most certainly have to be a globally reserved keyword (not a contextual one), as pack indexing can appear anywhere either a type, or an expression can appear. which is to say, everywhere.
+It would most certainly have to be a globally reserved keyword (not a contextual one), as pack indexing can appear anywhere either a type or an expression can appear. which is to say, everywhere.
 
 Maybe \tcode{packelement(pack, index)}. This would work, but we would arguably need another identifier for slicing.
 
@@ -156,8 +152,7 @@ It doesn't appear to be any logic to that choice, besides the fact that it's ava
 
 \subsubsection{Pack objects}
 
-\paper{P2671R0} proposes a syntax (rather arbitrarily on the fact it's currently not used), to create a "pack object", or rather, to instruct the compiler to manipulate
-a pack without expanding it.
+\paper{P2671R0} proposes a syntax to create a "pack object" (an expression) to instruct the compiler to manipulate a pack without expanding it.
 The one motivating use case is the for expansion statement, where that syntax allows us to distinguish "looping" over a tuple versus looping over a pack in a non-ambiguous manner.
 Other examples, including pack indexing and slicing, look similar but arguably worse using this "pack object" mechanism.
 
@@ -167,11 +162,63 @@ As noted, an expansion statement can be used with a pack using
     template for (auto elem : std::tuple(ts...)) { ... }
 \end{colorblock}
 
-
 Barry observes this is "wasteful" which is true, but a big part of the problem is that a tuple is a much heavier type than it ought to be,
 and pack indexing is one of the tools we need to make tuples lighter - along with forwarding references deduction and member packs).
 
-\subsubsection{Something else?}
+
+In this model, \tcode{pack!} is a pack object (the syntax seems to have been chosen rather arbitrarily on the fact it's currently not used),
+and then that object can be indexed using \tcode{pack![N]}.
+
+The pack object can be modeled by taking a reflection of the pack and then indexing that object splices the Nth element, as explained in \paper{P2671R0}
+
+\begin{colorblock}
+template <std::vector<std::meta::info> V>
+struct PackObject {
+    constexpr auto operator[](std::ptrdiff_t idx) const {
+        return [: V[idx] :];
+    }
+};
+\end{colorblock}
+
+This model does not explain how it would deal with packs of types, template parameters, universal templates, and anything that is not an expression as an \tcode{operator[]}
+has to return an expression.
+Note that it could arguably return a meta::info and then let the user do the splicing itself, at which point any proclaimed syntax advantage would be lost.
+
+We probably should have a discussion around the concept of pack objects, because they raise an interesting question:
+Do we need a syntax to reflect on a pack, that would be a shorthand for \tcode{std::vector\{\^{}ts...\}}? Maybe?
+Because I think that's the question that "pack-objects" fundamentally tries to answer.
+
+And it is true that pack indexing is equivalent to
+\begin{colorblock}
+ [: std::vector{^pack...}[N] :]
+\end{colorblock}
+
+And slicing can probably be emulated with
+
+\begin{colorblock}
+...[: std::vector{^pack...} | std::views::drop(N) | std::views::take(M) ] :]...
+\end{colorblock}
+
+Note that \paper{P2671R0} seems to propose a slicing operator (\tcode{pack[N:M]}) anyway,
+because the code above is not exactly terse.
+
+Barry observes that slicing through a pack object creates more questions than it solves.
+If slicing a pack creates a pack - which seems fairly obvious, does slicing a pack object create a pack object or a pack?
+
+Both answers seem equally justified, however if slicing a pack object produces a pack object, now we need another syntax
+to turn the pack object back into a pack, and this is how \paper{P2671R0}
+ends up suggesting \tcode{ts![1:]\~...} or \tcode{ts![1..]\~...}.
+
+Which is a lot of new syntax constructs that do try to offer a consistent story.
+And only work for expressions!
+
+In terms of compile time, an implementation could either do what the paper proposes,
+ie create a pack object, which includes a constexpr vector, evaluate that, and splice it to get the resulting expression
+which would be less than optimal (and yet faster than any existing solution!), or an implementation
+could be cleaver and treat \tcode{![N]} as a single "pack indexing" construct, which would be efficient but would be, in effect,
+a pack indexing operation spelled \tcode{![]} instead of \tcode{...[]}.
+
+I will not claim that one is prettier than the other, but one is certainly a natural extension of the current grammar.\subsubsection{Something else?}
 
 We could entertain all sorts of syntaxes that are not yet used. 2 dots, 4 dots, \tcode{!}, \tcode{@} \$, etc.
 None of them would be a logical extension of the existing grammar and, as we are extending an existing facility, we should aim for something more justified than simply "it's not yet used by something else"
@@ -205,8 +252,8 @@ Consider:
 template <typename Needle, typename... Pack>
 auto find_convertible_in_pack;
 
-// if find_convertible_in_pack<Foo, Types> is -1, T will be the last type, erroneously.
-using T = Types...[find_convertible_in_pack<Foo, Types>];
+// if find_convertible_in_pack<Foo, Types...> is -1, T will be the last type, erroneously.
+using T = Types...[find_convertible_in_pack<Foo, Types...>];
 \end{colorblock}
 
 In general, incorrect computations in an index can lead to a negative value that should make the program ill-formed but would instead
@@ -280,7 +327,8 @@ int main() {
 }
 \end{colorblock}
 
-Neither MSVC nor gcc supports this syntax and this pattern does not appear outside of compiler test suites (from a search on \href{https://cs.github.com/}{Github}, \href{https://codesearch.isocpp.org/cgi-bin/cgi_ppsearch?q=...%5B&search=Search}{isocpp} and in VCPKG).
+Neither MSVC nor GCC supports this syntax and this pattern does not appear outside of compiler test suites (from a search on \href{https://cs.github.com/}{Github}, \href{https://codesearch.isocpp.org/cgi-bin/cgi_ppsearch?q=...%5B&search=Search}{isocpp} and in VCPKG).
+The fact that 2 majors compilers did not implement this syntax in over a decade is indicative of its lack of usefulness.
 
 Should anyone be affected, a workaround is to name the variable.
 
@@ -521,10 +569,77 @@ The \grammarterm{constant-expression} shall evaluate to a value $V$ such that 0 
 
 The index of a \grammarterm{pack-index-expression} is the value of its \grammarterm{constant-expression}.
 
-A \grammarterm{pack-index-expression} denotes the ${index}$\textsuperscript{th} expression in a pack ([temp.variadic]).
 A \grammarterm{pack-index-expression} is a pack expansion ([temp.variadic]).
 
+\note{A \grammarterm{pack-index-expression} denotes the ${index}$\textsuperscript{th} expression in a pack ([temp.variadic]).}
+
 \end{addedblock}
+
+\rSec2[dcl.name]{Type names}
+
+\pnum
+\indextext{type name}%
+To specify type conversions explicitly,
+\indextext{operator!cast}%
+and as an argument of
+\tcode{sizeof},
+\tcode{alignof},
+\keyword{new},
+or
+\tcode{typeid},
+the name of a type shall be specified.
+This can be done with a
+\grammarterm{type-id},
+which is syntactically a declaration for a variable or function
+of that type that omits the name of the entity.
+
+\begin{bnf}
+    \nontermdef{type-id}\br
+    type-specifier-seq \opt{abstract-declarator}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{defining-type-id}\br
+    defining-type-specifier-seq \opt{abstract-declarator}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{abstract-declarator}\br
+    ptr-abstract-declarator\br
+    \opt{noptr-abstract-declarator} parameters-and-qualifiers trailing-return-type\br
+    abstract-pack-declarator
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{ptr-abstract-declarator}\br
+    noptr-abstract-declarator\br
+    ptr-operator \opt{ptr-abstract-declarator}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{noptr-abstract-declarator}\br
+    \opt{noptr-abstract-declarator} parameters-and-qualifiers\br
+    \opt{noptr-abstract-declarator} \terminal{[} \opt{constant-expression} \terminal{]} \opt{attribute-specifier-seq}\br
+    \terminal{(} ptr-abstract-declarator \terminal{)}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{abstract-pack-declarator}\br
+    noptr-abstract-pack-declarator\br
+    ptr-operator abstract-pack-declarator
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{noptr-abstract-pack-declarator}\br
+    noptr-abstract-pack-declarator parameters-and-qualifiers\br
+    \removed{noptr-abstract-pack-declarator \terminal{[} \opt{constant-expression} \terminal{]} \opt{attribute-specifier-seq}}\br
+    \terminal{...}
+\end{bnf}
+
+\ednote{The sequence \tcode{...[constant-expression]} should always be treated as pack indexing. However we may want to allow \tcode{T(\&...)[constant-expression]},
+which is the object of \paper{CWG1488}}
+
+\ednote{[...]}
 
 \rSec3[dcl.type.simple]{Simple type specifiers}%
 \indextext{type specifier!simple}
@@ -593,9 +708,9 @@ The \grammarterm{constant-expression} shall be an integral constant expression.
 The \grammarterm{constant-expression} shall evaluate to a value $V$ such that 0 <= $V$ < \tcode{sizeof...(typedef-name)}.
 
 The index of a \grammarterm{pack-index-specifier} is the value of its \grammarterm{constant-expression}.
-
-A \grammarterm{pack-index-specifier} denotes the type of the ${index}$\textsuperscript{th} \tcode{typedef-name} in a pack ([temp.variadic]).
 A \grammarterm{pack-index-specifier} is a pack expansion ([temp.variadic]).
+
+\note{A \grammarterm{pack-index-specifier} denotes the type of the ${index}$\textsuperscript{th} \tcode{typedef-name} in a pack ([temp.variadic]).}
 
 \end{addedblock}
 

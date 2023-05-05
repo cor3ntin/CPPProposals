@@ -232,9 +232,6 @@ computation.
 In the absence of member and alias packs, a \tcode{tuple_like} concept could look like that
 
 \begin{colorblock}
-template <typename T, template <typename> concept C>
-concept decays_to = C<std::decay_t<T>>;
-
 template <typename T, int N>
 constexpr bool __tuple_check_elements = [] {
     if constexpr (N == 0)
@@ -243,20 +240,23 @@ constexpr bool __tuple_check_elements = [] {
         typename std::tuple_element_t<N-1, T>;
         { std::get<N>(t) };
     })
-    return  __tuple_check_elements<T, N-1, C>;
+    return  __tuple_check_elements<T, N-1>;
     return false;
 }();
 
 template <typename T>
 concept tuple_like = requires {
     typename std::tuple_size<T>::type;
-} &&  (std::tuple_size_v<T>  == 0 || __tuple_check_elements<T, std::tuple_size_v<T>>);
+} &&  __tuple_check_elements<T, std::tuple_size_v<T>>;
 \end{colorblock}
 
 Here we use a constexpr template variable to check the constraint on individual elements.
 We can trivially adapt this code to take a concept argument
 
 \begin{colorblock}
+template <typename T, template <typename> concept C>
+concept decays_to = C<std::decay_t<T>>;
+
 template <typename T, int N, template <typename> concept C>
 constexpr bool __tuple_check_elements = [] {
     if constexpr (N == 0)
@@ -272,7 +272,7 @@ constexpr bool __tuple_check_elements = [] {
 template <typename T, template <typename> concept C>
 concept tuple_of = requires {
     typename std::tuple_size<T>::type;
-} &&  (std::tuple_size_v<T>  == 0 || __tuple_check_elements<T, std::tuple_size_v<T>, C>);
+} &&  __tuple_check_elements<T, std::tuple_size_v<T>, C>;
 \end{colorblock}
 
 And this works fine, but \tcode{__tuple_check_elements} is an atomic constraint, so, we cannot
