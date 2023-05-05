@@ -19,37 +19,44 @@
 
 \section{Abstract}
 
-This paper expands on the pack indexing feature described in \paper{P1858R2} and provides wording.
+This paper expands on the pack indexing feature described in \paper{P1858R2} and provides wording. % lah: wording for what? Perhaps add something like "proposes wording changes for the Standard." 
+
+% lah: do you want to add a TOC? It can be helpful so readers can quickly see what's coming. 
 
 \section{Revisions}
 
 
 \subsection{R1}
 
-Better explore the syntax choices and explore alternatives.
+\begin{itemize}
+\item{Better explore the syntax choices and explore alternatives}
+\end{itemize}
 
 \subsection{R0}
 
-Initial revision
+\begin{itemize}
+\item{Initial revision}
+\end{itemize}
 
 \section{Motivation}
 
-The motivation for pack indexing is covered in "Generalized pack declaration and usage" (\paper{P1858R2}) and
-"A plan for better template meta programming facilities in C++26" \cite{P2632R0}.
+The motivation for pack indexing is covered in \paper{P1858R2} and
+ \cite{P2632R0}. % lah: 1. Why are you using two different citation methods? Both papers are cited in this paper. When I click the first paper link, I'm linked to the paper online. When I click the second paper link, I'm linked to the item in the bib. Why are these different? 2. You don't list titles for citations elsewhere, so it's inconsistent to list them here. 
 
-The short version is that packs are sequences of types/expressions, and indexing is a fundamental operation on sequences.
-C++ and its users have so far relied on deduction or library facilities such as \tcode{index_sequence} or full-fledged template metaprogramming libraries such as
-mp11 and boost.hana to extract the Nth element of a pack, which has a high cost both in terms of code complexity and compiler throughput.
+The short background version is that packs are sequences of types/expressions % lah: Replace the slash with either "and", "or", or "and/or" so your reader is 100% clear what you meant. 
+ and indexing is a fundamental operation on sequences.
+C++ and its users have so far relied on deduction or library facilities, such as \tcode{index_sequence}, or full-fledged template metaprogramming libraries, such as
+mp11 and boost.hana, to extract the Nth element of a pack, which has a high cost both in terms of code complexity and compiler throughput.
 
-This paper proposes a new code language syntax to index packs of types (yielding a type), and packs of expressions (yielding an expression).
+This paper proposes a new code language syntax to index packs of types (yielding a type) and packs of expressions (yielding an expression).
 
 Previous works in this area also include \paper{P0565R0}, \paper{P1803R0}, \paper{N3761} and \paper{N4235}.
 
 \section{Syntax}
 
 The general syntax is \tcode{\placeholder{name-of-a-pack} ... [constant-expression]}.
-The syntax has the benefit of reusing familiar elements (\tcode{...} usually denotes a pack expansion) and \tcode{[]} subscripts,
-It is therefore natural that indexing a pack expansion reuses these elements.
+The syntax has the benefit of reusing familiar elements (\tcode{...} usually denotes a pack expansion) and \tcode{[]} subscripts.
+That indexing a pack expansion reuses these elements is, therefore, natural. 
 
 \begin{colorblock}
 template <typename... T>
@@ -57,70 +64,72 @@ constexpr auto first_plus_last(T... values) ->  T...[0] {
     return T...[0](values...[0] + values...[sizeof...(values)-1]);
 }
 int main() {
-    //first_plus_last(); // ill-formed
+    //first_plus_last(); // ill formed
     static_assert(first_plus_last(1, 2, 10) == 11);
 }
 \end{colorblock}
 
-This is a syntax that is used by Circle and that was initially proposed by \paper{P1858R2}.
+This syntax is used by Circle and was initially proposed by \paper{P1858R2}.
 
-\subsection{Other syntaxes considered}
+\subsection{Other syntactic options considered}
 
-The pack...[index] syntax was selected for this proposal after considering a
-number of other possible syntaxes, some of which have been proposed by other
-committee members:
-
+The pack...[index] % lah: Should this be in code font? 
+syntax was selected for this proposal after considering a
+number of other options, some of which have been proposed by other
+committee members.
 \begin{itemize}
-\item \tcode{pack.[index]} - \paper{N4235}
+\item \tcode{pack.[index]}; see \paper{N4235}
 \item \tcode{pack<index>} or \tcode{pack...<index>}
-\item \tcode{packexpr(args, I)} - \paper{P1803R0}
-\item \tcode{[index]pack} - \paper{P0535R0}
-\item Pack Objects - \paper{P2671R0}
+\item \tcode{packexpr(args, I)}; see \paper{P1803R0}
+\item \tcode{[index]pack}; see \paper{P0535R0}
+\item Pack objects; see \paper{P2671R0}
 \end{itemize}
 
-\subsection{So, which syntax to pick?}
+\subsection{So, which syntax is the best choice?}
 
 Any syntax would be better than
 \href{https://twitter.com/incomputable/status/1590733659694583808}{the status quo}.
-However, having done an analysis of different options, the original choice,
+However, having considered the different options, the original choice,
 \tcode{Pack...[N]}, still seems to be the best option, as it is straightforward
 and consistent with existing pack features.  What follows is a detailed
-analysis of the different options, but the reader may want to skip forward to
-the "Pack Index" section if the proposed syntax is acceptable to them.
+analysis of the different options, but readers who find the proposed syntax acceptable might want to skip forward to
+the "Pack Index" section.
 
-Before arguing what the best syntax is, which is ultimately subjective, we need to understand the constraints:
+Before arguing what the best syntax is, which is ultimately subjective, we need to understand the constraints.
 \begin{itemize}
-\item An indexed pack can produce a type, an expression, and maybe in the future a template template parameter, a universal template, etc, so we need a syntax
+\item An indexed pack can produce a type, an expression, and maybe in the future a template template parameter, a universal template, and so on; thus we need a syntax
 that can work in all contexts.
 \item We want a syntax that can be expanded to support slicing in the future.
-\item Pack elements can be array-like or tuple-like, so we need to be careful
-  about ambiguities.In particular, directly applying a subscript to a pack
-  (\tcode{P[i]}, where \tcode{P} is a pack) is not viable. Indeed, indexing a
+\item Pack elements can be array like or tuple like, so we need to be careful
+  about ambiguities. In particular, directly applying a subscript to a pack
+  (\tcode{P[i]}, where \tcode{P} is a pack) is nonviable. Indeed, indexing a
   pack of arrays (\tcode{ArrayPack...[index]}), indexing each array in a pack
-  (\tcode{ArrayPack[index]...}), indexing a single array with a pack of indexes
+  (\tcode{ArrayPack[index]...}), indexing a single array with a pack of indices % lah: indexes is for book indexes and indices is for mathematics.  
   (\tcode{Array[IndexPack]...}), and indexing each array in a pack of arrays
-  with an index from an (equal-length) pack of indexes
+  with an index from an (equal-length) pack of indices 
   (\tcode{ArrayPack[IndexPack]...}) are different operations, all of which are
   useful. [\href{https://compiler-explorer.com/z/E86h8eMG1}{This example}]
   shows how, using the proposed syntax, one can distinguish between indexing
-  the arrays from a pack with indexes from a pack
+  the arrays from a pack with indices from a pack
   (\tcode{ArrayPack[IndexPack]...}) and indexing a pack of arrays with a pack
-  of indexes (\tcode{ArrayPack...[IndexPack]...}).
+  of indices (\tcode{ArrayPack...[IndexPack]...}).
 \end{itemize}
 
 \subsubsection{pack.[index]}
 
 Historically in C++ (and C++-like languages), a single dot denotes member access.
-Reusing that syntax for pack indexing would introduce a semantics inconsistency.
+Reusing that syntax for pack indexing would introduce a semantics inconsistency and, more importantly, could close the door to future evolutions.
 
-More importantly, it may close the door to future evolutions.
-\paper{P1858R0} proposes \tcode{tuple-like.[N]} as sugar over \tcode{get<N>(tuple-like)}
-and \tcode{aggregate.[N]} returning the $Nth$ data member of an aggregate.
+\paper{P1858R0} proposes \tcode{tuple-like.[N]} as sugar over % lah: What do you mean "as sugar over"? If I'm not clear, then a global audience won't be clear. 
+\tcode{get<N>(tuple-like)}
+and \tcode{aggregate.[N]} returning the $Nth$ data member of an aggregate. % lah: WHAT is "returning the $Nth$ data member of an aggregate"---just the aggregate.[N] or BOTH get<N>(tuple-like) AND aggregate.[N]? 
 
-Ideally, \tcode{tuple[N]} would just work. A few proposals have tried to improve the ergonomy of tuple indexing
-\paper{P2726R0}, \paper{P0311R0}.
+Ideally, \tcode{tuple[N]} would just work. % lah: By "just," do you mean that it would simply work or do you mean that it would barely work? 
+A few proposals have tried to improve the ergonomy % lah: Do you mean ergodicity? 
+of tuple indexing (see
+\paper{P2726R0} and \paper{P0311R0}).
 
-I don't think there is a technical limitation to making `tuple-like[N]` work, on types that do not otherwise define a \tcode{operator[]}.
+We see no technical limitation to making \tcode{tuple-like[N]} work on types that do not otherwise define a \tcode{operator[]}.
 \paper{P1858R2} prefers \tcode{.[]} to \tcode{[]} because it proposes not only to index tuple-like but also any other decomposable types such as aggregates.
 An aggregate might have an \tcode{operator[]} already, and so there is a need to disambiguate.
 Note that array-like classes are tuple-like, but their \tcode{operator[]} has the same semantics as what tuple indexing would do.
