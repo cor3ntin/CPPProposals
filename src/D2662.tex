@@ -73,6 +73,7 @@ committee members:
 \begin{itemize}
 \item \tcode{pack.[index]} - \paper{N4235}
 \item \tcode{pack<index>} or \tcode{pack...<index>}
+\item \tcode{std::nth_type<index, pack...>} or \tcode{std::nth_value<index>(pack...)}
 \item \tcode{packexpr(args, I)} - \paper{P1803R0}
 \item \tcode{[index]pack} - \paper{P0535R0}
 \item Pack Objects - \paper{P2671R0}
@@ -135,6 +136,72 @@ We could use angle brackets instead of square brackets. I guess the argument is 
 However, there are existing practices in most languages for \tcode{[]} to be used for both indexing and slicing.
 Being consistent with existing practice never hurt.
 Besides, pack indexing will often occur in angle-bracket-heavy code, so using brackets for indexing too would not look better.
+
+\subsection{\tcode{std::nth_type<index, pack...>} or \tcode{std::nth_value<index>(pack...)}}
+
+As mentioned in the motivation section, there already exist library-only
+approaches to indexing a pack in mp11, boost.hana, and other libraries.
+Indeed, most implementations of the C++ Standard Library contain a private
+metafunction or two for this purpose.  The implementation itself is not
+complicated:
+
+\begin{colorblock}
+template <size_t Index, class P0, class... Pack>
+struct __nth_type_imp
+{
+    using type = typename __nth_type_imp<Index - 1, Pack...>::type;
+};
+
+template <class P0, class... Pack>
+struct __nth_type_imp<0, P0, Pack...>
+{
+    using type = P0;
+};
+
+template <size_t Index, class P0, class... Pack>
+using nth_type = typename __nth_type_imp<Index, P0, Pack...>::type;
+
+template <size_t Index, class T0, class... Types>
+constexpr auto nth_value(T0&& p0, Types&&... pack)
+{
+    if constexpr (0 == Index)
+        return p0;
+    else
+        return nth_value<Index-1>(std::forward<Types>(pack)...);
+}
+\end{colorblock}
+
+The obvious advantage of this approach is that it is implemented entirely in
+the library, with no language changes necessary.  However, the disadvantages
+are significant:
+
+\begin{itemize}
+\item Not only is the syntax harder to use, but there are different syntaxes
+  for packs of types verses packs of values. A metafunction for indexing a pack
+  of templates (not shown) would have a third name and require yet another
+  syntax.
+\item The recursion level for each of these facilities is
+  \mathtt{O(index)}. The instantiations for each index value is not re-used for
+  other index values, so \tcode{nth_type<5, pack...>} and
+  \tcode{nth_type<6, pack...>} produce 11 instantiations total, even with the
+  same \tcode{pack}.  Retrieving every element of a pack of size \mathtt{N},
+  requires \mathtt{O(N^2)} template instantiations.  If implemented entirely as
+  a library, the drag on compile time can be quite large.
+
+  A compiler can reduce the instantiation expense through the use of an
+  intrinsic, and several compilers have implemented such intrinsics.  However,
+  there is no guarantee that every implementation will do so.  Moreover, even
+  if the library template invoked an intrinsic, one level of pack expansion is
+  still needed for the indirection, making the best-case scenario
+  \mathtt(O(index)).
+\item The library solution does not have a future path for
+  treating a subset of a pack as an unexpanded pack (slicing). Because packs
+  are not first-class objects or types, it is doubtful that any metafunction
+  could yield an unexpanded pack without language changes, thus eliminating the
+  advantages of a library-only approach.
+\item The library solution would also not work for universal template
+  parameters, as described in [LINK TO PAPER HERE].
+\end{itemize}
 
 \subsubsection{Magic function}
 
