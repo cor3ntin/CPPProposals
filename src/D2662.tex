@@ -19,9 +19,7 @@
 
 \section{Abstract}
 
-This paper expands on the pack indexing feature described in \paper{P1858R2} and provides wording. % lah: wording for what? Perhaps add something like "proposes wording changes for the Standard."
-
-% lah: do you want to add a TOC? It can be helpful so readers can quickly see what's coming.
+This paper expands on the pack indexing feature described in \paper{P1858R2} and provides wording.
 
 \section{Revisions}
 
@@ -42,10 +40,10 @@ This paper expands on the pack indexing feature described in \paper{P1858R2} and
 \section{Motivation}
 
 The motivation for pack indexing is covered in \paper{P1858R2} and
- \cite{P2632R0}. % lah: 1. Why are you using two different citation methods? Both papers are cited in this paper. When I click the first paper link, I'm linked to the paper online. When I click the second paper link, I'm linked to the item in the bib. Why are these different? 2. You don't list titles for citations elsewhere, so it's inconsistent to list them here.
+ \paper{P2632R0}.
 
-The short background version is that packs are sequences of types/expressions % lah: Replace the slash with either "and", "or", or "and/or" so your reader is 100% clear what you meant.
- and indexing is a fundamental operation on sequences.
+The short background version is that packs are sequences of types or expressions
+and indexing is a fundamental operation on sequences.
 C++ and its users have so far relied on deduction or library facilities, such as \tcode{index_sequence}, or full-fledged template metaprogramming libraries, such as
 mp11 and boost.hana, to extract the Nth element of a pack, which has a high cost both in terms of code complexity and compiler throughput.
 
@@ -74,7 +72,7 @@ This syntax is used by Circle and was initially proposed by \paper{P1858R2}.
 
 \subsection{Other syntactic options considered}
 
-The pack...[index] % lah: Should this be in code font?
+The \tcode{pack...[index]}
 syntax was selected for this proposal after considering a
 number of other options, some of which have been proposed by other
 committee members.
@@ -108,28 +106,28 @@ that can work in all contexts.
   about ambiguities. In particular, directly applying a subscript to a pack
   (\tcode{P[i]}, where \tcode{P} is a pack) is nonviable. Indeed, indexing a
   pack of arrays (\tcode{ArrayPack...[index]}), indexing each array in a pack
-  (\tcode{ArrayPack[index]...}), indexing a single array with a pack of indices % lah: indexes is for book indexes and indices is for mathematics.
+  (\tcode{ArrayPack[index]...}), indexing a single array with a pack of indexes
   (\tcode{Array[IndexPack]...}), and indexing each array in a pack of arrays
-  with an index from an (equal-length) pack of indices
+  with an index from an (equal-length) pack of indexes
   (\tcode{ArrayPack[IndexPack]...}) are different operations, all of which are
   useful. [\href{https://compiler-explorer.com/z/E86h8eMG1}{This example}]
   shows how, using the proposed syntax, one can distinguish between indexing
-  the arrays from a pack with indices from a pack
+  the arrays from a pack with indexes from a pack
   (\tcode{ArrayPack[IndexPack]...}) and indexing a pack of arrays with a pack
-  of indices (\tcode{ArrayPack...[IndexPack]...}).
+  of indexes (\tcode{ArrayPack...[IndexPack]...}).
 \end{itemize}
 
-\subsubsection{pack.[index]} % lah: 1. note that here you don't use code font,  but for a later section head, you do. Pick a method and use that method consistently. 2. Is there any visual difference between subsection and subsubsection heads? I measured them with an old font ruler, and I see there is a size difference, but I shouldn't have to measure the font to see that. Consider adding section numbering so readers can quickly and easily see the structure.
+\subsubsection{\tcode{pack.[index]}}
 
 Historically in C++ (and C++-like languages), a single dot denotes member access.
 Reusing that syntax for pack indexing would introduce a semantics inconsistency and, more importantly, could close the door to future evolutions.
 
-\paper{P1858R0} proposes \tcode{tuple-like.[N]} as sugar over % lah: What do you mean "as sugar over"? If I'm not clear, then a global audience won't be clear.
+\paper{P1858R0} proposes \tcode{tuple-like.[N]} as syntactic sugar over
 \tcode{get<N>(tuple-like)}
 and \tcode{aggregate.[N]} returning the $Nth$ data member of an aggregate. % lah: WHAT is "returning the $Nth$ data member of an aggregate"---just the aggregate.[N] or BOTH get<N>(tuple-like) AND aggregate.[N]?
 
-Ideally, \tcode{tuple[N]} would just work. % lah: By "just," do you mean that it would simply work or do you mean that it would barely work?
-A few proposals have tried to improve the ergonomy % lah: Do you mean ergodicity?
+Ideally, \tcode{tuple[N]} would simply work.
+A few proposals have tried to improve the user-friendlyness
 of tuple indexing (see
 \paper{P2726R0} and \paper{P0311R0}).
 
@@ -149,7 +147,7 @@ a shorthand syntax to index the fields of an aggregate doesn't seem useful, then
 
 We could use angle brackets instead of square brackets, the argument, we suppose, being argument is that \tcode{<>} is more template like and that pack indexing is also template like.
 However, most languages have existing practices in which \tcode{[]} is to be used for both indexing and slicing.
-Being consistent with existing practice never hurts. %lah: never?
+Being consistent with existing practice doesn't hurt.
 Besides, pack indexing will often occur in angle-bracket-heavy code, so using brackets for indexing too would not look better.
 
 \subsubsection{Magic function}
@@ -160,10 +158,10 @@ The identifier would most certainly have to be a globally reserved keyword (not 
 
 Perhaps \tcode{packelement(pack, index)} would work, but we would arguably need another identifier for slicing.
 
-\subsubsection{\tcode{[N]pack...}} % lah: note that here you use code font, but for an earlier section head, you didn't. Pick a method and use that method consistently. Also note that the code font looks much smaller than the header font.
+\subsubsection{\tcode{[N]pack...}}
 
 \paper{P0535R0} explored putting the index before the pack, and this method
-would probably work, although some looking ahead might be necessary to distinguish from lambdas. % lah: to distinguish WHAT from lambdas?
+would probably work, although some looking ahead might be necessary to distinguish that syntax from that of lambdas.
 We see no logic to this choice other than, again, availability.
 
 \subsubsection{Pack objects}
@@ -180,7 +178,7 @@ As noted, an expansion statement can be used with a pack using
 \end{colorblock}
 
 Revzin observes this use is "wasteful," which is true, but a big part of the problem is that a tuple is a much heavier type than it ought to be,
-and pack indexing is one of the tools we need to make tuples lighter - along with forwarding references deduction and member packs. % lah: if you mean that you're making tuples and forwarding references reduction and member packs lighter, then leave as is. If you mean that that forwarding references reduction and member packs are also tools, then change to "...one of the tools, along with forwarding references deduction and member packs, that we need to make tuples lighter."
+and pack indexing is one of the tools we need to make tuples lighter - along with forwarding references deduction and member packs.
 
 In this model, \tcode{pack!} is a pack object (the syntax seems to have been chosen rather arbitrarily on the fact it's currently not used),
 and then that object can be indexed using \tcode{pack![N]}.
@@ -247,7 +245,7 @@ However, the code does make sense and is readable; e.g., see this \href{https://
 A few advantages come along with \tcode{...} for pack expansions.
 \begin{itemize}
 \item Seeing at a glance which pattern is expanded and where is useful.
-\item The syntax of pack declarations and pack expansion has so far been rather consistent and follows a given pattern. Multiple people % lah: developers? committee members?
+\item The syntax of pack declarations and pack expansion has so far been rather consistent and follows a given pattern. Multiple paper authors
  have come up with the same syntax independently because it's an obvious extension of existing syntax.
 \item Using \tcode{...\placeholder{postfix-syntax}} for this feature --- and future pack-related features (and nothing else) --- gives us a clear, reserved design space for packs.
 \end{itemize}
@@ -359,7 +357,7 @@ The provided wording is based on an implementation in a fork of Clang, which is 
 
 \section{Wording}
 
-\rSec2[basic.lookup.qual]{Qualified name lookup} % lah: 1. look at your PDF online. Your bullet is not displaying properly. Perhaps this isn't a web font or perhaps you're not embedding the fonts properly into your PDF. 2. Set your cross-references within parens, exactly like they appear in the Standard's draft. Inunderstand not wanting to use the section numbers, since it is a draft and they could change, but otherwise try to match the Standard when you're quoting from it.
+\rSec2[basic.lookup.qual]{Qualified name lookup}
 
 \rSec3[basic.lookup.qual.general]{General}
 
@@ -394,7 +392,7 @@ a complete \grammarterm{nested-name-specifier}.
 \end{bnf}
 
 \pnum
-\indextext{identifier}% % lah: Maybe add paragraph numbering. Set the paragraphs *exactly* as they appear in the Standard's draft.
+\indextext{identifier}
 An \grammarterm{identifier} is only
 an \grammarterm{id-expression} if it has
 been suitably declared \iref{dcl.dcl}
@@ -677,10 +675,10 @@ placeholder-type-specifier\br
     \tcode{signed char}               & ``\tcode{signed char}''           \\
     \keyword{char8_t}                   & ``\tcode{char8_t}''               \\
     \keyword{char16_t}                  & ``\tcode{char16_t}''              \\
+    ... & \\
 \end{simpletypetable}
-% lah: Add ... here to denote that the tables continues, but you're omitting the rest.
 
-% lah: why have you switched the order of the table and the text that precedes it in the Standard draft?
+
 \pnum
 When multiple \grammarterm{simple-type-specifier}{s} are allowed, they can be
 freely intermixed with other \grammarterm{decl-specifier}{s} in any order.
@@ -793,7 +791,6 @@ operand \iref{term.unevaluated.operand}.
 \rSec2[class.dtor]{Destructors}%
 
 
-% lah: your \added command is adding a space. There should be no space preceding the added comma, yet there is in your output PDF.
 \pnum
 \indextext{destructor!explicit call}%
 In an explicit destructor call, the destructor is specified by a
@@ -1127,7 +1124,7 @@ Previously, \tcode{T...[$n$]} would declare a pack of function parameters of typ
 \rationale
 Improve the handling of packs.
 \effect
-Valid C++23 code that declares % lah: a? the?
+Valid C++23 code that declares a
 pack of arrays parameter without specifying a \tcode{declarator-id} may become ill-formed.
 
 \begin{codeblock}
