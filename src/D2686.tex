@@ -4,7 +4,7 @@
 
 \documentclass{wg21}
 
-\title{Updated wording and implementation experience for P1481 (constexpr structured bindings)}
+\title{constexpr structured bindings and references to constexpr variables}
 \docnumber{D2686R1}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
@@ -19,134 +19,297 @@
 as a means to support \tcode{constexpr} structured bindings.
 This paper reports implementation experience on this proposal and provides updated wording.
 
-\subsection{Context}
+\section{Issues With R0 and possible solutions}
 
-The context for this paper can be found in \paper{P1481R0}.
-I was not aware to reach the original author, nor do I have the possibility to reproduce the original paper.
+The previous revision of this paper (\paper{P2686R0}) was approved by EWG in Issaquah, and was subsequently
+reviewed by CWG which found the proposed fording to be quite insufficient.
 
-The gist of it is that the original author proposed to support \tcode{constexpr} structured binding by making
+There is no issue with allowing constexpr structured binding in general, except for the case of a non-static structured binding
+initialized by a tuple, in which case, we need to make the equivalent of the following code work:
 
-\begin{colorblock}
-constexpr auto[a] = std::tuple(1);
-\end{colorblock}
-
-Equivalent to
 \begin{colorblock}
 constexpr auto __sb = std::tuple(1);
-const int& __a = std::get<0>(__sb);
+constexpr const int& __a = std::get<0>(__sb);
 \end{colorblock}
 
-\subsection{Additional motivation}
+\subsection{Issue with the originally proposed wording}
 
-In addition to the original motivation, if we believe structured bindings are useful (they are, great feature!)
-and we also believe in constexpr (as a means to increase type safety, improve runtime performance, etc),
-then both features ought to work together.
+The initial wording simply allowed references initialized by a constant expression to be usable in constant expressions.
+This failed to observe that the address of a \tcode{constexpr} variable with static storage duration may be different for each evaluation
+of a function and therefore cannot be a \emph{permitted result of a constant expression}.
 
-In addition to that, Expansion Statements (\paper{P1306R1}) aim to add a new kind of for loop
-with the express purpose to loop over tuples at compile time.
+CWG asks that EWG considers and pick one direction to resolve these concerns.
+Some options are explored below.
 
+\subsection{Allowing static and non-tuple constexpr structured binding}
+
+We should be clear that nothing prevents \tcode{constexpr} structured bindings to just work when binding an aggregate or an array - as those are modeled by special magic aliases that are not quite references
+(which allows them to work with bitfields).
+
+And a constexpr structured binding of a tuple \emph{with static storage duration}, ie:
 \begin{colorblock}
-auto tup = std::make_tuple(0, ‘a’, 3.14);
-// ill-formed without this paper
-template for (constexpr auto [idx, member] : std::views::enumerate(meta::data_members_of(^T)) )
-    fmt::print("{} {}", idx, foo.[:member:]);
+static constexpr auto [a, b] = std::tuple{1, 2};
 \end{colorblock}
 
-
-\subsection{History}
-
-Interestingly, this proposal was last seen in Kona in 2019.
-The concerns were
-\begin{itemize}
-    \item Lack of implementation
-    \item It was presented late in the C++20 cycle
-\end{itemize}
-
-
-\begin{quoteblock}
-Encourage further work on this proposal
-
-\begin{tabular}{|c|c|c|c|c|}
-    \hline
-    SF & F & N & A & SA\\
-    \hline
-    9 & 16 & 4 & 0 & 0 \\
-    \hline
-\end{tabular}
-\end{quoteblock}
-
-This paper thereby provides an implementation.
-I've also update the wording as CWG rewrote the impacted section, and added the wording to support the constexpr keyword
-on structured bindings declarations.
-
-\section{Implementation}
-
-\subsection{Circle}
-
-Circle implements constexpr structured bindings - and generally supports initializing references with constant expressions,
-and Sean Baxter was not aware that the standard didn't support it.
-Sean further observed that this is a core language syntactic sugar and as such, users could expect it to work everywhere.
-
-\subsection{Clang}
-I implemented a prototype implementation in the hope to weed out issues.
-It is available on \href{https://godbolt.org/z/dWWxcEEf9}{Compiler Explorer}.
-
-Please note that by lack of time, I have not yet published the last version of the implementation, but that should hopefully be
-done before Kona.
-
-
-I don't think the implementation revealed particular issues (my own inaptitudes non-withstanding), I, however, believe \tcode{[basic.odr]}
-might need to be tweaked.
-
-\begin{quoteblock}
-A variable \tcode{x} that is named by a potentially-evaluated expression \tcode{E} is odr-used by \tcode{E} unless x is a reference that is usable in constant expressions ([expr.const]).
-\end{quoteblock}
-
-I don't think this is sufficient. Consider for example,
+would also just work as it would be equivalent to
 
 \begin{colorblock}
-void foo() {
-    const int a = 1;
-    const int& b = a;
-    auto l = [] { return b; }; // we should not capture b implicitly here,
-                               // even if b is usable in constant expressions
+static constexpr auto __t = std::tuple{1, 2};
+static constexpr auto & a = std::get<0>(__t);
+static constexpr auto & b = std::get<1>(__t);
+\end{colorblock}
+
+Supporting that requires no further changes to the language than basically allowing the compiler to
+parse and apply the constexpr specifier.
+And independently of the rest of this paper, this would be useful and should be done.
+
+The problematic scenario is a non-static binding to a \tcode{tuple}.
+
+We could stop there, i.e. not try to solve this problem and force users to use \tcode{static}.
+We would however have to make sure expansion statements work with static variables as this was one of the motivations for this paper.
+The rest of the paper explores other options.
+
+\subsection{Making \tcode{constexpr} implicitly static}
+
+We could make \tcode{constexpr} variables implicitly static.
+However, this would most certainly break existing code, in addition to being inconsistent with the meaning of constexpr.
+Consider
+
+\begin{colorblock}
+int f() {
+    constexpr struct S {
+        mutable int m ;
+    } s{0};
+    return ++s.m;
+}
+
+int main() {
+    assert(f() + f() == 2); // currently 2. Becomes 3 if 's' is made implicitly static
 }
 \end{colorblock}
 
-In my prototype, I check that the initializer of the reference is itself a constant expression, and that seems to work.
+So this is not a practical suggestion. We could, as Richard suggested
+make \tcode{constexpr} only static in some cases to alleviate some of the breakages, or even only make constexpr bindings static - and not other variables, but this
+feels like a hack rather than an actual solution.
 
-\section{Wording}
+\subsection{Always re-evaluate a call to \tcode{get}?}
 
-\rSec1[expr.const]{Constant expressions}%
+We could conceive that during constant evaluation, tuple structured bindings are replaced by a call to \tcode{get} every time they are constant-evaluated.
+This would help with constexpr structured binding, but would still disallow generic cases like :
 
-\pnum
-A variable is \defn{potentially-constant} if
-it is constexpr or
-it has reference or const-qualified integral or enumeration type.
+\begin{colorblock}
+constexpr in not_a_sb =1;
+constexpr const int&  a = sb;
+\end{colorblock}
 
-\pnum
-A constant-initialized potentially-constant variable $V$ is
-\defn{usable in constant expressions} at a point $P$ if
-$V$'s initializing declaration $D$ is reachable from $P$ and
+Additionally, this would be observable in scenarios where get would perform some kind of compile time i/o such as proposed by \paper{P2758R0}.
+
+\subsection{Symbolic addressing}
+
+The most promising option, the one we think should be pursued is for \tcode{constexpr} references to designate a specific object, rather than an address,
+and to retain that information across constant evaluation contexts.
+This is how constant evaluation of references works except that this information is not currently persisted across constant evaluation - which is why we do not permit
+constexpr references to refer to objects with automatic storage duration (or subobjects thereof).
+
+To quote the reflector:
+
+\begin{quoteblock}
+This would also resolve a longstanding complaint that the following is invalid:
+\begin{colorblock}
+void f() {
+    constexpr int a = 1;
+    constexpr auto *p = &a;
+}
+\end{colorblock}
+
+It seems like a lot of C++ developers expect the declaration of p to be valid, even though it's potentially initialized to a different address each time f is invoked.
+\end{quoteblock}
+
+This solution has the benefit of not being structured-binding specific and would arguably meet user expectations better than the current rule.
+Interestingly, and maybe counter-intuitively  the constexprness of pointers and references is completely orthogonal to that of their underlying object:
+
+\begin{colorblock}
+int main() {
+    static int i = 0;
+    static constexpr int & r = i; // currently valid
+
+    int j = 0;
+    constexpr int & s = j; // could be valid under the "symbolic addressing" model.
+}
+\end{colorblock}
+
+References can be constant expressions because we can track during constant evaluation which object they refer to, independently of whether the value of that object is or isn't a constant expression.
+
+There are several things we would have to be careful about.
+Pointers and references to variables with automatic storage duration cannot be used outside of the lifetime of their underlying objects, so they could not appear
 \begin{itemize}
-    \item $V$ is constexpr \added{or it is of reference type initialized with a core constant expression},
-    \item $V$ is not initialized to a TU-local value, or
-    \item $P$ is in the same translation unit as $D$.
-\end{itemize}
-An object or reference is \defn{usable in constant expressions} if it is
-\begin{itemize}
-    \item a variable that is usable in constant expressions, or
-    \item a template parameter object\iref{temp.param}, or
-    \item a string literal object\iref{lex.string}, or
-    \item a temporary object of non-volatile const-qualified literal type
-    whose lifetime is extended\iref{class.temporary}
-    to that of a variable that is usable in constant expressions, or
-    \item a non-mutable subobject or reference member of any of the above.
+  \item In template arguments
+  \item As the initializer of a variable with static storage duration.
 \end{itemize}
 
-\rSec1[dcl.struct.bind]{Structured binding declarations}%
-\indextext{structured binding declaration}%
-\indextext{declaration!structured binding|see{structured binding declaration}}%
+Similarly, we can construct an automatic storage duration reference to a static variable, but not a static constexpr reference bound to an automatic storage duration object.
+
+\subsection{Additional considerations}
+
+\subsubsection{Thread-local variables}
+
+Taking the address of a thread-local variable may initialize the variable, and that initialization may not be a constant expression.
+Supporting references/pointers to thread-local variables would therefore require additional consideration, probably we would only want to allow it if it was already initialized
+on declaration.
+
+We could exclude thread locals from the design entirely as I'm not sure there is a compelling use case for constexpr references to thread-local objects.
+
+\subsubsection{Lambda capture of \tcode{constexpr} references bound to automatic storage duration objects}
+
+\tcode{constexpr} references are not odr-used.  Because of that, a constexpr reference used in a lambda does not trigger a capture.
+This would be problematic for references bount to automatic storage duration objects, ie consider:
+
+\begin{colorblock}
+auto f() {
+    int i = 0;
+    constexpr const int & ref = i;
+    return [] {
+        return ref;
+    });
+}
+f(); //# ! try to access i outside of its lifetime
+\end{colorblock}
+
+We will have to modify \href{http://eel.is/c++draft/basic.def.odr#5.1}{[basic.def.odr]/p5.1}so that constexpr references to automatic storage duration variables (or subobjects thereof) are odr-used.
+
+\section{Next step}
+
+CWG is asking EWG to pick a direction. We will provide wording consistent with that direction.
+In the meantime, this paper retains the wording for \tcode{constexpr} structured binding which can be pursued independently (non-static bindings of \tcode{tuple} will just not
+work.)
+
+%\section{Original Motivation}
+%
+%The context for this paper can be found in \paper{P1481R0}.
+%I was not aware to reach the original author, nor do I have the possibility to reproduce the original paper.
+%
+%The gist of it is that the original author proposed to support \tcode{constexpr} structured binding by making
+%
+%\begin{colorblock}
+%constexpr auto[a] = std::tuple(1);
+%\end{colorblock}
+%
+%Equivalent to
+%\begin{colorblock}
+%constexpr auto __sb = std::tuple(1);
+%const int& __a = std::get<0>(__sb);
+%\end{colorblock}
+%
+%In addition to the original motivation, if we believe structured bindings are useful (they are, great feature!) and we also believe in constexpr (as a means to increase type safety, improve runtime performance, etc),
+%then both features ought to work together.
+%
+%In addition to that, Expansion Statements (\paper{P1306R1}) aim to add a new kind of for loop
+%with the express purpose to loop over tuples at compile time.
+%
+%\begin{colorblock}
+%auto tup = std::make_tuple(0, ‘a’, 3.14);
+%// ill-formed without this paper
+%template for (constexpr auto [idx, member] : std::views::enumerate(meta::data_members_of(^T)) )
+%    fmt::print("{} {}", idx, foo.[:member:]);
+%\end{colorblock}
+%
+%
+%\subsection{History}
+%
+%Interestingly, this proposal was last seen in Kona in 2019.
+%The concerns were
+%\begin{itemize}
+%    \item Lack of implementation
+%    \item It was presented late in the C++20 cycle
+%\end{itemize}
+%
+%
+%\begin{quoteblock}
+%Encourage further work on this proposal
+%
+%\begin{tabular}{|c|c|c|c|c|}
+%    \hline
+%    SF & F & N & A & SA\\
+%    \hline
+%    9 & 16 & 4 & 0 & 0 \\
+%    \hline
+%\end{tabular}
+%\end{quoteblock}
+%
+%This paper thereby provides an implementation.
+%I've also updated the wording as CWG rewrote the impacted section, and added the wording to support the constexpr keyword
+%on structured bindings declarations.
+%
+%\section{Implementation}
+%
+%\subsection{Circle}
+%
+%Circle implements constexpr structured bindings - and generally supports initializing references with constant expressions,
+%and Sean Baxter was not aware that the standard didn't support it.
+%Sean further observed that this is a core language syntactic sugar and as such, users could expect it to work everywhere.
+%
+%\subsection{Clang}
+%I implemented a prototype implementation in the hope to weed out issues.
+%It is available on \href{https://godbolt.org/z/dWWxcEEf9}{Compiler Explorer}.
+%
+%Please note that by lack of time, I have not yet published the last version of the implementation, but that should hopefully be
+%done before Kona.
+%
+%
+%I don't think the implementation revealed particular issues (my own inaptitudes non-withstanding), I, however, believe \tcode{[basic.odr]}
+%might need to be tweaked.
+%
+%\begin{quoteblock}
+%A variable \tcode{x} that is named by a potentially-evaluated expression \tcode{E} is odr-used by \tcode{E} unless x is a reference that is usable in constant expressions ([expr.const]).
+%\end{quoteblock}
+%
+%I don't think this is sufficient. Consider for example,
+%
+%\begin{colorblock}
+%void foo() {
+%    const int a = 1;
+%    const int& b = a;
+%    auto l = [] { return b; }; // we should not capture b implicitly here,
+%                               // even if b is usable in constant expressions
+%}
+%\end{colorblock}
+%
+%In my prototype, I check that the initializer of the reference is itself a constant expression, and that seems to work.
+
+\section{Wording for constexpr structured binding}
+
+\ednote{This wording only makes constexpr structured a valid grammatrical construct and does not permit non-static bindings of tuple-like objets}
+
+%\rSec1[expr.const]{Constant expressions}%
+%
+%\pnum
+%A variable is \defn{potentially-constant} if
+%it is constexpr or
+%it has reference or const-qualified integral or enumeration type.
+%
+%\pnum
+%A constant-initialized potentially-constant variable $V$ is
+%\defn{usable in constant expressions} at a point $P$ if
+%$V$'s initializing declaration $D$ is reachable from $P$ and
+%\begin{itemize}
+%    \item $V$ is constexpr \added{or it is of reference type initialized with a core constant expression},
+%    \item $V$ is not initialized to a TU-local value, or
+%    \item $P$ is in the same translation unit as $D$.
+%\end{itemize}
+%An object or reference is \defn{usable in constant expressions} if it is
+%\begin{itemize}
+%    \item a variable that is usable in constant expressions, or
+%    \item a template parameter object\iref{temp.param}, or
+%    \item a string literal object\iref{lex.string}, or
+%    \item a temporary object of non-volatile const-qualified literal type
+%    whose lifetime is extended\iref{class.temporary}
+%    to that of a variable that is usable in constant expressions, or
+%    \item a non-mutable subobject or reference member of any of the above.
+%\end{itemize}
+%
+%\rSec1[dcl.struct.bind]{Structured binding declarations}%
+%\indextext{structured binding declaration}%
+%\indextext{declaration!structured binding|see{structured binding declaration}}%
 
 \pnum
 A structured binding declaration introduces the \grammarterm{identifier}{s}

@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{user-generated \tcode{static\_assert} messages}
-\docnumber{P2741R1}
+\docnumber{D2741R2}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -20,6 +20,15 @@
 We propose that \tcode{static_assert} should accept user-generated string-like objects as their diagnostic message.
 
 \section{Revisions}
+
+\subsection{R2}
+
+Following SG-16 review:
+
+\begin{itemize}
+\item Remove support for \tcode{char8_t} for now.
+\item Improve wording
+\end{itemize}
 
 \subsection{R1}
 
@@ -197,6 +206,20 @@ A compatible string-like type is a type that:
 
 This is consistent with how structured bindings and range for loops work.
 
+\subsection{Non-contiguous ranges}
+
+We only propose to support ranges that offer \tcode{size()} and \tcode{data()}.
+There are a few reasons for that.
+
+Defining what a range is is slightly more involved - although we could reuse the definition used by ranged-base \tcode{for}, and it seem less motivated.
+ie, string-like are usually contiguous.
+
+But the main reason is that implenters expressed some slight performance concerns.
+constant evaluating \tcode{operator++} and \tcode{operaor*} for each character at compile time is a lot less efficient than evaluating a pointer.
+It could even be faster to convert a list to string and then use it in a diagnostic message, than to use the list directly, as the later forces
+us to get in and out of the constant evaluation domain.
+
+
 \subsection{Encodings}
 
 Constant evaluation deals with literal encoding, which may not be UTF-8.
@@ -261,6 +284,8 @@ Fair enough, but if we are concerned about that, we should add u8 support to \tc
 Null-terminated strings are mostly useful to communicate with C libraries and systems and are rarely useful at compile time.
 While it would not be a huge effort to support them, maybe it's best to keep the design simple.
 
+SG-16 expressed a slight preference to not support null-terminated string.
+
 \subsection{Alternatives}
 
 In the status quo, depending on the specific use case, macros can be used to stringify some arguments, or
@@ -302,13 +327,18 @@ This feature was implemented in Circle and prototyped in Clang, with no difficul
     \opt{attribute-specifier-seq} decl-specifier-seq \opt{ref-qualifier} \terminal{[} identifier-list \terminal{]} initializer \terminal{;}
 \end{bnf}
 
+\begin{addedblock}
+\begin{bnf}
+    \nontermdef{static-assert-message}\br
+        unevaluated-string\br
+        constant-expression\br
+\end{bnf}
+\end{addedblock}
+
 \begin{bnf}
     \nontermdef{static_assert-declaration}\br
     \keyword{static_assert} \terminal{(} constant-expression \terminal{)} \terminal{;}\br
-    \keyword{static_assert} \terminal{(} constant-expression \terminal{,} unevaluated-string \terminal{)} \terminal{;}\br
-    \begin{addedblock}
-    \keyword{static_assert} \terminal{(} constant-expression \terminal{,} constant-expression \terminal{)} \terminal{;}
-     \end{addedblock}
+    \keyword{static_assert} \terminal{(} constant-expression \terminal{,} \changed{unevaluated-string}{static-assert-message} \terminal{)} \terminal{;}\br
 \end{bnf}
 
 \begin{bnf}
@@ -326,34 +356,57 @@ This feature was implemented in Circle and prototyped in Clang, with no difficul
 \pnum
 \indextext{\idxgram{static_assert}}%
 
-In a \grammarterm{static_assert-declaration},
-the \added{first} \grammarterm{constant-expression} \added{$E$}
-is contextually converted to \keyword{bool} and
-the converted expression shall be a constant expression\iref{expr.const}.
+\textcolor{noteclr}{[...]}
+
+\pnum
+\indextext{definition!declaration as}%
+Syntactic components beyond those found in the general form of
+\grammarterm{simple-declaration} are added to a function declaration to make a
+\grammarterm{function-definition}. An object declaration, however, is also
+a definition unless it contains the \keyword{extern} specifier and has no
+initializer\iref{basic.def}.
+\indextext{initialization!definition and}%
+An object definition causes storage of appropriate size and alignment to be reserved and
+any appropriate initialization\iref{dcl.init} to be done.
+
+\pnum
+A \grammarterm{nodeclspec-function-declaration} shall declare a
+constructor, destructor, or conversion function.
+\begin{note}
+ Because a member function cannot be subject to a non-defining declaration
+ outside of a class definition\iref{class.mfct}, a \grammarterm{nodeclspec-function-declaration}
+ can only be used in a \grammarterm{template-declaration}\iref{temp.pre},
+ \grammarterm{explicit-instantiation}\iref{temp.explicit}, or
+ \grammarterm{explicit-specialization}\iref{temp.expl.spec}.
+\end{note}
+
 
 \begin{addedblock}
-If a second \grammarterm{constant-expression} $Msg$ is provided:
+\pnum
+
+If a \grammarterm{static-assert-message} matches the syntactic requirements of \grammarterm{unevaluated-string}
+it is an \grammarterm{unevaluated-string} and its text is the text of the \grammarterm{unevaluated-string}.
+
+Otherwise, a \grammarterm{static_assert-message} is a \grammarterm{constant-expression} $Msg$ and
 \begin{itemize}
     \item \tcode{$Msg$.size()} shall be a well-formed integral constant expression,
-    \item \tcode{$Msg$.data()} shall be a well-formed constant expression whose possibly const-qualified type is \tcode{char*} or \tcode{char8_t*}, and
-    \item \tcode{[$Msg$.data(), $Msg$.data() + $Msg$.size())} shall denote a valid range.
+    \item \tcode{$Msg$.data()} shall be a well-formed constant expression whose type is a pointer to possibly const-qualified \tcode{char}, and
+    \item the text of the \grammarterm{static-assert-message} is formed by the sequence\\ \tcode{[$Msg$.data(), $Msg$.data() + $Msg$.size())} which shall denote a valid range.
 \end{itemize}
 \end{addedblock}
+
+In a \grammarterm{static_assert-declaration},
+the \grammarterm{constant-expression}
+is contextually converted to \keyword{bool} and
+the converted expression shall be a constant expression\iref{expr.const}.
 
 
 If the value of the expression \added{$E$} when
 so converted is \tcode{true}, the declaration has no
 effect.
 Otherwise, the program is ill-formed and the resulting
-diagnostic message\iref{intro.compliance} should include \removed{the text of
-the \grammarterm{string-literal}, if one is supplied.}
-
-\begin{addedblock}
-\begin{itemize}
-\item the text formed by the sequence \tcode{[$Msg$.data(), $Msg$.data() + $Msg$.size())} if $Msg$ is supplied, or
-\item the text of the \grammarterm{string-literal}, if one is supplied.
-\end{itemize}
-\end{addedblock}
+diagnostic message\iref{intro.compliance} should include the text of
+the \changed{\grammarterm{string-literal}}{\grammarterm{static-assert-message}}, if one is supplied.
 
 
 \begin{example}
