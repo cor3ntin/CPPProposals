@@ -63,15 +63,19 @@
 \usepackage{xparse}
 \usepackage{xstring}
 
+\IfFontExistsTF{Noto Sans}{
+  \setmainfont{Noto Sans}
+}{}
 
-%\setmainfont{Noto Sans}
-%\newcommand{\emoji}[1]{ {\setmainfont{Noto Color Emoji}[Renderer=Harfbuzz]{#1}} }
+\IfFontExistsTF{Inconsolatazi4}{
+  \setmonofont[
+    AutoFakeSlant,
+    BoldItalicFeatures={FakeSlant},
+  ]{Inconsolatazi4}
+}{}
 
+\newcommand{\emoji}[1]{ {\setmainfont{Noto Color Emoji}[Renderer=Harfbuzz]{#1}} }
 
-%\setmonofont[
-%  AutoFakeSlant,
-%  BoldItalicFeatures={FakeSlant},
-%]{Inconsolatazi4}
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
