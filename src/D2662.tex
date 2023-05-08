@@ -26,30 +26,36 @@ This paper expands on the pack indexing feature described in \paper{P1858R2} and
 
 \subsection{R1}
 
-Better explore the syntax choices and explore alternatives. Wording improvements.
+\begin{itemize}
+\item{Better explore the syntax choices and explore alternatives}
+\item Wording improvements/
+\end{itemize}
 
 \subsection{R0}
 
-Initial revision
+\begin{itemize}
+\item{Initial revision}
+\end{itemize}
 
 \section{Motivation}
 
-The motivation for pack indexing is covered in "Generalized pack declaration and usage" (\paper{P1858R2}) and
-"A plan for better template meta programming facilities in C++26" \cite{P2632R0}.
+The motivation for pack indexing is covered in \paper{P1858R2} and
+ \paper{P2632R0}.
 
-The short version is that packs are sequences of types/expressions, and indexing is a fundamental operation on sequences.
-C++ and its users have so far relied on deduction or library facilities such as \tcode{index_sequence} or full-fledged template metaprogramming libraries such as
-mp11 and boost.hana to extract the Nth element of a pack, which has a high cost both in terms of code complexity and compiler throughput.
+The short background version is that packs are sequences of types or expressions
+and indexing is a fundamental operation on sequences.
+C++ and its users have so far relied on deduction or library facilities, such as \tcode{index_sequence}, or full-fledged template metaprogramming libraries, such as
+mp11 and boost.hana, to extract the Nth element of a pack, which has a high cost both in terms of code complexity and compiler throughput.
 
-This paper proposes a new code language syntax to index packs of types (yielding a type), and packs of expressions (yielding an expression).
+This paper proposes a new code language syntax to index packs of types (yielding a type) and packs of expressions (yielding an expression).
 
 Previous works in this area also include \paper{P0565R0}, \paper{P1803R0}, \paper{N3761} and \paper{N4235}.
 
 \section{Syntax}
 
 The general syntax is \tcode{\placeholder{name-of-a-pack} ... [constant-expression]}.
-The syntax has the benefit of reusing familiar elements (\tcode{...} usually denotes a pack expansion) and \tcode{[]} subscripts,
-It is therefore natural that indexing a pack expansion reuses these elements.
+The syntax has the benefit of reusing familiar elements (\tcode{...} usually denotes a pack expansion) and \tcode{[]} subscripts.
+That indexing a pack expansion reuses these elements is, therefore, natural:
 
 \begin{colorblock}
 template <typename... T>
@@ -57,84 +63,92 @@ constexpr auto first_plus_last(T... values) ->  T...[0] {
     return T...[0](values...[0] + values...[sizeof...(values)-1]);
 }
 int main() {
-    //first_plus_last(); // ill-formed
+    //first_plus_last(); // ill formed
     static_assert(first_plus_last(1, 2, 10) == 11);
 }
 \end{colorblock}
 
-This is a syntax that is used by Circle and that was initially proposed by \paper{P1858R2}.
+This syntax is used by Circle and was initially proposed by \paper{P1858R2}.
 
-\subsection{Other syntaxes considered}
+\subsection{Other syntactic options considered}
 
-The pack...[index] syntax was selected for this proposal after considering a
-number of other possible syntaxes, some of which have been proposed by other
-committee members:
-
+The \tcode{pack...[index]}
+syntax was selected for this proposal after considering a
+number of other options, some of which have been proposed by other
+committee members.
 \begin{itemize}
-\item \tcode{pack.[index]} - \paper{N4235}
+\item \tcode{pack.[index]}; see \paper{N4235}
 \item \tcode{pack<index>} or \tcode{pack...<index>}
 \item \tcode{std::nth_type<index, pack...>} or \tcode{std::nth_value<index>(pack...)}
-\item \tcode{packexpr(args, I)} - \paper{P1803R0}
-\item \tcode{[index]pack} - \paper{P0535R0}
-\item Pack Objects - \paper{P2671R0}
+\item \tcode{packexpr(args, I)}; see \paper{P1803R0}
+\item \tcode{[index]pack}; see \paper{P0535R0}
+\item Pack objects; see \paper{P2671R0}
 \end{itemize}
 
-\subsection{So, which syntax to pick?}
+\subsection{So, which syntax is the best choice?}
 
 Any syntax would be better than
 \href{https://twitter.com/incomputable/status/1590733659694583808}{the status quo}.
-However, having analyzed different options, the original choice,
+However, having considered the different options, the original choice,
+
 \tcode{Pack...[N]}, still seems to be the best option, as it is straightforward
 and consistent with existing pack features.  What follows is a detailed
-analysis of the different options, but the reader may want to skip forward to
-the "Pack Index" section if the proposed syntax is acceptable to them.
+analysis of the different options, but readers who find the proposed syntax acceptable might want to skip forward to
+the "Pack Index" section.
 
-Before arguing what the best syntax is, which is ultimately subjective, we need to understand the constraints:
+Before arguing what the best syntax is, which is ultimately subjective, we need to understand the constraints.
 \begin{itemize}
-\item An indexed pack can produce a type, an expression, and maybe in the future a template template parameter, a universal template, etc, so we need a syntax
+\item An indexed pack can produce a type, an expression, and maybe in the future a template template parameter, a universal template, and so on; thus we need a syntax
 that can work in all contexts.
+
 \item We want a syntax that can be expanded to support slicing in the future.
-\item Pack elements can be array-like or tuple-like, so we need to be careful about ambiguities.
 
-In particular, directly applying a subscript to a pack (\tcode{P[i]}, where \tcode{P} is a pack) is not viable.
-Indeed, indexing a pack of arrays (\tcode{ArrayPack...[index]}), indexing each array in a pack (\tcode{ArrayPack[index]...}),
-indexing a single array with a pack of indexes (\tcode{Array[IndexPack]...}), and indexing each array in a pack of array with an index from an (equal-length) pack of indexes
-(\tcode{ArrayPack[IndexPack]...}) are different operations, all of which are useful.
-
-[\href{https://compiler-explorer.com/z/E86h8eMG1}{This example}] shows how, using the proposed syntax, one can distinguish between indexing
-the arrays from a pack with indexes from a pack (\tcode{ArrayPack[IndexPack]...}) and indexing a pack of arrays with a pack of indexes (\tcode{ArrayPack...[IndexPack]...}).
+\item Pack elements can be array like or tuple like, so we need to be careful
+  about ambiguities. In particular, directly applying a subscript to a pack
+  (\tcode{P[i]}, where \tcode{P} is a pack) is nonviable. Indeed, indexing a
+  pack of arrays (\tcode{ArrayPack...[index]}), indexing each array in a pack
+  (\tcode{ArrayPack[index]...}), indexing a single array with a pack of indexes
+  (\tcode{Array[IndexPack]...}), and indexing each array in a pack of arrays
+  with an index from an (equal-length) pack of indexes
+  (\tcode{ArrayPack[IndexPack]...}) are different operations, all of which are
+  useful. [\href{https://compiler-explorer.com/z/E86h8eMG1}{This example}]
+  shows how, using the proposed syntax, one can distinguish between indexing
+  the arrays from a pack with indexes from a pack
+  (\tcode{ArrayPack[IndexPack]...}) and indexing a pack of arrays with a pack
+  of indexes (\tcode{ArrayPack...[IndexPack]...}).
 \end{itemize}
 
-\subsubsection{pack.[index]}
+\subsubsection{\tcode{pack.[index]}}
 
 Historically in C++ (and C++-like languages), a single dot denotes member access.
-Reusing that syntax for pack indexing would introduce a semantics inconsistency.
+Reusing that syntax for pack indexing would introduce a semantics inconsistency and, more importantly, could close the door to future evolutions.
 
-More importantly, it may close the door to future evolutions.
-\paper{P1858R0} proposes \tcode{tuple-like.[N]} as sugar over \tcode{get<N>(tuple-like)}
-and \tcode{aggregate.[N]} returning the $Nth$ data member of an aggregate.
+\paper{P1858R0} proposes \tcode{tuple-like.[N]} as syntactic sugar over
+\tcode{get<N>(tuple-like)}
+and \tcode{aggregate.[N]} returning the $Nth$ data member of an aggregate. % lah: WHAT is "returning the $Nth$ data member of an aggregate"---just the aggregate.[N] or BOTH get<N>(tuple-like) AND aggregate.[N]?
 
-Ideally, \tcode{tuple[N]} would just work. A few proposals have tried to improve the ergonomy of tuple indexing
-\paper{P2726R0}, \paper{P0311R0}.
+Ideally, \tcode{tuple[N]} would simply work.
+A few proposals have tried to improve the user-friendlyness
+of tuple indexing (see
+\paper{P2726R0} and \paper{P0311R0}).
 
-I don't think there is a technical limitation to making `tuple-like[N]` work, on types that do not otherwise define a \tcode{operator[]}.
-\paper{P1858R2} prefers \tcode{.[]} to \tcode{[]} because it proposes not only to index tuple-like but also any other decomposable types such as aggregates.
-An aggregate might have an \tcode{operator[]} already, and so there is a need to disambiguate.
-Note that array-like classes are tuple-like, but their \tcode{operator[]} has the same semantics as what tuple indexing would do.
+We see no technical limitation to making \tcode{tuple-like[N]} work on types that do not otherwise define a \tcode{operator[]}.
+\paper{P1858R2} prefers \tcode{.[]} to \tcode{[]} because the paper proposes to index not only tuple-like, but also any other decomposable types, such as aggregates.
+An aggregate might have an \tcode{operator[]} already, so disambiguating is unnecessary.
+Note that array-like classes are tuple like, but their \tcode{operator[]} has the same semantics as what tuple indexing would do. % lah: I know this seems weird, but in "array-like classes," the "array-like" is functioning as a two-word adjective for a noun, so it gets a hyphen, and "tuple like" is functioning as a predicate adjective, so it doesn't get a hyphen.
 
-Whether tuple-indexing should be spelled \tcode{.[]} or \tcode{[]} depends on whether indexing an aggregate is a frequent enough use case
-to warrant a specific syntax, rather than indexing the pack formed by unpacking an aggregate (\tcode{aggregate[:]} - in the syntax of \paper{P1858R2}, \tcode{aggregate.[N]} is a shorthand for \tcode{aggregate[:]...[N]}).
+Whether tuple-indexing should be written as \tcode{.[]} or \tcode{[]} depends on whether indexing an aggregate is a frequent enough use case
+to warrant a specific syntax, rather than indexing the pack formed by unpacking an aggregate (\tcode{aggregate[:]} --- in the syntax of \paper{P1858R2}, \tcode{aggregate.[N]} is a shorthand for \tcode{aggregate[:]...[N]}).
 
-If we don't find a shorthand syntax to index the fields of an aggregate useful, then we can index tuple-like objects with \tcode{tuple[N]} which would make
-\tcode{pack.[N]} up for grab...
-
-... Which does not mean we should. There is very little motivation to use syntax usually denoting member access for packs, except that it's an available syntax.
+If % lah: When are you using "we" to mean the authors and when are you using it to mean "the Committee" or "the C++ community"?
+a shorthand syntax to index the fields of an aggregate doesn't seem useful, then we can index tuple-like objects with \tcode{tuple[N]}, which would make
+\tcode{pack.[N]} up for grabs. But that does not mean we should. We see little motivation --- other than availability --- for using syntax that usually denotes member access for packs.
 
 \subsubsection{Angle brackets}
 
-We could use angle brackets instead of square brackets. I guess the argument is that \tcode{<>} is more template-ish and pack indexing is also template-ish.
-However, there are existing practices in most languages for \tcode{[]} to be used for both indexing and slicing.
-Being consistent with existing practice never hurt.
+We could use angle brackets instead of square brackets, the argument, we suppose, being argument is that \tcode{<>} is more template like and that pack indexing is also template like.
+However, most languages have existing practices in which \tcode{[]} is to be used for both indexing and slicing.
+Being consistent with existing practice doesn't hurt.
 Besides, pack indexing will often occur in angle-bracket-heavy code, so using brackets for indexing too would not look better.
 
 \subsection{\tcode{std::nth_type<index, pack...>} or \tcode{std::nth_value<index>(pack...)}}
@@ -208,23 +222,24 @@ are significant:
 
 \subsubsection{Magic function}
 
-\paper{P1803R0} proposed \tcode{packexpr(pack, N)}. ie \tcode{reserved-identifier(pack, N)}.
-We'd need to find an identifier that is meaningful for all types of packs (not just expressions) and is not widely used.
-It would most certainly have to be a globally reserved keyword (not a contextual one), as pack indexing can appear anywhere either a type or an expression can appear. which is to say, everywhere.
+\paper{P1803R0} proposed \tcode{packexpr(pack, N)}, i.e., \tcode{reserved-identifier(pack, N)}.
+We would need to find an identifier that is meaningful for all types of packs (not just expressions) and is not widely used.
+The identifier would most certainly have to be a globally reserved keyword (not a contextual one), as pack indexing can appear anywhere either a type, or an expression can appear, which is everywhere.
 
-Maybe \tcode{packelement(pack, index)}. This would work, but we would arguably need another identifier for slicing.
+Perhaps \tcode{packelement(pack, index)} would work, but we would arguably need another identifier for slicing.
 
 \subsubsection{\tcode{[N]pack...}}
 
-Putting the index before the pack was explored by \paper{P0535R0}.
-This would probably work, although some look-ahead to distinguish from lambdas may be necessary.
-It doesn't appear to be any logic to that choice, besides the fact that it's available.
+\paper{P0535R0} explored putting the index before the pack, and this method
+would probably work, although some looking ahead might be necessary to distinguish that syntax from that of lambdas.
+We see no logic to this choice other than, again, availability.
 
 \subsubsection{Pack objects}
 
-\paper{P2671R0} proposes a syntax to create a "pack object" (an expression) to instruct the compiler to manipulate a pack without expanding it.
-The one motivating use case is the for expansion statement, where that syntax allows us to distinguish "looping" over a tuple versus looping over a pack in a non-ambiguous manner.
-Other examples, including pack indexing and slicing, look similar but arguably worse using this "pack object" mechanism.
+\paper{P2671R0} proposes a syntax (rather arbitrarily given it's currently unused), to create a \textit{pack object} or, rather, to instruct the compiler to manipulate
+a pack without expanding it.
+The one motivating use case is for the expansion statement, where that syntax allows us to distinguish \textit{looping} over a tuple versus looping over a pack in a nonambiguous manner.
+Other examples, including pack indexing and slicing, look similar but arguably worse using this \textit{pack object} mechanism.
 
 As noted, an expansion statement can be used with a pack using
 
@@ -232,9 +247,8 @@ As noted, an expansion statement can be used with a pack using
     template for (auto elem : std::tuple(ts...)) { ... }
 \end{colorblock}
 
-Barry observes this is "wasteful" which is true, but a big part of the problem is that a tuple is a much heavier type than it ought to be,
-and pack indexing is one of the tools we need to make tuples lighter - along with forwarding references deduction and member packs).
-
+Revzin observes this use is "wasteful," which is true, but a big part of the problem is that a tuple is a much heavier type than it ought to be,
+and pack indexing is one of the tools we need to make tuples lighter - along with forwarding references deduction and member packs.
 
 In this model, \tcode{pack!} is a pack object (the syntax seems to have been chosen rather arbitrarily on the fact it's currently not used),
 and then that object can be indexed using \tcode{pack![N]}.
@@ -290,19 +304,20 @@ a pack indexing operation spelled \tcode{![]} instead of \tcode{...[]}.
 
 I will not claim that one is prettier than the other, but one is certainly a natural extension of the current grammar.\subsubsection{Something else?}
 
-We could entertain all sorts of syntaxes that are not yet used. 2 dots, 4 dots, \tcode{!}, \tcode{@} \$, etc.
-None of them would be a logical extension of the existing grammar and, as we are extending an existing facility, we should aim for something more justified than simply "it's not yet used by something else"
+We could entertain all sorts of syntaxes that are not yet used: two dots, four dots, \tcode{!}, \tcode{@} \$, and so on.
+None of them would be a logical extension of the existing grammar, and since we are extending an existing facility, we should aim for something more justified than simply "it's not yet used by something else."
 
 \subsubsection{Too many dots?}
 
 One of the arguments heard against the \tcode{T...[N]} syntax is the "too many dots" argument.
-And it's true that code that does a lot of pack manipulation has some dots.
-However, it does make sense and it's readable in actual code \href{https://github.com/seanbaxter/circle/blob/master/tuple/tuple.hxx}{like this implementation of tuple}.
-\tcode{...} for pack expansions have a few advantages
+And it's true that code that perform a lot of pack manipulation has numerous dots.
+However, the code does make sense and is readable; e.g., see this \href{https://github.com/seanbaxter/circle/blob/master/tuple/tuple.hxx}{linked implementation of tuple}.
+A few advantages come along with \tcode{...} for pack expansions.
 \begin{itemize}
-\item It is useful to be able to see at a glance which pattern is expanded, and where.
-\item The syntax of pack declarations and pack expansion has so far been rather consistent and follows a given pattern. Multiple people have come up with the same syntax independently because it's sort of it the obvious extension of existing syntax.
-\item Using \tcode{...\placeholder{postfix-syntax}} for this feature, and future pack-related features (and nothing else), gives us a clear reserved design space for packs.
+\item Seeing at a glance which pattern is expanded and where is useful.
+\item The syntax of pack declarations and pack expansion has so far been rather consistent and follows a given pattern. Multiple paper authors
+ have come up with the same syntax independently because it's an obvious extension of existing syntax.
+\item Using \tcode{...\placeholder{postfix-syntax}} for this feature --- and future pack-related features (and nothing else) --- gives us a clear, reserved design space for packs.
 \end{itemize}
 
 \section{Allowable values for the pack index}
@@ -311,10 +326,8 @@ The index of a pack indexing expression or specifier is an integral constant exp
 Empty packs can't be indexed.
 
 In other proposals, a negative index, \tcode{-N}, would be interpreted as
-indexing from the end of the pack (as an alias of \tcode{T...[sizeof...(T)-N]}).
-However, a negative index could occur by accident, yielding surprising results.
-
-Consider:
+indexing from the end of the pack --- as an alias of \tcode{T...[sizeof...(T)-N]}.
+However, a negative index could occur by accident, yielding surprising results:
 
 \begin{colorblock}
 // Return the index of the first type convertible to Needle in Pack
@@ -326,37 +339,35 @@ auto find_convertible_in_pack;
 using T = Types...[find_convertible_in_pack<Foo, Types...>];
 \end{colorblock}
 
-In general, incorrect computations in an index can lead to a negative value that should make the program ill-formed but would instead
+In general, incorrect computations in an index can lead to a negative value that should make the program ill formed but would instead
 yield an incorrect type.
 
-Note however that circle does support from-the-end indexing using a negative index, and Sean Baxter reports no surprise from using this feature.
+Note, however, that Circle does support from-the-end indexing using a negative index, and Sean Baxter reports no surprises from using this feature.
 
 An alternative for indexing from the end is to provide a specific syntax; for example, C\# uses \tcode{\^{}} to mean "from the end", and Dlang interprets \tcode{\${}}
-as the size of the array
+as the size of the array:
 \begin{colorblock}
 using Foo = T...[0];
-using Bar = T...[^1]; // First from the end
-using Bar = T...[$ - 1]; // First from the end
+using Bar = T...[^1]; // first from the end
+using Bar = T...[$ - 1]; // first from the end
 \end{colorblock}
 
-Given that there are different alternatives, all of which can be added later, and for which we do not have usage experience, this paper does not propose
+Given that alternatives are available, all of which can be added later and for which we do not have usage experience, this paper does not propose
 from-the-end indexing.
 
 \section{Indexing a pack of types}
 
-Indexing a pack of type is a type specifier that can, like \tcode{decltype} appear:
+Indexing a pack of types is a type specifier that can, like \tcode{decltype}, appear as
 \begin{itemize}
-    \item As a simple-type-specifier
-    \item As a base class specifier
-    \item As a nested name specifier
-    \item As the type of an explicit destructor call
+    \item a simple-type-specifier
+    \item a base class specifier
+    \item a nested name specifier
+    \item the type of an explicit destructor call
 \end{itemize}
 
 \section{Type deduction}
 
-Pack indexing specifiers should not allow deducing the pack from such an expression.
-
-Consider:
+Pack indexing specifiers should not allow deducing the pack from such an expression:
 
 \begin{colorblock}
 template <typename... T>
@@ -364,7 +375,7 @@ void f(T...[0]);
 f(0);
 \end{colorblock}
 
-It doesn't really make sense to start thinking about how deduction would work here or what that code would possibly mean.
+To start thinking about how deduction would work here or what that code would possibly mean doesn't make sense.
 We simply always consider pack indexing to be a non-deduced context.
 
 \section{Indexing a pack of expressions}
@@ -372,22 +383,22 @@ We simply always consider pack indexing to be a non-deduced context.
 The intent is that a pack indexing expression behaves exactly as the underlying expression would.
 In particular, \tcode{decltype(id-dexpression) and \tcode{decltype(pack-index-expression)}} behave the same.
 
-\section{Future Evolution}
+\section{Future evolution}
 
-The syntax can be extended  in subsequent proposals to support:
+The syntax can be extended in subsequent proposals to support
 
 \begin{itemize}
-\item Indexing packs introduced by structured bindings or other non-dependent packs
-\item Indexing packs of template template parameters
-\item From-the-end-indexing
-\item Pack Slicing (Returning a subset of a pack as an unexpanded pack)
-\item Packs of universal template parameters could be indexed in the same way.
+\item indexing packs introduced by structured bindings or other non-dependent packs
+\item indexing packs of template template parameters
+\item from-the-end-indexing
+\item pack slicing (returning a subset of a pack as an unexpanded pack)
 \end{itemize}
+Packs of universal template parameters could be indexed in the same way.
 
 
 \section{Potential impact on existing code}
 
-In C++23, \tcode{T... [N]} is a valid syntax for declaring a function parameter matching a pack of unnamed arrays of size N.
+In C++23, \tcode{T... [N]} is a valid syntax for declaring a function parameter matching a pack of unnamed arrays of size N:
 
 \begin{colorblock}
 template <typename... T>
@@ -400,34 +411,21 @@ int main() {
 Neither MSVC nor GCC supports this syntax and this pattern does not appear outside of compiler test suites (from a search on \href{https://cs.github.com/}{Github}, \href{https://codesearch.isocpp.org/cgi-bin/cgi_ppsearch?q=...%5B&search=Search}{isocpp} and in VCPKG).
 The fact that 2 majors compilers did not implement this syntax in over a decade is indicative of its lack of usefulness.
 
-Should anyone be affected, a workaround is to name the variable.
+Should anyone be affected, a workaround is to name the variable:
 
 \begin{colorblock}
 template <typename... T>
 void f(T... foo[1]);
 \end{colorblock}
 
-[\href{https://godbolt.org/z/T7v3ETz1G}{Demonstration}].
-
+See this linked \href{https://godbolt.org/z/T7v3ETz1G}{demonstration}.
 
 \section{Implementation}
 
 This proposal is inspired by features implemented in the Circle compiler (with the same syntax).
-The provided wording is based on an implementation in a fork of clang, which is available on \href{https://compiler-explorer.com/z/WKobTEq6x}{Compiler Explorer}.
+The provided wording is based on an implementation in a fork of Clang, which is available on \href{https://compiler-explorer.com/z/WKobTEq6x}{Compiler Explorer}.
 
-As of the writing of the paper, the Clang implementation is known not to support pack indexing inside of the expansion of other template parameters.
-I.e., the following is intended to work but currently does not
-
-\begin{colorblock}
-template <typename... Ts, int... N>
-auto f(Ts... ts) {
-    return std::tuple{ (ts...[N])... };
-}
-\end{colorblock}
-
-We hope to fix these issues before the Kona meeting in November.
-
-\section{Formal Wording}
+\section{Wording}
 
 \rSec2[basic.lookup.qual]{Qualified name lookup}
 
@@ -464,24 +462,25 @@ a complete \grammarterm{nested-name-specifier}.
 \end{bnf}
 
 \pnum
-\indextext{identifier}%
+\indextext{identifier}
 An \grammarterm{identifier} is only
 an \grammarterm{id-expression} if it has
-been suitably declared\iref{dcl.dcl}
-or if it appears as part of a \grammarterm{declarator-id}\iref{dcl.decl}.
+been suitably declared \iref{dcl.dcl}
+or if it appears as part of a \grammarterm{declarator-id} \iref{dcl.decl}.
 An \grammarterm{identifier} that names a coroutine parameter
-refers to the copy of the parameter\iref{dcl.fct.def.coroutine}.
+refers to the copy of the parameter \iref{dcl.fct.def.coroutine}.
+
 \begin{note}
     For \grammarterm{operator-function-id}{s}, see~\ref{over.oper}; for
     \grammarterm{conversion-function-id}{s}, see~\ref{class.conv.fct}; for
     \grammarterm{literal-operator-id}{s}, see~\ref{over.literal}; for
     \grammarterm{template-id}{s}, see~\ref{temp.names}.
-    A \grammarterm{type-name} \added{, \grammarterm{pack-index-specifier}, } or \grammarterm{decltype-specifier}
+    A \grammarterm{type-name}\added{, \grammarterm{pack-index-specifier}, } or \grammarterm{decltype-specifier}
     prefixed by \tcode{\~} denotes the destructor of the type so named;
     see~\ref{expr.prim.id.dtor}.
     Within the definition of a non-static member function, an
     \grammarterm{identifier} that names a non-static member is transformed to a
-    class member access expression\iref{class.mfct.non.static}.
+    class member access expression \iref{class.mfct.non.static}.
 \end{note}
 
 \pnum
@@ -493,11 +492,13 @@ A \defn{component name} of an \grammarterm{unqualified-id} $U$ is
     the component name of
     the \grammarterm{template-id} or \grammarterm{type-name} of $U$, if any.
 \end{itemize}
+
 \begin{note}
     Other constructs that contain names to look up can have several
-    component names\iref{expr.prim.id.qual,dcl.type.simple,dcl.type.elab,
-        dcl.mptr,namespace.udecl,temp.param,temp.names,temp.res}.
+    component names \iref{expr.prim.id.qual, dcl.type.simple, dcl.type.elab,
+        dcl.mptr, namespace.udecl, temp.param, temp.names, temp.res}.
 \end{note}
+
 The \defnadj{terminal}{name} of a construct is
 the component name of that construct that appears lexically last.
 
@@ -570,15 +571,15 @@ let $T$ be the template nominated by $N$ without $A$.
 $T$ shall be a class template.
 \begin{itemize}
     \item
-    If $A$ is the template argument list\iref{temp.arg} of
-    the corresponding \grammarterm{template-head} $H$\iref{temp.mem},
+    {If $A$ is the template argument list \iref{temp.arg} of
+    the corresponding \grammarterm{template-head} $H$ \iref{temp.mem},
     $N$ nominates the primary template of $T$;
     $H$ shall be equivalent to
-    the \grammarterm{template-head} of $T$\iref{temp.over.link}.
+    the \grammarterm{template-head} of $T$ \iref{temp.over.link}.}
     \item
-    Otherwise, $N$ nominates the partial specialization\iref{temp.spec.partial} of $T$
-    whose template argument list is equivalent to $A$\iref{temp.over.link};
-    the program is ill-formed if no such partial specialization exists.
+    {Otherwise, $N$ nominates the partial specialization \iref{temp.spec.partial} of $T$
+    whose template argument list is equivalent to $A$ \iref{temp.over.link};
+    the program is ill-formed if no such partial specialization exists.}
 \end{itemize}
 Any other \grammarterm{nested-name-specifier} nominates
 the entity denoted by its
@@ -597,14 +598,13 @@ A \grammarterm{qualified-id} shall not be of the form\added{s}
 \grammarterm{decltype-specifier} \tcode{::} \tcode{\~} \grammarterm{type-name}
 \added{,
 \grammarterm{nested-name-specifier} \opt{\keyword{template}} \tcode{\~}
-\grammarterm{pack-index-specifier}
+\grammarterm{pack-index-\linebreak[3]specifier}
 or \grammarterm{pack-index-specifier} \tcode{::} \tcode{\~} \grammarterm{type-name}
-}
-.
+}.
 
 \pnum
 The result of a \grammarterm{qualified-id} $Q$ is
-the entity it denotes\iref{basic.lookup.qual}.
+the entity it denotes \iref{basic.lookup.qual}.
 The type of the expression is the type of the result.
 The result is an lvalue if the member is
 \begin{itemize}
@@ -616,7 +616,7 @@ The result is an lvalue if the member is
     \item
     a variable,
     \item
-    a structured binding\iref{dcl.struct.bind}, or
+    a structured binding \iref{dcl.struct.bind}, or
     \item
     a data member,
 \end{itemize}
@@ -625,7 +625,7 @@ and a prvalue otherwise.
 \begin{addedblock}
 \ednote{Add a new section after [expr.prim.id.qual]}
 
-\rSec3[expr.prim.pack.index]{Pack Indexing Expression}
+\rSec3[expr.prim.pack.index]{Pack indexing expression}
 
 \begin{bnf}
     \nontermdef{pack-index-expression}\br
@@ -716,8 +716,6 @@ which is the object of \paper{CWG1488}}
 
 \pnum
 The simple type specifiers are
-
-
 \begin{bnf}
 \nontermdef{simple-type-specifier}\br
 \opt{nested-name-specifier} type-name\br
@@ -727,7 +725,6 @@ decltype-specifier\br
 placeholder-type-specifier\br
 \opt{nested-name-specifier} template-name\br
 \end{bnf}
-
 \textcolor{noteclr}{[...]}
 
 \begin{simpletypetable}
@@ -748,7 +745,9 @@ placeholder-type-specifier\br
     \tcode{signed char}               & ``\tcode{signed char}''           \\
     \keyword{char8_t}                   & ``\tcode{char8_t}''               \\
     \keyword{char16_t}                  & ``\tcode{char16_t}''              \\
+    ... & \\
 \end{simpletypetable}
+
 
 \pnum
 When multiple \grammarterm{simple-type-specifier}{s} are allowed, they can be
@@ -765,7 +764,7 @@ freely intermixed with other \grammarterm{decl-specifier}{s} in any order.
 
 \begin{addedblock}
 
-\rSec3[dcl.type.pack.indexing]{Pack Indexing Specifier}
+\rSec3[dcl.type.pack.indexing]{Pack indexing specifier}
 
 \begin{bnf}
     \nontermdef{pack-index-specifier}\br
@@ -799,20 +798,20 @@ A \grammarterm{pack-index-specifier} is a pack expansion ([temp.variadic]).
 For an expression $E$, the type denoted by \tcode{decltype($E$)} is defined as follows:
 \begin{itemize}
 \item if $E$ is an unparenthesized \grammarterm{id-expression}
-naming a structured binding\iref{dcl.struct.bind},
+naming a structured binding \iref{dcl.struct.bind},
 \tcode{decltype($E$)} is the referenced type as given in
 the specification of the structured binding declaration;
 
 \item otherwise, if $E$ is an unparenthesized \grammarterm{id-expression}
-naming a non-type \grammarterm{template-parameter}\iref{temp.param},
+naming a non-type \grammarterm{template-parameter} \iref{temp.param},
 \tcode{decltype($E$)} is the type of the \grammarterm{template-parameter}
 after performing any necessary
-type deduction\iref{dcl.spec.auto,dcl.type.class.deduct};
+type deduction \iref{dcl.spec.auto, dcl.type.class.deduct};
 
 \item otherwise, if $E$ is an unparenthesized \grammarterm{id-expression} or
 an unparenthesized
 class
-member access\iref{expr.ref}, \tcode{decltype($E$)} is the
+member access \iref{expr.ref}, \tcode{decltype($E$)} is the
 type of the entity named by $E$.
 If there is no such entity, the program is ill-formed;
 
@@ -833,7 +832,7 @@ is \tcode{T\&}, where \tcode{T} is the type of $E$;
 \end{itemize}
 
 The operand of the \keyword{decltype} specifier is an unevaluated
-operand\iref{term.unevaluated.operand}.
+operand \iref{term.unevaluated.operand}.
 
 \begin{example}
     \begin{codeblock}
@@ -870,7 +869,7 @@ followed by a
 \grammarterm{type-name}\added{, \grammarterm{pack-index-specifier},} or \grammarterm{decltype-specifier}
 that denotes the destructor's class type.
 The invocation of a destructor is subject to the usual rules for member
-functions\iref{class.mfct};
+functions \iref{class.mfct};
 that is, if the object is not of the destructor's class type and
 not of a class derived from the destructor's class type (including when
 the destructor is invoked via a null pointer value), the program has
@@ -932,12 +931,12 @@ the notation:
 \rSec1[temp.type]{Type equivalence}
 
 \pnum
-If an expression $e$ is type-dependent\iref{temp.dep.expr},
+If an expression $e$ is type-dependent \iref{temp.dep.expr},
 \tcode{decltype($e$)}
 denotes a unique dependent type. Two such \grammarterm{decltype-specifier}{s}
 refer to the same type only if their \grammarterm{expression}{s} are
-equivalent\iref{temp.over.link}.
-\begin{note}
+equivalent \iref{temp.over.link}.
+\begin{note} % lah: Thios note in the Standard draft is label "Note 1", not just "Note".
     However, such a type might be aliased,
     e.g., by a \grammarterm{typedef-name}.
 \end{note}
@@ -946,7 +945,7 @@ equivalent\iref{temp.over.link}.
 For a template argument \tcode{T}, if the \grammarterm{constant-expression} of a \grammarterm{pack-index-specifier} is type-dependent,
 \tcode{T...[\grammarterm{constant-expression}]} denotes a unique dependent type.
 Two such \grammarterm{pack-index-specifier}{s} refer to the same type only if their \grammarterm{constant-expression}{s} are
-equivalent\iref{temp.over.link} and their type are the same.
+equivalent \iref{temp.over.link} and their type are the same. %lah: what does the "their" refer to? The pack-index-specifiers or the constant-expressions? Also, we would need to alter this to "their types are the same" or "their type is the same".
 \end{addedblock}
 
 \rSec2[temp.variadic]{Variadic templates}
@@ -963,13 +962,13 @@ depends on the context in which the expansion occurs. Pack
 expansions can occur in the following contexts:
 
 \begin{itemize}
-    \item In a function parameter pack\iref{dcl.fct}; the pattern is the
+    \item In a function parameter pack \iref{dcl.fct}; the pattern is the
     \grammarterm{parameter-declaration} without the ellipsis.
 
-    \item In a \grammarterm{using-declaration}\iref{namespace.udecl};
+    \item In a \grammarterm{using-declaration} \iref{namespace.udecl};
     the pattern is a \grammarterm{using-declarator}.
 
-    \item In a template parameter pack that is a pack expansion\iref{temp.param}:
+    \item In a template parameter pack that is a pack expansion \iref{temp.param}:
     \begin{itemize}
         \item
         if the template parameter pack is a \grammarterm{parameter-declaration};
@@ -981,44 +980,44 @@ expansions can occur in the following contexts:
         without the ellipsis.
     \end{itemize}
 
-    \item In an \grammarterm{initializer-list}\iref{dcl.init};
+    \item In an \grammarterm{initializer-list} \iref{dcl.init};
     the pattern is an \grammarterm{initializer-clause}.
 
-    \item In a \grammarterm{base-specifier-list}\iref{class.derived};
+    \item In a \grammarterm{base-specifier-list} \iref{class.derived};
     the pattern is a \grammarterm{base-specifier}.
 
-    \item In a \grammarterm{mem-initializer-list}\iref{class.base.init} for a
+    \item In a \grammarterm{mem-initializer-list} \iref{class.base.init} for a
     \grammarterm{mem-initializer} whose \grammarterm{mem-initializer-id} denotes a
     base class; the pattern is the \grammarterm{mem-initializer}.
 
-    \item In a \grammarterm{template-argument-list}\iref{temp.arg};
+    \item In a \grammarterm{template-argument-list} \iref{temp.arg};
     the pattern is a \grammarterm{template-argument}.
 
-    \item In an \grammarterm{attribute-list}\iref{dcl.attr.grammar}; the pattern is
+    \item In an \grammarterm{attribute-list} \iref{dcl.attr.grammar}; the pattern is
     an \grammarterm{attribute}.
 
-    \item In an \grammarterm{alignment-specifier}\iref{dcl.align}; the pattern is
+    \item In an \grammarterm{alignment-specifier} \iref{dcl.align}; the pattern is
     the \grammarterm{alignment-specifier} without the ellipsis.
 
-    \item In a \grammarterm{capture-list}\iref{expr.prim.lambda.capture}; the pattern is
+    \item In a \grammarterm{capture-list} \iref{expr.prim.lambda.capture}; the pattern is
     the \grammarterm{capture} without the ellipsis.
 
-    \item In a \tcode{sizeof...} expression\iref{expr.sizeof}; the pattern is an
+    \item In a \tcode{sizeof...} expression \iref{expr.sizeof}; the pattern is an
     \grammarterm{identifier}.
 
     \begin{addedblock}
-    \item In a \grammarterm{pack-index-expression} ; the pattern is an
+    \item In a \grammarterm{pack-index-expression}; the pattern is an
     \grammarterm{id-expression}.
-    \item In a \grammarterm{pack-index-specifier} ; the pattern is an
+    \item In a \grammarterm{pack-index-specifier}; the pattern is an
     \grammarterm{identifier}.
     \end{addedblock}
 
-    \item In a \grammarterm{fold-expression}\iref{expr.prim.fold};
+    \item In a \grammarterm{fold-expression} \iref{expr.prim.fold};
     the pattern is the \grammarterm{cast-expression}
     that contains an unexpanded pack.
 \end{itemize}
 
-\begin{example}
+\begin{example} % lah: this is labeled Example 4 in the Standard's draft.
     \begin{codeblock}
         template<class ... Types> void f(Types ... rest);
         template<class ... Types> void g(Types ... rest) {
@@ -1043,7 +1042,7 @@ are not expanded by a nested pack expansion; such packs are called
 by a pack expansion shall have the same number of arguments specified. An
 appearance of a name of a pack that is not expanded is
 ill-formed.
-\begin{example}
+\begin{example} % lah: this is labeled Example 5 in the Standard's draft.
     \begin{codeblock}
         template<typename...> struct Tuple {};
         template<typename T1, typename T2> struct Pair {};
@@ -1112,7 +1111,7 @@ even in cases where omitting the pack expansion entirely would
 otherwise be ill-formed or would result in an ambiguity in the grammar.
 
 \pnum
-The instantiation of a \tcode{sizeof...} expression\iref{expr.sizeof} produces
+The instantiation of a \tcode{sizeof...} expression \iref{expr.sizeof} produces
 an integral constant with value $N$.
 
 \begin{addedblock}
@@ -1145,7 +1144,7 @@ The non-deduced contexts are:
     of a type that was specified using a
     \grammarterm{qualified-id}.
     \begin{addedblock}
-    \item A \grammarterm{pack-index-specifier,}
+    \item A \grammarterm{pack-index-specifier.}
     \end{addedblock}
     \item
     The \grammarterm{expression} of a \grammarterm{decltype-specifier}.
@@ -1158,7 +1157,7 @@ The non-deduced contexts are:
     deduction is being done.
     \item
     A function parameter for which the associated argument is an
-    overload set\iref{over.over}, and one or more of the following apply:
+    overload set \iref{over.over}, and one or more of the following apply:
     \begin{itemize}
         \item
         more than one function matches the function parameter type (resulting in
@@ -1169,8 +1168,8 @@ The non-deduced contexts are:
         the overload set supplied as an argument contains one or more function templates.
     \end{itemize}
     \item A function parameter for which the associated argument is an initializer
-    list\iref{dcl.init.list} but the parameter does not have
-    a type for which deduction from an initializer list is specified\iref{temp.deduct.call}.
+    list \iref{dcl.init.list} but the parameter does not have
+    a type for which deduction from an initializer list is specified \iref{temp.deduct.call}.
     \begin{example}
         \begin{codeblock}
             template<class T> void g(T);
@@ -1190,12 +1189,13 @@ The non-deduced contexts are:
 
 \rSec3[decl.array]
 \change
-Previously, \tcode{T...[$n$]} would declarare a pack of function parameters of type "array of \tcode{T} of size \tcode{$n$}".
+Previously, \tcode{T...[$n$]} would declare a pack of function parameters of type "array of \tcode{T} of size \tcode{$n$}".
 \tcode{T...[$n$]} is now a \grammarterm{pack-index-specifier}.
 \rationale
 Improve the handling of packs.
 \effect
-Valid C++ 2023 code that declares pack of arrays parameter without specifying a \tcode{declarator-id} may become ill-formed.
+Valid C++23 code that declares a
+pack of arrays parameter without specifying a \tcode{declarator-id} may become ill-formed.
 
 \begin{codeblock}
 template <typename... T>
@@ -1224,11 +1224,11 @@ int main() {
 
 We would like to thank Bloomberg for sponsoring this work.\\
 
-Sean Baxter for his work on Circle and Barry Revzin, for his work on \paper{P1858R2}, both works being the foundation of the design presented here.
+We extend our appreciate to Sean Baxter for his work on Circle and to Barry Revzin  for his work on \paper{P1858R2}, both works being the foundation of the design presented here.
 
-Also Thanks to Lewis Baker, for his valuable feedback on this paper.
+Thanks also to Lewis Baker for his valuable feedback on this paper.
 
-\section{References}
+\section{References} % lah: Correct your citation style. Books, proceedings, conference names, and Standards use italics. Articles, presentations, and talks use quotes. Harvard style is the general UK convention. https://intranet.birmingham.ac.uk/as/libraryservices/library/referencing/icite/harvard/referencelist.aspx
 
 \renewcommand{\section}[2]{}%
 \bibliographystyle{plain}

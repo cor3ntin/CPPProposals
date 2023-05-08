@@ -29,7 +29,7 @@ initialized by a tuple, in which case, we need to make the equivalent of the fol
 
 \begin{colorblock}
 constexpr auto __sb = std::tuple(1);
-const int& __a = std::get<0>(__sb);
+constexpr const int& __a = std::get<0>(__sb);
 \end{colorblock}
 
 \subsection{Issue with the originally proposed wording}
@@ -38,7 +38,7 @@ The initial wording simply allowed references initialized by a constant expressi
 This failed to observe that the address of a \tcode{constexpr} variable with static storage duration may be different for each evaluation
 of a function and therefore cannot be a \emph{permitted result of a constant expression}.
 
-CWG asks that EWG considers and pick one direction to resolve their concerns.
+CWG asks that EWG considers and pick one direction to resolve these concerns.
 Some options are explored below.
 
 \subsection{Allowing static and non-tuple constexpr structured binding}
@@ -51,7 +51,7 @@ And a constexpr structured binding of a tuple \emph{with static storage duration
 static constexpr auto [a, b] = std::tuple{1, 2};
 \end{colorblock}
 
-would also just work; As it would be equivalent to
+would also just work as it would be equivalent to
 
 \begin{colorblock}
 static constexpr auto __t = std::tuple{1, 2};
@@ -65,15 +65,15 @@ And independently of the rest of this paper, this would be useful and should be 
 
 The problematic scenario is a non-static binding to a \tcode{tuple}.
 
-We could stop there. ie not try to solve this problem and force users to use \tcode{static}.
+We could stop there, i.e. not try to solve this problem and force users to use \tcode{static}.
 We would however have to make sure expansion statements work with static variables as this was one of the motivations for this paper.
 The rest of the paper explores other options.
 
-\subsection{Making \tcode{constexpr} implicitely static}
+\subsection{Making \tcode{constexpr} implicitly static}
 
 We could make \tcode{constexpr} variables implicitly static.
 However, this would most certainly break existing code, in addition to being inconsistent with the meaning of constexpr.
-ie, consider
+Consider
 
 \begin{colorblock}
 int f() {
@@ -84,7 +84,7 @@ int f() {
 }
 
 int main() {
-    assert(f() + f() == 2); // 3 if s is static
+    assert(f() + f() == 2); // currently 2. Becomes 3 if 's' is made implicitly static
 }
 \end{colorblock}
 
@@ -95,8 +95,14 @@ feels like a hack rather than an actual solution.
 \subsection{Always re-evaluate a call to \tcode{get}?}
 
 We could conceive that during constant evaluation, tuple structured bindings are replaced by a call to \tcode{get} every time they are constant-evaluated.
-This would of course just help with constexpr structured binding. We could imagine this would be observable in fringe scenarios where \tcode{get} would for example
-perform some kind of compile time i/o such as proposed by \paper{P2758R0}.
+This would help with constexpr structured binding, but would still disallow generic cases like :
+
+\begin{colorblock}
+constexpr in not_a_sb =1;
+constexpr const int&  a = sb;
+\end{colorblock}
+
+Additionally, this would be observable in scenarios where get would perform some kind of compile time i/o such as proposed by \paper{P2758R0}.
 
 \subsection{Symbolic addressing}
 
@@ -135,13 +141,15 @@ int main() {
 References can be constant expressions because we can track during constant evaluation which object they refer to, independently of whether the value of that object is or isn't a constant expression.
 
 There are several things we would have to be careful about.
-Pointers and references to variables with automatic cannot be allowed to be used outside of the lifetime of their underlying objects, so they could not appear
+Pointers and references to variables with automatic storage duration cannot be used outside of the lifetime of their underlying objects, so they could not appear
 \begin{itemize}
-  \item In template argument
+  \item In template arguments
   \item As the initializer of a variable with static storage duration.
 \end{itemize}
 
-Similarly, we can construct an automatic storage duration reference to a static variable, but a static constexpr reference bound to an automatic storage duration object.
+Similarly, we can construct an automatic storage duration reference to a static variable, but not a static constexpr reference bound to an automatic storage duration object.
+
+\subsection{Additional considerations}
 
 \subsubsection{Thread-local variables}
 
@@ -151,10 +159,10 @@ on declaration.
 
 We could exclude thread locals from the design entirely as I'm not sure there is a compelling use case for constexpr references to thread-local objects.
 
-\subsubsection{Lambda capture}
+\subsubsection{Lambda capture of \tcode{constexpr} references bound to automatic storage duration objects}
 
-\tcode{constexpr} references are not odr-used. So when they are used in lambda they are not captured.
-This is problematic, ie consider:
+\tcode{constexpr} references are not odr-used.  Because of that, a constexpr reference used in a lambda does not trigger a capture.
+This would be problematic for references bount to automatic storage duration objects, ie consider:
 
 \begin{colorblock}
 auto f() {
@@ -167,8 +175,7 @@ auto f() {
 f(); //# ! try to access i outside of its lifetime
 \end{colorblock}
 
-We will have to modify \href{http://eel.is/c++draft/basic.def.odr#5.1}{[basic.def.odr]/p5.1} so that it does not apply to references to automatic storage duration
-(or subobjects thereof).
+We will have to modify \href{http://eel.is/c++draft/basic.def.odr#5.1}{[basic.def.odr]/p5.1}so that constexpr references to automatic storage duration variables (or subobjects thereof) are odr-used.
 
 \section{Next step}
 
