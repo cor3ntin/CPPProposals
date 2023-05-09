@@ -8,6 +8,7 @@
 \docnumber{D2686R1}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Brian Bi}{bbi10@bloomberg.net}
 
 \usepackage{color, colortbl}
 \begin{document}
@@ -24,26 +25,48 @@ This paper reports implementation experience on this proposal and provides updat
 The previous revision of this paper (\paper{P2686R0}) was approved by EWG in Issaquah, and was subsequently
 reviewed by CWG which found the proposed fording to be quite insufficient.
 
-There is no issue with allowing constexpr structured binding in general, except for the case of a non-static structured binding
-initialized by a tuple, in which case, we need to make the equivalent of the following code work:
+There is no issue with allowing constexpr structured binding in general, except for the case of an automatic storage duration structured binding
+initialized by a tuple.
+
+Ie, this scenario specifically:
 
 \begin{colorblock}
-constexpr auto __sb = std::tuple(1);
-constexpr const int& __a = std::get<0>(__sb);
+void f() {
+    constexpr auto [a] = std::tuple(1);
+    static_assert(a == 1);
+}
 \end{colorblock}
+
+Which translates to the following:
+
+\begin{colorblock}
+void f() {
+    constexpr auto __sb = std::tuple(1);  // __sb has automatic storage scenario
+    constexpr const int& a = get<0>(__sb);
+}
+\end{colorblock}
+
+When the structured binding is over an array or a class type, it doesn't really create actual references,
+so there is no issue. And when the structured binding is not at function scope, the underlying tuple object has
+static storage duration and its address is a permitted result of a constant expression.
+
+So the problematic case is when we are creating an automatic storage duration (ie, at block scope) structured binding of a tuple (or \placeholder{tuple-like})
+object. It is a specific scenario, but not an uncommon one.
 
 \subsection{Issue with the originally proposed wording}
 
 The initial wording simply allowed references initialized by a constant expression to be usable in constant expressions.
-This failed to observe that the address of a \tcode{constexpr} variable with static storage duration may be different for each evaluation
+This failed to observe that the address of a \tcode{constexpr} variable with automatic storage duration may be different for each evaluation
 of a function and therefore cannot be a \emph{permitted result of a constant expression}.
 
 CWG asks that EWG considers and pick one direction to resolve these concerns.
 Some options are explored below.
 
-\subsection{Allowing static and non-tuple constexpr structured binding}
+\section{Possible solutions}
 
-We should be clear that nothing prevents \tcode{constexpr} structured bindings to just work when binding an aggregate or an array - as those are modeled by special magic aliases that are not quite references
+\subsection{\#0 Allowing static and non-tuple constexpr structured binding}
+
+We should be clear that nothing prevents \tcode{constexpr} structured bindings from just working when binding an aggregate or an array - as those are modeled by special magic aliases that are not quite references
 (which allows them to work with bitfields).
 
 And a constexpr structured binding of a tuple \emph{with static storage duration}, ie:
@@ -63,13 +86,13 @@ Supporting that requires no further changes to the language than basically allow
 parse and apply the constexpr specifier.
 And independently of the rest of this paper, this would be useful and should be done.
 
-The problematic scenario is a non-static binding to a \tcode{tuple}.
+The problematic scenario is an automatic storage duration binding to a \tcode{tuple}.
 
 We could stop there, i.e. not try to solve this problem and force users to use \tcode{static}.
 We would however have to make sure expansion statements work with static variables as this was one of the motivations for this paper.
 The rest of the paper explores other options.
 
-\subsection{Making \tcode{constexpr} implicitly static}
+\subsection{\#1 Making \tcode{constexpr} implicitly static}
 
 We could make \tcode{constexpr} variables implicitly static.
 However, this would most certainly break existing code, in addition to being inconsistent with the meaning of constexpr.
@@ -92,7 +115,7 @@ So this is not a practical suggestion. We could, as Richard suggested
 make \tcode{constexpr} only static in some cases to alleviate some of the breakages, or even only make constexpr bindings static - and not other variables, but this
 feels like a hack rather than an actual solution.
 
-\subsection{Always re-evaluate a call to \tcode{get}?}
+\subsection{\#2 Always re-evaluate a call to \tcode{get}?}
 
 We could conceive that during constant evaluation, tuple structured bindings are replaced by a call to \tcode{get} every time they are constant-evaluated.
 This would help with constexpr structured binding, but would still disallow generic cases like :
@@ -102,9 +125,9 @@ constexpr in not_a_sb =1;
 constexpr const int&  a = sb;
 \end{colorblock}
 
-Additionally, this would be observable in scenarios where get would perform some kind of compile time i/o such as proposed by \paper{P2758R0}.
+Additionally, this would be observable in scenarios where get would perform some kind of compile-time i/o such as proposed by \paper{P2758R0}.
 
-\subsection{Symbolic addressing}
+\subsection{\#3 Symbolic addressing}
 
 The most promising option, the one we think should be pursued is for \tcode{constexpr} references to designate a specific object, rather than an address,
 and to retain that information across constant evaluation contexts.
@@ -138,7 +161,7 @@ int main() {
 }
 \end{colorblock}
 
-References can be constant expressions because we can track during constant evaluation which object they refer to, independently of whether the value of that object is or isn't a constant expression.
+References can be constant expressions because we can track during constant evaluation which objects they refer to, independently of whether the value of that object is or isn't a constant expression.
 
 There are several things we would have to be careful about.
 Pointers and references to variables with automatic storage duration cannot be used outside of the lifetime of their underlying objects, so they could not appear
@@ -147,7 +170,7 @@ Pointers and references to variables with automatic storage duration cannot be u
   \item As the initializer of a variable with static storage duration.
 \end{itemize}
 
-Similarly, we can construct an automatic storage duration reference to a static variable, but not a static constexpr reference bound to an automatic storage duration object.
+Similarly, we can construct an automatic storage duration constexpr reference to a static variable, but not a static constexpr reference bound to an automatic storage duration object.
 
 \subsection{Additional considerations}
 
@@ -162,7 +185,7 @@ We could exclude thread locals from the design entirely as I'm not sure there is
 \subsubsection{Lambda capture of \tcode{constexpr} references bound to automatic storage duration objects}
 
 \tcode{constexpr} references are not odr-used.  Because of that, a constexpr reference used in a lambda does not trigger a capture.
-This would be problematic for references bount to automatic storage duration objects, ie consider:
+This would be problematic for references bound to automatic storage duration objects, ie consider:
 
 \begin{colorblock}
 auto f() {
@@ -180,9 +203,22 @@ We will have to modify \href{http://eel.is/c++draft/basic.def.odr#5.1}{[basic.de
 \section{Next step}
 
 CWG is asking EWG to pick a direction. We will provide wording consistent with that direction.
-In the meantime, this paper retains the wording for \tcode{constexpr} structured binding which can be pursued independently (non-static bindings of \tcode{tuple} will just not
-work.)
+We need to pick one of the options presented in this paper.
 
+\begin{itemize}
+\item Option \#1: Making \tcode{constexpr} implicitly static
+\item Option \#2: Always re-evaluate a call to \tcode{get}
+\item Option \#3: Symbolic addressing.
+\end{itemize}
+
+Because Option \#1 and \#2 can either break existing code or introduce inconsistency, we suggest that the third option, Symbolic Addressing
+constitutes the best path forward.
+
+If we pick that third option, we should further decide whether we want to limit ourselves to allow constexpr references to automatic duration storage objects, or if we should also support
+constexpr references to thread local duration storage objects, knowing that this will require additional complexity due to the fact that
+thread-local variables are initialized at the point of use.
+
+In the meantime, this paper retains the wording for \tcode{constexpr} structured binding which can be pursued independently (automatic storage duration bindings of \tcode{tuple} will simply not work.) - this is the wording for Option \#0;
 %\section{Original Motivation}
 %
 %The context for this paper can be found in \paper{P1481R0}.
@@ -278,7 +314,7 @@ work.)
 
 \section{Wording for constexpr structured binding}
 
-\ednote{This wording only makes constexpr structured a valid grammatrical construct and does not permit non-static bindings of tuple-like objets}
+\ednote{This wording only makes constexpr structured a valid grammatical construct and does not permit automatic storage duration bindings of tuple-like objets}
 
 %\rSec1[expr.const]{Constant expressions}%
 %
@@ -397,6 +433,10 @@ then all its declarations shall contain the same specifier.
 \section{Acknowledgments}
 
 We would like to thank Bloomberg for sponsoring this work.
+Thanks to Nina Dinka Ranns, Pablo Halpernm and Joshua Berne for their feedback.
+
+Thanks to Richard Smith for the original discussion of possible solutions on the Core reflector.
+
 Thanks to Nicolas Lesser for the original work on \paper{P1481R0}.
 
 \section{References}
