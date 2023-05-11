@@ -4,10 +4,11 @@
 
 \documentclass{wg21}
 
-\title{Concepts and variable template template parameters}
+\title{Concept and variable-template template-parameters}
 \docnumber{D2841R0}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
+\author{Gašper Ažman}{gasper.azman@gmail.com}
 \usepackage[dvipsnames]{xcolor}
 
 
@@ -17,21 +18,20 @@
 \section{Abstract}
 
 C++ allows passing templates as template parameters.
-It however does not support these template template parameters to be non-types, ie either variables or concepts.
+It, however, does not support these template template-parameters to be non-types, ie either variables or concepts.
 This represents a hole in the template facilities, one that this paper proposes to address.
 
 \section{Motivation}
 
-Template template parameters are in effect higher-order templates, and allow greater composability.
-They can be used for example to write a function that operates on any container of any type or to write CRTP-based interfaces.
+Template template-parameters allow for higher-order templates greater composability.
+They can be used, for example, to constrain a function that operates on any container of any type or to write CRTP-based interfaces.
 
-However, C++23 limits these template template parameters to be template classes or aliases.
-A variable template (C++14) - or a concept (concepts are themselves templates) cannot be passed as a template parameter.
+C++23 limits template template-parameters to be class templates or alias templates.
+A variable template (C++14) - or a concept (concepts are themselves templates) cannot be passed as a template argument in C++23.
 
-The motivation for passing a concept as a template argument is very much the same as why we support templated classes as template arguments:
-We want to allow higher-level constructs.
+The motivation for passing a concept as a template argument is very much the same as why we support class templates as template arguments -- to allow higher-level constructs.
 
-We note that there is community interest in these features:
+There is community interest in these features:
 
 \begin{itemize}
 \item \href{https://stackoverflow.com/questions/63098070/is-it-possible-to-pass-a-concept-as-a-template-parameter}{Is it possible to pass a concept as a template parameter?}
@@ -43,24 +43,24 @@ We note that there is community interest in these features:
 
 \subsection{Previous works}
 
-Variable template template parameters were proposed in \paper{P2008R0} and were part of the original design for variable templates \paper{N3615}.
-Concepts template parameters have been described by Barry Revzin (back when Concept names were uppercase) in his blog \href{https://brevzin.github.io/c++/2019/01/09/concept-templates/}{here} and \href{https://brevzin.github.io/c++/2019/03/24/concept-templates-2/}{here}.
+Variable-template template-parameters were proposed in \paper{P2008R0} and were part of the original design for variable templates \paper{N3615}.
+Concept template-parameters have been described by Barry Revzin (back when Concept names were uppercase) in his blog \href{https://brevzin.github.io/c++/2019/01/09/concept-templates/}{here} and \href{https://brevzin.github.io/c++/2019/03/24/concept-templates-2/}{here}.
 We mentionned them in \paper{P2632R0} and \paper{P1985R3}.
 
-\subsection{Universal template parameters}
+\subsection{Universal template-parameters}
 
-The fact that variable template template parameters and concept template parameters appear in the same papers is not accidental.
-For a universal template parameter to be universal, we need to make sure it covers the set of entities we could possibly want to ever use as template parameters.
+The fact that variable-template template-parameters and concept template-parameters appear in the same papers is not accidental.
+For a universal template-parameter to be universal, we need to make sure it covers the set of entities we could possibly want to ever use as template-parameters.
 There is therefore an important order of operations.
-If we were to add universal template parameters before concepts template parameters and variable template parameters, we would be in a situation were either
+If we were to add universal template-parameters before concept template-parameters and variable-template template-parameters, we would be in a situation where either
 \begin{itemize}
-\item We can't ever add concept template parameters and variable template parameters
-\item "universal template parameters would not be truly universal"
-\item We would feel forced to come up with some kind of more universal template parameter syntax
+\item We can't ever add concept template-parameters and variable-template template-parameters
+\item "universal template-parameters would not be truly universal"
+\item We would feel forced to come up with some kind of "more universal template-parameter" syntax
 \end{itemize}
 
 None of these outcomes seems desirable, and therefore the best course of action is to ensure that we
-support the best we can the full set of entities we might ever want to support as template parameters, before adding support for universal template parameters.
+support the best we can the full set of entities we might ever want to support as template-parameters, before adding support for universal template-parameters.
 
 \section{Design}
 
@@ -179,27 +179,12 @@ concept range_of_integrals = std::ranges::range<T> && @\textbf{std::integral}@<s
 Note that this transformation does not change any other behavior of normalization - ie concept template parameters that appear within other atomic constraints
 are not substituted, and arguments that are not concept names are not substituted either.
 
-\subsection{Fold expressions involving concept template parameters}
+\subsection{Subsumption and fold expressions over \tcode{\&\&} and \tcode{||}}
 
-We propose to extend normalization and constraint ordering to better support concept template parameters.
+Before we handle the more complicated scenario where the fold expression is over a pack of concepts, we must fix an old concept-ts issue that fell through the cracks.
+\href{http://cplusplus.github.io/concepts-ts/ts-active.html#28}{Ordering of constraints involving fold expressions}
 
-There are 2 scenarios to consider:
-
-\begin{colorblock}
-template <
-    typename T,
-    template <typename...> concept... C>
-concept all_of = (C<T> && ...);
-\end{colorblock}
-
-Here the pattern is a concept. We want to expand the fold expression by replacing the fold expression with the concept template arguments,
-as we explain in the previous section.
-
-Once substituted, the sequence of binary \tcode{\&\&} or \tcode{||} is normalized.
-\tcode{all_of}, \tcode{any_of}, etc can then be implemented in a way that properly supports subsumption.
-
-
-The other scenario involves a concept taking a pack as template argument:
+Consider:
 
 \begin{colorblock}
 template <class T> concept bool A = std::is_move_constructible_v<T>;
@@ -215,22 +200,53 @@ requires (C<T> && ...)
 void g(T...);
 \end{colorblock}
 
-This is the scenario described by an old concept-ts issue that fell under the cracks.
-\href{http://cplusplus.github.io/concepts-ts/ts-active.html#28}{Ordering of constraints involving fold expressions}
+We want to apply the subsumption rule to the normalized form of the requires clause (and its arguments). As of C++23, the above \tcode{g}\ s are ambiguous.
 
-In this case, we do not want to expand the pattern (which involves template arguments that are not concepts).
-Instead, we want to apply the subsumption rule to the normalized form of the concept (and its arguments).
+While this is technically a breaking change, it only makes more programs valid (where there was simple ambiguity in C++23, we now have a refined partial ordering of that pair).
+
+This is useful when dealing with algebraic type classes. Consider a concept constraining a (simplified) environment implementation via a type-indexed \tcode{std::tuple}. (In real code, the environment is a type-tag indexed map)
+
+\begin{colorblock}
+template <typename X, typename... T>
+concept environment_of = (... && requires (X& x) { { get<T>(x) } -> std::same_as<T&>; } );
+
+auto f(sender auto&& s, environment_of<std::stop_token> auto env); // uses std::allocator
+auto f(sender auto&& s, environment_of<std::stop_token, std::pmr::allocator> auto env); // uses given allocator
+\end{colorblock}
+
+
+\subsection{Fold expressions involving concept template parameters}
+
+When the fold expression is over a pack of \emph{concepts}, we must be a bit more careful.
+
+\begin{colorblock}
+template <
+    typename T,
+    template <typename...> concept... C>
+concept all_of = (C<T> && ...);
+\end{colorblock}
+
+Once substituted, the sequence of binary \tcode{\&\&} or \tcode{||} is normalized.
+\tcode{all_of}, \tcode{any_of}, etc. can then be implemented in a way that supports subsumption.
+
+One very important case where this facility is absolutely essential is constraining tuples (and other algebraic data-types) by dimension. Consider, for instance:
+
+\begin{colorblock}
+template <typename X, template <typename> concept... C>
+concept product_type_of = (... && C<std::tuple_element_t<C...[?], X>>);
+//   index-of-current-element, not proposed, but needed  ~~~~~~~
+\end{colorblock}
+
+\paper{P2632R0} discusses alternatives to the awful index-of-current-element syntax above.
 
 \subsection{ADL}
 
-Similarly to variables, variable templates, and concepts are not considered associated entities
-when performing a lookup. This is also consistent with previous work (for example \paper{N3595} and \paper{P0934R0}),
-and the general consensus towards ADL.
+Similarly to variables, variable templates and concepts are not associated entities when performing argument-dependent lookup.
+This is consistent with previous work (for example \paper{N3595} and \paper{P0934R0}) and the general consensus towards ADL.
 
 \subsection{Equivalence of atomic constraints}
 
-One interesting concept to consider is \tcode{tuple_of}, which would allow constraining a function on a tuple-like of integrals for example - a frequent use case in scientific
-computation.
+One interesting concept to consider is \tcode{tuple_of}, which would allow constraining a function on a tuple-like of integrals for example - a frequent use case in scientific computation.
 
 In the absence of member and alias packs, a \tcode{tuple_like} concept could look like that
 
@@ -238,12 +254,12 @@ In the absence of member and alias packs, a \tcode{tuple_like} concept could loo
 template <typename T, int N>
 constexpr bool __tuple_check_elements = [] {
     if constexpr (N == 0)
-    return true;
+      return true;
     else if constexpr(requires (T t) {
         typename std::tuple_element_t<N-1, T>;
         { std::get<N>(t) };
     })
-    return  __tuple_check_elements<T, N-1>;
+      return  __tuple_check_elements<T, N-1>;
     return false;
 }();
 
@@ -253,7 +269,7 @@ concept tuple_like = requires {
 } &&  __tuple_check_elements<T, std::tuple_size_v<T>>;
 \end{colorblock}
 
-Here we use a constexpr template variable to check the constraint on individual elements.
+Here we use a constexpr variable template to check the constraint on individual elements.
 We can trivially adapt this code to take a concept argument
 
 \begin{colorblock}
@@ -263,12 +279,12 @@ concept decays_to = C<std::decay_t<T>>;
 template <typename T, int N, template <typename> concept C>
 constexpr bool __tuple_check_elements = [] {
     if constexpr (N == 0)
-    return true;
+      return true;
     else if constexpr(requires (T t) {
         typename std::tuple_element_t<N-1, T>;
         { std::get<N>(t) } -> decays_to<C>;
     })
-    return  __tuple_check_elements<T, N-1, C>;
+      return  __tuple_check_elements<T, N-1, C>;
     return false;
 }();
 
@@ -282,7 +298,8 @@ And this works fine, but \tcode{__tuple_check_elements} is an atomic constraint,
 establish a subsumption relationship for this concept.
 
 With a sufficient number of pack features, we could probably write a concept that checks all elements with a single constraint,
-ie
+ie.
+
 \begin{colorblock}
 template <typename T, typename E, int N, template <typename> concept C>
 concept __tuple_of_element = requires (T t) {
@@ -298,9 +315,9 @@ concept tuple_of = requires {
 
 But, in addition to relying on imaginary features, this is pretty inefficient as ordering complexity would be proportional to the square of the number of tuple elements.
 
-Fortunately, while checking satisfaction does require looking at every element, we can just look at one element to establish subsumption.
+Fortunately, while checking satisfaction does require looking at every element, we can just look at one element to establish subsumption in this particular case.
 
-So we can rewrite our concept as
+We can rewrite our concept as
 
 \begin{colorblock}
 template <typename T, int N, template <typename> concept C>
@@ -329,11 +346,11 @@ concept tuple_of = requires {
 ));
 \end{colorblock}
 
-For this to work, the concept template parameter C needs to be substituted
+For this to work, the concept template-parameter C needs to be substituted
 in the concept \tcode{__tuple_of_element} but not in the atomic constraint
 \tcode{__check_tuple_elements<T, std::tuple_size_v<T>, C>}.
 
-Atomic constraints also need to ignore concept template parameters for the purpose
+Atomic constraints also need to ignore concept template-parameters for the purpose
 of comparing their template arguments when establishing atomic constraint equivalence during subsumption.
 
 
@@ -363,7 +380,7 @@ In the \tcode{concepts} header, half of the concepts are not unary.
 
 
 When passing concepts as template arguments, this becomes quickly apparent.
-Let us consider a \tcode{range_of} concept constraining its value type with a concept template parameter.
+Let us consider a \tcode{range_of} concept constraining the range's value type with a concept template-parameter.
 
 \begin{colorblock}
 template <typename R, template <typename> concept C>
@@ -387,7 +404,7 @@ auto f(range_of<same_as<int>> auto&&);
 \end{colorblock}
 
 
-We can rewrite our \tcode{range_of} concept to take extra argument forwarded to the concept parameter
+We can rewrite our \tcode{range_of} concept to take an extra argument pack forwarded to the concept parameter
 
 \begin{colorblock}
 template <typename R, template <typename...> concept C,  typename... Args>
@@ -416,16 +433,19 @@ void f(range_of<packed_concept<std::convertible_to, int>,
 \end{colorblock}
 
 This works.
-It is also not particularly usable or readable.
-And all hope of subsumption is lost (concepts cannot be class members for very good reason - it would fundamentally break subsumption - so \tcode{apply} is a \tcode{bool} variable - an atomic constraint).
+It is also not particularly usable or readable, and all hope of subsumption is lost.
+Concepts cannot be class members for a very good reason - it would fundamentally break subsumption - so \tcode{apply} is a \tcode{bool} variable - an atomic constraint.
 
-The question then is can we support making something similar in the language? Could we make something like \begin{colorblock}
-void f(range_of<@\textbf{concept convertible_to<int>}@> auto)\end{colorblock}
+Can we still support making something similar in the language? Could we make something like
+
+\begin{colorblock}
+void f(range_of<@\textbf{concept convertible_to<int>}@> auto)
+\end{colorblock}
 
 just work? Yes!
 
 We can indeed create a new kind of template argument - or a new kind of template-id - that carries additional arguments that are injected
-when the corresponding concept template parameter is specialized.
+when the corresponding concept template-parameter is specialized.
 \begin{colorblock}
 // Given this declaration
 template <typename @\textbf{\textcolor{OliveGreen}{T}}@, template <typename> concept @\textbf{\textcolor{WildStrawberry}{C}}@>
@@ -439,7 +459,7 @@ template<>
 constexpr bool b<@\textbf{\textcolor{OliveGreen}{double}}@, concept @\textbf{\textcolor{WildStrawberry}{convertible_to}}@<@\textbf{\textcolor{Plum}{int}}@>> = @\textbf{\textcolor{WildStrawberry}{convertible_to}}@<@\textbf{\textcolor{OliveGreen}{double}}@, @\textbf{\textcolor{Plum}{int}}@>;
 \end{colorblock}
 
-Notice that in this example, \tcode{C} is a concept template parameter that accepts exactly one argument,
+Notice that in this example, \tcode{C} is a concept template-parameter that accepts exactly one argument,
 even though \tcode{convertible_to} needs 2.
 This is because the other arguments will be filled in automatically.
 
@@ -455,7 +475,7 @@ This feature (which we call partial application) expresses intent very clearly a
 
 \subsection{Syntax of partially applied concept}
 
-Partially applied concepts can appear as template arguments matching a concept template parameter (and nowhere else).
+Partially applied concepts can appear as template arguments matching a concept template-parameter (and nowhere else).
 You might have noticed the \tcode{concept} keyword there.
 
 Why \tcode{range_of<concept convertible_to<int>>} rather than simply \tcode{range_of<convertible_to<int>>}?
@@ -470,7 +490,7 @@ This has not been an issue with \grammarterm{type-constraint}{s} because they on
 
 However, the ambiguity between a partial concept application and a boolean expression can appear in a couple of cases:
 \begin{itemize}
-    \item In the presence of universal template parameters (should a given argument matching a UTP be considered a bool or a concept template parameter?)
+    \item In the presence of universal template parameters (should a given argument matching a UTP be considered a bool or a concept template-parameter?)
     \item In an overload set the concept could be matched to both a bool and a concept, as in this example courtesy of Barry Revzin
 \begin{colorblock}
 template <bool B> void f();
@@ -502,16 +522,15 @@ some_template_name <
 >;
 \end{colorblock}
 
-\subsubsection{Generalized partially applied template template parameters?}
+\subsubsection{Generalized partially applied template template-parameters?}
 
-A question that arises when considering this partial application of concepts is whether it generalizes to other kinds of template parameters.
+A question that arises when considering this partial application of concepts is whether it generalizes to other kinds of template-parameters.
 
 But concepts are unique in that the first parameter has a special meaning and as such it does make a lot of sense
 that you can pass the first parameter at a different time than all other parameters.
 After all, this is why \tcode{type-constraint}{s} exist.
 
-To generalize that to other template template parameters, we would need to be able
-to provide - or not - arbitrary parameters:
+To generalize that to other template template-parameters, we would need to be able to provide - or not - arbitrary parameters:
 we could imagine for example being able to write some kind of code where some but not all template arguments are provided.
 
 \begin{colorblock}
@@ -548,14 +567,14 @@ Supporting that does not seem like a good time investment.
 
 Our main priority should be to make progress on some form of universal template parameters.
 We will have an implementation of Universal Template Parameters for Kona.
-But before that, we need to ensure concepts and variable template template parameters are supported features so that universal
-template parameters support the gamut of entities that could be reasonably be used as template parameters.
+But before that, we need to ensure concepts and variable-template template-parameters are supported features so that universal
+template-parameters support the gamut of entities that could be reasonably be used as template-parameters.
 
-As part of that, subsumption for concept template parameters, as proposed in this paper, as well as subsumption of fold expressions
+As part of that, subsumption for concept template-parameters, as proposed in this paper, as well as subsumption of fold expressions
 should be considered an integral part of the design as adding them later might be somewhat annoying (it could affect existing code, in theory).
 
-However, partial concept application does not affect template parameters - it's a new kind of template argument or template name.
-So this can - and probably should - be pursued as a separate effort to not block progress on universal template parameters.
+However, partial concept application does not affect template-parameters - it's a new kind of template argument or template name.
+So this can - and probably should - be pursued as a separate effort to not block progress on universal template-parameters.
 
 \section{Things to be careful about}
 
@@ -565,12 +584,12 @@ Care has to be taken to not change that.
 In particular, specialization of concepts is not allowed, nor is declaring concepts in classes or other non-global (potentially dependent)
 contexts.
 
-Concepts template parameters need to be substituted when evaluating constraints, but other arguments do not.
+Concepts template-parameters need to be substituted when evaluating constraints, but other arguments do not.
 Efficient memoization is still possible by caching concept template arguments (and only concept template arguments) along the concept.
 
-Concepts template parameters do not allow a concept to refer to itself, or recursion.
+Concepts template-parameters do not allow a concept to refer to itself, or recursion.
 
-Universal template parameters may allow recursion.
+Universal template-parameters may allow recursion.
 
 \begin{colorblock}
 template <typename T, __any C, typename...Args>
@@ -587,7 +606,7 @@ or to have an implementation-defined limit for how many concepts can be replaced
 
 \section{Implementation}
 
-The paper as proposed has been implemented in a fork of Clang.
+The paper as proposed has been implemented in a fork of Clang and is available on godbolt.org.
 The implementation revealed no particular challenge.
 
 Partial concept application was also implemented, modeled by a new kind of template argument.
@@ -742,7 +761,7 @@ is either discarded\iref{module.global.frag} or has internal linkage.
 \indextext{class name!\idxcode{typedef}}%
 A \grammarterm{simple-template-id} is only a \grammarterm{typedef-name}
 if its \grammarterm{template-name} names
-an alias template or \changed{a template \grammarterm{template-parameter}}{a \grammarterm{type-template-parameter} template parameter}.
+an alias template or \changed{a template \grammarterm{template-parameter}}{a \grammarterm{type-template-parameter} template-parameter}.
 \begin{note}
     A \grammarterm{simple-template-id} that names a class template specialization
     is a \grammarterm{class-name}\iref{class.name}.
