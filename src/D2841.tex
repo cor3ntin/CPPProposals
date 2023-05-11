@@ -31,11 +31,36 @@ A variable template (C++14) - or a concept (concepts are themselves templates) c
 
 The motivation for passing a concept as a template argument is very much the same as why we support class templates as template arguments -- to allow higher-level constructs.
 
+Such constructs might for example include
+\begin{itemize}
+\item \tcode{range_of}\\
+    Many algorithms can operate on a sequences of integer or string-like types and while it is possible to express
+    \tcode{range<T> \&\& SomeConcept<ranges::range_reference_t<R>>}, some code bases do that enough they might want to have a shorter way to express that idea,
+    one which would let them use the abbreviated syntax in more cases.
+
+\item \tcode{tuple_of} \\
+    Same idea. Except that expressing this idea in the require clause of each function or class which might need it would be an exercise in frustration an
+    a maintainance nightmare. We explore a tuple_of concept later in this paper.
+
+\item Avoiding duplication. In his \href{https://brevzin.github.io/c++/2019/01/09/concept-templates/}{blog post} on this very topic, Barry Revzin observed that \tcode{std::ranges} defines a handful of concepts that
+are eerily similar to one another except they use different concepts internally. Concept template parameters can reduce a lot of duplication.
+Compare the \href{https://eel.is/c++draft/indirectcallable.indirectinvocable}{definitions in the standard} and \href{https://godbolt.org/z/ohKsoKh9G}{the implementatiion with our proposal}.
+\end{itemize}
+
+To quote Barry's aforementioned blog post
+\begin{quoteblock}
+I’d rather write a one-line definition per metaconcept, not a one-line definition per metaconcept instantiation.
+\end{quoteblock}
+
+
+We also demonstrated how this feature can be leverage to provide better diagnostics when a concept is not satisfied \href{https://compiler-explorer.com/z/sPz5faEbP}{[Compiler Explorer]}.
+
+
 There is community interest in these features:
 
 \begin{itemize}
 \item \href{https://stackoverflow.com/questions/63098070/is-it-possible-to-pass-a-concept-as-a-template-parameter}{Is it possible to pass a concept as a template parameter?}
-\item \href{https://stackoverflow.com/questions/72488554/concept-to-assert-an-argument-is-another-concept-with-whatever-parameters?noredirect=1&lq=1}{Concept to assert an argument is another concept, with whatever parameters}
+\item \href{https://stackoverflow.com/questions/72488554/concept-to-assert-an-argument-is-another-concept-with-whatever-parameters}{Concept to assert an argument is another concept, with whatever parameters}
 \item \href{https://stackoverflow.com/questions/58875829/passing-a-concept-to-a-function}{Passing a concept to a function}
 \item \href{https://stackoverflow.com/questions/61664468/how-to-pass-a-variable-template-as-template-argument}{How to pass a variable template as template argument}
 \item \href{https://stackoverflow.com/questions/58592312/can-a-variable-template-be-passed-as-a-template-template-argument}{Can a variable template be passed as a template template argument?}
@@ -606,8 +631,10 @@ or to have an implementation-defined limit for how many concepts can be replaced
 
 \section{Implementation}
 
-The paper as proposed has been implemented in a fork of Clang and is available on godbolt.org.
-The implementation revealed no particular challenge.
+The paper as proposed has been implemented in a fork of Clang and is available on compiler-explorer.
+The implementation revealed no particular challenge. In particular we confirmed that the proposed changes
+do not prevent memoization for subsumtion and satisfiability - ie, a concept and the set of its concept parameters
+is what needs to be cached.
 
 Partial concept application was also implemented, modeled by a new kind of template argument.
 This is still a work in progress.
