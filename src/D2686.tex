@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{constexpr structured bindings and references to constexpr variables}
-\docnumber{D2686R1}
+\docnumber{P2686R1}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Brian Bi}{bbi10@bloomberg.net}
@@ -343,7 +343,31 @@ In the meantime, this paper retains the wording for \tcode{constexpr} structured
 %    \item a non-mutable subobject or reference member of any of the above.
 %\end{itemize}
 %
-%\rSec1[dcl.struct.bind]{Structured binding declarations}%
+
+\rSec1[dcl.dcl]{Declarations}%
+\rSec2[dcl.pre]{Preamble}
+
+\ednote{Change 9.1.6 as follow}
+
+\pnum
+A \grammarterm{simple-declaration} with an \grammarterm{identifier-list} is called
+a \defn{structured binding declaration}\iref{dcl.struct.bind}.
+Each \grammarterm{decl-specifier} in the \grammarterm{decl-specifier-seq}
+shall be
+\added{\tcode{constexpr},}
+\tcode{static},
+\tcode{thread_local},
+\tcode{auto} \iref{dcl.spec.auto}, or
+a \grammarterm{cv-qualifier}.
+\begin{example}
+    \begin{codeblock}
+        template<class T> concept C = true;
+        C auto [x, y] = std::pair{1, 2};    // error: constrained \grammarterm{placeholder-type-specifier}
+        // not permitted for structured bindings
+    \end{codeblock}
+\end{example}
+
+\rSec1[dcl.struct.bind]{Structured binding declarations}%
 %\indextext{structured binding declaration}%
 %\indextext{declaration!structured binding|see{structured binding declaration}}%
 
