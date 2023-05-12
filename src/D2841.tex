@@ -23,7 +23,7 @@ This represents a hole in the template facilities, one that this paper proposes 
 
 \section{Motivation}
 
-Template template-parameters allow for higher-order templates greater composability.
+Template template-parameters allow for higher-order templates and greater composability.
 They can be used, for example, to parametrize a function that operates on any container of any type or to write CRTP-based interfaces.
 
 C++23 limits template template-parameters to be class templates or alias templates.
@@ -49,15 +49,13 @@ auto f(T&& x);
 Other such constructs might for example include
 \begin{itemize}
 \item \tcode{range_of}\\
-    Many algorithms can operate on a sequences of integer or string-like types and while it is possible to express
+    Many algorithms can operate on a sequence of integer or string-like types and while it is possible to express
     \tcode{range<T> \&\& SomeConcept<ranges::range_reference_t<R>>}, some code bases do that enough they might want to have a shorter way to express that idea,
     one which would let them use the abbreviated syntax in more cases.
 
 \item \tcode{tuple_of} \\
-    Same idea. Except that expressing this idea in the require clause of each function or class which might need it would be an exercise in frustration an
-    a maintainance nightmare. We explore a \tcode{tuple_of} concept later in this paper.
-    It is common in the scientific community to represent vectors as tuples-like things of numbers and these scientific librairies do not have great way to express
-    these constraints.
+    Same idea. Except that expressing this idea in the require clause of each function or class which might need it would be an exercise in frustration and a maintenance nightmare. We explore a \tcode{tuple_of} concept later in this paper.
+    It is common in the scientific community to represent vectors as tuples-like things of numbers and these scientific libraries do not have great way to express these constraints.
 
 \item Avoiding duplication. In his \href{https://brevzin.github.io/c++/2019/01/09/concept-templates/}{blog post} on this very topic, Barry Revzin observed that \tcode{std::ranges} defines a handful of concepts that
 are eerily similar to one another except they use different concepts internally. Concept template parameters can reduce a lot of duplication.
@@ -69,11 +67,11 @@ To quote Barry's aforementioned blog post
 I’d rather write a one-line definition per metaconcept, not a one-line definition per metaconcept instantiation.
 \end{quoteblock}
 
-And so, part of the motivation for concept template-parameters is the same motivation as we have for function, and templates, and classes:
-We want to be able to reuse code, to make it less repetitive and error prone.
+And so, part of the motivation for concept template-parameters is the same motivation as we have for functions, and templates, and classes:
+We want to be able to reuse code, to make it less repetitive and error-prone.
 
 
-We also demonstrated how this feature can be leverage to provide better diagnostics when a concept is not satisfied \href{https://compiler-explorer.com/z/sPz5faEbP}{[Compiler Explorer]}.
+We also demonstrated how this feature can be leveraged to provide better diagnostics when a concept is not satisfied \href{https://compiler-explorer.com/z/sPz5faEbP}{[Compiler Explorer]}.
 
 
 There is community interest in these features:
@@ -100,10 +98,9 @@ constexpr bool is_same_v = is_same<T, U>::value;
 \end{colorblock}
 
 But this is not compile-time efficient: A class has to be instantiated which is usually slow on most implementations.
-And then we still need to instantiate the variable. This performance issue is explored  im more details in \paper{P1715R1}.
+And then we still need to instantiate the variable. This performance issue is explored in more detail in \paper{P1715R1}.
 
-It also add complexity for users: the only reason we expose both a variable template and a class template for every boolean trait is because the language
-does not support variable-template template-parameters.
+It also adds complexity for users: the only reason we expose both a variable template and a class template for every boolean trait is because the language does not support variable-template template-parameters.
 
 For instance, counting elements that satisfy a specific predicate could be done as
 
@@ -121,7 +118,7 @@ std::size_t count_if_v = (... + p<Ts>::value);
 
 It will always be more work for the compiler to instantiate a whole class together with its body (not just its declaration) to allow access to the inner value member than just instantiating a variable template, no matter how much we try to optimize this pattern. \paper{P1715R1} makes the same case.
 
-The authors have use-cases that don't fit in the paper (like most \emph{interesting} usecases don't) where type-based vs variable-based metaprogramming means the difference of 300s compile-times per unit vs more than an hour (currently by textually duplicating definitions that could have been genericised if variable template template-parameters were available).
+The authors have use cases that don't fit in the paper (like most \emph{interesting} use cases don't) where type-based vs variable-based metaprogramming means the difference of 300s compile-times per unit vs more than an hour (currently by textually duplicating definitions that could have been genericized if variable template template-parameters were available).
 
 \subsection{Previous works}
 
@@ -145,12 +142,6 @@ None of these outcomes seems desirable, and therefore the best course of action 
 support the best we can the full set of entities we might ever want to support as template-parameters, before adding support for universal template-parameters.
 
 \section{Design}
-
-%\section{TODO}
-%
-%\begin{itemize}
-%\item can variable template template parameter ever be deduced?
-%\end{itemize}
 
 \subsection{Syntax}
 
@@ -285,7 +276,7 @@ We want to apply the subsumption rule to the normalized form of the requires cla
 
 While this is technically a breaking change, it only makes more programs valid (where there was simple ambiguity in C++23, we now have a refined partial ordering of that pair).
 
-This is useful when dealing with algebraic type classes. Consider a concept constraining a (simplified) environment implementation via a type-indexed \tcode{std::tuple}. (In real code, the environment is a type-tag indexed map)
+This is useful when dealing with algebraic-type classes. Consider a concept constraining a (simplified) environment implementation via a type-indexed \tcode{std::tuple}. (In real code, the environment is a type-tag indexed map)
 
 \begin{colorblock}
 template <typename X, typename... T>
@@ -321,10 +312,35 @@ concept product_type_of = (... && C<std::tuple_element_t<C...[?], X>>);
 
 \subsection{ADL}
 
-Similarly to variables, variable templates and concepts are not associated entities when performing argument-dependent lookup.
+Similarly to variables, variable templates, and concepts are not associated entities when performing argument-dependent lookup.
 This is consistent with previous work (for example \paper{N3595} and \paper{P0934R0}) and the general consensus towards ADL.
 
 \subsection{Deduction and partial ordering}
+
+Variable and concepts template parameters should be deducible from a template argument of a class template, used in the argument list of a function
+- including a function that is synthesized for the purpose of partial ordering.
+
+IE, the intent is that the following is well-formed.
+
+\begin{colorblock}
+template <template <class> auto V, template <class> concept C>
+struct A {}; // A takes a variable template template argument
+
+template <template <class T> auto V, template <class> concept C>
+void foo(A<V, C>);  // can accept any specialization of A; V and C are deduced
+
+template <class T>
+auto Var = 0;
+
+template <class T>
+concept Concept = true;
+
+void test() {
+    foo(A<Var, Concept>{});
+}
+\end{colorblock}
+
+\href{https://compiler-explorer.com/z/66dr6fnKj}{[Compiler Explorer]}
 
 \subsection{Equivalence of atomic constraints}
 
@@ -428,6 +444,8 @@ concept tuple_of = requires {
 ));
 \end{colorblock}
 
+\href{https://compiler-explorer.com/z/n6nsdj37j}{[Compiler Explorer]}
+
 For this to work, the concept template-parameter C needs to be substituted
 in the concept \tcode{__tuple_of_element} but not in the atomic constraint
 \tcode{__check_tuple_elements<T, std::tuple_size_v<T>, C>}.
@@ -525,6 +543,7 @@ void f(range_of<@\textbf{concept convertible_to<int>}@> auto)
 \end{colorblock}
 
 just work? Yes!
+\href{https://compiler-explorer.com/z/36sqoGsr7}{[Compiler Explorer]}
 
 We can indeed create a new kind of template argument - or a new kind of template-id - that carries additional arguments that are injected
 when the corresponding concept template-parameter is specialized.
@@ -584,7 +603,7 @@ f<invocable<int>>(); // boolean or partially applied concept?
 We explored various solutions to this ambiguity, including always treating something that could be a concept as a concept,
 and forcing an explicit cast to bool to force a boolean expression, or making the concept keyword optional when the concept has a fixed number of arguments.
 
-Both approach suffer the same issue: they could change the meaning of code when the concept is modified by adding defaulted or variadic
+Both approaches suffer the same issue: they could change the meaning of code when the concept is modified by adding defaulted or variadic
 parameters - it could also break pre-C++26 code.
 
 So it does not appear to be a robust solution.
@@ -689,8 +708,8 @@ or to have an implementation-defined limit for how many concepts can be replaced
 \section{Implementation}
 
 The paper as proposed has been implemented in a fork of Clang and is available on compiler-explorer.
-The implementation revealed no particular challenge. In particular we confirmed that the proposed changes
-do not prevent memoization for subsumtion and satisfiability - ie, a concept and the set of its concept parameters
+The implementation revealed no particular challenge. In particular, we confirmed that the proposed changes
+do not prevent memoization for subsumption and satisfiability - ie, a concept and the set of its concept parameters
 is what needs to be cached.
 
 Partial concept application was also implemented, modeled by a new kind of template argument.
@@ -1761,7 +1780,7 @@ respectively and substitute it for each occurrence of that parameter
 in the function type of the template.
 
 
-\ednote{TODO + IMPLEMENT}
+\ednote{Do we need to change anything here?}
 
 \begin{note}
     The type replacing the placeholder
@@ -1811,7 +1830,13 @@ have one of the following forms:
     @\opt{TT}@<>
 \end{codeblock}
 
-\ednote{Could a variable template parameter ever be deduced?}
+%\ednote{Could a variable template parameter ever be deduced?}
+
+\section{Acknowledgments}
+Many people contributed valuable discussions and feedbacks to this paper, notably
+Nina Dinka Ranns, Alisdair Meredith, Joshua Berne, Pablo Halpern, Lewis Baker, Bengt Gustafsson,
+Hannеs Hauswedell and Barry Revzin.
+
 
 \bibliographystyle{plain}
 \bibliography{wg21}
