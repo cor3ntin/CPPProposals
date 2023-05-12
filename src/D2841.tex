@@ -40,17 +40,22 @@ Such constructs might for example include
 
 \item \tcode{tuple_of} \\
     Same idea. Except that expressing this idea in the require clause of each function or class which might need it would be an exercise in frustration an
-    a maintainance nightmare. We explore a tuple_of concept later in this paper.
+    a maintainance nightmare. We explore a \tcode{tuple_of} concept later in this paper.
+    It is common in the scientific community to represent vectors as tuples-like things of numbers and these scientific librairies do not have great way to express
+    these constraints.
 
 \item Avoiding duplication. In his \href{https://brevzin.github.io/c++/2019/01/09/concept-templates/}{blog post} on this very topic, Barry Revzin observed that \tcode{std::ranges} defines a handful of concepts that
 are eerily similar to one another except they use different concepts internally. Concept template parameters can reduce a lot of duplication.
-Compare the \href{https://eel.is/c++draft/indirectcallable.indirectinvocable}{definitions in the standard} and \href{https://godbolt.org/z/ohKsoKh9G}{the implementatiion with our proposal}.
+Compare the \href{https://eel.is/c++draft/indirectcallable.indirectinvocable}{definitions in the standard} and \href{https://godbolt.org/z/ohKsoKh9G}{the implementation with our proposal}.
 \end{itemize}
 
 To quote Barry's aforementioned blog post
 \begin{quoteblock}
 I’d rather write a one-line definition per metaconcept, not a one-line definition per metaconcept instantiation.
 \end{quoteblock}
+
+And so, part of the motivation for concept template-parameters is the same motivation as we have for function, and templates, and classes:
+We want to be able to reuse code, to make it less repetitive and error prone.
 
 
 We also demonstrated how this feature can be leverage to provide better diagnostics when a concept is not satisfied \href{https://compiler-explorer.com/z/sPz5faEbP}{[Compiler Explorer]}.
@@ -66,9 +71,27 @@ There is community interest in these features:
 \item \href{https://stackoverflow.com/questions/58592312/can-a-variable-template-be-passed-as-a-template-template-argument}{Can a variable template be passed as a template template argument?}
 \end{itemize}
 
+\subsection{Variable template-parameters}
+
+Variable-template template-parameters (previously proposed in \paper{P2008R0}), are arguably less useful.
+They can be emulated with a template class with a static public \tcode{value} data member.
+Most standard type traits are defined as a type, and have an equivalent \tcode{_v} variable:
+\begin{colorblock}
+template <typename T, typename U>
+constexpr bool is_same_v = is_same<T, U>::value;
+\end{colorblock}
+
+But this is not compile-time efficient: A class has to be instantiated which is usually slow on most implementations.
+And then we still need to instantiate the variable. This performance issue is explored  im more details in \paper{P1715R1}.
+
+It also add complexity for users: the only reason we expose both a variable template and a class template for every boolean trait is because the language
+does not support variable-template template-parameters.
+
+\ednote{TODO GASPER}
+
 \subsection{Previous works}
 
-Variable-template template-parameters were proposed in \paper{P2008R0} and were part of the original design for variable templates \paper{N3615}.
+and were part of the original design for variable templates \paper{N3615}.
 Concept template-parameters have been described by Barry Revzin (back when Concept names were uppercase) in his blog \href{https://brevzin.github.io/c++/2019/01/09/concept-templates/}{here} and \href{https://brevzin.github.io/c++/2019/03/24/concept-templates-2/}{here}.
 We mentionned them in \paper{P2632R0} and \paper{P1985R3}.
 
@@ -127,7 +150,6 @@ template<
 \end{colorblock}
 
 \subsection{Default Arguments}
-
 
 Like type template template parameters, concepts, and variable template template
 parameters can have a default argument which is a concept name or the name of a variable template respectively.
@@ -239,7 +261,6 @@ auto f(sender auto&& s, environment_of<std::stop_token> auto env); // uses std::
 auto f(sender auto&& s, environment_of<std::stop_token, std::pmr::allocator> auto env); // uses given allocator
 \end{colorblock}
 
-
 \subsection{Fold expressions involving concept template parameters}
 
 When the fold expression is over a pack of \emph{concepts}, we must be a bit more careful.
@@ -268,6 +289,8 @@ concept product_type_of = (... && C<std::tuple_element_t<C...[?], X>>);
 
 Similarly to variables, variable templates and concepts are not associated entities when performing argument-dependent lookup.
 This is consistent with previous work (for example \paper{N3595} and \paper{P0934R0}) and the general consensus towards ADL.
+
+\subsection{Deduction and partial ordering}
 
 \subsection{Equivalence of atomic constraints}
 
