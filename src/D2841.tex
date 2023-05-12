@@ -24,14 +24,29 @@ This represents a hole in the template facilities, one that this paper proposes 
 \section{Motivation}
 
 Template template-parameters allow for higher-order templates greater composability.
-They can be used, for example, to constrain a function that operates on any container of any type or to write CRTP-based interfaces.
+They can be used, for example, to parametrize a function that operates on any container of any type or to write CRTP-based interfaces.
 
 C++23 limits template template-parameters to be class templates or alias templates.
 A variable template (C++14) - or a concept (concepts are themselves templates) cannot be passed as a template argument in C++23.
 
 The motivation for passing a concept as a template argument is very much the same as why we support class templates as template arguments -- to allow higher-level constructs.
 
-Such constructs might for example include
+It would be very nice, for instance, to be able to define a concept adaptor such as
+
+\begin{colorblock}
+template <typename T, template <typename> concept C>
+concept decays_to = C<decay_t<T>>;
+\end{colorblock}
+
+and be able to use it with any concept constraint
+
+\begin{colorblock}
+template <decays_to<copyable> T>
+auto f(T&& x);
+\end{colorblock}
+
+
+Other such constructs might for example include
 \begin{itemize}
 \item \tcode{range_of}\\
     Many algorithms can operate on a sequences of integer or string-like types and while it is possible to express
@@ -71,6 +86,9 @@ There is community interest in these features:
 \item \href{https://stackoverflow.com/questions/58592312/can-a-variable-template-be-passed-as-a-template-template-argument}{Can a variable template be passed as a template template argument?}
 \end{itemize}
 
+Unfortunately, this is one of those features that truly shows its power on large examples that don't tend to fit into papers.
+
+
 \subsection{Variable template-parameters}
 
 Variable-template template-parameters (previously proposed in \paper{P2008R0}), are arguably less useful.
@@ -87,7 +105,23 @@ And then we still need to instantiate the variable. This performance issue is ex
 It also add complexity for users: the only reason we expose both a variable template and a class template for every boolean trait is because the language
 does not support variable-template template-parameters.
 
-\ednote{TODO GASPER}
+For instance, counting elements that satisfy a specific predicate could be done as
+
+\begin{colorblock}
+template <template <typename> auto p, typename... Ts>
+std::size_t count_if_v = (... + p<Ts>);
+\end{colorblock}
+
+We could do the same thing with a type, but it incurs a class template instantiation for each element. Observe:
+
+\begin{colorblock}
+template <template <typename> typename p, typename... Ts>
+std::size_t count_if_v = (... + p<Ts>::value);
+\end{colorblock}
+
+It will always be more work for the compiler to instantiate a whole class together with its body (not just its declaration) to allow access to the inner value member than just instantiating a variable template, no matter how much we try to optimize this pattern. \paper{P1715R1} makes the same case.
+
+The authors have use-cases that don't fit in the paper (like most \emph{interesting} usecases don't) where type-based vs variable-based metaprogramming means the difference of 300s compile-times per unit vs more than an hour (currently by textually duplicating definitions that could have been genericised if variable template template-parameters were available).
 
 \subsection{Previous works}
 
