@@ -286,6 +286,8 @@ auto f(sender auto&& s, environment_of<std::stop_token> auto env); // uses std::
 auto f(sender auto&& s, environment_of<std::stop_token, std::pmr::allocator> auto env); // uses given allocator
 \end{colorblock}
 
+Without the subsumption fixes to fold expressions, the above two overloads conflict, even though they should by rights be partially ordered.
+
 \subsection{Fold expressions involving concept template parameters}
 
 When the fold expression is over a pack of \emph{concepts}, we must be a bit more careful.
@@ -355,7 +357,7 @@ constexpr bool __tuple_check_elements = [] {
       return true;
     else if constexpr(requires (T t) {
         typename std::tuple_element_t<N-1, T>;
-        { std::get<N>(t) };
+        { std::get<N-1>(t) };
     })
       return  __tuple_check_elements<T, N-1>;
     return false;
@@ -380,7 +382,7 @@ constexpr bool __tuple_check_elements = [] {
       return true;
     else if constexpr(requires (T t) {
         typename std::tuple_element_t<N-1, T>;
-        { std::get<N>(t) } -> decays_to<C>;
+        { std::get<N-1>(t) } -> decays_to<C>;
     })
       return  __tuple_check_elements<T, N-1, C>;
     return false;
