@@ -18,7 +18,7 @@
 \section{Abstract}
 
 C++ allows passing templates as template parameters.
-It does not, however, support these template template-parameters to be non-types, i.e., either variables or concepts, which 
+It does not, however, support these template template-parameters to be non-types, i.e., either variables or concepts, which
 represents a hole in the template facilities and is the topic of this paper.
 
 \section{Motivation}
@@ -38,7 +38,7 @@ template <typename T, template <typename> concept C>
 concept decays_to = C<decay_t<T>>;
 \end{colorblock}
 
-Being able to use it with any concept constraint would also be helpful: 
+Being able to use it with any concept constraint would also be helpful:
 
 \begin{colorblock}
 template <decays_to<copyable> T>
@@ -46,7 +46,7 @@ auto f(T&& x);
 \end{colorblock}
 
 
-Other such constructs might, for example, include the following. 
+Other such constructs might, for example, include the following.
 \begin{itemize}
 \item \tcode{range_of}\\
     Many algorithms can operate on a sequence of integer or string-like types and while it is possible to express
@@ -57,11 +57,10 @@ Other such constructs might, for example, include the following.
     This follows the same idea, but expressing this idea in the require clause of each function or class that might need it would be an exercise in frustration and a maintenance nightmare. We explore a \tcode{tuple_of} concept later in this paper.
     Representing vectors as tuples-like things of numbers is common in the scientific community, and these scientific libraries have no ideal way to express these constraints.
 
-\item Avoiding duplication.\\ % lah: to make this item look like the other two. 
-     In his \href{https://brevzin.github.io/c++/2019/01/09/concept-templates/}{blog post} on this very topic, Barry Revzin observed that \tcode{std::ranges} defines a handful of concepts that
-    are eerily % lah: is that the right word for your intention?  
-    similar to one another except they use different concepts internally. Concept template-parameters can reduce a lot of duplication.
-    Compare the \href{https://eel.is/c++draft/indirectcallable.indirectinvocable}{definitions in the Standard} and \href{https://godbolt.org/z/ohKsoKh9G}{the implementation with our proposal}.
+\item Avoiding duplication.\\
+     In his \href{https://brevzin.github.io/c++/2019/01/09/concept-templates/}{blog post} on this very topic, Barry Revzin observed that \tcode{std::ranges} defines a handful of concepts that are very
+     similar to one another except they use different concepts internally. Concept template-parameters can reduce a lot of duplication.
+     Compare the \href{https://eel.is/c++draft/indirectcallable.indirectinvocable}{definitions in the Standard} and \href{https://godbolt.org/z/ohKsoKh9G}{the implementation with our proposal}.
 \end{itemize}
 
 To quote Barry's aforementioned blog post
@@ -77,7 +76,7 @@ We also demonstrated how this feature can be leveraged to provide better diagnos
 
 
 There is community interest in these features.
-\begin{itemize} % lah: Note that the first and last items are complete sentences. Write the others to also be complete sentences. Then the list will be parallel, meaning all items have the same structure. 
+\begin{itemize}
 \item \href{https://stackoverflow.com/questions/63098070/is-it-possible-to-pass-a-concept-as-a-template-parameter}{Is it possible to pass a concept as a template parameter?}
 \item \href{https://stackoverflow.com/questions/72488554/concept-to-assert-an-argument-is-another-concept-with-whatever-parameters}{Concept to assert an argument is another concept, with whatever parameters}
 \item \href{https://stackoverflow.com/questions/58875829/passing-a-concept-to-a-function}{Passing a concept to a function}
@@ -88,7 +87,7 @@ There is community interest in these features.
 Unfortunately, this is one of those features that truly shows its power on large examples that don't tend to fit into papers.
 
 
-\subsection{Variable template-parameters} % lah: Should this be variable-template template-parameters? 
+\subsection{Variable-template template-parameters}
 
 Variable-template template-parameters (previously proposed in \paper{P2008R0}) are arguably less useful.
 They can be emulated with a template class with a static public \tcode{value} data member.
@@ -101,8 +100,7 @@ constexpr bool is_same_v = is_same<T, U>::value;
 But this is not compile-time efficient: A class has to be instantiated, which is usually slow on most implementations.
 Then we still need to instantiate the variable. This performance issue is explored in more detail in \paper{P1715R1}.
 
-It % lah: what is "it" here? 
-also adds complexity for users: The main reason we expose both a variable template and a class template for every boolean % lah: I typically capitalize Boolean since it's named after a person, George Boole. Not everyone does though. So it's your choice whether to show old George some respect. : )  
+Wrapping variables in class templates also adds complexity for users: The main reason we expose both a variable template and a class template for every boolean
 trait is because the language does not support variable-template template-parameters. (Note that we are aware of some codebases using traits as tags for dispatch but this far from the common case.)
 
 For instance, counting elements that satisfy a specific predicate could be done as
@@ -198,7 +196,7 @@ struct S {
 
 \subsection{Concept template-parameters and subsumption}
 
-Consider: % lah: Your PDF has font errors for the # signs
+Consider:
 \begin{colorblock}
 template <typename T>
 requires view<T> && input_range<T>
@@ -212,7 +210,7 @@ void f(); // #2
 We expect \#2 to be more specialized than \#1 because \tcode{contiguous_range} subsumes\\
 \tcode{input_range}.
 
-Now, consider: % lah: Your PDF has font errors for the # signs
+Now, consider:
 
 \begin{colorblock}
 template <typename T>
@@ -224,7 +222,7 @@ requires all_of<T, view, contiguous_range>
 void f(); // #2
 \end{colorblock}
 
-%https://compiler-explorer.com/z/71qjW1WWP
+[\href{https://compiler-explorer.com/z/71qjW1WWP}{Run this example on Compiler Explorer}]
 
 This example ought to be isomorphic to the previous one, and \#2 should still be more specialized than \#1.
 To do that, we need to be able to substitute concept template arguments in constraint expressions when normalizing constraints.
@@ -240,7 +238,6 @@ concept, recursively.
 
 As such, subsumption for concept template-parameters does not violate the guiding principle of subsumption.
 
-% lah: Your PDF has font errors for the # signs
 \begin{colorblock}
 template<typename T, template <typename...> concept C>
 concept range_of = std::ranges::range<T> && @\textbf{C}@<std::remove_cvref_t<std::ranges::range_reference_t<T>>>; // #1
@@ -254,11 +251,10 @@ Note that this transformation does not change any other behavior of normalizatio
 are not substituted, and arguments that are not concept names are not substituted either.
 
 \subsection{Subsumption and fold expressions over \tcode{\&\&} and \tcode{||}}
-% lah: Your PDF has font errors for the && signs; there is simply a wide space with nothing at all there. 
 
-Before we handle the more complicated scenario where the fold expression is over % lah: Not sure what "is over" means here. Maybe it's fine and I just don't understand the technical part of it. Ask your coauthor or Josh or Brian. 
-a pack of concepts, we must fix an old concept-ts % lah: Should ts be in code font? 
- issue that fell through the cracks; see 
+Before we handle the more complicated scenario where the fold expression's pattern is
+a pack of concepts, we must fix an old concept-ts
+ issue that fell through the cracks; see
 \href{http://cplusplus.github.io/concepts-ts/ts-active.html#28}{ordering of constraints involving fold expressions}:
 
 \begin{colorblock}
@@ -343,11 +339,11 @@ void test() {
 }
 \end{colorblock}
 
-See \href{https://compiler-explorer.com/z/66dr6fnKj}{[Compiler Explorer]}.
+[\href{https://compiler-explorer.com/z/66dr6fnKj}{Run this example on Compiler Explorer}]
 
 \subsection{Equivalence of atomic constraints}
 
-One interesting concept to consider is \tcode{tuple_of}, which would e.g., allow constraining a function on a tuple-like % lah: should tuple-like be set in code font as it is two lines below? 
+One interesting concept to consider is \tcode{tuple_of}, which would e.g., allow constraining a function on a \placeholder{tuple-like}
 of integrals, a frequent use case in scientific computation.
 
 In the absence of member and alias packs, a \tcode{tuple_like} concept could look like
@@ -448,7 +444,7 @@ concept tuple_of = requires {
 ));
 \end{colorblock}
 
-See \href{https://compiler-explorer.com/z/n6nsdj37j}{[Compiler Explorer]}.
+[\href{https://compiler-explorer.com/z/n6nsdj37j}{Run this example on Compiler Explorer}]
 
 For this to work, the concept template-parameter C needs to be substituted
 in the concept \tcode{__tuple_of_element} but not in the atomic constraint
@@ -546,8 +542,9 @@ Can we still support making something similar in the language? Could we make som
 void f(range_of<@\textbf{concept convertible_to<int>}@> auto)
 \end{colorblock}
 
-simply work? Yes!
-See \href{https://compiler-explorer.com/z/36sqoGsr7}{[Compiler Explorer]}.
+simply work? Yes!\\
+
+[\href{https://compiler-explorer.com/z/36sqoGsr7}{Run this example on Compiler Explorer}]
 
 We can indeed create a new kind of template argument --- or a new kind of template-id --- that carries additional arguments that are injected
 when the corresponding concept template-parameter is specialized.
@@ -581,9 +578,7 @@ This feature (which we call partial application) expresses intent very clearly a
 \subsection{Syntax of partially applied concepts}
 
 Partially applied concepts can appear as template arguments matching a concept template-parameter (and nowhere else).
-You might have noticed the \tcode{concept} keyword there. % lah: where? 
-
-Why \tcode{range_of<concept convertible_to<int>>} rather than simply\linebreak[4] \tcode{range_of<convertible_to<int>>}?
+You might have noticed the \tcode{concept} keyword prefixing template arguments in previous examples and wonder why \tcode{range_of<concept convertible_to<int>>} rather than simply \tcode{range_of<convertible_to<int>>}?
 
 Of course, there is an undeniable parallel with the syntax of concept declaration, which is nice, but the keyword is there to avoid ambiguity.
 
@@ -608,7 +603,7 @@ We explored various solutions to this ambiguity, including always treating somet
 and forcing an explicit cast to bool to force a boolean expression or making the concept keyword optional when the concept has a fixed number of arguments.
 
 Both approaches suffer the same issue: They could change the meaning of code when the concept is modified by adding defaulted or variadic
-parameters. It could also break pre-C++26 code. 
+parameters. It could also break pre-C++26 code.
 So they do not appear to be robust solutions.
 
 We also refrained from any solution that would make the nature of template arguments somehow deduced from the corresponding parameter
@@ -630,11 +625,11 @@ some_template_name <
 
 A question that arises when considering this partial application of concepts is whether it generalizes to other kinds of template-parameters.
 
-Concepts are unique in that the first parameter has a special meaning, and as such, 
+Concepts are unique in that the first parameter has a special meaning, and as such,
 that you can pass the first parameter at a different time than all other parameters does make a lot of sense.
 After all, this is why \tcode{type-constraint}{s} exist.
 
-To generalize that % lah: that what? property? 
+To generalize partial application
 to other template template-parameters, we would need to be able to provide --- or not --- arbitrary parameters;
 we could imagine, for example, being able to write some kind of code where some but not all template arguments are provided.
 
@@ -646,7 +641,7 @@ However, this is more complicated than what we need for concepts, and whether it
 How arguments and parameters would be matched is less clear.
 Besides, unlike concepts, aliases and variable templates can be created at class scope.
 
-Therefore the motivation for partially applied concepts does not necessarily generalize terribly well. 
+Therefore the motivation for partially applied concepts does not necessarily generalize terribly well.
 We did consider whether this sort of placeholder syntax would be a good fit for concepts in isolation, but
 we think \tcode{concept \grammarterm{type-constraint}} is more consistent, less novel, and
 therefore more teachable than a placeholder syntax.
@@ -703,7 +698,7 @@ concept Foo = Concept<T, Args...>;
 Y<int, Foo>;
 \end{colorblock}
 
-This will need careful consideration, but we have options, such as preventing the same concept name from appearing multiple times 
+This will need careful consideration, but we have options, such as preventing the same concept name from appearing multiple times
 or having an implementation-defined limit for how many concepts can be replaced during subsumption.
 
 \section{Implementation}
@@ -917,7 +912,7 @@ A template specialization \iref{temp.spec} can be referred to by a
 
 \pnum
 A \defn{concept-id} is a \grammarterm{simple-template-id}
-where the \grammarterm{template-name} is a \grammarterm{concept-name} \added{or names a \grammarterm{concept-parameter}}. % lah: it seems from the PDF like there's an extraneous space before the period.
+where the \grammarterm{template-name} is a \grammarterm{concept-name} \added{or names a \grammarterm{concept-parameter}}.
 A concept-id is a prvalue of type \tcode{bool}, and
 does not name a template specialization.
 A concept-id evaluates to \tcode{true}
@@ -1226,7 +1221,7 @@ no diagnostic required.
 \end{example}
 
 \begin{addedblock}
-Two template parameters are of the same kind if either % lah: "either" doesn't seem the right fit for so many options
+Two template parameters are of the same kind if:
 \begin{itemize}
 \item they are both \grammarterm{type-parameter},
 \item they are both non-type parameter,
@@ -1451,7 +1446,7 @@ a constraint \iref{temp.constr.constr} that is defined as follows:
     after \removed{substituting \tcode{A$_1$, A$_2$, ..., A$_n$}}
     \begin{itemize}
     \begin{addedblock}
-    \item substituting each use of A$_i$'s corresponding template parameter in the \grammarterm{constraint-expression} of \tcode{C} if A$_i$ denotes a \grammarterm{concept-name} % lah: and? or? 
+    \item substituting each use of A$_i$'s corresponding template parameter in the \grammarterm{constraint-expression} of \tcode{C} if A$_i$ denotes a \grammarterm{concept-name} % lah: and? or?
     \end{addedblock}
     \item
     \added{substituting each A$_i$ that is not a \grammarterm{concept-name}} for \tcode{C}{'s} respective template parameters in the
@@ -1754,7 +1749,7 @@ refers:
     when a placement operator delete that is a
     function template
     specialization
-    is selected to match a placement operator new 
+    is selected to match a placement operator new
     \iref{basic.stc.dynamic.deallocation,expr.new};
     \item
     when a friend function declaration \iref{temp.friend}, an
@@ -1782,7 +1777,7 @@ respectively and substitute it for each occurrence of that parameter
 in the function type of the template.
 
 
-\ednote{Do we need to change anything here?} % lah: it doesn't seem you want this to be in your final paper. 
+\ednote{Do we need to change anything here?} % lah: it doesn't seem you want this to be in your final paper.
 
 \begin{note}
     The type replacing the placeholder
@@ -1838,6 +1833,8 @@ have one of the following forms:
 Many people contributed valuable discussions and feedbacks to this paper, notably
 Nina Dinka Ranns, Alisdair Meredith, Joshua Berne, Pablo Halpern, Lewis Baker, Bengt Gustafsson,
 Hannеs Hauswedell and Barry Revzin.
+
+We also want to thank Lori Hughes for helping editing this paper and Bloomberg for sponsoring this work.
 
 
 \bibliographystyle{plain}
