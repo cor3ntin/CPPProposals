@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{user-generated \tcode{static\_assert} messages}
-\docnumber{P2741R2}
+\docnumber{D2741R3}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -20,6 +20,10 @@
 We propose that \tcode{static_assert} should accept user-generated string-like objects as their diagnostic message.
 
 \section{Revisions}
+
+\subsection{R3}
+
+Expand the design section to explain how instantiation and recursion work, following BSI comments.
 
 \subsection{R2}
 
@@ -219,6 +223,64 @@ constant evaluating \tcode{operator++} and \tcode{operaor*} for each character a
 It could even be faster to convert a list to string and then use it in a diagnostic message, than to use the list directly, as the later forces
 us to get in and out of the constant evaluation domain.
 
+\subsection{What if the expression producing the message is ill-formed?}
+
+The message-producing expression is intended to be always instantiated, but only evaluated if the assertion failed.
+
+\begin{colorblock}
+template <auto N>
+consteval std::string_view oups() {
+    static_assert(N, "this always fires");
+    return "oups!";
+}
+void f() {
+    static_assert(true, oups<false>());
+}
+\end{colorblock}
+
+\href{https://godbolt.org/z/PdvKsjTxq}{[Compiler explorer]}
+
+\tcode{oups<false>} is instantiated even though the static_assert never triggers.
+This behavior is consistent with the rest of the language - except for discarded statements, and is motivated by the fact that if the message-producing
+is ill-formed, it would otherwise not be detected until the \tcode{static_assert} triggers. In effect, it could hide bugs in code whose purpose is to diagnose bugs,
+and this seems extremely user hostile.
+
+We should also note that in the example above both static_assert would triggers, but it is very much implemenrtation defined whether an implementation could
+evaluate \tcode{oups<false>} despite it being ill-formed.
+
+\subsection{Could this thing recurse forever?}
+
+Consider:
+
+\begin{colorblock}
+template <auto N>
+consteval std::string_view oups() {
+    if constexpr(N == 0)
+        return "oups";
+    else
+        static_assert(!N, oups<N-1>());
+    return "oups!";
+}
+
+void f() {
+  static_assert(false, oups<99999>());
+}
+\end{colorblock}
+
+\href{https://godbolt.org/z/Kc9cPbqz6}{[Compiler explorer]}
+
+This naturaly falls into implementation limits.
+No message is likely to be produced as we cannot evaluate the termilal branch until bumping into the limits.
+
+with a more reasonable limit, say
+
+\begin{colorblock}
+static_assert(false, oups<5>());
+\end{colorblock}
+
+\href{https://godbolt.org/z/eqsj6GavG}{[Compiler explorer]}
+
+The static assert messages are produced (again, it is mostly QOI and context dependent whether the user generated message can be produced)
 
 \subsection{Encodings}
 

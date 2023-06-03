@@ -19,6 +19,15 @@ reserve memory for non-sized ranges whose size can be approximated.
 
 \section{Revisions}
 
+\subsection{R1}
+
+When SG-9 reviewed R0, Tim Song pointed out that \tcode{std::vector} and \tcode{std::string} call \tcode{std::distance} in their constructor (rather than calling \tcode{push_back} and reallocating themselves).
+This was not mentionned or considered at all in R0. R1 fixes this blattant omission.
+
+If anything this makes the motivation stronger but it opens some interesting design questions.
+
+SG-9 also pointed out that R0, despite being motivated by performance considerations, failed to present any benchmarks. Benchmarks are now provided.
+
 \section{Motivation}
 
 You should know this proposal is secretly about Unicode.
@@ -47,8 +56,11 @@ We do not have to know anything else about \tcode{views::uppercase} to know that
 
 In fact, it cannot be, for the same reason, a \tcode{random_access_range}.  It will be, at best, a \tcode{bidirectional_range}.
 This means that in the above example, we cannot reserve memory in advance when constructing the output vector in \tcode{ranges::to}.
-So the implementation will be notionally calling \tcode{push_back} and the vector will reallocate itself according to its growth factor
-which can have a measurable impact on performance.
+So the implementation will
+\begin{itemize}
+\item for a forward range, call \tcode{distance}, in effect going over the view twice (unless the range is random access, which is never the case in the presence of Unicode algorithms) which for a Unicode algorithm is very expensive.
+\item for a non forward range, call \tcode{push_back} in a loop
+\end{itemize}
 
 But... only a couple thousand codepoints have a casing that is not their identity and of those only a few hundred might produce more than
 one codepoint. That's about 1\% of the total number of allocated codepoints.
@@ -59,13 +71,13 @@ So the above example is massively pessimized because of a statistically unlikely
 
 This is not just a problem with upper-casing. All casing transformations in Unicode have the same peculiarity.
 It also applies to all forms of Unicode Normalization (normalization can produce output strings that are longer, or shorter than the input)
-and text encoding and decoding, especially between UTF-forms.
+and text encoding and decoding, especially between UTF forms.
 
 It is not possible to compute the size of the conversion from a string of length \tcode{L} from UTF-32 to UTF-8, but we know it will be at least \tcode{L}.
 And for some scripts, including English, it will be equal or very close to \tcode{L}.
 
 
-So we need a way to advertise "This range is about yea big", so that \tcode{ranges::to} and all the ranges constructors added by \paper{P1206R7}
+We need a way to advertise "This range is about yea big" so that \tcode{ranges::to} and all the ranges constructors added by \paper{P1206R7}
 can reduce the number of allocations they perform.
 
 \section{Design}
@@ -88,8 +100,8 @@ To that end, we propose:
 \end{itemize}
 
 Like \tcode{ranges::size} we mandate O(1) evaluation of \tcode{size_hint}.
-With this design, ranges that are sized are already \tcode{approximately_sized_range}, which avoid some duplication, undue complexity, and confusion.
-for example, we don't have to modify existing containers and views whose sized-ness does not depend on another view.
+With this design, ranges that are sized are already \tcode{approximately_sized_range}, which avoids some duplication, undue complexity, and confusion.
+for example, we don't have to modify existing containers and views whose size-ness does not depend on another view.
 
 \subsection{Usage}
 
@@ -124,7 +136,7 @@ compute a \tcode{size_hint} the same way they compute their size.
 
 \subsubsection{Views with predicate}
 
-\tcode{take_while}, \tcode{drop_while} and \tcode{filter} could in theory expose the size of their adapted range.
+\tcode{take_while}, \tcode{drop_while} and \tcode{filter} could, in theory, expose the size of their adapted range.
 however, this might lead to huge overallocation so, conservatively, these things do not expose a \tcode{size_hint}.
 
 \subsubsection{\tcode{zip} and \tcode{cartesian_product}}
@@ -150,7 +162,42 @@ As I'm not entirely certain what the best approach is, this paper does not make 
 
 \tcode{ranges::to} is sligtly modified to use \tcode{ranges::size_hint} instead of \tcode{ranges::size}.
 An implementation can also use \tcode{size_hint} in the various range constructors.
-User code could use it for similar purposes
+User code could use it for similar purposes.
+
+
+\subsection{\tcode{vector} and \tcode{string} constructors}
+
+\tcode{std::vector} performs a single allocation on construction by calling \tcode{distance} first.
+It could only use \tcode{size_hint} on types that are \tcode{Cpp17MoveInsertable} (which is the case for Unicode algorithms), as reallocation would force items to be moved around.
+It may affect the performance of vector construction negatively when it is constructed from a forward range that is not sized, but for which calling \tcode{distance} is cheap, and \tcode{size_hint} is off enough that the reallocations are noticeable.
+
+The proposed wording is currently silent on what happens to vector but we have 3 options:
+
+\begin{itemize}
+  \item Requires implementation to rely on \tcode{size_hint} when constructing a vector from a non-sized range of \tcode{Cpp17MoveInsertable} elements.
+  \item Allowing implementation to do so without requiring it. Note that whether allocations are performed would be observable through whether the move constructor of each element is called or not (unless the elements are of trivial types (or are otherwise trivially relocatable \paper{P2786R0})). Any effect resulting from a call to \tcode{std::distance} would not be performed.
+  \item In the presence of a \tcode{approximately_sized_range}, \tcode{ranges::to} could construct the container using reserve and insertions, instead of forwarding to the container constructor. The downside of this approach is that \tcode{ranges::to} would have different performance characteristics than container construction, which seems undesirable, and the optimization could not be applied to other operations such as \tcode{assign_range}/\tcode{insert_range}.
+\end{itemize}
+
+\section{Benchmarks}
+
+The following graph shows 2 Unicode normalization algorithms (Upper casing and NFC) for translations of the \href{https://unicode.org/udhr/index.html}{Universal Declaration of human rights} in English, Danish, Japanese, and Chinese.
+Each such Transformation is performed twice:
+
+\begin{itemize}
+\item By reserving the number of elements of the pre-transformation text in the output container, emulating the proposed \tcode{size_hint}
+\item By constructing the output container directly without reserve (status quo behavior of \tcode{ranges::to}).
+\end{itemize}
+
+The graph shows that, for a forward range, reserving is consistently about twice as fast. This is consistent with the fact the range is traversed twice.
+
+\includegraphics[width=\textwidth]{D2846_bench1.png}
+
+If the input range is non-forward, there is less difference on small datasets:
+
+\includegraphics[width=\textwidth]{D2846_bench2.png}
+
+But as the data gets bigger and the number of allocations increases being able to reserve memory gets more noticeably impactful (performance delta of 5-10\%).
 
 \section{Existing practices and alternatives considered}
 
@@ -167,7 +214,7 @@ The second half of the tuple that is returned is an Option<usize>. A None here m
 It is not enforced that an iterator implementation yields the declared number of elements. A buggy iterator may yield less than the lower bound or more than the upper bound of elements.
 size_hint() is primarily intended to be used for optimizations such as reserving space for the elements of the iterator, but must not be trusted to e.g., omit bounds checks in unsafe code. An incorrect implementation of size_hint() should not lead to memory safety violations.
 
-That said, the implementation should provide a correct estimation, because otherwise it would be a violation of the trait’s protocol.
+That said, the implementation should provide a correct estimation, because otherwise, it would be a violation of the trait’s protocol.
 \end{quoteblock}
 
 However, that flexibility is not useful in practice:
