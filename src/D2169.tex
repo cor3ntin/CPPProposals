@@ -7,7 +7,7 @@
 
 
 \title{A nice placeholder with no name}
-\docnumber{P2169R3}
+\docnumber{P2169R4}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Michael Park}{mcypark@gmail.com}
@@ -55,6 +55,12 @@ inspect(foo) { _  => bar; };
 \end{center}
 
 \section{Revisions}
+
+\subsection{Revision 4}
+
+\begin{itemize}
+\item Wording improvements
+\end{itemize}
 
 \subsection{Revision 3}
 
@@ -121,7 +127,7 @@ The design as presented in this paper takes the following design parameters into
 
 \subsection{Proposal}
 
-We propose that when \tcode{_} is used as the identifier for the declaration of a variable, non static class member variable, function parameter name,
+We propose that when \tcode{_} is used as the identifier for the declaration of a variable, non static class member variable,
 lambda capture or structured binding.
 the introduced name is implicitly given the \tcode{[[maybe_unused]]} attribute.
 
@@ -131,8 +137,8 @@ auto _ = foo(); // equivalent to [[maybe_unused]] auto _  = f();
 \end{lstlisting}
 \end{example}
 
-When a variable with automatic storage duration, a function parameter, a non-static class member variable, structured binding or lambda capture is introduced by the identifier \tcode{_}
-it can redefine an existing declaration, [basic.scope.declarative] in the same scope. After redeclaration, if the variable is used, the programm is ill-formed.
+When a variable with automatic storage duration, a non-static class member variable, structured binding or lambda capture is introduced by the identifier \tcode{_}
+it can redefine an existing declaration, [basic.scope.declarative] in the same scope. After redeclaration, if the variable is used, the program is ill-formed.
 
 \begin{example}
 \begin{lstlisting}[style=color]
@@ -160,6 +166,30 @@ inspect(i) {
     _  => 1;   // wildcard pattern
 };
 \end{lstlisting}
+
+\subsection{NTTP}
+
+We do not propose to support
+
+\begin{colorblock}
+template <auto _, auto _>
+void f();
+\end{colorblock}
+
+This is to avoid adding unecessary complexity - template arguments can already be left unnamed without loss of functionality, and declarations in a templated entity are not allowed to have the same name as that of a template parameter currently, which would introduce additional complexities.
+
+\subsection{requires clause parameter names and parameter names}
+
+In Varna, EWG decided not to support function parameter names and requires clauses
+parameter as these can remained unamed without semantics differences.
+
+Both EWG and CWG expressed a desire of consistency between NTTP,
+function parameters and require clauses parameters, and not supporting either
+introduce less complexity while offering a simple model:
+
+Any variable declaration that \emph{has to} be named, can be named with a \tcode{_} placeholder variable.
+Any variable declaration that \emph{does not have to} be named can just remain unnamed, with the same effect.
+
 
 \subsection{Should declaring variables called \tcode{_} be deprecated?}
 
@@ -289,10 +319,20 @@ The current version of this proposal can be emulaterd with the \tcode{-Werror} f
 \rSec2[basic.scope.scope]{General}
 
 \begin{addedblock}
-A declaration is \grammarterm{name independent} if its name is \tcode{_},
-and it declares a variable with automatic storage duration, a structured binding, a function parameter, the variable introduced by an \grammarterm{init-capture}, or a non-static data member.
 
-The \grammarterm{attribute-token} \tcode{maybe_unused} is applied to name independent declarations.
+\ednote {Modify [basic.scope.scope]/p5}
+
+A declaration is \grammarterm{name-independent} if its name is \tcode{_}
+and it declares a variable with automatic storage duration, a structured binding not inhabiting a namespace scope, the variable introduced by an \grammarterm{init-capture}, or a non-static data member.
+
+
+% A name-independent declaration is considered to be marked \tcode{maybe_unused} % cross reference.
+% add note: can't have attribute on init-capture
+
+% replace the attribute by its effect
+
+\recommended
+Implementations should not emit a warning that  a name-independent declaration is used or unused.
 
 %\recommended
 %An implementation should not emit a warning that
@@ -305,11 +345,12 @@ if they correspond and
 cause their shared name to denote different entities\iref{basic.link}.
 The program is ill-formed
 if, in any scope, a name is bound to two declarations \added{A and B}
-that potentially conflict and \changed{one}{A} precedes \changed{the other}{B} \iref{basic.lookup}\added{, unless B is name independent}.
+that potentially conflict and \changed{one}{A} precedes \changed{the other}{B} \iref{basic.lookup}\added{, unless B is name-independent}.
 
 \begin{addedblock}
 \begin{note}
-An \grammarterm{id-expression} that denotes a name independent declaration is ill-formed when another declaration with the same name inhabits the same scope.
+An \grammarterm{id-expression} that names a unique name-independent declaration is usable until
+an additional declaration of the same name is introduced in the same scope [basic.lookup.general].
 \end{note}
 \end{addedblock}
 
@@ -321,25 +362,37 @@ An \grammarterm{id-expression} that denotes a name independent declaration is il
 	in which case it is often ambiguous.
 \end{note}
 \begin{example}
-	\begin{codeblock}
-		void f() {
-			int x,y;
-			void x();             // error: different entity for \tcode{x}
-			int y;                  // error: redefinition
+\begin{codeblock}
+void f() {
+	int x,y;
+	void x();             // error: different entity for \tcode{x}
+	int y;                  // error: redefinition
+}
+enum { f };             // error: different entity for \tcode{::f}
+namespace A {}
+namespace B = A;
+namespace B = A;        // OK, no effect
+namespace B = B;        // OK, no effect
+namespace A = B;        // OK, no effect
+namespace B {}          // error: different entity for \tcode{B}
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+void g() {
+    int _;
+    _ = 0;    // OK
+    int _;    // OK, name independent declaration
+    _ = 0;    // error: two non-function declarations in the lookup set
+}
 
-                        @\added{    int _;}@
-			@\added{    _ = 0;                  // OK}@
-                        @\added{    int _;                  // OK}@
-			@\added{    _ = 0;                  // error: id-expression '_' denoting a \grammarterm{redefinable underscore entity}}@
-		}
-		enum { f };             // error: different entity for \tcode{::f}
-		namespace A {}
-		namespace B = A;
-		namespace B = A;        // OK, no effect
-		namespace B = B;        // OK, no effect
-		namespace A = B;        // OK, no effect
-		namespace B {}          // error: different entity for \tcode{B}
-	\end{codeblock}
+void h () {
+    int _;          // \#1
+    _ ++;           // OK
+    static int _;   // error: conflicts with \#1 because static variables are not
+                    // name-independent
+}
+\end{codeblock}
+\end{addedblock}
 \end{example}
 
 \textcolor{noteclr}{[...]}
@@ -349,7 +402,7 @@ An \grammarterm{id-expression} that denotes a name independent declaration is il
 \textcolor{noteclr}{[...]}
 
 \pnum
-If a declaration \added{that is not a name independent declaration and} whose target scope is the block scope $S$ of a
+If a declaration \added{that is not a name-independent declaration and} whose target scope is the block scope $S$ of a
 \begin{itemize}
     \item
     \grammarterm{compound-statement} of a \grammarterm{lambda-expression},
@@ -376,7 +429,7 @@ the program is ill-formed.
 
 \textcolor{noteclr}{[...]}
 
-\rSec1[basic.link]{Program and linkage}%
+\rSec2[basic.link]{Program and linkage}%
 
 \ednote{Modify [basic.link]/p8 as follow}
 
@@ -386,7 +439,7 @@ if, considering declarations of unnamed types to introduce their names
 for linkage purposes, if any\iref{dcl.typedef,dcl.enum},
 they correspond\iref{basic.scope.scope},
 have the same target scope that is not a function or template parameter scope,
-\added{neither is a name independent declaration, }
+\added{neither is a name-independent declaration, }
 and either
 \begin{itemize}
     \item
@@ -403,15 +456,29 @@ and either
 
 \textcolor{noteclr}{[...]}
 
-\rSec1[namespace.udecl]{The \tcode{using} declaration}%
+\rSec2[namespace.udecl]{The \tcode{using} declaration}%
 
-\textcolor{noteclr}{[...]}
+\textcolor{noteclr}{Modify [namespace.udecl]/p10 }
 
 \pnum
-If a declaration \added{A} named by a \grammarterm{using-declaration}
+If a declaration named by a \grammarterm{using-declaration}
 that inhabits the target scope of another declaration \added{B}
-potentially conflicts with it \added{, either B is not name independent or A doesn't precedes B}\iref{basic.scope.scope}, and
-either is reachable from the other, the program is ill-formed.
+potentially conflicts with it \iref{basic.scope.scope} and
+either is reachable from the other, the program is ill-formed \added{unless B is name-independent and the \grammarterm{using-declaration} precedes B}.
+
+\begin{addedblock}
+\begin{example}
+\begin{codeblock}
+int _;
+void f() {
+	int _;   // B
+	_ = 0;
+	using ::_;  // error: using-declaration does not precede B
+}
+\end{codeblock}
+\end{example}
+\end{addedblock}
+
 If two declarations named by \grammarterm{using-declaration}{s}
 that inhabit the same scope potentially conflict,
 either is reachable from the other, and
@@ -422,6 +489,16 @@ the program is ill-formed.
     between conflicting function declarations.
 \end{note}
 
+
+\section{Feature test macros}
+
+\ednote{Add a new macro in \tcode{[tab:cpp.predefined.ft]} : \tcode{__cpp_placeholder_variables} set to the date of adoption}.
+
+\begin{addedblock}
+\begin{codeblock}
+#define __cpp_placeholder_variables 2023XX // date of adoption
+\end{codeblock}
+\end{addedblock}
 
 %\rSec2[basic.lookup.general]{General}%
 %\pnum

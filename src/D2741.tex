@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{user-generated \tcode{static\_assert} messages}
-\docnumber{D2741R3}
+\docnumber{P2741R3}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -169,7 +169,7 @@ enum Second
 
 static_assert(
 First::nbElementFirstEnum == Second::nbElementSecondEnum,
-"Not the same number of element in the enums." + First::nbElementFirstEnum + " " + Second::nbElementSecondEnum);
+"Not the same number of element in the enums."s + to_string(First::nbElementFirstEnum) + " "s + to_string(Second::nbElementSecondEnum);
 \end{colorblock}
 \end{quoteblock}
 
@@ -306,7 +306,7 @@ Should we want another encoding here (and we really should not, C++ has enough e
 In other words, given the following code:
 
 \begin{colorblock}
-string_view str = "Hello";
+constexpr string_view str = "Hello";
 static_assert(false, str);
 \end{colorblock}
 
@@ -391,16 +391,16 @@ This feature was implemented in Circle and prototyped in Clang, with no difficul
 
 \begin{addedblock}
 \begin{bnf}
-    \nontermdef{static-assert-message}\br
+    \nontermdef{static_assert-message}\br
         unevaluated-string\br
-        constant-expression\br
+        conditional-expression\br
 \end{bnf}
 \end{addedblock}
 
 \begin{bnf}
     \nontermdef{static_assert-declaration}\br
     \keyword{static_assert} \terminal{(} constant-expression \terminal{)} \terminal{;}\br
-    \keyword{static_assert} \terminal{(} constant-expression \terminal{,} \changed{unevaluated-string}{static-assert-message} \terminal{)} \terminal{;}\br
+    \keyword{static_assert} \terminal{(} constant-expression \terminal{,} \changed{unevaluated-string}{static_assert-message} \terminal{)} \terminal{;}\br
 \end{bnf}
 
 \begin{bnf}
@@ -446,30 +446,52 @@ constructor, destructor, or conversion function.
 \begin{addedblock}
 \pnum
 
-If a \grammarterm{static-assert-message} matches the syntactic requirements of \grammarterm{unevaluated-string}
-it is an \grammarterm{unevaluated-string} and its text is the text of the \grammarterm{unevaluated-string}.
+If a \grammarterm{static_assert-message} matches the syntactic requirements of \grammarterm{unevaluated-string},
+it is an \grammarterm{unevaluated-string} and the text of the \grammarterm{static_assert-message} is the text of the \grammarterm{unevaluated-string}.
 
-Otherwise, a \grammarterm{static_assert-message} is a \grammarterm{constant-expression} $Msg$ and
+Otherwise, a \grammarterm{static_assert-message} shall be an expression $M$ such that
 \begin{itemize}
-    \item \tcode{$Msg$.size()} shall be a well-formed integral constant expression,
-    \item \tcode{$Msg$.data()} shall be a well-formed constant expression whose type is a pointer to possibly const-qualified \tcode{char}, and
-    \item the text of the \grammarterm{static-assert-message} is formed by the sequence\\ \tcode{[$Msg$.data(), $Msg$.data() + $Msg$.size())} which shall denote a valid range.
+    \item the expression \tcode{$M$.size()} is implicitly convertible to \tcode{std::size_t}, and
+    \item the expression \tcode{$M$.data()} is implicitly convertible to "pointer to \tcode{const char}".
 \end{itemize}
+
 \end{addedblock}
 
 In a \grammarterm{static_assert-declaration},
-the \grammarterm{constant-expression}
+the \grammarterm{constant-expression} \added{$E$}
 is contextually converted to \keyword{bool} and
-the converted expression shall be a constant expression\iref{expr.const}.
-
+the converted expression shall be a constant expression \iref{expr.const}.
 
 If the value of the expression \added{$E$} when
-so converted is \tcode{true}, the declaration has no
-effect.
-Otherwise, the program is ill-formed and the resulting
-diagnostic message\iref{intro.compliance} should include the text of
-the \changed{\grammarterm{string-literal}}{\grammarterm{static-assert-message}}, if one is supplied.
+so converted is \tcode{true} or the expression is evaluated in the context of a template definition,
+the declaration has no effect \added{and the \grammarterm{static_assert-message} is an unevaluated operand [expr.context]} .
 
+Otherwise,
+the \grammarterm{static_assert-declaration} \defnx{fails}{\idxcode{static_assert}!failed}\changed{,}{ and}
+\removed{the program is ill-formed, and the resulting
+diagnostic message \iref{intro.compliance} should include the text of
+the \grammarterm{string-literal}, if one is supplied}.
+
+\begin{addedblock}
+\begin{itemize}
+\item the program is ill-formed, and
+\item if the \grammarterm{static_assert-message} is a \grammarterm{conditional-expression} $M$,
+\begin{itemize}
+	\item \tcode{$M$.size()} shall be a converted constant expression of type \tcode{std::size_t} and let $N$ denote the value of that expression,
+	\item \tcode{$M$.data()}, implicitly converted to the type "pointer to \tcode{const char}", shall be a core constant expression and let $D$ denote the converted expression,
+	\item for each $i$ where $0 \le  i < N$, \tcode{$D$[$i$]} shall be an integral constant expression, and
+	\item the text of the \grammarterm{static_assert-message} is formed by the sequence\\
+	of $N$ code units, starting at \tcode{$D$}, of the ordinary literal encoding [lex.charset].
+\end{itemize}
+\end{itemize}
+\end{addedblock}
+
+\begin{addedblock}
+\recommended
+
+When a \grammarterm{static_assert-declaration} fails, the resulting diagnostic message should
+include the text of the \grammarterm{static_assert-message}, if one is supplied.
+\end{addedblock}
 
 \begin{example}
 \begin{codeblock}
@@ -483,6 +505,12 @@ the \changed{\grammarterm{string-literal}}{\grammarterm{static-assert-message}},
 \subsection{Feature test macro}
 
 \ednote{In \tcode{[tab:cpp.predefined.ft]}, bump the value of\tcode{__cpp_static_assert} to the date of adoption}.
+
+\begin{addedblock}
+\begin{codeblock}
+#define __cpp_static_assert 2023XX // date of adoption
+\end{codeblock}
+\end{addedblock}
 
 \section{References}
 

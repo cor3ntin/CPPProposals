@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Pack Indexing}
-\docnumber{P2662R1}
+\docnumber{D2662R2}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Pablo Halpern}{phalpern@halpernwightsoftware.com}
@@ -20,6 +20,11 @@ This paper expands on the pack indexing feature described in \paper{P1858R2} and
 
 \section{Revisions}
 
+\subsection{R2}
+
+\begin{itemize}
+	\item Wording improvements
+\end{itemize}
 
 \subsection{R1}
 
@@ -436,25 +441,44 @@ Lookup of an \grammarterm{identifier}
 followed by a \tcode{::} scope resolution operator
 considers only
 namespaces, types, and templates whose specializations are types.
-If a name, \grammarterm{template-id}, \added{pack-index-specifier,} or \grammarterm{decltype-specifier}
+If a name, \grammarterm{template-id}, or \grammarterm{\changed{decltype-specifier}{complex-type-specifier}}
 is followed by a \tcode{::},
 it shall designate a namespace, class, enumeration, or dependent type,
 and the \tcode{::} is never interpreted as
 a complete \grammarterm{nested-name-specifier}.
 
+
 \rSec2[expr.prim.id]{Names}
+
+\rSec3[expr.prim.id.general]{General}
+
+\begin{bnf}
+	\nontermdef{id-expression}\br
+	unqualified-id\br
+	qualified-id\br
+\begin{addedblock}
+	pack-index-expression
+\end{addedblock}
+\end{bnf}
+
 \rSec3[expr.prim.id.unqual]{Unqualified names}
+
+
+% Modify id-expression to add another level for (un)qualified-id (id)
+% a pack-expression => restrict to identifier
+
+% check the order of pack specifier to appear last everywhere it is mentionned.
+
+% introduce complex type specifier
 
 \begin{bnf}
     \nontermdef{unqualified-id}\br
     identifier\br
-    \added{pack-index-expression}\br
     operator-function-id\br
     conversion-function-id\br
     literal-operator-id\br
     \terminal{\~} type-name\br
-    \terminal{\~} decltype-specifier\br
-    \added{\terminal{\~} pack-index-specifier}\br
+    \terminal{\~} \changed{decltype-specifier}{complex-type-specifier}\br
     template-id
 \end{bnf}
 
@@ -472,7 +496,7 @@ refers to the copy of the parameter \iref{dcl.fct.def.coroutine}.
     \grammarterm{conversion-function-id}{s}, see~\ref{class.conv.fct}; for
     \grammarterm{literal-operator-id}{s}, see~\ref{over.literal}; for
     \grammarterm{template-id}{s}, see~\ref{temp.names}.
-    A \grammarterm{type-name}\added{, \grammarterm{pack-index-specifier}, } or \grammarterm{decltype-specifier}
+    A \grammarterm{type-name} or \grammarterm{ \changed{decltype-specifier}{complex-type-specifier}}
     prefixed by \tcode{\~} denotes the destructor of the type so named;
     see~\ref{expr.prim.id.dtor}.
     Within the definition of a non-static member function, an
@@ -518,8 +542,7 @@ the component name of that construct that appears lexically last.
     \terminal{::}\br
     type-name \terminal{::}\br
     namespace-name \terminal{::}\br
-    decltype-specifier \terminal{::}\br
-    \added{pack-index-specifier \terminal{::}}\br
+    \changed{decltype-specifier}{complex-type-specifier} \terminal{::}\br
     nested-name-specifier identifier \terminal{::}\br
     nested-name-specifier \opt{\keyword{template}} simple-template-id \terminal{::}
 \end{bnf}
@@ -557,8 +580,8 @@ inhabit a scope that contains the entity being redeclared or specialized.
 \pnum
 The \grammarterm{nested-name-specifier} \tcode{::} nominates
 the global namespace.
-A \grammarterm{nested-name-specifier} with a \grammarterm{decltype-specifier}
-nominates the type denoted by the \grammarterm{decltype-specifier},
+A \grammarterm{nested-name-specifier} with a \grammarterm{\changed{decltype-specifier}{complex-type-specifier}}
+nominates the type denoted by the \grammarterm{\changed{decltype-specifier}{complex-type-specifier}},
 which shall be a class or enumeration type.
 If a \grammarterm{nested-name-specifier} $N$
 is declarative and
@@ -582,22 +605,16 @@ Any other \grammarterm{nested-name-specifier} nominates
 the entity denoted by its
 \grammarterm{type-name},
 \grammarterm{namespace-name},
-\grammarterm{identifier}, or
+\grammarterm{identifier}, \removed{or}
 \grammarterm{simple-template-id}.
 If the \grammarterm{nested-name-specifier} is not declarative,
 the entity shall not be a template.
 
 \pnum
-A \grammarterm{qualified-id} shall not be of the form\added{s}
+A \grammarterm{qualified-id} shall not be of the form
 \grammarterm{nested-name-specifier} \opt{\keyword{template}} \tcode{\~}
-\grammarterm{decltype-specifier}
-\changed{nor of the form}{, }
-\grammarterm{decltype-specifier} \tcode{::} \tcode{\~} \grammarterm{type-name}
-\added{,
-\grammarterm{nested-name-specifier} \opt{\keyword{template}} \tcode{\~}
-\grammarterm{pack-index-\linebreak[3]specifier}
-or \grammarterm{pack-index-specifier} \tcode{::} \tcode{\~} \grammarterm{type-name}
-}.
+\grammarterm{\changed{decltype-specifier}{complex-type-specifier}} nor of the form
+\grammarterm{\changed{decltype-specifier}{complex-type-specifier}} \tcode{::} \tcode{\~} \grammarterm{type-name}.
 
 \pnum
 The result of a \grammarterm{qualified-id} $Q$ is
@@ -626,21 +643,54 @@ and a prvalue otherwise.
 
 \begin{bnf}
     \nontermdef{pack-index-expression}\br
-    id-expression \terminal{...} \terminal{[} constant-expression \terminal{]}  \br
+    identifier \terminal{...} \terminal{[} constant-expression \terminal{]}  \br
 \end{bnf}
 
-The \grammarterm{id-expression} in a \grammarterm{pack-index-expression} shall denote a pack.
+The \grammarterm{identifier} in a \grammarterm{pack-index-expression} shall denote a pack.
 
-The \grammarterm{constant-expression} shall be an integral constant expression.
-The \grammarterm{constant-expression} shall evaluate to a value $V$ such that 0 <= $V$ < \tcode{sizeof...(id-expression)}.
+The \grammarterm{constant-expression} shall be a converted constant expression [expr.const] of type \tcode{std::size_t} whose value $V$ is such that $0 \le V < \tcode{sizeof...(identifier)}$.
 
-The index of a \grammarterm{pack-index-expression} is the value of its \grammarterm{constant-expression}.
+The index of the \grammarterm{pack-index-expression} is $V$.
 
 A \grammarterm{pack-index-expression} is a pack expansion ([temp.variadic]).
 
-\note{A \grammarterm{pack-index-expression} denotes the ${index}$\textsuperscript{th} expression in a pack ([temp.variadic]).}
+\note{A \grammarterm{pack-index-expression} denotes the $V$\textsuperscript{th} expression in the pack denoted by the  \grammarterm{identifier} ([temp.variadic]).}
 
 \end{addedblock}
+
+\rSec3[expr.unary.op]{Unary operators}
+
+\ednote{Modify [expr.unary.op]/p10}
+
+\pnum
+\indextext{operator!ones' complement}%
+The operand of the \tcode{\~{}} operator shall have integral or unscoped enumeration type.
+Integral promotions are performed.
+The type of the result is the type of the promoted operand.
+% FIXME: [basic.fundamental]/p5 uses $x_i$; [expr] uses $\tcode{x}_i$.
+Given the coefficients $\tcode{x}_i$
+of the base-2 representation\iref{basic.fundamental}
+of the promoted operand \tcode{x},
+the coefficient $\tcode{r}_i$
+of the base-2 representation of the result \tcode{r}
+is 1 if $\tcode{x}_i$ is 0, and 0 otherwise.
+\begin{note}
+	The result is the ones' complement of the operand
+	(where operand and result are considered as unsigned).
+\end{note}
+There is an ambiguity
+in the grammar when \tcode{\~{}} is followed by
+a \grammarterm{type-name} or \grammarterm{\changed{decltype-specifier}{complex-type-specifier}}.
+The ambiguity is resolved by treating \tcode{\~{}} as the
+operator rather than as the start of an \grammarterm{unqualified-id}
+naming a destructor.
+\begin{note}
+	Because the grammar does not permit an operator to follow the
+	\tcode{.}, \tcode{->}, or \tcode{::} tokens, a \tcode{\~{}} followed by
+	a \grammarterm{type-name} or \grammarterm{\changed{decltype-specifier}{complex-type-specifier}} in a
+	member access expression or \grammarterm{qualified-id} is
+	unambiguously parsed as a destructor name.
+\end{note}
 
 \rSec2[dcl.name]{Type names}
 
@@ -713,15 +763,24 @@ which is the object of \paper{CWG1488}}
 
 \pnum
 The simple type specifiers are
+
 \begin{bnf}
 \nontermdef{simple-type-specifier}\br
 \opt{nested-name-specifier} type-name\br
 nested-name-specifier \keyword{template} simple-template-id\br\textbf{}
-decltype-specifier\br
-\added{pack-index-specifier}\br
+\changed{decltype-specifier}{complex-type-specifier}\br
 placeholder-type-specifier\br
 \opt{nested-name-specifier} template-name\br
 \end{bnf}
+
+\begin{addedblock}
+\begin{bnf}
+\nontermdef{complex-type-specifier}\br
+decltype-specifier\br
+pack-index-specifier\br
+\end{bnf}
+\end{addedblock}
+
 \textcolor{noteclr}{[...]}
 
 \begin{simpletypetable}
@@ -732,8 +791,8 @@ placeholder-type-specifier\br
     \hdstyle{Specifier(s)}            &   \hdstyle{Type}                  \\ \capsep
     \grammarterm{type-name}           & the type named                    \\
     \grammarterm{simple-template-id}  & the type as defined in [temp.names]\\
-    \added{\grammarterm{pack-index-specifier}} & \added{the type as defined in [dcl.type.pack.indexing]} \\
     \grammarterm{decltype-specifier}  & the type as defined in [dcl.type.decltype]\\
+    \added{\grammarterm{pack-index-specifier}} & \added{the type as defined in [dcl.type.pack.indexing]} \\
     \grammarterm{placeholder-type-specifier}
     & the type as defined in [dcl.spec.auto]\\
     \grammarterm{template-name}       & the type as defined in [dcl.type.class.deduct]\\
@@ -770,13 +829,12 @@ freely intermixed with other \grammarterm{decl-specifier}{s} in any order.
 
 The \grammarterm{typedef-name} in a \grammarterm{pack-index-specifier} shall denote a pack.
 
-The \grammarterm{constant-expression} shall be an integral constant expression.
-The \grammarterm{constant-expression} shall evaluate to a value $V$ such that 0 <= $V$ < \tcode{sizeof...(typedef-name)}.
+The \grammarterm{constant-expression} shall be a converted constant expression [expr.const] of type \tcode{std::size_t} whose value $V$ is such that $0 \le V < \tcode{sizeof...(typedef-name)}$.
 
-The index of a \grammarterm{pack-index-specifier} is the value of its \grammarterm{constant-expression}.
+The index of a \grammarterm{pack-index-specifier} is $V$.
 A \grammarterm{pack-index-specifier} is a pack expansion ([temp.variadic]).
 
-\note{A \grammarterm{pack-index-specifier} denotes the type of the ${index}$\textsuperscript{th} \tcode{typedef-name} in a pack ([temp.variadic]).}
+\note{The \grammarterm{pack-index-specifier} denotes the type of the ${V}$\textsuperscript{th} \tcode{typedef-name} of the pack ([temp.variadic]).}
 
 \end{addedblock}
 
@@ -811,12 +869,6 @@ class
 member access \iref{expr.ref}, \tcode{decltype($E$)} is the
 type of the entity named by $E$.
 If there is no such entity, the program is ill-formed;
-
-\begin{addedblock}
-\begin{note}
-A \grammarterm{pack-index-expression} is an \grammarterm{id-expression}.
-\end{note}
-\end{addedblock}
 
 \item otherwise, if $E$ is
 an xvalue, \tcode{decltype($E$)} is \tcode{T\&\&}, where \tcode{T} is the type
@@ -863,7 +915,7 @@ operand \iref{term.unevaluated.operand}.
 In an explicit destructor call, the destructor is specified by a
 \tcode{\~{}}
 followed by a
-\grammarterm{type-name}\added{, \grammarterm{pack-index-specifier},} or \grammarterm{decltype-specifier}
+\grammarterm{type-name} or \grammarterm{decltype-specifier}
 that denotes the destructor's class type.
 The invocation of a destructor is subject to the usual rules for member
 functions \iref{class.mfct};
@@ -902,17 +954,16 @@ the notation:
 
 \begin{bnf}
     \nontermdef{base-specifier}\br
-    \opt{attribute-specifier-seq} class-or-decltype\br
-    \opt{attribute-specifier-seq} \keyword{virtual} \opt{access-specifier} class-or-decltype\br
-    \opt{attribute-specifier-seq} access-specifier \opt{\keyword{virtual}} class-or-decltype
+    \opt{attribute-specifier-seq} class-or-\changed{decltype}{complex-type-specifier}\br
+    \opt{attribute-specifier-seq} \keyword{virtual} \opt{access-specifier} class-or-\changed{decltype}{complex}\br
+    \opt{attribute-specifier-seq} access-specifier \opt{\keyword{virtual}} class-or-\changed{decltype}{complex-type-specifier}
 \end{bnf}
 
 \begin{bnf}
-    \nontermdef{class-or-decltype}\br
+    \nontermdef{class-or-\changed{decltype}{complex-type-specifier}}\br
     \opt{nested-name-specifier} type-name\br
     nested-name-specifier \keyword{template} simple-template-id\br
-    decltype-specifier\br
-    \added{pack-index-specifier}
+    \changed{decltype-specifier}{complex-type-specifier}
 \end{bnf}
 
 \indextext{specifier access|see{access specifier}}%
@@ -939,10 +990,12 @@ equivalent \iref{temp.over.link}.
 \end{note}
 
 \begin{addedblock}
-For a template argument \tcode{T}, if the \grammarterm{constant-expression} of a \grammarterm{pack-index-specifier} is type-dependent,
-\tcode{T...[\grammarterm{constant-expression}]} denotes a unique dependent type.
-Two such \grammarterm{pack-index-specifier}{s} refer to the same type only if their \grammarterm{constant-expression}{s} are
-equivalent \iref{temp.over.link} and their type are the same. %lah: what does the "their" refer to? The pack-index-specifiers or the constant-expressions? Also, we would need to alter this to "their types are the same" or "their type is the same".
+For a template parameter pack \tcode{T}, \tcode{T...[\grammarterm{constant-expression}{}]} denotes a unique dependent type.
+
+If the \grammarterm{constant-expression} of a \grammarterm{pack-index-specifier} is value-dependent, two such \grammarterm{pack-index-specifier}{s} refer to the same type only if their \grammarterm{constant-expression}{s} are equivalent \iref{temp.over.link}.
+
+Otherwise, two such \grammarterm{pack-index-specifier}{s} refer to the same type only if their \grammarterm{constant-expression}{s} have the same value.
+
 \end{addedblock}
 
 \rSec2[temp.variadic]{Variadic templates}
@@ -1004,9 +1057,9 @@ expansions can occur in the following contexts:
 
     \begin{addedblock}
     \item In a \grammarterm{pack-index-expression}; the pattern is an
-    \grammarterm{id-expression}.
-    \item In a \grammarterm{pack-index-specifier}; the pattern is an
     \grammarterm{identifier}.
+    \item In a \grammarterm{pack-index-specifier}; the pattern is a
+    \grammarterm{typedef-name}.
     \end{addedblock}
 
     \item In a \grammarterm{fold-expression} \iref{expr.prim.fold};
@@ -1129,6 +1182,9 @@ The instantiation of $P$ is the \grammarterm{typedef-name} \tcode{$\mathtt{E}_K$
 
 \rSec3[temp.deduct.type]{Deducing template arguments from a type}
 
+% An id-expression is type-dependent if it is a template-id that is not a concept-id and is dependent; OR it it a pack expression whose constant expression is a constant expression OR or if its terminal name is
+
+% modify class.base.init.
 
 \pnum
 The non-deduced contexts are:
@@ -1141,7 +1197,7 @@ The non-deduced contexts are:
     of a type that was specified using a
     \grammarterm{qualified-id}.
     \begin{addedblock}
-    \item A \grammarterm{pack-index-specifier.}
+    \item A \grammarterm{pack-index-specifier} or a \grammarterm{pack-index-expression}.
     \end{addedblock}
     \item
     The \grammarterm{expression} of a \grammarterm{decltype-specifier}.
@@ -1186,13 +1242,12 @@ The non-deduced contexts are:
 
 \rSec3[decl.array]
 \change
-Previously, \tcode{T...[$n$]} would declare a pack of function parameters of type "array of \tcode{T} of size \tcode{$n$}".
+Previously, \tcode{T...[$n$]} would declare a pack of function parameters.
 \tcode{T...[$n$]} is now a \grammarterm{pack-index-specifier}.
 \rationale
 Improve the handling of packs.
 \effect
-Valid C++23 code that declares a
-pack of arrays parameter without specifying a \tcode{declarator-id} may become ill-formed.
+Valid C++23 code that declares a pack of parameter without specifying a \tcode{declarator-id} becomes ill-formed.
 
 \begin{codeblock}
 template <typename... T>
