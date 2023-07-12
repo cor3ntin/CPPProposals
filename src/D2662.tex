@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Pack Indexing}
-\docnumber{D2662R2}
+\docnumber{P2662R2}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Pablo Halpern}{phalpern@halpernwightsoftware.com}
@@ -23,7 +23,9 @@ This paper expands on the pack indexing feature described in \paper{P1858R2} and
 \subsection{R2}
 
 \begin{itemize}
-	\item Wording improvements
+\item Wording improvements, as reviewed by CWG in Varna
+\item Add a section about ways types could be deduced from an index-type-specifier.
+\item expand the "future evolutions" section.
 \end{itemize}
 
 \subsection{R1}
@@ -105,7 +107,7 @@ that can work in all contexts.
 
 \item We want a syntax that can be expanded to support slicing in the future.
 
-\item Pack elements can be array like or tuple like, so we need to be careful
+\item Pack elements can be array-like or tuple like, so we need to be careful
   about ambiguities. In particular, directly applying a subscript to a pack
   (\tcode{P[i]}, where \tcode{P} is a pack) is nonviable. Indeed, indexing a
   pack of arrays (\tcode{ArrayPack...[index]}), indexing each array in a pack
@@ -130,14 +132,14 @@ Reusing that syntax for pack indexing would introduce a semantics inconsistency 
 and \tcode{aggregate.[N]} returning the $Nth$ data member of an aggregate. % lah: WHAT is "returning the $Nth$ data member of an aggregate"---just the aggregate.[N] or BOTH get<N>(tuple-like) AND aggregate.[N]?
 
 Ideally, \tcode{tuple[N]} would simply work.
-A few proposals have tried to improve the user-friendlyness
+A few proposals have tried to improve the user-friendliness
 of tuple indexing (see
 \paper{P2726R0} and \paper{P0311R0}).
 
 We see no technical limitation to making \tcode{tuple-like[N]} work on types that do not otherwise define a \tcode{operator[]}.
-\paper{P1858R2} prefers \tcode{.[]} to \tcode{[]} because the paper proposes to index not only tuple-like, but also any other decomposable types, such as aggregates.
+\paper{P1858R2} prefers \tcode{.[]} to \tcode{[]} because the paper proposes to index not only tuple-like but also any other decomposable types, such as aggregates.
 An aggregate might have an \tcode{operator[]} already, so disambiguating is unnecessary.
-Note that array-like classes are tuple like, but their \tcode{operator[]} has the same semantics as what tuple indexing would do. % lah: I know this seems weird, but in "array-like classes," the "array-like" is functioning as a two-word adjective for a noun, so it gets a hyphen, and "tuple like" is functioning as a predicate adjective, so it doesn't get a hyphen.
+Note that array-like classes are tuple-like, but their \tcode{operator[]} has the same semantics as what tuple indexing would do. % lah: I know this seems weird, but in "array-like classes," the "array-like" is functioning as a two-word adjective for a noun, so it gets a hyphen, and "tuple like" is functioning as a predicate adjective, so it doesn't get a hyphen.
 
 Whether tuple-indexing should be written as \tcode{.[]} or \tcode{[]} depends on whether indexing an aggregate is a frequent enough use case
 to warrant a specific syntax, rather than indexing the pack formed by unpacking an aggregate (\tcode{aggregate[:]} --- in the syntax of \paper{P1858R2}, \tcode{aggregate.[N]} is a shorthand for \tcode{aggregate[:]...[N]}).
@@ -148,7 +150,7 @@ a shorthand syntax to index the fields of an aggregate doesn't seem useful, then
 
 \subsubsection{Angle brackets}
 
-We could use angle brackets instead of square brackets, the argument, we suppose, being argument is that \tcode{<>} is more template like and that pack indexing is also template like.
+We could use angle brackets instead of square brackets, the argument, we suppose, being argument is that \tcode{<>} is more template-like and that pack indexing is also template-like.
 However, most languages have existing practices in which \tcode{[]} is to be used for both indexing and slicing.
 Being consistent with existing practice doesn't hurt.
 Besides, pack indexing will often occur in angle-bracket-heavy code, so using brackets for indexing too would not look better.
@@ -195,8 +197,8 @@ the library, with no language changes necessary.  However, the disadvantages
 are significant:
 
 \begin{itemize}
-\item Not only is the syntax harder to use, but there are different syntaxes
-  for packs of types verses packs of values. A metafunction for indexing a pack
+\item Not only is the syntax harder to use but there are different syntaxes
+  for packs of types versus packs of values. A metafunction for indexing a pack
   of templates (not shown) would have a third name and require yet another
   syntax.
 \item The recursion level for each of these facilities is
@@ -291,7 +293,7 @@ because the code above is not exactly terse.
 Barry observes that slicing through a pack object creates more questions than it solves.
 If slicing a pack creates a pack - which seems fairly obvious, does slicing a pack object create a pack object or a pack?
 
-Both answers seem equally justified, however if slicing a pack object produces a pack object, now we need another syntax
+Both answers seem equally justified, however, if slicing a pack object produces a pack object, now we need another syntax
 to turn the pack object back into a pack, and this is how \paper{P2671R0}
 ends up suggesting \tcode{ts![1:]\~...} or \tcode{ts![1..]\~...}.
 
@@ -312,7 +314,7 @@ None of them would be a logical extension of the existing grammar, and since we 
 \subsubsection{Too many dots?}
 
 One of the arguments heard against the \tcode{T...[N]} syntax is the "too many dots" argument.
-And it's true that code that perform a lot of pack manipulation has numerous dots.
+And it's true that code that performs a lot of pack manipulation has numerous dots.
 However, the code does make sense and is readable; e.g., see this \href{https://github.com/seanbaxter/circle/blob/master/tuple/tuple.hxx}{linked implementation of tuple}.
 A few advantages come along with \tcode{...} for pack expansions.
 \begin{itemize}
@@ -341,7 +343,7 @@ auto find_convertible_in_pack;
 using T = Types...[find_convertible_in_pack<Foo, Types...>];
 \end{colorblock}
 
-In general, incorrect computations in an index can lead to a negative value that should make the program ill formed but would instead
+In general, incorrect computations in an index can lead to a negative value that should make the program ill-formed but would instead
 yield an incorrect type.
 
 Note, however, that Circle does support from-the-end indexing using a negative index, and Sean Baxter reports no surprises from using this feature.
@@ -377,15 +379,58 @@ void f(T...[0]);
 f(0);
 \end{colorblock}
 
-To start thinking about how deduction would work here or what that code would possibly mean doesn't make sense.
-We simply always consider pack indexing to be a non-deduced context.
+However, CWG in Varna realized a way where a pack indexing type specifier could be deduced, and is asking EWG to chime in
+as changing something to be deducible after the fact is always going to be a breaking change.
+
+Consider the following example, graciously provided by Jens Maurer:
+\begin{colorblock}
+template<class ...T>
+int f( T...[0], std::tuple<T...> );
+int x = f(-1, std::tuple(5u, 1));
+\end{colorblock}
+
+Here \tcode{T...} is deduced from \tcode{5u, 1} to be \tcode{unsigned, int},
+the first parameter of \tcode{f} is unsigned and \tcode{-1} is converted to unsigned.
+
+This is what we propose.
+
+But, we could imagine to instead, in that case, consider \tcode{T...}
+to be a sparse, infinitely-sized pack of sort - as we don't know its \tcode{size},
+deduced \tcode{T...[0]} to be \tcode{int} (from \tcode{-1}),
+then deduce the remaining of the pack (here the 2nd element) from the
+remaining arguments, and then check we have deduced a type for each
+element of the pack.
+
+Such a strategy would allow deducing parameters in interesting order
+
+\begin{colorblock}
+template<class ...T>
+int f(T...[1],  T...[0] );
+int x = f(5u, 2l); // deduce f(long, unsigned)
+\end{colorblock}
+
+While this is theoretically possible, we should note that is has not been implemented,
+and certainly adds a lot of complexity to implementations.
+And it's hard to think of a use case that would justify it.
+
+It is important to note that while we are not proposing this
+funny deduction strategy, it would be a breaking change to adopt something like that
+in a subsequent standard.
+
+
+Going back to the first example, if T...[0] is not a deduced context,
+it will correspond to unsigned, and if we allow it to be deduced it will be deduced to \tcode{int}
+in the first parameter and in the second, which would be ill-formed.
+
+In this proposal, we simply always consider pack indexing to be a non-deduced context.
+
 
 \section{Indexing a pack of expressions}
 
 The intent is that a pack indexing expression behaves exactly as the underlying expression would.
 In particular, \tcode{decltype(id-dexpression) and \tcode{decltype(pack-index-expression)}} behave the same.
 
-\section{Future evolution}
+\section{Future evolutions}
 
 The syntax can be extended in subsequent proposals to support
 
@@ -397,6 +442,31 @@ The syntax can be extended in subsequent proposals to support
 \end{itemize}
 Packs of universal template parameters could be indexed in the same way.
 
+To avoid confusing merge conflicts, we aim to progress concept, variable template, and universal
+template parameters before proposing indexing of template parameters packs.
+
+\subsection{Extending pack indexing to arbitrary expressions}
+
+In this proposal, we limit pack-index expressions to index a pack of \grammarterm{id-expression}{s},
+which then denotes a function parameter pack, NTTP pack or, the pack introduced by a structured binding.
+
+The reasons for that is that it is more readable and easier on the compiler to first index a pack,
+and then construct an expression around that, rather than construct an arbitrarily complex pattern,
+expand it, and reject all but one of the expanded elements - especially as substitution failures could occur.
+
+Nevertheless, in the presence of multiple packs, being able to index arbitrary complex might improve code readability slightly,
+which would be the one motivation for this feature.
+
+\begin{colorblock}
+void g(auto&&);
+template <typename...T>
+void f(T&&... t) {
+    g(std::forward<T...[0]>(t...[0])); // current proposal
+    g(std::forward<T>(t)...[0]); // not proposed nor implemented
+}
+\end{colorblock}
+
+This is a possible evolution of this feature that can be explored but we should understand what would be the viable implementation strategies so that a compiler can avoid instantiating expressions that are not used.
 
 \section{Potential impact on existing code}
 
@@ -411,7 +481,7 @@ int main() {
 \end{colorblock}
 
 Neither MSVC nor GCC supports this syntax and this pattern does not appear outside of compiler test suites (from a search on \href{https://cs.github.com/}{Github}, \href{https://codesearch.isocpp.org/cgi-bin/cgi_ppsearch?q=...%5B&search=Search}{isocpp} and in VCPKG).
-The fact that 2 majors compilers did not implement this syntax in over a decade is indicative of its lack of usefulness.
+The fact that 2 major compilers did not implement this syntax in over a decade is indicative of its lack of usefulness.
 
 Should anyone be affected, a workaround is to name the variable:
 
@@ -467,7 +537,7 @@ a complete \grammarterm{nested-name-specifier}.
 % Modify id-expression to add another level for (un)qualified-id (id)
 % a pack-expression => restrict to identifier
 
-% check the order of pack specifier to appear last everywhere it is mentionned.
+% check the order of pack specifier to appear last everywhere it is mentioned.
 
 % introduce complex type specifier
 
