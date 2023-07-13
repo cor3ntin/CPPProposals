@@ -31,7 +31,7 @@ This paper expands on the pack indexing feature described in \paper{P1858R2} and
 \subsection{R1}
 
 \begin{itemize}
-\item At EWG's request, we explained in more details the syntax choices and explored alternatives.
+\item At EWG's request, we explained in more detail the syntax choices and explored alternatives.
 \item Wording improvements
 \end{itemize}
 
@@ -272,7 +272,7 @@ This model does not explain how it would deal with packs of types, template para
 has to return an expression.
 Note that it could arguably return a meta::info and then let the user do the splicing itself, at which point any proclaimed syntax advantage would be lost.
 
-We probably should have a discussion around the concept of pack objects, because they raise an interesting question:
+We probably should discuss the concept of pack-objects, because they raise an interesting question:
 Do we need a syntax to reflect on a pack, that would be a shorthand for \tcode{std::vector\{\^{}ts...\}}? Maybe?
 Because I think that's the question that "pack-objects" fundamentally tries to answer.
 
@@ -395,34 +395,55 @@ the first parameter of \tcode{f} is unsigned and \tcode{-1} is converted to unsi
 This is what we propose.
 
 But, we could imagine to instead, in that case, consider \tcode{T...}
-to be a sparse, infinitely-sized pack of sort - as we don't know its \tcode{size},
+to be a sparse, infinitely-sized pack of a sort - as we don't know its \tcode{size},
 deduced \tcode{T...[0]} to be \tcode{int} (from \tcode{-1}),
 then deduce the remaining of the pack (here the 2nd element) from the
 remaining arguments, and then check we have deduced a type for each
 element of the pack.
 
-Such a strategy would allow deducing parameters in interesting order
-
+However, allowing parts of packs to be deduced only makes sense if the size of the pack is independently deduced.
+Consider:
 \begin{colorblock}
-template<class ...T>
-int f(T...[1],  T...[0] );
-int x = f(5u, 2l); // deduce f(long, unsigned)
+template <typename... T>
+int f(T...[0], int) {
+    static_assert(sizeof...(T) == ???);
+}
+int a = f(0, 1);
 \end{colorblock}
 
-While this is theoretically possible, we should note that is has not been implemented,
-and certainly adds a lot of complexity to implementations.
-And it's hard to think of a use case that would justify it.
+Is the intent that \tcode{T...} is \tcode{int} (size 1) or \tcode{int, int} (size 2)?
+Both seem reasonable options.
+We could add a rule that the size of a deduced pack is deduced to be the size of the smallest pack that can be deduced,
+but this would surely not make sense in all cases, and the implementation costs seem impossible to justify.
 
-It is important to note that while we are not proposing this
-funny deduction strategy, it would be a breaking change to adopt something like that
+So the only context in which a pack indexing specifier could be deduced seems to be when the entire pack is
+otherwise deduced, or when the size of a pack is deduced independently, which only ever happens for empty (non-indexable packs),
+which is awfully limited, and yet very complex.
+
+And this is before we consider whether this would impact partial ordering rules, which it certainly would, for example, what should this do?
+
+\begin{colorblock}
+template <typename... T>
+int f(T...[0], tuple<T...>);  // #1
+
+template <typename F, typename... T>
+int f(F, tuple<T...>);  // #2
+
+int a = f(0, tuple{1});   // #1 or #2
+\end{colorblock}
+
+
+We are sure there may be cases where this feature could be useful, yet we failed to come up
+with genuine motivation for it. The reason for this discussion is that it would be a breaking change to adopt something like that
 in a subsequent standard.
 
-
-Going back to the first example, if T...[0] is not a deduced context,
+Going back to the first example, if \tcode{T...[0]} is not a deduced context,
 it will correspond to unsigned, and if we allow it to be deduced it will be deduced to \tcode{int}
 in the first parameter and in the second, which would be ill-formed.
 
 In this proposal, we simply always consider pack indexing to be a non-deduced context.
+
+% https://godbolt.org/z/GqhPMMTT1
 
 
 \section{Indexing a pack of expressions}
@@ -435,15 +456,21 @@ In particular, \tcode{decltype(id-dexpression) and \tcode{decltype(pack-index-ex
 The syntax can be extended in subsequent proposals to support
 
 \begin{itemize}
-\item indexing packs introduced by structured bindings or other non-dependent packs
-\item indexing packs of template template parameters
-\item from-the-end-indexing
-\item pack slicing (returning a subset of a pack as an unexpanded pack)
+\item Indexing packs introduced by structured bindings or other non-dependent packs.
+      This should just work without further modification when both this paper and \paper{P1061R5} are both adopted.
+\item Indexing packs of template template parameters. To avoid confusing merge conflicts,
+      we aim to progress concept, variable template, and universal template parameters before proposing indexing
+      of template parameters packs. But our hope is to complete the feature for C++26 so that indexing works on all kinds of packs.
+      Packs of universal template parameters could and should be indexed in the same way.
 \end{itemize}
-Packs of universal template parameters could be indexed in the same way.
 
-To avoid confusing merge conflicts, we aim to progress concept, variable template, and universal
-template parameters before proposing indexing of template parameters packs.
+Other features are more evolutionary but this paper left the design open to allow coherent design of:
+\begin{itemize}
+\item From-the-end-indexing
+\item Pack slicing (returning a subset of a pack as an unexpanded pack) as discussed in \paper{P1858R0} and \paper{P2632R0}.
+\item Indexing packs of arbitrary expressions, as described below.
+\end{itemize}
+
 
 \subsection{Extending pack indexing to arbitrary expressions}
 
@@ -1346,7 +1373,7 @@ int main() {
 
 We would like to thank Bloomberg for sponsoring this work.\\
 
-We extend our appreciate to Sean Baxter for his work on Circle and to Barry Revzin  for his work on \paper{P1858R2}, both works being the foundation of the design presented here.
+We extend our appreciation to Sean Baxter for his work on Circle and to Barry Revzin for his work on \paper{P1858R2}, both works being the foundation of the design presented here.
 
 Thanks also to Lewis Baker for his valuable feedback on this paper, and Lori Hughes for editing this paper.
 
