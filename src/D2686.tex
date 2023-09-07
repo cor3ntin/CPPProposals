@@ -210,19 +210,19 @@ f(); //# ! try to access i outside of its lifetime
 We will have to modify \href{http://eel.is/c++draft/basic.def.odr#5.1}{[basic.def.odr]/p5.1} so that \tcode{constexpr} references to automatic storage duration variables (or subobjects thereof) are ODR-used.
 
 
-\section{Wording for Option 3 (synmbolic addressing)}
+\section{Wording for Option 3 (symbolic addressing)}
 
 \rSec1[basic.def.odr]{One-definition rule}%
 
-\ednote{Modify 6.3.5 as follow}
+\ednote{Modify p5 as follows:}
 
 \label{term.odr.use}%
 A variable is named by an expression
 if the expression is an \grammarterm{id-expression} that denotes it.
 A variable \tcode{x} that is named by a
-potentially-evaluated expression \changed{$E$}{$N$}
+potentially-evaluated expression \changed{$E$}{$N$}\added{ that appears at a point $P$}
 is \defnx{odr-used}{odr-use} by \changed{$E$}{$N$} unless
-\added{\tcode{x} is $N$ is an
+\added{$N$ is an
 element of the set of potential results of an expression $E$, where
 }
 \begin{removedblock}
@@ -247,19 +247,27 @@ element of the set of potential results of an expression $E$, where
 \begin{addedblock}
 \begin{itemize}
 \item
-\tcode {x} is usable in constant expression at $P$ and $E$ designates a reference that is constexpr-representable at $P$, or
+\tcode {x} is usable in constant expressions at $P$ (\iref{expr.const}) and $E$ designates a reference that is constexpr-representable at $P$, or
 \item
-\tcode{x} is usable in constant expression at $P$ and $E$ designates an object that is usable in constant expression at $P$, and the lvalue-to-
-rvalue conversion [conv.lval] is applied to $E$, or
+\tcode{x} is usable in constant expressions at $P$, $E$ designates an object that is usable in constant expressions at $P$, and the lvalue-to-rvalue
+conversion (\iref{conv.lval}) is applied to $E$, or
 \item
-$E$ is a discarded-value expression [expr.context] to which the lvalue-to-rvalue
+$E$ is a discarded-value expression (\iref{expr.context}) to which the lvalue-to-rvalue
 conversion is not applied.
 \end{itemize}
 \end{addedblock}
 
 \rSec3[basic.start.static]{Static initialization}
 
-\ednote{Modify 6.9.3.2.2 as follow}
+\emph{Drafting note:} The constant initialization of a variable implicitly
+includes the constant initialization of any temporary objects whose lifetimes
+are extended to that of the variable. All references to constant initialization
+from elsewhere in the standard currently refer only to variables with constant
+initialization. Removing the words "or temporary object" from this paragraph
+simplifies the wording elsewhere by avoiding the need to define when an object
+(as opposed to variable) is constant-initialized.
+
+\ednote{Modify p2 as follows:}
 
 \pnum
 \indextext{initialization!constant}%
@@ -284,7 +292,25 @@ any dynamic initialization.
 \rSec1[expr.const]{Constant expressions}
 \indextext{expression!constant}
 
-\ednote{Modify 7.7 as follow}
+\emph{Drafting note:} P0784R7 abolished the previous restriction that constexpr
+constructors of non-literal class types may not be invoked during constant
+evaluation. The current wording of [expr.const]/2 still contains a special
+exception that allows a variable to be considered constant-initialized even
+though the initialization would invoke such a constructor; that wording is
+unnecessary since P0784R7 was accepted.
+
+\emph{Drafting note:} A structured binding is a named lvalue, but is not a
+reference; therefore, the current rules regarding references that are not
+usable in constant expressions ([expr.const]/8) do not apply to structured
+bindings. The intent of the below wording is that structured bindings should be
+subject to the same restrictions during constant evaluation that would apply if
+they were references.
+
+\emph{Drafting note:} The definition of "constexpr-referenceable" below is
+written under the assumption that temporary objects are considered to have the
+storage duration described in CWG1634, namely, that a temporary object whose
+lifetime is extended inherits the storage duration of the reference that is
+bound to it, and any other temproary object has a distinct storage duration.
 
 \pnum
 Certain contexts require expressions that satisfy additional
@@ -305,23 +331,34 @@ are called
     conditional-expression
 \end{bnf}
 
+\ednote{Insert a paragraph after p1:}
+
 \begin{addedblock}
-The constituent values of an object $o$ are the value of $o$ if it has scalar type and the values of
+The \defn{constituent values} of an object $o$ are the value of $o$ if it has scalar type and the values of
 any of $o$’s subobjects of scalar type, other than inactive union members and subobjects
-thereof. The constituent references of an object $o$ are the non-static data members of
+thereof. The \defn{constituent references} of an object $o$ are the non-static data members of
 reference type of $o$ and of any of $o$’s subobjects that are neither inactive union members nor
 subobjects thereof.
+\end{addedblock}
+
+\ednote{Insert a paragraph after p1:}
+
+\begin{addedblock}
 The constituent values and constituent references of a variable \tcode{x} are defined as follows:
 \begin{itemize}
 \item If \tcode{x} declares an object, the constituent values and references of that object are
 constituent values and references of \tcode{x}.
-\item If x declares a reference, that reference is a constituent reference of \tcode{x}.
+\item If \tcode{x} declares a reference, that reference is a constituent reference of \tcode{x}.
+\end{itemize}
 For any constituent reference \tcode{r} of a variable \tcode{x}, if \tcode{r} is bound to a temporary object or
 subobject thereof whose lifetime is extended to that of \tcode{r}, the constituent values and
 references of that temporary object are also constituent values and references of \tcode{x}. This rule
 applies recursively.
-\end{itemize}
+\end{addedblock}
 
+\ednote{Insert a paragraph after p1:}
+
+\begin{addedblock}
 An object $o$ is \defn{constexpr-referenceable} from a point $P$ if
 \begin{itemize}
 \item $o$ has static storage duration, or
@@ -329,12 +366,17 @@ An object $o$ is \defn{constexpr-referenceable} from a point $P$ if
 $o$’s complete object, or the variable to whose lifetime that of $o$ is extended, \tcode{v}’s smallest
 enclosing non-block scope and $P$’s smallest enclosing non-block scope are the same function parameter scope.
 \end{itemize}
+\end{addedblock}
 
-An object or reference \tcode{x} is constexpr-representable at a point $P$ if, for each constituent value
+\ednote{Insert a paragraph after p1:}
+
+\begin{addedblock}
+An object or reference \tcode{x} is \defn{constexpr-representable} at a point $P$ if, for each constituent value
 of \tcode{x} that points to or past an object $o$, and for each constituent reference of \tcode{x} that refers to an
 object $o$, $o$ is constexpr-referenceable from $P$.
-
 \end{addedblock}
+
+\ednote{Modify p2 as follows:}
 
 \pnum
 A variable \removed{or temporary object} \changed{\tcode{o}}\tcode{v}} is \defn{constant-initialized} if
@@ -366,6 +408,8 @@ A variable is \defn{potentially-constant} if
 it is constexpr or
 it has reference or non-volatile const-qualified integral or enumeration type.
 
+\ednote{Modify p4 as follows:}
+
 \pnum
 A constant-initialized potentially-constant variable $V$ is
 \defn{usable in constant expressions} at a point $P$ if
@@ -375,13 +419,13 @@ $V$'s initializing declaration $D$ is reachable from $P$ and
     \item $V$ is not initialized to a TU-local value, or
     \item $P$ is in the same translation unit as $D$.
 \end{itemize}
-An object or reference \added{$O$} is \defn{usable in constant expressions} \added{at point $P$} if it is
+An object or reference \added{$x$} is \defn{usable in constant expressions} \added{at point $P$} if it is
 \begin{itemize}
     \begin{removedblock}
     \item a variable that is usable in constant expressions, or
     \end{removedblock}
-    \item a template parameter object \iref{temp.param}, or
-    \item a string literal object \iref{lex.string}, or
+    \item a template parameter object \iref{temp.param}\added{ or subobject thereof}, or
+    \item a string literal object \iref{lex.string}\added{ or subobject thereof}, or
     \begin{removedblock}
     \item a temporary object of non-volatile const-qualified literal type
     whose lifetime is extended \iref{class.temporary}
@@ -389,36 +433,42 @@ An object or reference \added{$O$} is \defn{usable in constant expressions} \add
     \item a non-mutable subobject or reference member of any of the above.
     \end{removedblock}
     \begin{addedblock}
-    \item either
+    \item one of the following:
     \begin{itemize}
-        \item a non-volatile variable that is usable in constant expressions at P, or
+        \item a non-volatile variable that is usable in constant expressions at $P$,
         \item a temporary object of non-volatile const-qualified literal type
-        whose lifetime is extended \iref{class.temporary}
-        to that of a variable that is usable in constant expressions \added{at P}
+        whose lifetime is extended (\iref{class.temporary})
+        to that of a variable that is usable in constant expressions at $P$,
+        \item a non-mutable subobject of any of the above, or
+        \item a reference member of any of the above
     \end{itemize}
-    that is constexpr-representable at $P$ and, if $O$ is an object, it has no mutable subobjects, or,
-    \item a non-mutable subobject or reference member of any of the above.
+    that is constexpr-representable at $P$, subject to the restriction that if
+    $x$ is an object, it has no mutable subobjects.
     \end{addedblock}
 \end{itemize}
+\begin{addedblock}
+{\begin{note} An object can be usable in constant expressions even if its
+complete object $o$ is disqualified from being usable in constant expressions
+because $o$ has a mutable subobject.\end{note}}
+\end{addedblock}
 
-
-\ednote{Add after 7.7.8}
+\ednote{Add after p8:}
 
 \begin{addedblock}
 For the purposes of determining whether an expression is a core constant expression, the
-evaluation of an id-expression that names a structured binding v ([dcl.struct.bind]) has the
+evaluation of an \grammarterm{id-expression} that names a structured binding \tcode{v} (\iref{dcl.struct.bind}) has the
 following semantics:
 \begin{itemize}
 \item If \tcode{v} is an lvalue referring to the object bound to an invented reference \tcode{r}, the
-behavior is as if \tcode{r} was nominated.
+behavior is as if \tcode{r} were nominated.
 \item Otherwise, if \tcode{v} names an array member or class member, the behavior is that of
-evaluating \tcode{e[i]} or \tcode{e.m}, respectively, where \tcode{e} is the name of the variable initialized
-from the initializer of the structured binding declaration, and \tcode{i} is the index of the
-element referred to or \tcode{m} is the name of the member referred to by \tcode{v}, respectively.
+evaluating \tcode{$e$[$i$]} or \tcode{$e$.$m$}, respectively, where \tcode{$e$} is the name of the variable initialized
+from the initializer of the structured binding declaration, and \tcode{$i$} is the index of the
+element referred to or \tcode{$m$} is the name of the member referred to by \tcode{v}, respectively.
 \end{itemize}
 \end{addedblock}
 
-\ednote{Modify p13}
+\ednote{Modify p13 as follows:}
 
 \pnum
 A \defnadj{constant}{expression} is either
@@ -454,19 +504,19 @@ satisfies the following constraints:
     \end{removedblock}
     \begin{addedblock}
     \item each constituent reference refers to an object or a non-immediate function,
-    \item no constituent object of scalar type has an indeterminate value ([basic.indet]),
-    \item no constituent value of pointer type is a pointer to an immediate function, or an invalid pointer value [basic.compound].
-    \item no constituent value of \grammarterm{pointer-to-member-function} designates an immediate function.
+    \item no constituent value of scalar type is an indeterminate value ([basic.indet]),
+    \item no constituent value of pointer type is a pointer to an immediate function or an invalid pointer value (\iref{basic.compound}), and
+    \item no constituent value of pointer-to-member type designates an immediate function.
     \end{addedblock}
-
-
 \end{itemize}
+\begin{removedblock}
 An entity is a
 \defnx{permitted result of a constant expression}{constant expression!permitted result of}
 if it is an
 object with static storage duration that either is not a temporary object or is
 a temporary object whose value satisfies the above constraints, or if
 it is a non-immediate function.
+\end{removedblock}
 \begin{note}
     A glvalue core constant expression
     that either refers to or points to an unspecified object
@@ -477,14 +527,14 @@ it is a non-immediate function.
 \rSec1[dcl.dcl]{Declarations}%
 \rSec2[dcl.pre]{Preamble}
 
-\ednote{Change 9.1.6 as follow}
+\ednote{Change p6 as follows:}
 
 \pnum
 A \grammarterm{simple-declaration} with an \grammarterm{identifier-list} is called
 a \defn{structured binding declaration}\iref{dcl.struct.bind}.
 Each \grammarterm{decl-specifier} in the \grammarterm{decl-specifier-seq}
 shall be
-\added{\tcode{constexpr},}
+\added{\tcode{constexpr}, \tcode{constinit},}
 \tcode{static},
 \tcode{thread_local},
 \tcode{auto} \iref{dcl.spec.auto}, or
@@ -501,6 +551,8 @@ a \grammarterm{cv-qualifier}.
 %\indextext{structured binding declaration}%
 %\indextext{declaration!structured binding|see{structured binding declaration}}%
 
+\ednote{Change p1 as follows:}
+
 \pnum
 A structured binding declaration introduces the \grammarterm{identifier}{s}
 $\tcode{v}_0$, $\tcode{v}_1$, $\tcode{v}_2, \dotsc$
@@ -509,8 +561,11 @@ of the
 of \defn{structured binding}{s}.
 Let \cv{} denote the \grammarterm{cv-qualifier}{s} in
 the \grammarterm{decl-specifier-seq} and
-\placeholder{S} consist of the \added{\tcode{constexpr} and }\grammarterm{storage-class-specifier}{s} of
-the \grammarterm{decl-specifier-seq} (if any).
+\placeholder{S} consist of \changed{the \grammarterm{storage-class-specifier}{s} of
+the \grammarterm{decl-specifier-seq} (if any)}
+{each \grammarterm{decl-specifier} of the \grammarterm{decl-specifier-seq} that
+is \tcode{constexpr}, \tcode{constinit}, or a
+\grammarterm{storage-class-specifier}}.
 A \cv{} that includes \tcode{volatile} is deprecated;
 see [depr.volatile.type].
 First, a variable with a unique name \exposid{e} is introduced. If the
@@ -565,6 +620,8 @@ is \tcode{T}; the referenced type is \tcode{T}.
 \indextext{specifier!\idxcode{constexpr}}
 \indextext{specifier!\idxcode{consteval}}
 
+\ednote{Change p1 as follows:}
+
 \pnum
 The \keyword{constexpr} specifier shall be applied only to
 the definition of a variable or variable template\added{, a structured binding declaration, } or
@@ -578,7 +635,9 @@ If any declaration of a function or function template has
 a \keyword{constexpr} or \keyword{consteval} specifier,
 then all its declarations shall contain the same specifier.
 
-\ednote{Modify p6 as follow}
+[...]
+
+\ednote{Modify p6 as follows:}
 
 \pnum
 A \keyword{constexpr} specifier used in an object declaration
@@ -592,10 +651,10 @@ shall be a constant expression\iref{expr.const}.
 A \keyword{constexpr} variable that is an object,
 as well as any temporary to which a \keyword{constexpr} reference is bound,
 shall have constant destruction.
-\begin{addedblock}
+\added{
 Immediately after the initializing declaration of a \tcode{constexpr} variable \tcode{v},
 the object or reference declared by \tcode{v} shall be constexpr-representable.
-\end{addedblock}
+}
 
 
 \begin{example}
@@ -608,30 +667,50 @@ the object or reference declared by \tcode{v} shall be constexpr-representable.
     \end{codeblock}
 \end{example}
 
+\rSec2[dcl.constexpr]{The \keyword{constinit} specifier}
+
+\emph{Drafting note:} Unlike in [dcl.constexpr], we don't need an explicit rule
+about the object or reference being constexpr-representable in this section,
+because the restriction added to [expr.const]/2 will cause the variable to have
+dynamic initialization if the object or reference is not
+constexpr-representable.
+
+\ednote{Modify p1 as follows:}
+
+The \keyword{constinit} specifier shall be applied only to a declaration of a
+variable with static or thread storage duration \added{or to a structured
+binding declaration (\iref{dcl.struct.bind})}. If the specifier is applied to
+any declaration of a variable, it shall be applied to the initializing
+declaration. No diagnostic is required if no \keyword{constinit} declaration is
+reachable at the point of the initializing declaration.
 
 \rSec2[temp.arg.nontype]{Template non-type arguments}
 
-\ednote{Modify [temp.arg.nontype]/p1 as follow}
+\ednote{Modify [temp.arg.nontype]/p1 as follows:}
 
-\begin{addedblock}
+\added{%
 A \grammarterm{template-argument} for a non-type  \grammarterm{template-parameter} with declared type T shall be such
-that the invented declaration
+that the invented declaration%
+}
+\begin{addedblock}
 \begin{codeblock}
     T x = @\grammarterm{template-argument}@ ;
 \end{codeblock}
+\end{addedblock}
+\added{%
 satisfies the semantic constraints for the definition of a \tcode{constexpr} variable with static
 storage duration [dcl.constexpr].
-\end{addedblock}
-
-\pnum
-If \removed{the type} \tcode{T} of a \grammarterm{template-parameter}\iref{temp.param}
-contains a placeholder type\iref{dcl.spec.auto}
-or a placeholder for a deduced class type\iref{dcl.type.class.deduct},
-the type of the parameter is \changed{the type deduced for the variable \tcode{x} in the invented declaration}{from the above declaration}.
+}%
+If \removed{the type} \tcode{T} \removed{of a \grammarterm{template-parameter}\iref{temp.param}}
+contains a placeholder type (\iref{dcl.spec.auto})
+or a placeholder for a deduced class type (\iref{dcl.type.class.deduct}),
+the type of the parameter is \changed{the type deduced for the variable \tcode{x} in the invented declaration}{deduced from the above declaration;}
+\begin{removedblock}
 \begin{codeblock}
     T x = @\grammarterm{template-argument}@ ;
 \end{codeblock}
-If a deduced parameter type is not permitted
+\end{removedblock}
+\changed{If a deduced parameter type}{if the parameter type thus deduced} is not permitted
 for a \grammarterm{template-parameter} declaration \iref{temp.param},
 the program is ill-formed.
 
@@ -646,7 +725,7 @@ the program is ill-formed.
 We would like to thank Bloomberg for sponsoring this work.
 Thanks to Nina Dinka Ranns, Pablo Halpern, and Joshua Berne for their feedback.
 
-Thanks to Richard Smith for the original discussion of possible solutions on the Core reflector.
+Thanks to Richard Smith for the original discussion of possible solutions on the Core reflector and for feedback on the wording.
 
 Thanks to Nicolas Lesser for the original work on \paper{P1481R0}.
 
