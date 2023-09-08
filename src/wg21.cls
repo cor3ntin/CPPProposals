@@ -213,7 +213,9 @@
 \newcommand{\changednb}[3]{\removednb{#1}{#2}\added{#3}}
 \newcommand{\remitem}[1]{\item\removed{#1}}
 
-\newcommand{\ednote}[1]{\textcolor{noteclr}{[Editor's note: #1] }}
+\newcommand{\ednote}[1]{\textcolor{noteclr}{[\emph{Editor's note:} #1] }}
+\newcommand{\draftnote}[1]{\textcolor{noteclr}{\emph{Drafting note:} #1}}
+
 
 \newenvironment{addedblock}
 {

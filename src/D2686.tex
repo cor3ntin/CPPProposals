@@ -25,7 +25,9 @@ This paper reports implementation experience on this proposal and provides updat
 
 \subsection{Revision 2}
 
-We provide wording for option 3 (symbolic addressing), which is the direction chosen by EWG in Vasrna.
+We provide wording for option 3 (symbolic addressing), which is the direction chosen by EWG in Varna.
+We also allow \tcode{constinit} structured bindings, mostly because we could not find a good reason not to,
+and we think it's best to avoid too many exceptions and inconsistencies.
 
 \subsection{Revision 1}
 
@@ -259,13 +261,13 @@ conversion is not applied.
 
 \rSec3[basic.start.static]{Static initialization}
 
-\emph{Drafting note:} The constant initialization of a variable implicitly
+\draftnote{The constant initialization of a variable implicitly
 includes the constant initialization of any temporary objects whose lifetimes
 are extended to that of the variable. All references to constant initialization
 from elsewhere in the standard currently refer only to variables with constant
 initialization. Removing the words "or temporary object" from this paragraph
 simplifies the wording elsewhere by avoiding the need to define when an object
-(as opposed to variable) is constant-initialized.
+(as opposed to variable) is constant-initialized.}
 
 \ednote{Modify p2 as follows:}
 
@@ -292,25 +294,29 @@ any dynamic initialization.
 \rSec1[expr.const]{Constant expressions}
 \indextext{expression!constant}
 
-\emph{Drafting note:} P0784R7 abolished the previous restriction that constexpr
+\draftnote{\paper{P0784R7} abolished the previous restriction that constexpr
 constructors of non-literal class types may not be invoked during constant
 evaluation. The current wording of [expr.const]/2 still contains a special
 exception that allows a variable to be considered constant-initialized even
 though the initialization would invoke such a constructor; that wording is
-unnecessary since P0784R7 was accepted.
+unnecessary since \paper{P0784R7} was accepted.}
 
-\emph{Drafting note:} A structured binding is a named lvalue, but is not a
-reference; therefore, the current rules regarding references that are not
-usable in constant expressions ([expr.const]/8) do not apply to structured
+\draftnote{A structured binding is a named lvalue, but is not a
+reference in the non-tuple-like cases; therefore, the current rules regarding references that are not
+usable in constant expressions ([expr.const]/8) do not always apply to structured
 bindings. The intent of the below wording is that structured bindings should be
 subject to the same restrictions during constant evaluation that would apply if
 they were references.
+}
 
-\emph{Drafting note:} The definition of "constexpr-referenceable" below is
+% https://eel.is/c++draft/dcl.struct.bind#4
+
+\draftnote{The definition of "constexpr-referenceable" below is
 written under the assumption that temporary objects are considered to have the
-storage duration described in CWG1634, namely, that a temporary object whose
+storage duration described in \paper{CWG1634}, namely, that a temporary object whose
 lifetime is extended inherits the storage duration of the reference that is
 bound to it, and any other temproary object has a distinct storage duration.
+}
 
 \pnum
 Certain contexts require expressions that satisfy additional
@@ -531,7 +537,7 @@ it is a non-immediate function.
 
 \pnum
 A \grammarterm{simple-declaration} with an \grammarterm{identifier-list} is called
-a \defn{structured binding declaration}\iref{dcl.struct.bind}.
+a \defn{structured binding declaration} \iref{dcl.struct.bind}.
 Each \grammarterm{decl-specifier} in the \grammarterm{decl-specifier-seq}
 shall be
 \added{\tcode{constexpr}, \tcode{constinit},}
@@ -590,7 +596,7 @@ from the corresponding structured binding declaration.
 The type of the \grammarterm{id-expression}
 \exposid{e} is called \tcode{E}.
 \begin{note}
-    \tcode{E} is never a reference type\iref{expr.prop}.
+    \tcode{E} is never a reference type \iref{expr.prop}.
 \end{note}
 
 \pnum
@@ -647,7 +653,7 @@ shall have literal type and
 shall be initialized.
 In any \keyword{constexpr} variable declaration,
 the full-expression of the initialization
-shall be a constant expression\iref{expr.const}.
+shall be a constant expression \iref{expr.const}.
 A \keyword{constexpr} variable that is an object,
 as well as any temporary to which a \keyword{constexpr} reference is bound,
 shall have constant destruction.
@@ -689,7 +695,7 @@ reachable at the point of the initializing declaration.
 \ednote{Modify [temp.arg.nontype]/p1 as follows:}
 
 \added{%
-A \grammarterm{template-argument} for a non-type  \grammarterm{template-parameter} with declared type T shall be such
+A \grammarterm{template-argument} for a non-type  \grammarterm{template-parameter} with declared type \tcode{T} shall be such
 that the invented declaration%
 }
 \begin{addedblock}
@@ -701,16 +707,16 @@ that the invented declaration%
 satisfies the semantic constraints for the definition of a \tcode{constexpr} variable with static
 storage duration [dcl.constexpr].
 }%
-If \removed{the type} \tcode{T} \removed{of a \grammarterm{template-parameter}\iref{temp.param}}
+If \removed{the type} \tcode{T} \removed{of a \grammarterm{template-parameter} \iref{temp.param}}
 contains a placeholder type (\iref{dcl.spec.auto})
 or a placeholder for a deduced class type (\iref{dcl.type.class.deduct}),
-the type of the parameter is \changed{the type deduced for the variable \tcode{x} in the invented declaration}{deduced from the above declaration;}
+the type of the parameter is \changed{the type deduced for the variable \tcode{x} in the invented declaration}{deduced from the above declaration.}
 \begin{removedblock}
 \begin{codeblock}
     T x = @\grammarterm{template-argument}@ ;
 \end{codeblock}
 \end{removedblock}
-\changed{If a deduced parameter type}{if the parameter type thus deduced} is not permitted
+\changed{If a deduced parameter type}{If the parameter type thus deduced} is not permitted
 for a \grammarterm{template-parameter} declaration \iref{temp.param},
 the program is ill-formed.
 
