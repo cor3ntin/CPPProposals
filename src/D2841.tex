@@ -250,46 +250,11 @@ concept range_of_integrals = std::ranges::range<T> && @\textbf{std::integral}@<s
 Note that this transformation does not change any other behavior of normalization, i.e., concept template-parameters that appear within other atomic constraints
 are not substituted, and arguments that are not concept names are not substituted either.
 
-\subsection{Subsumption and fold expressions over \tcode{\&\&} and \tcode{||}}
-
-Before we handle the more complicated scenario where the fold expression's pattern is
-a pack of concepts, we must fix an old concept-ts
- issue that fell through the cracks; see
-\href{http://cplusplus.github.io/concepts-ts/ts-active.html#28}{ordering of constraints involving fold expressions}:
-
-\begin{colorblock}
-template <class T> concept bool A = std::is_move_constructible_v<T>;
-template <class T> concept bool B = std::is_copy_constructible_v<T>;
-template <class T> concept bool C = A<T> && B<T>;
-
-template <class... T>
-requires (A<T> && ...)
-void g(T...);
-
-template <class... T>
-requires (C<T> && ...)
-void g(T...);
-\end{colorblock}
-
-We want to apply the subsumption rule to the normalized form of the requires clause (and its arguments). As of C++23, the above \tcode{g} is ambiguous.
-
-While this is technically a breaking change, it only makes more programs valid. (Where there was simple ambiguity in C++23, we now have a refined partial ordering of that pair.)
-
-This is useful when dealing with algebraic-type classes. Consider a concept constraining a (simplified) environment implementation via a type-indexed \tcode{std::tuple}. (In real code, the environment is a type-tag indexed map.)
-
-\begin{colorblock}
-template <typename X, typename... T>
-concept environment_of = (... && requires (X& x) { { get<T>(x) } -> std::same_as<T&>; } );
-
-auto f(sender auto&& s, environment_of<std::stop_token> auto env); // uses std::allocator
-auto f(sender auto&& s, environment_of<std::stop_token, std::pmr::allocator> auto env); // uses given allocator
-\end{colorblock}
-
-Without the subsumption fixes to fold expressions, the above two overloads conflict, even though they should by rights be partially ordered.
-
 \subsection{Fold expressions involving concept template-parameters}
 
-When the fold expression is over a pack of \emph{concepts}, we must be a bit more careful.
+Our proposed design allow for subsumption in the the presence of fold expressions whose pattern is a concept.
+(For the non-concept case, see \paper{P2963R0})
+
 
 \begin{colorblock}
 template <
@@ -454,213 +419,6 @@ Atomic constraints also need to ignore concept template-parameters for the purpo
 of comparing their template arguments when establishing atomic constraint equivalence during subsumption.
 
 
-\section{Partially applied concepts}
-
-The first argument of a concept is the entity for which we are checking satisfaction.
-Concepts can take additional arguments parameterizing the concept.
-
-For example, \tcode{invocable<T, int>} checks whether an object of type \tcode{T} can be called
-with an \tcode{int} argument.
-
-In specific contexts, a \tcode{type-constraint} can appear in a template head, or before \tcode{auto} to constrain --- or assert ---
-a type. In that case, the compiler injects the type to which the concept is applied, rather than this type being specified by the user.
-
-For example, the following two declarations are equivalent:
-
-\begin{colorblock}
-template<invocable<int> T>
-void f();
-
-template<typename T>
-void f() requires invocable<T, int>;
-\end{colorblock}
-
-This is helpful because a great many concepts are binary or n-ary.
-In the \tcode{concepts} header, half of the concepts are not unary.
-
-
-When passing concepts as template arguments, this becomes quickly apparent.
-Let us consider a \tcode{range_of} concept constraining the range's value type with a concept template-parameter:
-
-\begin{colorblock}
-template <typename R, template <typename> concept C>
-concept range_of = std::ranges::range<R> && C<std::ranges::range_value_t<R>>;
-\end{colorblock}
-
-We can then have an algorithm taking a range of \tcode{integral}:
-
-\begin{colorblock}
-auto median(range_of<std::integral> auto&&);
-\end{colorblock}
-
-
-But maybe we want to be a little more specific. Can we accept only a range of ints?
-Given that our \tcode{range_of} expects a concept (it should really accept a universal template parameter!),
-maybe we could use \tcode{same_as}.
-But \tcode{same_as} requires arguments. Can we make something like that work?
-
-\begin{colorblock}
-auto f(range_of<same_as<int>> auto&&);
-\end{colorblock}
-
-
-We can rewrite our \tcode{range_of} concept to take an extra argument pack forwarded to the concept parameter:
-
-\begin{colorblock}
-template <typename R, template <typename...> concept C,  typename... Args>
-concept range_of = std::ranges::range<R> && C<std::ranges::range_value_t<R>, Args...>;
-void f(range_of<std::same_as, int> auto &&);
-\end{colorblock}
-
-
-This is not the clearest interface. And crucially, it doesn't compose. For example, a range of \tcode{regular} and also convertible to int
-type is not expressible.
-
-One workaround would be to lift the concept and its argument into a type:
-
-\begin{colorblock}
-template <template <typename...> concept C, typename... Args>
-struct packed_concept {
-    template <typename T>
-    static constexpr bool apply  = C<T, Args...>;
-};
-
-template <typename R, typename... PackedConcept>
-concept range_of = std::ranges::range<R>
-                   && (PackedConcept::template apply<std::ranges::range_value_t<R>> && ...);
-void f(range_of<packed_concept<std::convertible_to, int>,
-                packed_concept<std::regular>> auto &&);
-\end{colorblock}
-
-This works.
-It is also not particularly usable or readable, and all hope of subsumption is lost.
-Concepts cannot be class members for a very good reason: It would fundamentally break subsumption. So \tcode{apply} is a \tcode{bool} variable, an atomic constraint.
-
-Can we still support making something similar in the language? Could we make something like
-
-\begin{colorblock}
-void f(range_of<@\textbf{concept convertible_to<int>}@> auto)
-\end{colorblock}
-
-simply work? Yes!\\
-
-[\href{https://compiler-explorer.com/z/36sqoGsr7}{Run this example on Compiler Explorer}]
-
-We can indeed create a new kind of template argument --- or a new kind of template-id --- that carries additional arguments that are injected
-when the corresponding concept template-parameter is specialized.
-\begin{colorblock}
-// Given this declaration,
-template <typename @\textbf{\textcolor{OliveGreen}{T}}@, template <typename> concept @\textbf{\textcolor{WildStrawberry}{C}}@>
-constexpr bool b = @\textbf{\textcolor{WildStrawberry}{C}}@<@\textbf{\textcolor{OliveGreen}{T}}@>;
-
-// this specialization
-b<@\textbf{\textcolor{OliveGreen}{double}}@, concept std::convertible_to<@\textbf{\textcolor{Plum}{int}}@>>;
-
-// is rewritten like that by injecting the arguments passed to the concept argument.
-template<>
-constexpr bool b<@\textbf{\textcolor{OliveGreen}{double}}@, concept @\textbf{\textcolor{WildStrawberry}{convertible_to}}@<@\textbf{\textcolor{Plum}{int}}@>> = @\textbf{\textcolor{WildStrawberry}{convertible_to}}@<@\textbf{\textcolor{OliveGreen}{double}}@, @\textbf{\textcolor{Plum}{int}}@>;
-\end{colorblock}
-
-Notice that in this example, \tcode{C} is a concept template-parameter that accepts exactly one argument,
-even though \tcode{convertible_to} needs two.
-The other arguments will be filled in automatically.
-
-In effect, it's like we created a new concept
-
-\begin{colorblock}
-template <typename T>
-concept convertible_to_int = convertible_to<T, int>;
-\end{colorblock}
-
-but we did it inline, directly in the template argument.
-This feature (which we call partial application) expresses intent very clearly and works with subsumption.
-
-\subsection{Syntax of partially applied concepts}
-
-Partially applied concepts can appear as template arguments matching a concept template-parameter (and nowhere else).
-You might have noticed the \tcode{concept} keyword prefixing template arguments in previous examples and wonder why \tcode{range_of<concept convertible_to<int>>} rather than simply \tcode{range_of<convertible_to<int>>}?
-
-Of course, there is an undeniable parallel with the syntax of concept declaration, which is nice, but the keyword is there to avoid ambiguity.
-
-If the concept accepts a variable number of arguments (because it has defaulted or variadic parameters),
-whether \tcode{ConceptName<Args>} is a partial application or a complete specialization
-(which is then a boolean expression) can be ambiguous .
-
-This has not been an issue with \grammarterm{type-constraint}{s} because they only ever appear in a context where the first parameter is always injected.
-
-However, the ambiguity between a partial concept application and a boolean expression can appear in a couple of cases.
-\begin{enumerate}
-    \item In the presence of universal template parameters: Should a given argument matching a UTP be considered a bool or a concept template-parameter?
-    \item In an overload set, the concept could be matched to both a bool and a concept, as in this example courtesy of Barry Revzin:
-\begin{colorblock}
-template <bool B> void f();
-template <template <typename> concept C> void f();
-f<invocable<int>>(); // boolean or partially applied concept?
-\end{colorblock}
-\end{enumerate}
-
-We explored various solutions to this ambiguity, including always treating something that \emph{could} be a concept as a concept
-and forcing an explicit cast to bool to force a boolean expression or making the concept keyword optional when the concept has a fixed number of arguments.
-
-Both approaches suffer the same issue: They could change the meaning of code when the concept is modified by adding defaulted or variadic
-parameters. It could also break pre-C++26 code.
-So they do not appear to be robust solutions.
-
-We also refrained from any solution that would make the nature of template arguments somehow deduced from the corresponding parameter
-during overload resolution, for this would be madness (and it would not really solve the question for universal template parameters).
-
-Ultimately, the \tcode{concept} keyword is a great way to show intent and mirrors concept declaration. The following syntax would be valid:
-
-\begin{colorblock}
-some_template_name <
-    std::regular,  /// can pass the name directly
-    concept regular<>, // no reason this should not work
-    invocable<int>, // that is a bool - it will get diagnosed
-                    // if no overload or specialization expect a bool
-    concept invocable<int> // ok
->;
-\end{colorblock}
-
-\subsubsection{Generalized partially applied template template-parameters?}
-
-A question that arises when considering this partial application of concepts is whether it generalizes to other kinds of template-parameters.
-
-Concepts are unique in that the first parameter has a special meaning, and as such,
-that you can pass the first parameter at a different time than all other parameters does make a lot of sense.
-After all, this is why \tcode{type-constraint}{s} exist.
-
-To generalize partial application
-to other template template-parameters, we would need to be able to provide --- or not --- arbitrary parameters;
-we could imagine, for example, being able to write some kind of code where some but not all template arguments are provided.
-
-\begin{colorblock}
-Foo<std::map<?, ? , my_comparator>>;
-\end{colorblock}
-
-However, this is more complicated than what we need for concepts, and whether it would be useful is debatable.
-How arguments and parameters would be matched is less clear.
-Besides, unlike concepts, aliases and variable templates can be created at class scope.
-
-Therefore the motivation for partially applied concepts does not necessarily generalize terribly well.
-We did consider whether this sort of placeholder syntax would be a good fit for concepts in isolation, but
-we think \tcode{concept \grammarterm{type-constraint}} is more consistent, less novel, and
-therefore more teachable than a placeholder syntax.
-
-\subsection{Packs of partial concepts?}
-
-Arguably one could imagine a scenario in which a pack of partial concepts could be constructed:
-
-\begin{colorblock}
-template <typename T, template <typename> concept... Concepts>
-concept AllOf  = (Concepts<T> && ...);
-
-template <typename T, template <typename...> concept... Concepts>
-concept Foo = AllOf<T, concept Concepts<double>...>;
-\end{colorblock}
-
-But it seems difficult to imagine a scenario where this would be useful; i.e., when do different concepts accept the same arguments (besides the first one)?
-Supporting that does not seem like a good time investment.
-
 \section{Status of this proposal and further work}
 
 Our main priority should be to make progress on some form of universal template parameters.
@@ -671,8 +429,7 @@ template-parameters support the gamut of entities that could reasonably be used 
 As part of that, subsumption for concept template-parameters, as proposed in this paper, as well as subsumption of fold expressions
 should be considered an integral part of the design since adding them later might be somewhat annoying. (It could affect existing code, in theory.)
 
-However, partial concept application does not affect template-parameters; it's a new kind of template argument or template name.
-So this can --- and probably should --- be pursued as a separate effort to avoid blocking progress on universal template-parameters.
+\section{More examples}
 
 \section{Things to be careful about}
 
@@ -707,9 +464,6 @@ The paper as proposed has been implemented in a fork of Clang and is available o
 The implementation revealed no particular challenge. In particular, we confirmed that the proposed changes
 do not prevent memoization for subsumption and satisfiability, i.e., a concept and the set of its concept parameters
 are what needs to be cached.
-
-Partial concept application was also implemented, modeled by a new kind of template argument.
-This is still a work in progress.
 
 \section{Wording}
 

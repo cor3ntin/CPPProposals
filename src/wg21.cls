@@ -275,7 +275,7 @@
     export,extern,false,float,for,friend,goto,if,inline,int,long,mutable,namespace,new,noexcept,
     not,not\_eq,nullptr,operator,or,or\_eq,private,protected,public,reflexpr,register,reinterpret\_cast,
     requires,return,short,signed,sizeof,static,static\_assert,static\_cast,struct,switch,synchronized,template,
-    this,thread\_local,throw,true,try,typedef,typeid,typename,union,unsigned,using,virtual,void,
+    this,thread\_local,throw,true,try,typedef,typeid,typename,union,unsigned,using,virtual,void,universal,
     volatile,wchar\_t,while,xor,xor\_eq}
 }
 \lstdefinestyle{color}{language=C++,
@@ -290,7 +290,7 @@
         export,extern,false,float,for,friend,goto,if,inline,int,long,mutable,namespace,new,noexcept,
         not,not\_eq,nullptr,operator,or,or\_eq,private,protected,public,reflexpr,register,reinterpret\_cast,
         requires,return,short,signed,sizeof,static,static\_assert,static\_cast,struct,switch,synchronized,template,
-        this,thread\_local,throw,true,try,typedef,typeid,typename,union,unsigned,using,virtual,void,
+        this,thread\_local,throw,true,try,typedef,typeid,typename,union,unsigned,using,virtual,void,universal,
         volatile,wchar\_t,while,xor,xor\_eq}
 }
 

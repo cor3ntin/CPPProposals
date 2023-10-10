@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{\tcode{size\_hint}: Eagerly reserving memory for not-quite-sized lazy ranges}
-\docnumber{D2846R1}
+\docnumber{P2846R1}
 \audience{SG-9, LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -27,6 +27,11 @@ This was not mentioned or considered at all in R0. R1 fixes this blattant omissi
 If anything this makes the motivation stronger but it opens some interesting design questions.
 
 SG-9 also pointed out that R0, despite being motivated by performance considerations failed to present any benchmarks. Benchmarks are now provided.
+
+SG-9 also suggested that it would be useful for \tcode{sized_range} to subsume \tcode{approximately\_sized\_range}.
+This change has been applied.
+
+Add a section on naming.
 
 \section{Motivation}
 
@@ -101,7 +106,7 @@ To that end, we propose:
 
 Like \tcode{ranges::size} we mandate O(1) evaluation of \tcode{size_hint}.
 With this design, ranges that are sized are already \tcode{approximately_sized_range}, which avoids some duplication, undue complexity, and confusion.
-for example, we don't have to modify existing containers and views whose size-ness does not depend on another view.
+for example, we don't have to modify existing containers and views whose sized-ness does not depend on another view.
 
 \subsection{Usage}
 
@@ -162,7 +167,7 @@ As I'm not entirely certain what the best approach is, this paper does not make 
 
 \tcode{ranges::to} is sligtly modified to use \tcode{ranges::size_hint} instead of \tcode{ranges::size}.
 An implementation can also use \tcode{size_hint} in the various range constructors.
-User code could use it for similar purposes.
+User code could use that feature for similar purposes.
 
 
 \subsection{\tcode{vector} and \tcode{string} constructors}
@@ -174,14 +179,27 @@ It may affect the performance of vector construction negatively when it is const
 The proposed wording is currently silent on what happens to vector but we have 3 options:
 
 \begin{itemize}
-  \item Requires implementation to rely on \tcode{size_hint} when constructing a vector from a non-sized range of \tcode{Cpp17MoveInsertable} elements.
-  \item Allowing implementation to do so without requiring it. Note that whether allocations are performed would be observable through whether the move constructor of each element is called or not (unless the elements are of trivial types (or are otherwise trivially relocatable \paper{P2786R0})). Any effect resulting from a call to \tcode{std::distance} would not be performed.
-  \item In the presence of a \tcode{approximately_sized_range}, \tcode{ranges::to} could construct the container using reserve and insertions, instead of forwarding to the container constructor. The downside of this approach is that \tcode{ranges::to} would have different performance characteristics than container construction, which seems undesirable, and the optimization could not be applied to other operations such as \tcode{assign_range}/\tcode{insert_range}.
+  \item Require implementation to rely on \tcode{size_hint} when constructing a vector from a non-sized range of \tcode{Cpp17MoveInsertable} elements.
+
+        A concern here is that custom allocators can't tell whether elements are move insertable because they are not required to be SFINAE-friendly.
+        So, we could either only require calling \tcode{size_hint} for \tcode{std::allocator} only, or it would break \tcode{vector}s of non-movable types using a custom \tcode{allocator}.
+
+        Another solution is to check for \tcode{MoveConstructible} - which would still break the fringe case of types that are \tcode{MoveConstructible} and not \tcode{Cpp17MoveInsertable}.
+        But there is consensus in SG-9 that those are fringe edge cases.
+
+  \item Allowing implementations to do so without requiring it.
+
+        Note that whether allocations are performed would be observable through whether the move constructor of each element is called or not (unless the elements are of trivial types (or are otherwise trivially relocatable \paper{P2786R0})). Any effect resulting from a call to \tcode{std::distance} would not be performed.
+
+        SG-9 had a preference for this option.
+
+  \item In the presence of a \tcode{approximately_sized_range}, \tcode{ranges::to} could construct the container using reserve and insertions, instead of forwarding to the container constructor.
+        The downside of this approach is that \tcode{ranges::to} would have different performance characteristics than container construction, which seems undesirable, and the optimization could not be applied to other operations such as \tcode{assign_range}/\tcode{insert_range}.
 \end{itemize}
 
 \section{Benchmarks}
 
-The following graph shows 2 Unicode normalization algorithms (Upper casing and NFC) for translations of the \href{https://unicode.org/udhr/index.html}{Universal Declaration of human rights} in English, Danish, Japanese, and Chinese.
+The following graph shows 2 Unicode normalization algorithms (Upper casing and NFC) for translations of the \href{https://unicode.org/udhr/index.html}{Universal Declaration of Human Rights} in English, Danish, Japanese, and Chinese.
 Each such Transformation is performed twice:
 
 \begin{itemize}
@@ -221,6 +239,14 @@ However, that flexibility is not useful in practice:
 The upper bound is \href{https://internals.rust-lang.org/t/is-size-hint-1-ever-used/8187?u=scottmcm}{rarely used},
 and I'm told that using it in reserved was tried and led to performance regression.
 The complex return type seems to also create some confusion for rust users.
+
+
+\section{Naming}
+
+SG-9 had no strong preferences between the naming of the \tcode{size_hint} function.
+The two options considered are \tcode{size_hint} (which is nice because it reflects the fact that it's a function intended as a performance hint)
+and \tcode{approximate_size} (which is nice because it reflects the name of the \tcode{approximately_sized_range} concept).
+Both options being equally cromulent, we are happy to let LEWG pick their preference.
 
 \section{Wording}
 
@@ -262,11 +288,11 @@ inline namespace @\unspec@ {
 template<class>
 constexpr bool disable_sized_range = false; // freestanding
 
-template<class T>
-concept sized_range = @\seebelow@;  // freestanding
-
 @\added{template<class T>}@
 @\added{concept approximately_sized_range = \seebelow;  // freestanding}@
+
+template<class T>
+concept sized_range = @\seebelow@;  // freestanding
 
 template<class T>
 constexpr bool enable_view = @\seebelow@;    // freestanding
@@ -274,7 +300,7 @@ constexpr bool enable_view = @\seebelow@;    // freestanding
 }
 \end{codeblock}
 
-\ednote{Insert after }
+\ednote{Insert after [range.prim.ssize] }
 
 \begin{addedblock}
 \rSec2[range.prim.size.hint]{\tcode{ranges::size_hint}}
@@ -329,15 +355,36 @@ Then:
 
 \rSec2[range.sized]{Sized ranges}
 
+\begin{addedblock}
+\rSec2[range.approximately.sized]{Approximately sized ranges}
+
 \pnum
-The \libconcept{sized_range} concept refines \libconcept{range} with
+The \libconcept{approximately_sized_range} concept refines \libconcept{range} with
+the requirement that an approximation of the number of elements in the range can be determined
+in amortized constant time using \tcode{ranges::size_hint}.
+
+\begin{itemdecl}
+template<class T>
+concept @\deflibconcept{approximately_sized_range}@ =
+@\libconcept{range}@<T> && requires(T& t) { ranges::size_hint(t); };
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    Given an lvalue \tcode{t} of type \tcode{remove_reference_t<T>}, \tcode{T}
+    models \libconcept{approximately_sized_range} only if \tcode{ranges::size_hint(t)} is amortized \bigoh{1}, and does not modify \tcode{t}.
+\end{itemdescr}
+\end{addedblock}
+
+\pnum
+The \libconcept{sized_range} concept refines \libconcept{\changed{range}{approximately_sized_range}} with
 the requirement that the number of elements in the range can be determined
 in amortized constant time using \tcode{ranges::size}.
 
 \begin{itemdecl}
     template<class T>
     concept @\deflibconcept{sized_range}@ =
-    @\libconcept{range}@<T> && requires(T& t) { ranges::size(t); };
+    @\libconcept{\changed{range}{approximately_sized_range}}@<T> && requires(T& t) { ranges::size(t); };
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -362,26 +409,6 @@ in amortized constant time using \tcode{ranges::size}.
     \end{itemize}
 \end{itemdescr}
 
-\begin{addedblock}
-\rSec2[range.approximately.sized]{Approximately sized ranges}
-
-\pnum
-The \libconcept{approximately_sized_range} concept refines \libconcept{range} with
-the requirement that an approximation of the number of elements in the range can be determined
-in amortized constant time using \tcode{ranges::size_hint}.
-
-\begin{itemdecl}
-template<class T>
-concept @\deflibconcept{approximately_sized_range}@ =
-@\libconcept{range}@<T> && requires(T& t) { ranges::size_hint(t); };
-\end{itemdecl}
-
-\begin{itemdescr}
-    \pnum
-    Given an lvalue \tcode{t} of type \tcode{remove_reference_t<T>}, \tcode{T}
-    models \libconcept{approximately_sized_range} only if \tcode{ranges::size_hint(t)} is amortized \bigoh{1}, and does not modify \tcode{t}.
-\end{itemdescr}
-\end{addedblock}
 
 \rSec3[range.utility.conv.to]{\tcode{ranges::to}}
 
@@ -869,7 +896,7 @@ enumerate_view(R&&) -> enumerate_view<views::all_t<R>>;
 %}
 %\end{codeblock}
 
-\rSec3[range.adjacent.view]{Class template \tcode{adjacent_view}}
+\rSec3 [range.adjacent.view]{Class template \tcode{adjacent_view}}
 
 \indexlibrarymember{begin}{adjacent_view}%
 \indexlibrarymember{end}{adjacent_view}%
@@ -929,7 +956,7 @@ Equivalent to:
 \end{itemdescr}
 \end{addedblock}
 
-rSec3[range.adjacent.transform.view]{Class template \tcode{adjacent_transform_view}}
+\rSec3[range.adjacent.transform.view]{Class template \tcode{adjacent_transform_view}}
 
 \indexlibrarymember{begin}{adjacent_transform_view}%
 \indexlibrarymember{end}{adjacent_transform_view}%
