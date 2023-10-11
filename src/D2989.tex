@@ -1,0 +1,394 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{A Simple Approach to Universal Template Parameters}
+\docnumber{P2989R0}
+\audience{EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Gašper Ažman}{gasper.azman@gmail.com}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{graphicx}
+
+
+
+\def\changemargin#1#2{\list{}{\rightmargin#2\leftmargin#1}\item[]}
+\let\endchangemargin=\endlist
+
+\begin{document}
+\maketitle
+
+\section{Abstract}
+In \paper{P1985R3}, we explore universal template parameters (a template parameter that can be a type, non-type, or template name).
+We proposed allowing the use of universal template parameters in all contexts, which would have added a large amount of complexity to both the specification and implementations
+for limited benefits. In this paper, we propose a much simpler approach to the same feature.
+
+\section{Difference with \paper{P1985R3}}
+
+This paper is really a follow up on \paper{P1985R3}.
+The main difference is that we are only proposing that universal template parameters can only be used as template arguments, to side step parsing ambiguities, syntax disambiguators etc
+(more detail below).
+
+Beside that, this is still very much the same feature and the same design (there are not that many ways to design this feature).
+We present a few design questions not considered before and report on early implementation efforts in Clang.
+
+
+\section{Design}
+
+The design is centered around as few pieces as possible.
+\begin{itemize}
+\item A universal template parameter can be declared in the template head of a function, class, or variable template.
+\item The name of a universal parameter (which is found by unqualified lookup) can be used as a template argument. And nowhere else.
+\item universal template parameters can be packs
+\item universal template parameters cannot be defaulted.
+\item Forwarding a universal template to another template, as well as partial specializations are the main way to handle universal template parameters
+\end{itemize}
+
+\subsection{Partial ordering of universal template parameters}
+
+Anything that can be a template argument can be the argument of a universal template parameter. Hence the name Universal Template Parameter.
+
+Consequently, Universal Template Parameters are less specialized than any other sort of template they are compared with.
+This allows specializing an entity based on template parameter kind.
+
+\begin{colorblock}
+template <universal template>
+constexpr bool is_variable = false;   // #1
+template <auto a>
+constexpr bool is_variable<a> = true; // #2
+\end{colorblock}
+
+Here, \tcode{\#2} is more specialized than \tcode{\#1} because a universal template parameter is less specialized than a non-type parameter.
+
+\subsection{Universal Template Parameter Deduction}
+
+The \emph{kind} of a universal parameter is determined by the \emph{kind} of the corresponding template argument.
+IE, if the template argument is a type, the corresponding template parameter will be a type template parameter.
+
+If the template argument denotes a template name (or concept name), the corresponding universal template parameter
+is deduced to be a template (or concept) template parameter with the same template head.
+
+\begin{colorblock}
+template <universal template T>
+struct S;
+
+using A = S<std::pair>; // T is compared against template <typename T, typename U> typename
+\end{colorblock}
+
+If the template argument is an expression, the corresponding universal template parameter becomes a non-type template parameter.
+
+\subsection{NTTP Deduction}
+
+This brings an interesting question: When replacing a universal template parameter with a non-type argument, what type should we deduce against?
+We have a few options:
+\begin{itemize}
+\item Deducing the exact type -  Similar to \tcode{decltype(auto)}. While seemingly simple at first, this is not particularly useful as xvalues would be deduced as \tcode{T\&\&}, which are not structural types and therefore
+are not valid template arguments.
+\item Deducing a non-reference type - similar to \tcode{auto}. This would make it impossible to"forward" a reference to another template. As passing template arguments to other entities is the main motivation for this feature, this is also not a viable option.
+\item Deducing either a (suitably cv qualified) lvalue reference type if the argument is an lvalue, and a non-reference type otherwise. This allows passing references to other templates while preventing the creation of rvalue references. This is therefore the option we propose.
+% TODO example
+\end{itemize}
+
+\subsection{Concepts}
+
+Because concepts cannot be specialized, and because we do not have a good motivation for it, we do not propose to support universal template parameter
+In the template heads of concepts. universal template parameters also cannot be constrained with anything resembling a \grammarterm{type-constraint}.
+However, universal template parameter names can appear in template arguments in \tcode{requires} clauses.
+It is therefore possible to constrain an entity to accept only specific kinds of universal template parameters.
+
+% todo example
+
+\subsection{Function template}
+
+
+We are not proposing to allow passing an overload set or a function template as a universal template argument.
+This might be something to consider in the future but there certainly would be implementation challenges.
+Overall this is an orthogonal feature that has less to do with universal template argument than it has to the countless
+"overload set as first class objects" (\paper{P1170R0}) and "customization point objects" (\paper{P2547R1}) papers.
+
+
+\subsection{Library Support: Universal template parameters with \tcode{is}}
+
+We propose a set of library traits to accompany the core language feature.
+
+
+\begin{colorblock}
+template <universal template T>
+inline constexpr bool is_typename_v = false;
+template <universal template U>
+inline constexpr bool is_nttp_v = false;
+template <universal template U>
+inline constexpr bool is_template_v = false;
+template <universal template U>
+inline constexpr bool is_type_template_v = false;
+template <universal template U>
+inline constexpr bool is_var_template_v = false;
+template <universal template U>
+inline constexpr bool is_concept_v = false;
+\end{colorblock}
+
+These type traits can be specialized as follow:
+
+\begin{colorblock}
+template <typename U>
+inline constexpr bool is_typename_v<U> = true;
+
+template <auto U>
+inline constexpr bool is_nttp_v<U> = true;
+
+template <template<universal template....> universal template U>
+constexpr bool is_template_v<U> = true;
+
+template <template<universal template....> typename U>
+inline constexpr bool is_type_template_v<U> = true;
+
+template <template<universal template....> auto U>
+inline constexpr bool is_var_template_v<U> = true;
+
+template <template<universal template....> concept U>
+inline constexpr bool is_concept_v<U> = true;
+\end{colorblock}
+The final wording will most likely include support for the non-\tcode{_v} version of these traits.
+
+We would be remiss not to propose \tcode{std::is_specialization_of} (\paper{P2098R1}) here:
+
+\begin{colorblock}
+template<universal template T, universal template Primary >
+requires is_var_template_v<Primary> || requires is_type_template_v<Primary>
+inline constexpr bool is_specialization_of_v = false;
+
+template<
+    template<universal template...> typename Primary,
+    universal template... Args
+>
+inline constexpr bool is_specialization_of_v<Primary<Args...>, Primary>  = true;
+
+template<
+    template<universal template...> auto Primary,
+    universal template... Args
+>
+inline constexpr bool is_specialization_of_v<Primary<Args...>, Primary>  = true;
+\end{colorblock}
+
+Unlike \paper{P2098R1} which was rejected for not being universal enough (the technology did not exist at the time, this implementation) not only supports checking
+specializations for any class templates, including those having template parameters that are not types, but also specialization of variable templates.
+
+\subsection{In which we mention reflection}
+
+One of the things we do not propose in this paper is to force the interpretation of a universal template as a specific kind "in place" - in contrast with \paper{P1985R3}.
+IE, to use a universal template parameter, you have to pass it to another template which is then specialized for templates, NTTP, template names, etc.
+Naming a universal template parameter anywhere except as a template argument is ill-formed.
+
+There are a few reasons for that.
+First for types and NTTP it is easy enough to write \tcode{as_type} and \tcode{as_value} respectively as library functions (not proposed).
+
+\begin{colorblock}
+template<universal template>
+struct as_type;
+template<typename T>
+struct as_type<T> { using type = T; };
+template <universal template T>
+using as_type_t = as_type<T>::type;
+
+template<universal template U>
+constexpr auto as_value_v = delete;
+template<decltype(auto) V>
+constexpr decltype(auto) as_value_v<V> = V;
+\end{colorblock}
+
+These would allow extracting a type/value from a UTTP
+
+\begin{colorblock}
+template <universal template U>
+constexpr auto test() {
+    if constexpr(is_typename_v<U>) {
+        using a =  as_type<int>::type; // ok
+        return a{42};
+    }
+    else if constexpr(is_nttp_v<U>) {
+        decltype(auto) v = as_value_v<U>;
+        return v;
+    }
+}
+static_assert(test<int>() == 42);
+static_assert(test<24>() == 24);
+\end{colorblock}
+
+The second reason is that use cases are limited.
+The reason we need universal template parameters is to be able to handle entities of different shapes in generic contexts.
+
+However, the main reason is that the concern is somewhat orthogonal and not specific to this proposal.
+Enter reflection.
+This is something we mentioned in \paper{P1985R3}, and not just because we love to talk about reflection in every paper.
+
+Reflection has this feature which is now called splicing although terminology changed over the years when you can convert a reflection of an entity
+back into that entity. And of course, because it is possible to reflect on anything (in a theoretical future), then splicing a reflection
+can produce any kind of entity (I apologize to Core for my liberal use of "entity" through this paper).
+
+Quoting from \paper{P1240R2}
+
+\begin{quoteblock}
+\begin{colorblock}
+struct S { struct I { }; };
+template<int N> struct X;
+auto refl = ˆS;
+auto tmpl = ˆX;
+void f() {
+    typename[:refl:] * x; // Okay: declares x to be a pointer to S.
+    [:refl:] * x; // Error: attempt to multiply int by x.
+    [:refl:]::I i; // Okay: splice as part of a nested-name-specifier.
+    typename[:refl:]{}; // Okay: default-constructs an S temporary.
+    using T = [:refl:]; // Okay: operand must be a type.
+    struct C: [:refl:] {}; // Okay: base classes are types.
+    template[:tmpl:]<0>; // Okay: names the specialization.
+    [:tmpl:] < 0 > x; // Error: attempt to compare X with 0.
+}
+\end{colorblock}
+\end{quoteblock}
+
+This set of examples is rather illustrative of what we need to solve in general.
+Both splices and UTP are dependent expressions and need some form of parsing disambiguator to be usable
+in arbitrary contexts, like other dependent names (i.e. member of classes templates).
+
+So both \paper{P1985R3} and reflection had similar needs for disambiguating new interesting names and
+both papers try to come up with rules for cleverly avoiding the need for a disambiguator syntax.
+As shown in \paper{P1985R3}, this has further ramifications if we allow some form of aliases of universal template parameters, and/or some form of general aliasing that would allow more entities to become dependent
+and increase the need for disambiguation syntaxes.
+And of course, work is done on member packs and pack aliases, which adds a layer of consideration to these disambiguation syntaxes.
+
+And all of that has of course a non-trivial impact on C++ parsers, so progressing one step at a time seems reasonable.
+
+This is why we focus solely on allowing universal template parameters and once we have the basis right, we can expand to
+allow UTP in more places, if we find a compelling use case for it.
+
+Both reflection and "UTP everywhere" should have a consistent syntax for disambiguators and where we can and can't omit them.
+
+\subsection{Syntax}
+
+Speaking of syntax... we need a syntax for Universal Template Parameters.
+The set of possible syntax is infinite and it is unlikely productive to do an exhaustive search,
+
+\begin{itemize}
+
+\item \tcode{universal template Foo} works (ie is not ambiguous)
+
+\item \tcode{template auto} which is the syntax used by circle and \paper{P1985R0} reused \tcode{auto} in inconsistent ways,
+which many people - including us - are not the biggest fan of.
+
+\item \tcode{template} as an isolated keyword is perfectly fine, but people have expressed opposition to that.
+
+\item \tcode{__any} or \tcode{__universal} would also work, but C++ doesn't do that (unlike C).
+
+\item \tcode{universal_template} or similar would also work but again we don't do underscore often (of course, \tcode{co_yield} and co do)
+
+\item \tcode{anytmplarg} or any such weird enough keyword would also work. (we can't pick something non-weird, it would be ambiguous)
+
+\item \tcode{register} would like you to know it is available and down for anything.
+
+\end{itemize}
+
+We are proposing \tcode{universal template}. People seem to not hate it. It does what it says on the tin.
+We are of course \textbf{not} proposing to make \tcode{universal} a keyword.
+In a template parameter declaration, \tcode{universal template} would have a special meaning, so the meaning of \tcode{universal} would be
+contextual, like it is the case for \tcode{module}, \tcode{final}, \tcode{override}, etc.
+
+
+\begin{colorblock}
+template <
+        universal template, // template
+        universal foo       // type constraint or NTTP
+>
+\end{colorblock}
+
+Putting some of these options together show they are quite similar.
+
+\begin{table}
+\tiny
+\hspace{-30pt}
+\begin{tabular}{c | c | c}
+\begin{colorblock}
+template <
+  universal template,
+  template <universal template> auto C
+>
+struct s;
+\end{colorblock}
+&
+\begin{colorblock}
+template <
+  anytmplarg,
+  template <anytmplarg> auto C
+>
+struct s;
+\end{colorblock}
+&
+\begin{colorblock}
+template <
+  template auto,
+  template <template auto> auto C
+>
+struct s;
+\end{colorblock}
+\end{tabular}
+\end{table}
+
+
+The feature we are proposing allows us to express ideas that can't be expressed without this proposal, so it is important,
+but we expect these things will mostly be used by select generic facilities. Terseness is not a goal here.
+
+The \tcode{template auto} syntax is perhaps less cromulent than the two other option ilustrated above as, in addition to overloading
+auto with a novel meaning (one that has ery little to do with variables), it makes it harder (for a human) to distinguish
+variable templates, template variable template parameters, template template parameters with a variable template, universal templates,
+template template parameters with a universal template, etc.
+
+\begin{colorblock}
+template <
+   auto, // variable
+   template auto, // universal parameter
+   template <auto> auto, // variable template
+   template <template auto> auto // variable template with a universal template parameter.
+>
+struct S;
+\end{colorblock}
+
+
+We should clarify that none of the option proposed here pose anty challenge for the compiler. It's only what will feel more intuitive to
+developers with time. And as long as we don't do something too outlandish, any sytax we pick will become familiar with time.
+
+
+\section{Status of this proposal and implementation}
+
+The design presented in this paper roughly matches the implementation of Universal template parameters, albeit with a different syntax.
+We started a prototype implementation in Clang to re-demonstrate implementability and find out interesting design questions we might otherwise
+miss.
+
+The clang implementation does not support packs or template template parameters, but it does support passing type and non-type template arguments
+as arguments to universal parameters, and partial ordering/specialization is also generally working.
+
+Introducing a new kind of template parameters/template arguments certainly requires the equivalent of a few weeks of work for a production-ready implementation,
+but as far as Clang is concerned there are no fundamental limitations that would make this proposal impossible or unreasonable to implement.
+
+
+Our aim and hope is to agree on general design and syntax in Kona and come back in the next few months with a more complete implementation and wording.
+We should also progress \paper{P2841R0} first as we intend for concept and variable template to be valid universal template parameters,
+and so there is a better order of operation here, especially for ease of specification.
+
+\section{Wording}
+
+TBD!
+
+\section{Acknowledgments}
+
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+
+\renewcommand{\section}[2]{}%
+
+\begin{thebibliography}{9}
+
+
+\end{thebibliography}
+\end{document}
