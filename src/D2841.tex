@@ -31,6 +31,17 @@ A variable template (C++14) or a concept (concepts are themselves templates) can
 
 The motivation for passing a concept as a template argument is very much the same as our reason for supporting class templates as template arguments: to allow higher-level constructs.
 
+While there are workarounds - for example by wrapping a variable in a struct with a \tcode{value} member that can then be passed as a type template template parameter, these workarounds
+all suffer the same limitations:
+\begin{itemize}
+    \item They have terrible ergonomics
+    \item They have a noticeable impact on performance - instantiating types is expensive
+    \item They do not allow to take advantage of nice concept properties such as terse syntax and subsumption.
+\end{itemize}
+
+All of these limitations of available patterns are additional motivations for this proposal.
+
+
 Being able to define a concept adaptor, for instance, would be very nice:
 
 \begin{colorblock}
@@ -86,10 +97,9 @@ There is community interest in these features.
 
 Unfortunately, this is one of those features that truly shows its power on large examples that don't tend to fit into papers.
 
-
 \subsection{Variable-template template-parameters}
 
-Variable-template template-parameters (previously proposed in \paper{P2008R0}) are arguably less useful.
+Variable-template template-parameters (previously proposed in \paper{P2008R0}) are useful by themselves.
 They can be emulated with a template class with a static public \tcode{value} data member.
 Most standard type traits are defined as a type and have an equivalent \tcode{_v} variable:
 \begin{colorblock}
@@ -100,28 +110,199 @@ constexpr bool is_same_v = is_same<T, U>::value;
 But this is not compile-time efficient: A class has to be instantiated, which is usually slow on most implementations.
 Then we still need to instantiate the variable. This performance issue is explored in more detail in \paper{P1715R1}.
 
-Wrapping variables in class templates also adds complexity for users: The main reason we expose both a variable template and a class template for every boolean
-trait is because the language does not support variable-template template-parameters. (Note that we are aware of some codebases using traits as tags for dispatch but this far from the common case.)
+In microbenchmarks, Gašper has observed a minimum of 30\% speedup by not instantiating class bodies, and a 50\% memory usage reduction for programs with heavy traits usage, specifically when implementing P2300-like classes.
+
+Also, if one has multiple metaprogramming libraries, relying on idioms like \tcode{::value} is fundamentally less composable than a value just being a value.
+Similarly, if you have a concept in your codebase, you shouldn't have to wrap it into a static constexpr \tcode{::value} member of a type to pass it to a metafunction.
+
+Wrapping variables in class templates also adds complexity for users: The main reason we expose both a variable template and a class template for every boolean trait is that the language does not support variable-template template-parameters. (Note that we are aware of some codebases using traits as tags for dispatch but this is far from the common case.)
 
 For instance, counting elements that satisfy a specific predicate could be done as
 
 \begin{colorblock}
 template <template <typename> auto p, typename... Ts>
-std::size_t count_if_v = (... + p<Ts>);
+constexpr std::size_t count_if_v = (... + p<Ts>);
 \end{colorblock}
 
 We could do the same thing with a type, but it incurs a class template instantiation for each element:
 
 \begin{colorblock}
 template <template <typename> typename p, typename... Ts>
-std::size_t count_if_v = (... + p<Ts>::value);
+constexpr std::size_t count_if_v = (... + p<Ts>::value);
 \end{colorblock}
 
-It will always be more work for the compiler to instantiate a whole class together with its body (not just its declaration) to allow access to the inner value member than just instantiating a variable template, no matter how much we try to optimize this pattern. \paper{P1715R1} makes the same case.
+It will always be more work for the compiler to instantiate a whole class together with its body (not just its declaration) to allow access to the inner value member than just instantiating a variable template, no matter how much we try to optimize this pattern. \paper{p1715r1} makes the same case.
+
+\section{Additional examples}
 
 The authors have use cases that don't fit in the paper (typical for the most \emph{interesting} use cases) where type-based vs variable-based metaprogramming means the difference of 300s compile-times per unit vs. more than an hour (currently by textually duplicating definitions that could have been genericized if variable template template-parameters were available).
 
-\subsection{Previous works}
+%\pagebreak
+%
+%\subsection{Filter meta-function}
+%
+%
+%
+%\begin{colorblock}
+%constexpr bool _is_set_value(...) { return false; };
+%template <typename... Args>
+%constexpr bool _is_set_value(set_value_t(*)(Args...)) { return true; };
+%
+%template <typename sig>
+%concept a_set_value = _is_set_value(static_cast<sig>(nullptr));
+%
+%template <typename CompletionSignatureTypelist>
+%using value_channel_notification_type =
+%  CompletionSignatureTypelist
+%  ::template filter<a_set_value>
+%  ::template transform<get_args>
+%  ::template transform<std::tuple>>
+%  ::template apply<std::variant>;
+%
+%template <typename Sender>
+%struct my_receiver {
+%  template <typename... Args>
+%  void set_value(Args&&...args) {
+%    storage = std::tuple<Args>(FWD(args)...);
+%  }
+%
+%  // pretend senders have ::completion_signatures and that they are a type list with nested metafunctions
+%  value_channel_notification_type<Sender::completion_signatures> storage;
+%};
+%
+%\end{colorblock}
+%
+
+\pagebreak
+
+\subsection{Terse syntax, overloading, and reusing existing concepts}
+
+The following example, simplified from production code shows multiple interesting properties of concept template parameters.
+\tcode{with_values_t} takes a function and a predicate, and call the function with all the argument satisfying this predicate.
+
+Here we demonstrate the function with \tcode{either} and \tcode{maybe}, but in reality, this is used with receiver types - which are also monadic.
+The call operator applies \tcode{f} to all engaged arguments. But all the arguments must be of the same shape (all optionals, all expected), etc.
+
+To do that, we here use the abbreviated function template syntax with \tcode{type-constraints}, which is only possible with concept template parameters.
+
+\begin{colorblock}
+template <typename T>
+struct maybe;
+template <typename L, typename R>
+struct either;
+
+template <typename T>
+concept a_maybe = /*...*/;
+template <typename T>
+concept an_either = /*...*/;
+
+template <template <typename> concept C>
+struct _with_values_t {
+  static constexpr auto operator()(auto&& f, C auto&& e, C auto&& ... es) -> decltype(auto) {
+    if (is_active<C>(e)) {       // does the active type in the variant satisfy C
+        return _with_values_t{}(bind_front(f, *v), FWD(vs)...);
+    } else {
+        return _with_values_t{}(f, FWD(vs)...);
+    }
+  }
+};
+
+// have to enforce it's the same monad or it doesn't make any sense
+inline constexpr struct with_values_t : _with_values_t<a_maybe>, _with_values_t<an_either> {
+  using _with_values_t<a_maybe>::operator();
+  using _with_values_t<an_either>::operator();
+} with_values {};
+\end{colorblock}
+
+
+It would be technically possible to use a type instead here
+
+\begin{colorblock}
+template <typename T>
+struct an_either_t {
+    static constexpr bool value = an_either<T>;
+};
+
+struct _with_values_t {
+    template <typename First, typename... Tail>
+    requires (an_either_t<First>::value && (an_either_t<Tail>::value && ...))
+    static constexpr auto operator()(auto&& f, C auto&& e, C auto&& ... es) -> decltype(auto);
+};
+\end{colorblock}
+
+But again:
+\begin{itemize}
+\item This is much less ergonomic as it forces users to wrap their concepts in types which is not intuitive (ie we have found that difficult to teach).
+\item The necessity of introducing new names for the same predicate - just exposed as a type, concept, or variable - adds unnecessary complexity to APIs
+\item Composability only works by convention.
+\item Creating types has a significant performance impact on compile times
+\item Diagnostic messages are slightly worse than they could be because of the added layers of wrapping and because compilers will decompose concepts in diagnostic messages.
+\end{itemize}
+
+
+% when_all_nmap(handle_successes, handle_failures, senders...); // we're *actually* doing this on result<> types, not optionals. result = variant<set_value(...)..., set_error(...)..., set_stopped()>
+
+\subsection{When life give you Lambdas}
+
+To work around the lack of lambda parameters, users have started to use generic lambdas
+
+\begin{colorblock}
+template <typename T, auto ConceptWrapperLambda>
+concept decays_to = requires {
+    ConceptWrapperLambda.template operator()<std::decay_t<T>>();
+};
+template <class T>
+requires decays_to<T, ([]<std::copyable>(){})>
+auto f(T&& x) {}
+\end{colorblock}
+
+Here the concepts we want to parametrize on are passed as a constrained generic lambda - which we then try to call when checking our higher-level concepts.
+This allows not to have to create a new type for each concept, so it might be slightly easier to use, although the reader will agree that it particularly arcane.
+In addition to the usability concerns, lambdas are never a solution to compile times performance.
+
+All the existing swork around suffer similar performance and usability concerns, and of course none support subsumption.
+Yet, many such workarounds have been developed and number of them have been deployed in production.
+Daisy Hollman provided an \href{https://p2841.godbolt.org/z/efYK1crb3}{entire collection of such workarounds}.
+
+\pagebreak
+
+\subsection{Mixins}
+
+In this other example adapted from production code, We have a mixin container that has a \tcode{get_mixin<concept>} utility that
+returns the reference to the mixed-in type that implements that concept. Currently, we emulate it with the horrible constrained lambda trick.
+
+\begin{colorblock}
+template <typename facade>
+struct utils {
+  auto& self() & { return static_cast<facade&>(*this); }
+
+  template <template <typename> concept C>
+  auto _get_mixin() -> auto& {
+    return this->facade::template _get_mixin<C>();
+  }
+};
+
+template <typename... Mixins>
+struct facade : Mixins<utils<facade>>... {
+  template <template <typename> concept C>
+  auto& _get_mixin() {
+    using return_t = select_first_t<C, Mixins...>;
+    return static_cast<return_t&>(*this);
+  }
+};
+
+// and you want users to do stuff like
+template <typename X>
+concept exchange_handler = requires (X x, order o) {
+  x.send_order(o);
+  { x.decode_order(std::byte const*); } -> an_order;
+};
+\end{colorblock}
+
+There is no way to turn this concept into a type-trait in this mixin library, and there's no way to teach users to make concepts like \tcode{exchange_handler},
+unless we teach them that they have to lift the type themselves, with a different name.
+
+\subsection{Previous work}
 
 Variable-template template-parameters were proposed in \paper{P2008R0} and were part of the original design for variable templates \paper{N3615}.
 Concept template-parameters have been described by Barry Revzin (back when Concept names were uppercase) in his blog \href{https://brevzin.github.io/c++/2019/01/09/concept-templates/}{here} and \href{https://brevzin.github.io/c++/2019/03/24/concept-templates-2/}{here}.
@@ -130,7 +311,7 @@ We mentioned them in \paper{P2632R0} and \paper{P1985R3}.
 \subsection{Universal template-parameters}
 
 The fact that variable-template template-parameters and concept template-parameters appear in the same papers is not accidental.
-For a universal template-parameter to be universal, we need to make sure it covers the set of entities we could possibly want to ever use as template-parameters.
+For a universal template-parameter to be universal, we need to make sure it covers the set of entities we could want to use as template-parameters.
 There is, therefore, an important order of operations.
 If we were to add universal template-parameters before concept template-parameters and variable-template template-parameters, we would be in a situation where either
 \begin{itemize}
@@ -428,8 +609,6 @@ template-parameters support the gamut of entities that could reasonably be used 
 
 As part of that, subsumption for concept template-parameters, as proposed in this paper, as well as subsumption of fold expressions
 should be considered an integral part of the design since adding them later might be somewhat annoying. (It could affect existing code, in theory.)
-
-\section{More examples}
 
 \section{Things to be careful about}
 
