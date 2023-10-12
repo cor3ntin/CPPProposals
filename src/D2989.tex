@@ -35,6 +35,69 @@ Beside that, this is still very much the same feature and the same design (there
 We present a few design questions not considered before and report on early implementation efforts in Clang.
 
 
+\section{Examples}
+
+We already presented motivating examples in \paper{P1985R3}, but here are a couple more
+
+\subsection{Generic rebind}
+
+Consider this allocator:
+
+\begin{colorblock}
+template <class T, size_t BlockSize>
+class BlockAllocator {
+    public:
+    using value_type = T;
+    T* allocate(size_t);
+    void deallocate(T*, size_t);
+};
+\end{colorblock}
+
+
+This allocator cannot be rebound: it doesn't provide a \tcode{rebind} nested alias and one of its template argument is a NTTP.
+Because of the lack of universal template parameters, \tcode{allocator_traits::rebind_alloc} only works with allocatpr for which all the template parameters are types.
+
+Universal parameters would allow a more generic implementation of \tcode{rebind_alloc}
+
+
+\begin{colorblock}
+template <template <class, universal template...> Alloc, class T, universal... Args, class U>
+struct rebind_alloc_t<Alloc<T, Args...>, U> {
+    using type = Alloc<U, Args...>;
+};
+template <class Alloc>
+struct allocator_traits {
+    template<class T>
+    using rebind_alloc = rebind_alloc_t<Alloc, T>::type;
+};
+using rebound = allocator_traits<BlockAllocator<int>>::rebind_alloc<long>; // now ok
+\end{colorblock}
+
+\subsection{\tcode{ranges::to}}
+
+The following code is currently ill-formed:
+
+\begin{colorblock}
+auto v = view | ranges::to<llvm::SmallVector> ();
+\end{colorblock}
+
+This is because \tcode{llvm::SmallVector} has a defaulted NTTP.
+
+\begin{colorblock}
+template <typename T, unsigned N = CalculateSmallVectorDefaultInlinedElements<T>::value>
+class SmallVector;
+\end{colorblock}
+
+To fix this, this proposal would allow to redefine \tcode{ranges::to} as
+
+\begin{colorblock}
+template<template<universal template...> class C, class... Args>
+constexpr auto to(Args&&... args);
+\end{colorblock}
+
+which would allow llvm::SmallVector and similar classes (\tcode{folly::small_vector} works the same way)
+to be usable with \tcode{ranges::to}
+
 \section{Design}
 
 The design is centered around as few pieces as possible.
@@ -81,15 +144,47 @@ If the template argument is an expression, the corresponding universal template 
 
 \subsection{NTTP Deduction}
 
-This brings an interesting question: When replacing a universal template parameter with a non-type argument, what type should we deduce against?
-We have a few options:
-\begin{itemize}
-\item Deducing the exact type -  Similar to \tcode{decltype(auto)}. While seemingly simple at first, this is not particularly useful as xvalues would be deduced as \tcode{T\&\&}, which are not structural types and therefore
-are not valid template arguments.
-\item Deducing a non-reference type - similar to \tcode{auto}. This would make it impossible to"forward" a reference to another template. As passing template arguments to other entities is the main motivation for this feature, this is also not a viable option.
-\item Deducing either a (suitably cv qualified) lvalue reference type if the argument is an lvalue, and a non-reference type otherwise. This allows passing references to other templates while preventing the creation of rvalue references. This is therefore the option we propose.
-% TODO example
-\end{itemize}
+This brings an interesting question: When replacing a universal template parameter with a non-type argument, what type should we deduce against.
+We could deduce the non-reference type (ie \tcode{auto}), but this goes against one of the main goal of this feature to be able to forward arbitrary template arguments.
+
+So instead, we propose to deduce the exact type (ie \tcode{decltype(auto)}.
+
+This means that the following is ill-formed:
+
+\begin{colorblock}
+template <universal template>
+struct s{};
+constexpr int && i = 0;
+s<i> a; // int&& is not a valid NTTP
+\end{colorblock}
+
+And it makes specialization somewhat subtle:
+
+\begin{colorblock}
+static constexpr int a = 0;
+
+template <universal template>
+struct S { // #1
+    static constexpr int value = 0;
+};
+
+template <>
+struct S<a> { // #2
+    static constexpr int universal = 1;
+};
+
+void test() {
+    static_assert(S<a>::i   == 1);  // a is deduced as int
+    static_assert(S<(a)>::i == 0); //  (a) is deduced as const int& - and #2 is specialized for int, so #1 is picked
+}
+\end{colorblock}
+
+However, these subtleties are unlikely to manifest in practices - references NTTP are uncomonn, and explicitely specializing a universal template parameter
+for a specific value should also be rare.
+
+We considerd letting users control whether to deduce a reference with some syntax but this wiould add more complexity than it would solve problems.
+Deducing the exact type has the big advantage to make universal template parameters always be the exact same thging as the argument they are deduced from
+which is easier to teach.
 
 \subsection{Concepts}
 
