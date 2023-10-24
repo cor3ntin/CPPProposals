@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Concept and variable-template template-parameters}
-\docnumber{P2841R0}
+\docnumber{P2841R1}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Gašper Ažman}{gasper.azman@gmail.com}
@@ -20,6 +20,27 @@
 C++ allows passing templates as template parameters.
 It does not, however, support these template template-parameters to be non-types, i.e., either variables or concepts, which
 represents a hole in the template facilities and is the topic of this paper.
+
+We introduce a way to pass concepts and variable templates as template parameters
+
+
+\begin{colorblock}
+template<
+   template <typename T> concept C,
+   template <typename T> auto C
+>
+struct S{};
+
+template <typename T>
+concept Concept = true;
+
+template <typename T>
+constexpr auto Var = 42;
+
+S<Concept, Var> s;
+\end{colorblock}
+
+
 
 \section{Motivation}
 
@@ -242,7 +263,7 @@ But again:
 
 % when_all_nmap(handle_successes, handle_failures, senders...); // we're *actually* doing this on result<> types, not optionals. result = variant<set_value(...)..., set_error(...)..., set_stopped()>
 
-\subsection{When life give you Lambdas}
+\subsection{When life gives you Lambdas}
 
 To work around the lack of lambda parameters, users have started to use generic lambdas
 
@@ -1011,7 +1032,7 @@ in the scope of the template declaration.
 \begin{addedblock}
 The \grammarterm{identifier} in a \grammarterm{template-template-parameter} is not looked up.
 A \grammarterm{template-template-parameter} whose \grammarterm{identifier} does not follow an ellipsis defines its
-\grammarterm{identifier} to be a \grammarterm{template-name}.
+\grammarterm{identifier} to be a \grammarterm{template-name} in the scope of the template declaration.
 \end{addedblock}
 
 \begin{note}

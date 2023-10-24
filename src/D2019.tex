@@ -558,7 +558,7 @@ with all the supported attributes of that platform.
 The problem is that not all attributes that can be set can be queried (and reciprocally), and that interface would force
 and implementation to return all the attributes it supports, which is wasteful (would have to allocate for the name if a user wants to check the stack size).
 
-\subsection{\paper{P0484R1}}
+\subsection{P0484R1}
 
 P0484 proposes several solutions in the same design space:
 
@@ -782,56 +782,59 @@ explicit thread(@\removed{F\&\& f,}@ Args&&... args);
 
 \begin{itemdescr}
 
-\begin{addedblock}
-
+\pnum
+\constraints
 \begin{itemize}
-\item Let $i$ be the smallest value such that \tcode{is_invocable_v<decay_t<Args...[$i$]>>} is \tcode{true}.
+\begin{addedblock}
+\item \tcode{sizeof...(Args) > 0} is \tcode{true}, and
+\end{addedblock}
+\item \tcode{remove_cvref_t<\changed{F}{Args[0]}>} is not the same type as \tcode{thread}.
+\end{itemize}
+
+\begin{addedblock}
+\begin{itemize}[leftmargin=*]
+\item Let $i$ be the smallest value such that \tcode{decay_t<Args...[$i$]>} is not a thread attribute type. \ednote{We need to define that}
+
 If no such $i$ exists, the programm is ill-formed.
 
 \item Let \tcode{F} be \tcode{Args...[$i$]}.
 \item Let \tcode{f} be \tcode{args...[$i$]}.
-\item Let \tcode{Attrs} a pack of the types \tcode{Args...[0]},...,\tcode{Args...[$i-1$]} if $i$ is not equal to $0$ and an empty pack otherwise.
-\item Let \tcode{attrs} a pack of the expressions \tcode{args...[0]},...,\tcode{args...[$i-1$]} if $i$ is not equal to $0$ and an empty pack otherwise.
-\item Let \tcode{FArgs} a pack of the types \tcode{Args...[$i+1$]},...,\tcode{Args...[sizeof...(Args)-1]} if $i$ is not equal to \tcode{sizeof...(args)-1} and an empty pack otherwise.
-\item Let \tcode{fargs} a pack of the expressions \tcode{args...[$i+1$]},...,\tcode{args...[sizeof...(args)-1]} if $i$ is not equal to \tcode{sizeof...(args)-1} and an empty pack otherwise..
-
-% \ednote{Do we need to to be more explicit about }
-
+%\item Let \tcode{Attrs} a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
+\item Let \tcode{attrs} a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
+\item Let \tcode{FArgs} a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
+\item Let \tcode{fargs} a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
 \end{itemize}
 \end{addedblock}
 
 
 \pnum
-\constraints
-\begin{itemize}
-\item \tcode{remove_cvref_t<F>} is not the same type as \tcode{thread}.
-\end{itemize}
-\pnum
 \mandates
 The following are all \tcode{true}:
 \begin{itemize}
+\begin{removedblock}
     \item \tcode{is_constructible_v<decay_t<F>, F>},
-    \item \tcode{(is_constructible_v<decay_t<\added{F}Args>, \added{F}Args> \&\& ...)},
+\end{removedblock}
+    \item \tcode{(is_constructible_v<decay_t<Args>, Args> \&\& ...)},
 \begin{removedblock}
     \item \tcode{is_move_constructible_v<decay_t<F>>},
 \end{removedblock}
     \item \tcode{(is_move_constructible_v<decay_t<Args>> \&\& ...)}, \removed{and}
     \item \tcode{is_invocable_v<decay_t<F>, decay_t<\added{F}Args>...>}\changed{.}{, and}
 \begin{addedblock}
-    \item No potentially cv-qualified type is present more than once in \tcode{Attrs}.
+    \item No type is present more than once in the pack \tcode{remove_cvref_t<Attrs>}. \ednote{// is there a better way to say that ?}
 \end{addedblock}
 \end{itemize}
 
 \pnum
 \expects
-\tcode{decay_t<F>} and each type in \tcode{decay_t<Args>} meet the
+\removed{\tcode{decay_t<F>} and} each type in \tcode{decay_t<Args>} meet the
 \oldconcept{MoveConstructible} requirements
 
 \pnum
 \effects
 The new thread of execution executes
 \begin{codeblock}
-    invoke(@\placeholdernc{decay-copy}@(std::forward<F>(f)), @\placeholdernc{decay-copy}@(std::forward<@\added{F}@Args>(@\added{F}@args))...)
+    invoke(@\placeholdernc{decay-copy}@(std::forward<F>(f)), @\placeholdernc{decay-copy}@(std::forward<@\added{F}@Args>(@\added{f}@args))...)
 \end{codeblock}
 with the calls to
 \tcode{\placeholder{decay-copy}} being evaluated in the constructing thread.
@@ -844,7 +847,7 @@ If the invocation of \tcode{invoke} terminates with an uncaught exception,
 \tcode{terminate} is called.
 
 \begin{addedblock}
-\tcode{attrs} can be used to tailor the thread with additional implementation-defined behaviors. Thread attributes parameters unknown to the implementation are ignored. (see [thread.attributes]).
+\tcode{attrs} can be used to tailor the thread with additional implementation-defined behaviors. (see [thread.attributes]).
 \end{addedblock}
 
 \pnum
@@ -935,8 +938,8 @@ synchronizes with the beginning of the invocation of the copy of \tcode{f}.
 \section{Acknowledgments}
 
 Thanks to Martin Hořeňovský, Kamil Rytarowski, Clément Grégoire, Bruce Dawson, Patrice Roy, Ronen Friedman, Billy Baker, and others for their valuable feedback.
-Thanks to
-Jonathan Wakely and Mathias Stearn for their wording suggestions.
+
+Thanks to Tomasz Kamiński, as well as Jonathan Wakely and Mathias Stearn for their wording suggestions.
 
 
 \bibliographystyle{plain}
@@ -945,6 +948,10 @@ Jonathan Wakely and Mathias Stearn for their wording suggestions.
 
 \renewcommand{\section}[2]{}%
 \begin{thebibliography}{9}
+    \bibitem[P0484R1]{P0484R1}
+    Patrice Roy, Billy Baker
+    \emph{Enhancing Thread Constructor Attributes – An Exploration of the Design Space}\newline
+    \url{https://wg21.link/P0484R1}
 
     \bibitem[N4885]{N4892}
     Thomas Köppe
