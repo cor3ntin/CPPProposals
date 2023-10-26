@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{A Simple Approach to Universal Template Parameters}
-\docnumber{P2989R0}
+\docnumber{D2989R1}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Gašper Ažman}{gasper.azman@gmail.com}
@@ -24,6 +24,23 @@
 In \paper{P1985R3}, we explore universal template parameters (a template parameter that can be a type, non-type, or template name).
 We proposed allowing the use of universal template parameters in all contexts, which would have added a large amount of complexity to both the specification and implementations
 for limited benefits. In this paper, we propose a much simpler approach to the same feature.
+
+
+\section{Revisions}
+
+\subsection{R1}
+
+\begin{itemize}
+    \item Update the implementation experience
+    \item Fix code examples and add compiler explorer links
+\end{itemize}
+
+\subsection{R0}
+
+\begin{itemize}
+    \item{Initial revision}
+\end{itemize}
+
 
 \section{Difference with \paper{P1985R3}}
 
@@ -60,7 +77,10 @@ Universal parameters would allow a more generic implementation of \tcode{rebind_
 
 
 \begin{colorblock}
-template <template <class, universal template...> Alloc, class T, universal... Args, class U>
+template <typename, typename>
+struct rebind_alloc_t;
+
+template <template <class, universal template...> typename Alloc, class T, universal template... Args, class U>
 struct rebind_alloc_t<Alloc<T, Args...>, U> {
     using type = Alloc<U, Args...>;
 };
@@ -70,8 +90,10 @@ struct allocator_traits {
     using rebind_alloc = rebind_alloc_t<Alloc, T>::type;
 };
 using rebound = allocator_traits<BlockAllocator<int>>::rebind_alloc<long>; // now ok
-using rebound = allocator_traits<BlockAllocator<int, 128>>::rebind_alloc<long>; // ok too
+using rebound2 = allocator_traits<BlockAllocator<int, 128>>::rebind_alloc<long>; // ok too
 \end{colorblock}
+
+\href{https://gcc.godbolt.org/z/z7n978vdv}{[Demo on compiler explorer]}
 
 \subsection{\tcode{ranges::to}}
 
@@ -250,13 +272,15 @@ inline constexpr bool is_var_template_v<U> = true;
 template <template<universal template...> concept U>
 inline constexpr bool is_concept_v<U> = true;
 \end{colorblock}
+
+\href{https://godbolt.org/z/cEfvsaf4j}{[Demo on compiler explorer]}
+
 The final wording will most likely include support for the non-\tcode{_v} version of these traits.
 
 We would be remiss if we did not propose \tcode{std::is_specialization_of} (\paper{P2098R1}) here:
 
 \begin{colorblock}
-template<universal template Primary, universal template>
-requires is_var_template_v<Primary> || is_type_template_v<Primary>
+template<template<universal template...> typename, typename>
 inline constexpr bool is_specialization_of_v = false;
 
 template<
@@ -265,16 +289,12 @@ universal template... Args
 >
 inline constexpr bool is_specialization_of_v<Primary, Primary<Args...>>  = true;
 
-template<
-template<universal template...> auto Primary,
-universal template... Args
->
-inline constexpr bool is_specialization_of_v<Primary, Primary<Args...>>  = true;
-
 \end{colorblock}
 
 Unlike \paper{P2098R1}, which was rejected for not being universal enough (the technology did not exist at the time), this implementation not only supports checking
 specializations for any class templates, including those having template parameters that are not types, but also specialization of variable templates.
+
+\href{https://godbolt.org/z/5W47odaK5}{[Demo on compiler explorer]}
 
 \subsection{In which we mention reflection}
 
@@ -316,6 +336,8 @@ constexpr auto test() {
 static_assert(test<int>() == 42);
 static_assert(test<24>() == 24);
 \end{colorblock}
+
+\href{https://godbolt.org/z/oTPGvEYoa}{[Demo on Compiler Explorer]}
 
 The second reason is that use cases are limited.
 We need universal template parameters so we can handle entities of different shapes in generic contexts, by forwarding them to other templates, as illustrated in the examples at the start of this paper.
@@ -368,7 +390,8 @@ The set of possible syntaxes is for universal template parameters infinite tryin
 
 \begin{itemize}
 
-\item \tcode{universal template Foo} works (i.e., is not ambiguous).
+\item \tcode{universal template Foo} works (i.e., is not ambiguous). \href{https://tinyurl.com/pth8v9p7}{A search for \tcode{\#define universal}}
+finds one instance in a no-longer maintained project.
 
 \item \tcode{template auto} which is the syntax used by circle and \paper{P1985R0} reused \tcode{auto} in inconsistent ways
 which we and many others found undesirable.
@@ -454,18 +477,16 @@ developers with time, and any reasonable syntax we pick will become familiar wit
 
 \section{Status of this proposal and implementation}
 
-The design presented in this paper roughly matches the implementation of universal template parameters in Circle, albeit with a different syntax.
-We started a prototype implementation in Clang to demonstrate implementability in a second C++ compiler and discover any interesting design questions we might otherwise
-miss.
+The design presented in this paper roughly matches the implementation of universal template parameters in Circle (itself inspired by a previous iteration of this proposal),
+albeit with a different syntax.
 
-The Clang implementation does not support packs or template template parameters, but it does support passing type and nontype template arguments
-as arguments to universal parameters, and partial ordering/specialization also generally works.
-
-Introducing a new kind of template parameters/template arguments certainly requires a few weeks of work to acchieve a production-ready implementation,
-but Clang has no fundamental limitations that would make this proposal impossible or unreasonable to implement.
+We provide a prototype implementation in Clang to demonstrate implementability in a second C++ compiler and discover any interesting design questions we might otherwise
+miss. Our implementation compile the examples presented in this paper. However it remains a prototype that is not production ready.
+The implementation represented a few weeks of work. The main challenge of bringing this proposal to production ready implementations certainly resides in the
+testing of all possible combination of template parameter and arguments.
 
 
-Our aim is to agree on general design and syntax in Kona and then to follow-up in the next few months with a more complete implementation and wording.
+Our aim is to agree on general design and syntax in Kona and then to follow-up in the next few months with wording.
 We should also progress \paper{P2841R0}, first since we intend for concepts and variable templates to be valid universal template parameters.
 There is a better order of operation, especially for ease of specification.
 

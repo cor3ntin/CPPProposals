@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Concept and variable-template template-parameters}
-\docnumber{P2841R1}
+\docnumber{D2841R2}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Gašper Ažman}{gasper.azman@gmail.com}
@@ -39,6 +39,30 @@ constexpr auto Var = 42;
 
 S<Concept, Var> s;
 \end{colorblock}
+
+
+
+\section{Revisions}
+
+\subsection{R2}
+
+\begin{itemize}
+\item Add a section in the deduction of template parameters from the arguments of a variable template/concept specialization
+\end{itemize}
+
+
+\subsection{R1}
+
+\begin{itemize}
+\item Add examples, motivation
+\item Wording improvement
+\end{itemize}
+
+\subsection{R0}
+
+\begin{itemize}
+    \item{Initial revision}
+\end{itemize}
 
 
 
@@ -508,6 +532,50 @@ void test() {
 
 [\href{https://compiler-explorer.com/z/66dr6fnKj}{Run this example on Compiler Explorer}]
 
+\subsection{Deduction of template argument fron the argument lust of a variable template argument}
+
+This is not proposed.
+
+Consider:
+
+\begin{colorblock}
+template<template <typename...> auto, auto>
+inline constexpr bool is_specialization_of_v = false;
+
+template<
+template <typename...> auto v,
+typename... Args
+>
+inline constexpr bool is_specialization_of_v<v, v<Args...>> = false; // #2
+
+template <typename T>
+constexpr int i = 42;
+
+static_assert(is_specialization_of_v<i, i<int>>); // #3
+\end{colorblock}
+
+\href{https://godbolt.org/z/sqTfEojh4}{[Compiler Explorer]}
+
+
+Should we be able to deduce \tcode{Args} from \tcode{int}?
+Some existing implementations will eagerly substitute \tcode{i<int>} by its value (here, \tcode{42}),
+such that there is subsequently nothing left to deduce \tcode{Args} against.
+
+While it would be possible to make that work, the implementation effort is non-negligible and the benefits limited,
+as we could only deduce the arguments of entities that are valid template arguments - which sounds obvious but that means that the
+above example can only work on a subset of variables (constexpr variables template specialization of structural types).
+
+We would also need to decide whether \tcode{is_specialization_of_v<i, i<int>>} behaves differently from \tcode{is_specialization_of_v<i, (i<int>)>}
+and how that generalizes to arbitrary subexpressions involving variable template specializations.
+
+So, for now, arguments of variable template template parameter are not deduced.
+instead, we should make \#2 ill-formed, so that we have the opportunity to extend that at a later time if we find sufficient motivation for it.
+
+There are existing cases where we make non-deductible partial specializations ill-formed (see \href{https://eel.is/c++draft/temp.spec.partial#match-3}{[temp.spec.partial.match])},
+howevever in the general case we don't seem to (\href{https://gcc.godbolt.org/z/fv1e8nnsf}{for example here is an exampler with a non-deducible pack})
+
+
+
 \subsection{Equivalence of atomic constraints}
 
 One interesting concept to consider is \tcode{tuple_of}, which would e.g., allow constraining a function on a \placeholder{tuple-like}
@@ -692,7 +760,7 @@ Every name is introduced by a \defn{declaration}, which is a
     \item
     \grammarterm{parameter-declaration} \iref{dcl.fct},
     \item
-    \grammarterm{type-parameter} \iref{temp.param},\textbf{}
+    \grammarterm{type-parameter} \iref{temp.param},
     \begin{addedblock}
     \item
     \grammarterm{template-template-parameter} \iref{temp.param},
