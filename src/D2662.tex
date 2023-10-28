@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Pack Indexing}
-\docnumber{P2662R1}
+\docnumber{P2662R2}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Pablo Halpern}{phalpern@halpernwightsoftware.com}
@@ -20,11 +20,18 @@ This paper expands on the pack indexing feature described in \paper{P1858R2} and
 
 \section{Revisions}
 
+\subsection{R2}
+
+\begin{itemize}
+\item Wording improvements, as reviewed by CWG in Varna
+\item Add a section about ways types could be deduced from an index-type-specifier.
+\item expand the "future evolutions" section.
+\end{itemize}
 
 \subsection{R1}
 
 \begin{itemize}
-\item At EWG's request, we explained in more details the syntax choices and explored alternatives.
+\item At EWG's request, we explained in more detail the syntax choices and explored alternatives.
 \item Wording improvements
 \end{itemize}
 
@@ -100,7 +107,7 @@ that can work in all contexts.
 
 \item We want a syntax that can be expanded to support slicing in the future.
 
-\item Pack elements can be array like or tuple like, so we need to be careful
+\item Pack elements can be array-like or tuple like, so we need to be careful
   about ambiguities. In particular, directly applying a subscript to a pack
   (\tcode{P[i]}, where \tcode{P} is a pack) is nonviable. Indeed, indexing a
   pack of arrays (\tcode{ArrayPack...[index]}), indexing each array in a pack
@@ -125,14 +132,14 @@ Reusing that syntax for pack indexing would introduce a semantics inconsistency 
 and \tcode{aggregate.[N]} returning the $Nth$ data member of an aggregate. % lah: WHAT is "returning the $Nth$ data member of an aggregate"---just the aggregate.[N] or BOTH get<N>(tuple-like) AND aggregate.[N]?
 
 Ideally, \tcode{tuple[N]} would simply work.
-A few proposals have tried to improve the user-friendlyness
+A few proposals have tried to improve the user-friendliness
 of tuple indexing (see
 \paper{P2726R0} and \paper{P0311R0}).
 
 We see no technical limitation to making \tcode{tuple-like[N]} work on types that do not otherwise define a \tcode{operator[]}.
-\paper{P1858R2} prefers \tcode{.[]} to \tcode{[]} because the paper proposes to index not only tuple-like, but also any other decomposable types, such as aggregates.
+\paper{P1858R2} prefers \tcode{.[]} to \tcode{[]} because the paper proposes to index not only tuple-like but also any other decomposable types, such as aggregates.
 An aggregate might have an \tcode{operator[]} already, so disambiguating is unnecessary.
-Note that array-like classes are tuple like, but their \tcode{operator[]} has the same semantics as what tuple indexing would do. % lah: I know this seems weird, but in "array-like classes," the "array-like" is functioning as a two-word adjective for a noun, so it gets a hyphen, and "tuple like" is functioning as a predicate adjective, so it doesn't get a hyphen.
+Note that array-like classes are tuple-like, but their \tcode{operator[]} has the same semantics as what tuple indexing would do. % lah: I know this seems weird, but in "array-like classes," the "array-like" is functioning as a two-word adjective for a noun, so it gets a hyphen, and "tuple like" is functioning as a predicate adjective, so it doesn't get a hyphen.
 
 Whether tuple-indexing should be written as \tcode{.[]} or \tcode{[]} depends on whether indexing an aggregate is a frequent enough use case
 to warrant a specific syntax, rather than indexing the pack formed by unpacking an aggregate (\tcode{aggregate[:]} --- in the syntax of \paper{P1858R2}, \tcode{aggregate.[N]} is a shorthand for \tcode{aggregate[:]...[N]}).
@@ -143,7 +150,7 @@ a shorthand syntax to index the fields of an aggregate doesn't seem useful, then
 
 \subsubsection{Angle brackets}
 
-We could use angle brackets instead of square brackets, the argument, we suppose, being argument is that \tcode{<>} is more template like and that pack indexing is also template like.
+We could use angle brackets instead of square brackets, the argument, we suppose, being argument is that \tcode{<>} is more template-like and that pack indexing is also template-like.
 However, most languages have existing practices in which \tcode{[]} is to be used for both indexing and slicing.
 Being consistent with existing practice doesn't hurt.
 Besides, pack indexing will often occur in angle-bracket-heavy code, so using brackets for indexing too would not look better.
@@ -190,8 +197,8 @@ the library, with no language changes necessary.  However, the disadvantages
 are significant:
 
 \begin{itemize}
-\item Not only is the syntax harder to use, but there are different syntaxes
-  for packs of types verses packs of values. A metafunction for indexing a pack
+\item Not only is the syntax harder to use but there are different syntaxes
+  for packs of types versus packs of values. A metafunction for indexing a pack
   of templates (not shown) would have a third name and require yet another
   syntax.
 \item The recursion level for each of these facilities is
@@ -265,7 +272,7 @@ This model does not explain how it would deal with packs of types, template para
 has to return an expression.
 Note that it could arguably return a meta::info and then let the user do the splicing itself, at which point any proclaimed syntax advantage would be lost.
 
-We probably should have a discussion around the concept of pack objects, because they raise an interesting question:
+We probably should discuss the concept of pack-objects, because they raise an interesting question:
 Do we need a syntax to reflect on a pack, that would be a shorthand for \tcode{std::vector\{\^{}ts...\}}? Maybe?
 Because I think that's the question that "pack-objects" fundamentally tries to answer.
 
@@ -286,7 +293,7 @@ because the code above is not exactly terse.
 Barry observes that slicing through a pack object creates more questions than it solves.
 If slicing a pack creates a pack - which seems fairly obvious, does slicing a pack object create a pack object or a pack?
 
-Both answers seem equally justified, however if slicing a pack object produces a pack object, now we need another syntax
+Both answers seem equally justified, however, if slicing a pack object produces a pack object, now we need another syntax
 to turn the pack object back into a pack, and this is how \paper{P2671R0}
 ends up suggesting \tcode{ts![1:]\~...} or \tcode{ts![1..]\~...}.
 
@@ -307,7 +314,7 @@ None of them would be a logical extension of the existing grammar, and since we 
 \subsubsection{Too many dots?}
 
 One of the arguments heard against the \tcode{T...[N]} syntax is the "too many dots" argument.
-And it's true that code that perform a lot of pack manipulation has numerous dots.
+And it's true that code that performs a lot of pack manipulation has numerous dots.
 However, the code does make sense and is readable; e.g., see this \href{https://github.com/seanbaxter/circle/blob/master/tuple/tuple.hxx}{linked implementation of tuple}.
 A few advantages come along with \tcode{...} for pack expansions.
 \begin{itemize}
@@ -336,7 +343,7 @@ auto find_convertible_in_pack;
 using T = Types...[find_convertible_in_pack<Foo, Types...>];
 \end{colorblock}
 
-In general, incorrect computations in an index can lead to a negative value that should make the program ill formed but would instead
+In general, incorrect computations in an index can lead to a negative value that should make the program ill-formed but would instead
 yield an incorrect type.
 
 Note, however, that Circle does support from-the-end indexing using a negative index, and Sean Baxter reports no surprises from using this feature.
@@ -372,26 +379,121 @@ void f(T...[0]);
 f(0);
 \end{colorblock}
 
-To start thinking about how deduction would work here or what that code would possibly mean doesn't make sense.
-We simply always consider pack indexing to be a non-deduced context.
+However, CWG in Varna realized a way where a pack indexing type specifier could be deduced, and is asking EWG to chime in
+as changing something to be deducible after the fact is always going to be a breaking change.
+
+Consider the following example, graciously provided by Jens Maurer:
+\begin{colorblock}
+template<class ...T>
+int f( T...[0], std::tuple<T...> );
+int x = f(-1, std::tuple(5u, 1));
+\end{colorblock}
+
+Here \tcode{T...} is deduced from \tcode{5u, 1} to be \tcode{unsigned, int},
+the first parameter of \tcode{f} is unsigned and \tcode{-1} is converted to unsigned.
+
+This is what we propose.
+
+But, we could imagine to instead, in that case, consider \tcode{T...}
+to be a sparse, infinitely-sized pack of a sort - as we don't know its \tcode{size},
+deduced \tcode{T...[0]} to be \tcode{int} (from \tcode{-1}),
+then deduce the remaining of the pack (here the 2nd element) from the
+remaining arguments, and then check we have deduced a type for each
+element of the pack.
+
+However, allowing parts of packs to be deduced only makes sense if the size of the pack is independently deduced.
+Consider:
+\begin{colorblock}
+template <typename... T>
+int f(T...[0], int) {
+    static_assert(sizeof...(T) == ???);
+}
+int a = f(0, 1);
+\end{colorblock}
+
+Is the intent that \tcode{T...} is \tcode{int} (size 1) or \tcode{int, int} (size 2)?
+Both seem reasonable options.
+We could add a rule that the size of a deduced pack is deduced to be the size of the smallest pack that can be deduced,
+but this would surely not make sense in all cases, and the implementation costs seem impossible to justify.
+
+So the only context in which a pack indexing specifier could be deduced seems to be when the entire pack is
+otherwise deduced, or when the size of a pack is deduced independently, which only ever happens for empty (non-indexable packs),
+which is awfully limited, and yet very complex.
+
+And this is before we consider whether this would impact partial ordering rules, which it certainly would, for example, what should this do?
+
+\begin{colorblock}
+template <typename... T>
+int f(T...[0], tuple<T...>);  // #1
+
+template <typename F, typename... T>
+int f(F, tuple<T...>);  // #2
+
+int a = f(0, tuple{1});   // #1 or #2
+\end{colorblock}
+
+
+We are sure there may be cases where this feature could be useful, yet we failed to come up
+with genuine motivation for it. The reason for this discussion is that it would be a breaking change to adopt something like that
+in a subsequent standard.
+
+Going back to the first example, if \tcode{T...[0]} is not a deduced context,
+it will correspond to unsigned, and if we allow it to be deduced it will be deduced to \tcode{int}
+in the first parameter and in the second, which would be ill-formed.
+
+In this proposal, we simply always consider pack indexing to be a non-deduced context.
+
+% https://godbolt.org/z/GqhPMMTT1
+
 
 \section{Indexing a pack of expressions}
 
 The intent is that a pack indexing expression behaves exactly as the underlying expression would.
 In particular, \tcode{decltype(id-dexpression) and \tcode{decltype(pack-index-expression)}} behave the same.
 
-\section{Future evolution}
+\section{Future evolutions}
 
 The syntax can be extended in subsequent proposals to support
 
 \begin{itemize}
-\item indexing packs introduced by structured bindings or other non-dependent packs
-\item indexing packs of template template parameters
-\item from-the-end-indexing
-\item pack slicing (returning a subset of a pack as an unexpanded pack)
+\item Indexing packs introduced by structured bindings or other non-dependent packs.
+      This should just work without further modification when both this paper and \paper{P1061R5} are both adopted.
+\item Indexing packs of template template parameters. To avoid confusing merge conflicts,
+      we aim to progress concept, variable template, and universal template parameters before proposing indexing
+      of template parameters packs. But our hope is to complete the feature for C++26 so that indexing works on all kinds of packs.
+      Packs of universal template parameters could and should be indexed in the same way.
 \end{itemize}
-Packs of universal template parameters could be indexed in the same way.
 
+Other features are more evolutionary but this paper left the design open to allow coherent design of:
+\begin{itemize}
+\item From-the-end-indexing
+\item Pack slicing (returning a subset of a pack as an unexpanded pack) as discussed in \paper{P1858R0} and \paper{P2632R0}.
+\item Indexing packs of arbitrary expressions, as described below.
+\end{itemize}
+
+
+\subsection{Extending pack indexing to arbitrary expressions}
+
+In this proposal, we limit pack-index expressions to index a pack of \grammarterm{id-expression}{s},
+which then denotes a function parameter pack, NTTP pack or, the pack introduced by a structured binding.
+
+The reasons for that is that it is more readable and easier on the compiler to first index a pack,
+and then construct an expression around that, rather than construct an arbitrarily complex pattern,
+expand it, and reject all but one of the expanded elements - especially as substitution failures could occur.
+
+Nevertheless, in the presence of multiple packs, being able to index arbitrary complex might improve code readability slightly,
+which would be the one motivation for this feature.
+
+\begin{colorblock}
+void g(auto&&);
+template <typename...T>
+void f(T&&... t) {
+    g(std::forward<T...[0]>(t...[0])); // current proposal
+    g(std::forward<T>(t)...[0]); // not proposed nor implemented
+}
+\end{colorblock}
+
+This is a possible evolution of this feature that can be explored but we should understand what would be the viable implementation strategies so that a compiler can avoid instantiating expressions that are not used.
 
 \section{Potential impact on existing code}
 
@@ -406,7 +508,7 @@ int main() {
 \end{colorblock}
 
 Neither MSVC nor GCC supports this syntax and this pattern does not appear outside of compiler test suites (from a search on \href{https://cs.github.com/}{Github}, \href{https://codesearch.isocpp.org/cgi-bin/cgi_ppsearch?q=...%5B&search=Search}{isocpp} and in VCPKG).
-The fact that 2 majors compilers did not implement this syntax in over a decade is indicative of its lack of usefulness.
+The fact that 2 major compilers did not implement this syntax in over a decade is indicative of its lack of usefulness.
 
 Should anyone be affected, a workaround is to name the variable:
 
@@ -436,25 +538,44 @@ Lookup of an \grammarterm{identifier}
 followed by a \tcode{::} scope resolution operator
 considers only
 namespaces, types, and templates whose specializations are types.
-If a name, \grammarterm{template-id}, \added{pack-index-specifier,} or \grammarterm{decltype-specifier}
+If a name, \grammarterm{template-id}, or \grammarterm{\changed{decltype-specifier}{complex-type-specifier}}
 is followed by a \tcode{::},
 it shall designate a namespace, class, enumeration, or dependent type,
 and the \tcode{::} is never interpreted as
 a complete \grammarterm{nested-name-specifier}.
 
+
 \rSec2[expr.prim.id]{Names}
+
+\rSec3[expr.prim.id.general]{General}
+
+\begin{bnf}
+	\nontermdef{id-expression}\br
+	unqualified-id\br
+	qualified-id\br
+\begin{addedblock}
+	pack-index-expression
+\end{addedblock}
+\end{bnf}
+
 \rSec3[expr.prim.id.unqual]{Unqualified names}
+
+
+% Modify id-expression to add another level for (un)qualified-id (id)
+% a pack-expression => restrict to identifier
+
+% check the order of pack specifier to appear last everywhere it is mentioned.
+
+% introduce complex type specifier
 
 \begin{bnf}
     \nontermdef{unqualified-id}\br
     identifier\br
-    \added{pack-index-expression}\br
     operator-function-id\br
     conversion-function-id\br
     literal-operator-id\br
     \terminal{\~} type-name\br
-    \terminal{\~} decltype-specifier\br
-    \added{\terminal{\~} pack-index-specifier}\br
+    \terminal{\~} \changed{decltype-specifier}{complex-type-specifier}\br
     template-id
 \end{bnf}
 
@@ -472,7 +593,7 @@ refers to the copy of the parameter \iref{dcl.fct.def.coroutine}.
     \grammarterm{conversion-function-id}{s}, see~\ref{class.conv.fct}; for
     \grammarterm{literal-operator-id}{s}, see~\ref{over.literal}; for
     \grammarterm{template-id}{s}, see~\ref{temp.names}.
-    A \grammarterm{type-name}\added{, \grammarterm{pack-index-specifier}, } or \grammarterm{decltype-specifier}
+    A \grammarterm{type-name} or \grammarterm{ \changed{decltype-specifier}{complex-type-specifier}}
     prefixed by \tcode{\~} denotes the destructor of the type so named;
     see~\ref{expr.prim.id.dtor}.
     Within the definition of a non-static member function, an
@@ -518,8 +639,7 @@ the component name of that construct that appears lexically last.
     \terminal{::}\br
     type-name \terminal{::}\br
     namespace-name \terminal{::}\br
-    decltype-specifier \terminal{::}\br
-    \added{pack-index-specifier \terminal{::}}\br
+    \changed{decltype-specifier}{complex-type-specifier} \terminal{::}\br
     nested-name-specifier identifier \terminal{::}\br
     nested-name-specifier \opt{\keyword{template}} simple-template-id \terminal{::}
 \end{bnf}
@@ -557,8 +677,8 @@ inhabit a scope that contains the entity being redeclared or specialized.
 \pnum
 The \grammarterm{nested-name-specifier} \tcode{::} nominates
 the global namespace.
-A \grammarterm{nested-name-specifier} with a \grammarterm{decltype-specifier}
-nominates the type denoted by the \grammarterm{decltype-specifier},
+A \grammarterm{nested-name-specifier} with a \grammarterm{\changed{decltype-specifier}{complex-type-specifier}}
+nominates the type denoted by the \grammarterm{\changed{decltype-specifier}{complex-type-specifier}},
 which shall be a class or enumeration type.
 If a \grammarterm{nested-name-specifier} $N$
 is declarative and
@@ -582,22 +702,16 @@ Any other \grammarterm{nested-name-specifier} nominates
 the entity denoted by its
 \grammarterm{type-name},
 \grammarterm{namespace-name},
-\grammarterm{identifier}, or
+\grammarterm{identifier}, \removed{or}
 \grammarterm{simple-template-id}.
 If the \grammarterm{nested-name-specifier} is not declarative,
 the entity shall not be a template.
 
 \pnum
-A \grammarterm{qualified-id} shall not be of the form\added{s}
+A \grammarterm{qualified-id} shall not be of the form
 \grammarterm{nested-name-specifier} \opt{\keyword{template}} \tcode{\~}
-\grammarterm{decltype-specifier}
-\changed{nor of the form}{, }
-\grammarterm{decltype-specifier} \tcode{::} \tcode{\~} \grammarterm{type-name}
-\added{,
-\grammarterm{nested-name-specifier} \opt{\keyword{template}} \tcode{\~}
-\grammarterm{pack-index-\linebreak[3]specifier}
-or \grammarterm{pack-index-specifier} \tcode{::} \tcode{\~} \grammarterm{type-name}
-}.
+\grammarterm{\changed{decltype-specifier}{complex-type-specifier}} nor of the form
+\grammarterm{\changed{decltype-specifier}{complex-type-specifier}} \tcode{::} \tcode{\~} \grammarterm{type-name}.
 
 \pnum
 The result of a \grammarterm{qualified-id} $Q$ is
@@ -626,21 +740,54 @@ and a prvalue otherwise.
 
 \begin{bnf}
     \nontermdef{pack-index-expression}\br
-    id-expression \terminal{...} \terminal{[} constant-expression \terminal{]}  \br
+    identifier \terminal{...} \terminal{[} constant-expression \terminal{]}  \br
 \end{bnf}
 
-The \grammarterm{id-expression} in a \grammarterm{pack-index-expression} shall denote a pack.
+The \grammarterm{identifier} in a \grammarterm{pack-index-expression} shall denote a pack.
 
-The \grammarterm{constant-expression} shall be an integral constant expression.
-The \grammarterm{constant-expression} shall evaluate to a value $V$ such that 0 <= $V$ < \tcode{sizeof...(id-expression)}.
+The \grammarterm{constant-expression} shall be a converted constant expression [expr.const] of type \tcode{std::size_t} whose value $V$ is such that $0 \le V < \tcode{sizeof...(identifier)}$.
 
-The index of a \grammarterm{pack-index-expression} is the value of its \grammarterm{constant-expression}.
+The index of the \grammarterm{pack-index-expression} is $V$.
 
 A \grammarterm{pack-index-expression} is a pack expansion ([temp.variadic]).
 
-\note{A \grammarterm{pack-index-expression} denotes the ${index}$\textsuperscript{th} expression in a pack ([temp.variadic]).}
+\note{A \grammarterm{pack-index-expression} denotes the $V$\textsuperscript{th} expression in the pack denoted by the  \grammarterm{identifier} ([temp.variadic]).}
 
 \end{addedblock}
+
+\rSec3[expr.unary.op]{Unary operators}
+
+\ednote{Modify [expr.unary.op]/p10}
+
+\pnum
+\indextext{operator!ones' complement}%
+The operand of the \tcode{\~{}} operator shall have integral or unscoped enumeration type.
+Integral promotions are performed.
+The type of the result is the type of the promoted operand.
+% FIXME: [basic.fundamental]/p5 uses $x_i$; [expr] uses $\tcode{x}_i$.
+Given the coefficients $\tcode{x}_i$
+of the base-2 representation\iref{basic.fundamental}
+of the promoted operand \tcode{x},
+the coefficient $\tcode{r}_i$
+of the base-2 representation of the result \tcode{r}
+is 1 if $\tcode{x}_i$ is 0, and 0 otherwise.
+\begin{note}
+	The result is the ones' complement of the operand
+	(where operand and result are considered as unsigned).
+\end{note}
+There is an ambiguity
+in the grammar when \tcode{\~{}} is followed by
+a \grammarterm{type-name} or \grammarterm{\changed{decltype-specifier}{complex-type-specifier}}.
+The ambiguity is resolved by treating \tcode{\~{}} as the
+operator rather than as the start of an \grammarterm{unqualified-id}
+naming a destructor.
+\begin{note}
+	Because the grammar does not permit an operator to follow the
+	\tcode{.}, \tcode{->}, or \tcode{::} tokens, a \tcode{\~{}} followed by
+	a \grammarterm{type-name} or \grammarterm{\changed{decltype-specifier}{complex-type-specifier}} in a
+	member access expression or \grammarterm{qualified-id} is
+	unambiguously parsed as a destructor name.
+\end{note}
 
 \rSec2[dcl.name]{Type names}
 
@@ -713,15 +860,24 @@ which is the object of \paper{CWG1488}}
 
 \pnum
 The simple type specifiers are
+
 \begin{bnf}
 \nontermdef{simple-type-specifier}\br
 \opt{nested-name-specifier} type-name\br
 nested-name-specifier \keyword{template} simple-template-id\br\textbf{}
-decltype-specifier\br
-\added{pack-index-specifier}\br
+\changed{decltype-specifier}{complex-type-specifier}\br
 placeholder-type-specifier\br
 \opt{nested-name-specifier} template-name\br
 \end{bnf}
+
+\begin{addedblock}
+\begin{bnf}
+\nontermdef{complex-type-specifier}\br
+decltype-specifier\br
+pack-index-specifier\br
+\end{bnf}
+\end{addedblock}
+
 \textcolor{noteclr}{[...]}
 
 \begin{simpletypetable}
@@ -732,8 +888,8 @@ placeholder-type-specifier\br
     \hdstyle{Specifier(s)}            &   \hdstyle{Type}                  \\ \capsep
     \grammarterm{type-name}           & the type named                    \\
     \grammarterm{simple-template-id}  & the type as defined in [temp.names]\\
-    \added{\grammarterm{pack-index-specifier}} & \added{the type as defined in [dcl.type.pack.indexing]} \\
     \grammarterm{decltype-specifier}  & the type as defined in [dcl.type.decltype]\\
+    \added{\grammarterm{pack-index-specifier}} & \added{the type as defined in [dcl.type.pack.indexing]} \\
     \grammarterm{placeholder-type-specifier}
     & the type as defined in [dcl.spec.auto]\\
     \grammarterm{template-name}       & the type as defined in [dcl.type.class.deduct]\\
@@ -770,13 +926,12 @@ freely intermixed with other \grammarterm{decl-specifier}{s} in any order.
 
 The \grammarterm{typedef-name} in a \grammarterm{pack-index-specifier} shall denote a pack.
 
-The \grammarterm{constant-expression} shall be an integral constant expression.
-The \grammarterm{constant-expression} shall evaluate to a value $V$ such that 0 <= $V$ < \tcode{sizeof...(typedef-name)}.
+The \grammarterm{constant-expression} shall be a converted constant expression [expr.const] of type \tcode{std::size_t} whose value $V$ is such that $0 \le V < \tcode{sizeof...(typedef-name)}$.
 
-The index of a \grammarterm{pack-index-specifier} is the value of its \grammarterm{constant-expression}.
+The index of a \grammarterm{pack-index-specifier} is $V$.
 A \grammarterm{pack-index-specifier} is a pack expansion ([temp.variadic]).
 
-\note{A \grammarterm{pack-index-specifier} denotes the type of the ${index}$\textsuperscript{th} \tcode{typedef-name} in a pack ([temp.variadic]).}
+\note{The \grammarterm{pack-index-specifier} denotes the type of the ${V}$\textsuperscript{th} \tcode{typedef-name} of the pack ([temp.variadic]).}
 
 \end{addedblock}
 
@@ -811,12 +966,6 @@ class
 member access \iref{expr.ref}, \tcode{decltype($E$)} is the
 type of the entity named by $E$.
 If there is no such entity, the program is ill-formed;
-
-\begin{addedblock}
-\begin{note}
-A \grammarterm{pack-index-expression} is an \grammarterm{id-expression}.
-\end{note}
-\end{addedblock}
 
 \item otherwise, if $E$ is
 an xvalue, \tcode{decltype($E$)} is \tcode{T\&\&}, where \tcode{T} is the type
@@ -863,7 +1012,7 @@ operand \iref{term.unevaluated.operand}.
 In an explicit destructor call, the destructor is specified by a
 \tcode{\~{}}
 followed by a
-\grammarterm{type-name}\added{, \grammarterm{pack-index-specifier},} or \grammarterm{decltype-specifier}
+\grammarterm{type-name} or \grammarterm{decltype-specifier}
 that denotes the destructor's class type.
 The invocation of a destructor is subject to the usual rules for member
 functions \iref{class.mfct};
@@ -902,17 +1051,16 @@ the notation:
 
 \begin{bnf}
     \nontermdef{base-specifier}\br
-    \opt{attribute-specifier-seq} class-or-decltype\br
-    \opt{attribute-specifier-seq} \keyword{virtual} \opt{access-specifier} class-or-decltype\br
-    \opt{attribute-specifier-seq} access-specifier \opt{\keyword{virtual}} class-or-decltype
+    \opt{attribute-specifier-seq} class-or-\changed{decltype}{complex-type-specifier}\br
+    \opt{attribute-specifier-seq} \keyword{virtual} \opt{access-specifier} class-or-\changed{decltype}{complex}\br
+    \opt{attribute-specifier-seq} access-specifier \opt{\keyword{virtual}} class-or-\changed{decltype}{complex-type-specifier}
 \end{bnf}
 
 \begin{bnf}
-    \nontermdef{class-or-decltype}\br
+    \nontermdef{class-or-\changed{decltype}{complex-type-specifier}}\br
     \opt{nested-name-specifier} type-name\br
     nested-name-specifier \keyword{template} simple-template-id\br
-    decltype-specifier\br
-    \added{pack-index-specifier}
+    \changed{decltype-specifier}{complex-type-specifier}
 \end{bnf}
 
 \indextext{specifier access|see{access specifier}}%
@@ -939,10 +1087,12 @@ equivalent \iref{temp.over.link}.
 \end{note}
 
 \begin{addedblock}
-For a template argument \tcode{T}, if the \grammarterm{constant-expression} of a \grammarterm{pack-index-specifier} is type-dependent,
-\tcode{T...[\grammarterm{constant-expression}]} denotes a unique dependent type.
-Two such \grammarterm{pack-index-specifier}{s} refer to the same type only if their \grammarterm{constant-expression}{s} are
-equivalent \iref{temp.over.link} and their type are the same. %lah: what does the "their" refer to? The pack-index-specifiers or the constant-expressions? Also, we would need to alter this to "their types are the same" or "their type is the same".
+For a template parameter pack \tcode{T}, \tcode{T...[\grammarterm{constant-expression}{}]} denotes a unique dependent type.
+
+If the \grammarterm{constant-expression} of a \grammarterm{pack-index-specifier} is value-dependent, two such \grammarterm{pack-index-specifier}{s} refer to the same type only if their \grammarterm{constant-expression}{s} are equivalent \iref{temp.over.link}.
+
+Otherwise, two such \grammarterm{pack-index-specifier}{s} refer to the same type only if their \grammarterm{constant-expression}{s} have the same value.
+
 \end{addedblock}
 
 \rSec2[temp.variadic]{Variadic templates}
@@ -1004,9 +1154,9 @@ expansions can occur in the following contexts:
 
     \begin{addedblock}
     \item In a \grammarterm{pack-index-expression}; the pattern is an
-    \grammarterm{id-expression}.
-    \item In a \grammarterm{pack-index-specifier}; the pattern is an
     \grammarterm{identifier}.
+    \item In a \grammarterm{pack-index-specifier}; the pattern is a
+    \grammarterm{typedef-name}.
     \end{addedblock}
 
     \item In a \grammarterm{fold-expression} \iref{expr.prim.fold};
@@ -1129,6 +1279,9 @@ The instantiation of $P$ is the \grammarterm{typedef-name} \tcode{$\mathtt{E}_K$
 
 \rSec3[temp.deduct.type]{Deducing template arguments from a type}
 
+% An id-expression is type-dependent if it is a template-id that is not a concept-id and is dependent; OR it it a pack expression whose constant expression is a constant expression OR or if its terminal name is
+
+% modify class.base.init.
 
 \pnum
 The non-deduced contexts are:
@@ -1141,7 +1294,7 @@ The non-deduced contexts are:
     of a type that was specified using a
     \grammarterm{qualified-id}.
     \begin{addedblock}
-    \item A \grammarterm{pack-index-specifier.}
+    \item A \grammarterm{pack-index-specifier} or a \grammarterm{pack-index-expression}.
     \end{addedblock}
     \item
     The \grammarterm{expression} of a \grammarterm{decltype-specifier}.
@@ -1186,13 +1339,12 @@ The non-deduced contexts are:
 
 \rSec3[decl.array]
 \change
-Previously, \tcode{T...[$n$]} would declare a pack of function parameters of type "array of \tcode{T} of size \tcode{$n$}".
+Previously, \tcode{T...[$n$]} would declare a pack of function parameters.
 \tcode{T...[$n$]} is now a \grammarterm{pack-index-specifier}.
 \rationale
 Improve the handling of packs.
 \effect
-Valid C++23 code that declares a
-pack of arrays parameter without specifying a \tcode{declarator-id} may become ill-formed.
+Valid C++23 code that declares a pack of parameter without specifying a \tcode{declarator-id} becomes ill-formed.
 
 \begin{codeblock}
 template <typename... T>
@@ -1219,11 +1371,9 @@ int main() {
 
 \section{Acknowledgments}
 
-We would like to thank Bloomberg for sponsoring this work.\\
+We extend our appreciation to Sean Baxter for his work on Circle and to Barry Revzin for his work on \paper{P1858R2}, both works being the foundation of the design presented here.
 
-We extend our appreciate to Sean Baxter for his work on Circle and to Barry Revzin  for his work on \paper{P1858R2}, both works being the foundation of the design presented here.
-
-Thanks also to Lewis Baker for his valuable feedback on this paper, and Lori Hughes for editing it.
+Thanks also to Lewis Baker for his valuable feedback on this paper, Nina Dinka Ranns for her help with wording, and Lori Hughes for editing this paper.
 
 \section{References} % lah: Correct your citation style. Books, proceedings, conference names, and Standards use italics. Articles, presentations, and talks use quotes. Harvard style is the general UK convention. https://intranet.birmingham.ac.uk/as/libraryservices/library/referencing/icite/harvard/referencelist.aspx
 

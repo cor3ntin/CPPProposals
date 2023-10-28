@@ -1,0 +1,727 @@
+% !TeX document-id = {9322a846-f757-4574-9231-a2e85c743b21}
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\RequirePackage{luatex85}%
+\documentclass{wg21}
+
+
+\RequirePackageWithOptions{fontspec}
+\usepackage{newunicodechar}
+
+\setmainfont{Noto Sans}
+
+\title{Unevaluated strings}
+\docnumber{P2361R6}
+\audience{CWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Aaron Ballman}{aaron.ballman@gmail.com}
+
+\usepackage{tikz}
+
+\begin{document}
+
+\maketitle
+
+\section{Abstract}
+
+\grammarterm{string-literal}{s} can appear in a context where they are not used to
+initialize a character array, but are used at compile time for diagnostic messages,
+preprocessing, and other implementation-defined behaviors.
+This paper clarifies how compilers should handle these strings.
+
+
+\section{Motivation}
+
+A \grammarterm{string-literal} can appear in \tcode{_Pragma}, \tcode{asm}, \tcode{extern},
+\tcode{static_assert}, \tcode{[[deprecated]]} and \tcode{[[nodiscard]]} attributes...
+
+In all of these cases, the strings are exclusively used at compile time by the compiler, and are as such not evaluated in phase 6.
+This means they should not be converted to the narrow encoding or any literal encoding specified by an encoding prefix (L, u, U, u8).
+
+Their encoding should therefore not be constrained or otherwise specified,
+except that these strings can contain any Unicode characters.
+
+This proposal aims to identify contexts in which strings are not evaluated so that they can be handled consistently by compilers.
+
+\section{Revisions}
+
+\subsection{R6}
+Apply core feedback:
+\begin{itemize}
+\item Reword [over.literal]
+\item Revert the changes to [cpp]
+\item Rebase the wording in [dcl.pre]
+\end{itemize}
+
+\subsection{R5}
+\begin{itemize}
+\item Re-specify \tcode{asm} declarations to accept any \grammarterm{balanced-token-seq} rather than trying to put constraints on the
+\grammarterm{string-literal} they are currently specified to accept. This simplifies the specification and more closely matches existing practices.
+\textbf{Following EWG review, additional wording has been added to make it clear that an implementation does not have to support \tcode{asm} statements or any grammar therein}.
+The intent of the proposal is to allow implementer to either allow any kind of grammar they want in \tcode{asm} statements, or allow no grammar whatsoever; No implementation would have to
+change its handling of \tcode{asm} statements with this proposal.
+Further work to remove [decl.asm] entierly wile leaving the \tcode{asm} keyword reserved for vendor extensions could be the object of a separate paper.
+
+\item Fix a number of typos.
+\end{itemize}
+
+\subsection{R4}
+\begin{itemize}
+    \item Rebase the wording and wording tweaks.
+\end{itemize}
+
+\subsection{R3}
+\begin{itemize}
+    \item Improve wording by not making \grammarterm{unevaluated-string} preprocessing token as preprocessing tokens should not be context dependent. Fix the wording of \tcode{\#line} and \tcode{\_Pragma} accordingly.
+    \item Append null-terminator during evaluation of string-literals to make it clear that \grammarterm{unevaluated-string} are not null-terminated.
+    \item Adapt the grammar of \grammarterm{literal-operator-id}
+    \item Adapt the wording of \tcode{extern} to clarify that the likage specification denotes unicode characters.
+    \item Allow numeric escape sequences in asm statements.
+\end{itemize}
+\subsection{R2}
+\begin{itemize}
+    \item \grammarterm{unevaluated-string-literal} to \grammarterm{unevaluated-string}.
+    \item Add a note about not disallowing non-printable characters
+    \item Add a note about \grammarterm{unevaluated-string} not being expressions.
+    \item Fix typos.
+    \item Improve wording.
+\end{itemize}
+
+\section{Proposal}
+
+Unevaluated string literals can appear in
+
+\begin{itemize}
+\item \tcode{_Pragma}
+\item \tcode{\#line} directives
+%\item \tcode{header-name}
+\item \tcode{[[nodiscard]]} and \tcode{[[deprecated]]} attributes
+\item \tcode{extern} linkage specifications
+\item \tcode{asm} statements
+\item \tcode{static_assert}
+\item literal operator
+\end{itemize}
+
+We propose that in all of these cases:
+\begin{itemize}
+\item No prefix is allowed
+\item The string is not converted to the execution encoding.
+\item \tcode{universal-character-name} and \tcode{simple-escape-sequence} (except \tcode{\textbackslash 0} ) are replaced by
+the corresponding Unicode codepoints, and other escape sequences are ill-formed.
+\end{itemize}
+
+This last point is important. Because the encoding the compiler will convert these strings to is not known, and because UCNs can represent any Unicode characters,
+numeric-escape-sequences have no use beyond forcing the compiler to contend with invalid
+code units in diagnostic messages.
+
+All of these changes are breaking changes.
+However, a survey of open source projects tends to show that none of the restrictions added
+impact existing code.
+
+\textbf{This proposal does not specify how unevaluated strings are presented in diagnostic messages}.
+
+\subsection{Non-printable characters and escape sequences}
+
+This proposal does not attempt to restrict further the characters allowed in unevaluated strings.
+In particular, they may contain all matter of space, control characters, invisible characters, and alert.
+The handling of these characters in diagnostic messages is left as quality of implementation, mostly
+for simplicity. The alternative would be to only allow graphic characters (General_Category L, M, N, P, S + spaces).
+
+\section{Alternative considered}
+
+\subsection{Allowing and ignoring any prefix}
+
+This is arguably the status quo.
+The issue is that it is hard to teach. Users should be able to expect for example that L"X"
+is always in the wide execution encoding.
+It could be argued that \tcode{"foo"} not being in the narrow-encoding is also confusing, however, there is precedence for that in headers names (which are already not \grammarterm{string-literals}{s}).
+
+\subsection{Allowing prefixes and encode all strings using that prefix}
+
+This is both implementer- and user-hostile. It would force users to use any of u, u8, U
+on all of their \tcode{static_assert} which contain non-ASCII characters as it is the only way to obtain a portable encoding.
+It has the advantage of being mostly consistent (all strings except those in headers names would be encoded using the encoding associated with their prefix) but would break
+existing code using non-ASCII characters in \tcode{static_assert} and attributes and
+litter C++ code with these prefixes, which seems to be a net negative.
+
+\section{\tcode{asm} declarations}
+
+Several people in SG22, as well as an implementer, raised concerns about banning numeric escape sequences
+in asm statement as supposedly an implementation could do "something" here.
+Given the implementation-defined, conditionally supported nature of \tcode{asm} declarations, and existing practice, we decided to modify the grammar to accept any balanced token sequence (which includes string literals).
+This is consistent with GCC's "extended asm" syntax, notably.
+Implementations that support a single string literal in \tcode{asm} declarations can, of course, continue to do so with no change required to their
+implementation and are free to put whichever requirements they need on them.
+This does not requires an implementation to be able to parse arbitrary \grammarterm{balanced-token-seq} either.
+The intent is that any \grammarterm{balanced-token-seq} not recognized by an implementation that would otherwise support \tcode{asm} statements
+can be ill-formed.
+
+\section{Compilers survey}
+
+\subsection{_Pragma}
+
+In \tcode{_Pragma} directives, the standard specifies that the \tcode{L} prefix is ignored.
+In C, all encoding prefixes are ignored. This divergence is highlighted in \paper{CWG897}.
+MSVC does not support \tcode{_Pragma(L"")}.  Only Clang supports other prefixes in \tcode{_Pragma}.
+
+Out of the 90 million lines of code of the 1300+ open source projects available on vcpkg, a
+single use of that feature was found within clang’s lexer test suite, for a total of 2000 uses
+of \tcode{_Pragma}. Similarly, the only uses of \tcode{_Pragma (u8"")}, \tcode{_Pragma (u"")}, \tcode{_Pragma (U"")}, etc were
+found in Clang’s test suite (both because these are valid C and because neither GCC nor Clang
+are conforming, only \tcode{L""} is described as valid by the C++ standard).
+
+\subsection{Attributes}
+
+Clang does not support strings with an encoding prefix in attributes, other compilers accept them.
+
+
+\subsection{\tcode{static_assert}}
+
+All compilers support strings with an encoding prefix in static assert.
+MSVC appears to convert the string to the encoding associated with that prefix before displaying it, producing mojibake if a string
+cannot be represented in the literal encoding.
+The following diagnostics are emmited by MSVC with \tcode{/execution-charset:ascii}:
+\begin{quoteblock}
+\begin{codeblock}
+static_assert(false, "Your code is on @\emoji{🔥}@");
+
+<source>(1): warning C4566: character represented by universal-character-name
+'\u00F0'  cannot be represented in the current code page (20127)
+<source>(1): warning C4566: character represented by universal-character-name
+'\u0178'  cannot be represented in the current code page (20127)
+<source>(1): warning C4566: character represented by universal-character-name
+'\u201D' cannot be represented in the current code page (20127)
+<source>(1): warning C4566: character represented by universal-character-name
+'\u00A5' cannot be represented in the current code page (20127)
+<source>(1): error C2338: ????
+
+static_assert(false, u8"Your code is on @\emoji{🔥}@");
+<source>(1): error C2002: invalid wide-character constant
+\end{codeblock}
+\end{quoteblock}
+\subsection{\tcode{extern} \& \tcode{asm}}
+
+No compiler support strings with an encoding prefix in extern and asm statements.
+
+\subsection{\tcode{\#line}}
+
+GCC and  Clang do not support encoding prefix in \tcode{\#line} directives.
+
+\section{Future direction}
+
+This proposal does not prevent supporting constant expression in \tcode{static_assert} or attributes in
+the future; we can imagine the following grammar:
+
+\begin{bnf}
+    \nontermdef{static_assert-declaration}\br
+    \keyword{static_assert} \terminal{(} constant-expression \terminal{)} \terminal{;}\br
+    \keyword{static_assert} \terminal{(} constant-expression \terminal{,} unevaluated-string \terminal{)} \terminal{;}\br
+    \keyword{static_assert} \terminal{(} constant-expression \terminal{,} constant-expression \terminal{)} \terminal{;}
+\end{bnf}
+
+Those may make \tcode{static_assert(true, u8"foo");} valid again as \tcode{u8"foo"} would be a valid constant expression.
+
+
+\section{Implementability}
+
+This proposal requires implementations to keep around a non-encoded string for diagnostic purposes.
+This has recently come up in a clang patch to support EBCDIC as the literal encoding.
+To support diagnostics in this context, especially on a non-EBCDIC platform the original sequence of characters must be retained.
+This proposal offers a well-specified, portable mechanism to solve this problem.
+
+\section{Wording Challenges}
+
+Strings are handled in phases 5 and 6 before the program is parsed,
+which might force us to have a "reversal" of these phases.
+\grammarterm{string-literal} and \grammarterm{unevaluated-string-literal} only differ by the context in which they may appear.
+
+It is important to note that \grammarterm{unevaluated-string}, by virtue of not being evaluated, are not C++ expressions.
+They are purposefully left out of the \grammarterm{literal} grammar.
+Not being literal, and not being expressions, \grammarterm{unevaluated-string} do not have a value category.
+
+\section{Previous works}
+
+\paper{P2246R1} removes wording specific to attributes mandating that diagnostic with characters
+from the basic characters are displayed in diagnostic messages, which was not implementable.
+
+\section{Wording}
+
+%\rSec1[lex.charset]{Character sets}
+
+%\ednote{Modify "5.3.2" as follow}
+%
+%A \grammarterm{universal-character-name}
+%designates the character in ISO/IEC 10646 (if any)
+%whose code point is the hexadecimal number represented by
+%the sequence of \grammarterm{hexadecimal-digit}s
+%in the \grammarterm{universal-character-name}.
+%The program is ill-formed if that number is not a code point
+%or if it is a surrogate code point.
+%Noncharacter code points and reserved code points
+%are considered to designate separate characters distinct from
+%any ISO/IEC 10646 character.
+%If a \grammarterm{universal-character-name} outside
+%the \grammarterm{c-char-sequence}, \grammarterm{s-char-sequence}, or
+%\grammarterm{r-char-sequence} of
+%a \grammarterm{character-literal}\changed{ or}{,} \grammarterm{string-literal}\added{,\grammarterm{unevaluated-string}}
+%(in either case, including within a \grammarterm{user-defined-literal})
+%corresponds to a control character or
+%to a character in the basic
+%source character set, the program is ill-formed.
+
+
+%\rSec1[lex.pptoken]{Preprocessing tokens}
+%
+%\ednote{Modify "5.4 Preprocessing tokens" as follow}
+%
+%\indextext{token!preprocessing|(}%
+%\begin{bnf}
+%    \nontermdef{preprocessing-token}\br
+%    header-name\br
+%    import-keyword\br
+%    module-keyword\br
+%    export-keyword\br
+%    identifier\br
+%    pp-number\br
+%    character-literal\br
+%    user-defined-character-literal\br
+%    string-literal\br
+%    \added{unevaluated-string}\br
+%    user-defined-string-literal\br
+%    preprocessing-op-or-punc\br
+%    \textnormal{each non-whitespace character that cannot be one of the above}
+%\end{bnf}
+%
+%\pnum
+%Each preprocessing token that is converted to a token\iref{lex.token}
+%shall have the lexical form of a keyword, an identifier, a literal,
+%or an operator or punctuator.
+%
+%\pnum
+%A preprocessing token is the minimal lexical element of the language in translation
+%phases 3 through 6. The categories of preprocessing token are: header names,
+%placeholder tokens produced by preprocessing \tcode{import} and \tcode{module} directives
+%(\grammarterm{import-keyword}, \grammarterm{module-keyword}, and \grammarterm{export-keyword}),
+%identifiers, preprocessing numbers, character literals (including user-defined character
+%literals), string literals (including user-defined string literals \added{and unevaluated string}), preprocessing
+%operators and punctuators, and single non-whitespace characters that do not lexically
+%match the other preprocessing token categories. If a \tcode{'} or a \tcode{"} character
+%matches the last category, the behavior is undefined. Preprocessing tokens can be
+%separated by
+%\indextext{whitespace}%
+%whitespace;
+%\indextext{comment}%
+%this consists of comments\iref{lex.comment}, or whitespace
+%characters (space, horizontal tab, new-line, vertical tab, and
+%form-feed), or both. As described in \ref{cpp}, in certain
+%circumstances during translation phase 4, whitespace (or the absence
+%thereof) serves as more than preprocessing token separation. Whitespace
+%can appear within a preprocessing token only as part of a header name or
+%between the quotation characters in a character literal or
+%string literal..
+
+\ednote{Add after "[lex.string]/p10"}
+
+\begin{addedblock}
+
+\rSec3[lex.string.unevaluated]{Unevaluated strings}
+
+\begin{bnf}
+    \nontermdef{unevaluated-string}\br
+    string-literal
+\end{bnf}
+
+An \grammarterm{unevaluated-string} shall have no  \grammarterm{encoding-prefix}.
+
+Each \grammarterm{universal-character-name} and each \grammarterm{simple-escape-sequence} in an \grammarterm{unevaluated-string} is replaced by the member of the translation character set it denotes.
+An \grammarterm{unevaluated-string} that contains a \grammarterm{numeric-escape-sequence}
+or a \grammarterm{conditional-escape-sequence} is ill-formed.
+
+An \grammarterm{unevaluated-string} is never evaluated and its interpretation depends on the context in which it appears.
+\end{addedblock}
+
+\ednote{"translation set" is defined in \paper{P2314R2} in [lex.phases]}
+
+
+\rSec1[dcl.dcl]{Declarations}%
+
+\rSec1[dcl.pre]{Preamble}
+
+\begin{bnf}
+    \nontermdef{simple-declaration}\br
+    decl-specifier-seq \opt{init-declarator-list} \terminal{;}\br
+    attribute-specifier-seq decl-specifier-seq init-declarator-list \terminal{;}\br
+    \opt{attribute-specifier-seq} decl-specifier-seq \opt{ref-qualifier} \terminal{[} identifier-list \terminal{]} initializer \terminal{;}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{static_assert-declaration}\br
+    \keyword{static_assert} \terminal{(} constant-expression \terminal{)} \terminal{;}\br
+    \keyword{static_assert} \terminal{(} constant-expression \terminal{,} \added{unevaluated-}string\removed{-literal} \terminal{)} \terminal{;}
+\end{bnf}
+
+[...]
+
+\pnum
+\indextext{\idxgram{static_assert}}%
+In a \grammarterm{static_assert-declaration}, the
+is contextually converted to \tcode{bool} and the converted expression shall be a constant expression ([expr.const]).
+If the value of the expression when
+so converted is \tcode{true}, the declaration has no
+effect. Otherwise, the program is ill-formed, and the resulting
+diagnostic message\iref{intro.compliance} should include the text of
+the \grammarterm{\added{unevaluated-}string\removed{-literal}}, if one is supplied.
+
+\begin{example}
+\begin{codeblock}
+    static_assert(sizeof(int) == sizeof(void*), "wrong pointer size");
+\end{codeblock}\end{example}
+
+\rSec1[dcl.asm]{The \tcode{asm} declaration}%
+\indextext{declaration!\idxcode{asm}}%
+\indextext{assembler}%
+\indextext{\idxcode{asm}!implementation-defined}
+
+\pnum
+An \tcode{asm} declaration has the form
+
+\begin{bnf}
+    \nontermdef{asm-declaration}\br
+    \opt{attribute-specifier-seq} \keyword{asm} \terminal{(} \changed{string-literal}{balanced-token-seq} \terminal{)} \terminal{;}
+\end{bnf}
+
+The \tcode{asm} declaration is conditionally-supported; \added{any restrictions on the \grammarterm{balanced-token-seq} and} its meaning \changed{is}{are}
+\impldef{meaning of \tcode{asm} declaration}.
+%\begin{addedblock}
+%The \grammarterm{encoding-prefix} of the \grammarterm{string-literal} shall be absent.
+%\end{addedblock}
+The optional \grammarterm{attribute-specifier-seq} in
+an \grammarterm{asm-declaration} appertains to the \tcode{asm} declaration.
+\begin{note}
+    Typically it is used to pass information through the implementation to
+    an assembler.
+\end{note}
+
+\rSec1[dcl.link]{Linkage specifications}%
+\indextext{specification!linkage|(}
+
+\pnum
+All functions and variables whose names have external linkage
+and all function types
+have a \defn{language linkage}.
+\begin{note}
+    Some of the properties associated with an entity with language linkage
+    are specific to each implementation and are not described here. For
+    example, a particular language linkage might be associated with a
+    particular form of representing names of objects and functions with
+    external linkage, or with a particular calling convention, etc.
+\end{note}
+The default language linkage of all function types, functions, and
+variables is \Cpp{} language linkage. Two function types with
+different language linkages are distinct types even if they are
+otherwise identical.
+
+\pnum
+Linkage\iref{basic.link} between \Cpp{} and  non-\Cpp{} code fragments can
+be achieved using a \grammarterm{linkage-specification}:
+
+\indextext{\idxgram{linkage-specification}}%
+\indextext{specification!linkage!\idxcode{extern}}%
+%
+\begin{bnf}
+    \nontermdef{linkage-specification}\br
+    \keyword{extern} \added{unevaluated-}string\removed{-literal} \terminal{\{} \opt{declaration-seq} \terminal{\}}\br
+    \keyword{extern} \added{unevaluated-}string\removed{-literal} declaration
+\end{bnf}
+
+The \grammarterm{\added{unevaluated-}string\removed{-literal}} indicates the required language linkage
+\begin{addedblock}
+\begin{note}
+Escape sequences and \grammarterm{universal-character-name}{s} have been replaced in [lex.string.unevaluated]
+\end{note}
+\end{addedblock}
+.
+%\added{as a sequence of translation set characters}.
+
+This document specifies the semantics for the
+\added{unevaluated-}string\removed{-literal} \tcode{"C"} and \tcode{"C++"}. Use of a
+\added{unevaluated-}string\removed{-literal} other than \tcode{"C"} or \tcode{"C++"} is
+conditionally-supported, with \impldef{semantics of linkage specifiers} semantics.
+\begin{note}
+    Therefore, a linkage-specification with a \changed{\grammarterm{string-literal}}{language linkage} that
+    is unknown to the implementation requires a diagnostic.
+\end{note}
+\begin{note}
+    It is recommended that the spelling of the \changed{\grammarterm{string-literal}}{language linkage} be
+    taken from the document defining that language. For example, \tcode{Ada}
+    (not \tcode{ADA}) and \tcode{Fortran} or \tcode{FORTRAN}, depending on
+    the vintage.
+\end{note}
+
+
+\pnum
+\indextext{specification!linkage!implementation-defined}%
+Every implementation shall provide for linkage to the C programming language,
+\indextext{C!linkage to}%
+\tcode{"C"}, and \Cpp{}, \tcode{"C++"}.
+\begin{example}
+    \begin{codeblock}
+        complex sqrt(complex);          // \Cpp{} language linkage by default
+        extern "C" {
+            double sqrt(double);          // C language linkage
+        }
+    \end{codeblock}
+\end{example}
+
+// [...]
+
+\rSec1[dcl.attr]{Attributes}%
+\rSec2[dcl.attr.deprecated]{Deprecated attribute}%
+
+\pnum
+The \grammarterm{attribute-token} \tcode{deprecated} can be used to mark names and entities
+whose use is still allowed, but is discouraged for some reason.
+\begin{note}
+    In particular,
+    \tcode{deprecated} is appropriate for names and entities that are deemed obsolescent or
+    unsafe.
+\end{note}
+It shall appear at most once in each \grammarterm{attribute-list}. An
+\grammarterm{attribute-argument-clause} may be present and, if present, it shall have the form:
+
+\begin{ncbnf}
+    \terminal{(} \added{unevaluated-}string\removed{-literal} \terminal{)}
+\end{ncbnf}
+
+\begin{note}
+    The \grammarterm{\added{unevaluated-}string\removed{-literal}} in the \grammarterm{attribute-argument-clause}
+    can be used to explain the rationale for deprecation and/or to suggest a replacing entity.
+\end{note}
+
+\rSec2[dcl.attr.nodiscard]{Nodiscard attribute}%
+\indextext{attribute!nodiscard}
+
+\pnum
+The \grammarterm{attribute-token} \tcode{nodiscard}
+may be applied to the \grammarterm{declarator-id}
+in a function declaration or to the declaration of a class or enumeration.
+It shall appear at most once in each \grammarterm{attribute-list}.
+An \grammarterm{attribute-argument-clause} may be present
+and, if present, shall have the form:
+
+\begin{ncbnf}
+    \terminal{(} \added{unevaluated-}string\removed{-literal} \terminal{)}
+\end{ncbnf}
+
+\pnum
+A name or entity declared without the \tcode{nodiscard} attribute
+can later be redeclared with the attribute and vice-versa.
+\begin{note}
+    Thus, an entity initially declared without the attribute
+    can be marked as \tcode{nodiscard}
+    by a subsequent redeclaration.
+    However, after an entity is marked as \tcode{nodiscard},
+    later redeclarations do not remove the \tcode{nodiscard}
+    from the entity.
+\end{note}
+Redeclarations using different forms of the attribute
+(with or without the \grammarterm{attribute-argument-clause}
+or with different \grammarterm{attribute-argument-clause}s)
+are allowed.
+
+\pnum
+A \defnadj{nodiscard}{type} is
+a (possibly cv-qualified) class or enumeration type
+marked \tcode{nodiscard} in a reachable declaration.
+A \defnadj{nodiscard}{call} is either
+\begin{itemize}
+    \item
+    a function call expression\iref{expr.call}
+    that calls a function declared \tcode{nodiscard} in a reachable declaration or
+    whose return type is a nodiscard type, or
+    \item
+    an explicit type
+    conversion~(\ref{expr.type.conv}, \ref{expr.static.cast}, \ref{expr.cast})
+    that constructs an object through
+    a constructor declared \tcode{nodiscard} in a reachable declaration, or
+    that initializes an object of a nodiscard type.
+\end{itemize}
+
+Recommended Practice:
+Appearance of a nodiscard call as
+a potentially-evaluated discarded-value expression\iref{expr.prop}
+is discouraged unless explicitly cast to \tcode{void}.
+Implementations should issue a warning in such cases.
+\begin{note}
+    This is typically because discarding the return value
+    of a nodiscard call has surprising consequences.
+\end{note}
+The \grammarterm{\added{unevaluated-}string\removed{-literal}}
+in a \tcode{nodiscard} \grammarterm{attribute-argument-clause}
+should be used in the message of the warning
+as the rationale for why the result should not be discarded.
+
+
+
+\rSec1[over.literal]{User-defined literals}%
+\indextext{user-defined literal!overloaded}%
+\indextext{overloading!user-defined literal}
+
+\begin{bnf}
+    \nontermdef{literal-operator-id}\br
+    \keyword{operator} \changed{string-literal}{unevaluated-string} identifier\br
+    \keyword{operator} user-defined-string-literal
+\end{bnf}
+
+\pnum
+The \removed{\grammarterm{string-literal} or} \grammarterm{user-defined-string-literal}
+in a \grammarterm{literal-operator-id} shall have no
+\grammarterm{encoding-prefix}\changed{and}{. The \grammarterm{unevaluated-string} or \grammarterm{user-defined-string-literal}} shall \changed{contain no characters other than the
+implicit terminating \tcode{'\textbackslash 0'}}{be empty}.
+The \grammarterm{ud-suffix} of the \grammarterm{user-defined-string-literal} or
+the \grammarterm{identifier} in a \grammarterm{literal-operator-id} is called a
+\defnx{literal suffix identifier}{literal!suffix identifier}.
+Some literal suffix identifiers are reserved for future standardization;
+see~\ref{usrlit.suffix}.  A declaration whose \grammarterm{literal-operator-id} uses
+such a literal suffix identifier is ill-formed, no diagnostic required.
+
+
+
+
+%%\rSec1[cpp]{Preprocessing directives}%
+
+[...]
+
+
+%\rSec1[cpp.line]{Line control}%
+%\indextext{preprocessing directive!line control}%
+%\indextext{\idxcode{\#line}|see{preprocessing directive, line control}}
+%
+%\pnum
+%The \grammarterm{string-literal} of a
+%\tcode{\#line}
+%directive, if present,
+%shall \changed{be a character string literal}{satisfy the semantic constraints of an \grammarterm{unevaluated-string} [lex.string.unevaluated]}.
+%
+%\ednote {
+%\grammarterm{string-literal} is prexisting wording, but the grammar refers to a quoted sequence of s-char. This is arguably a bug that CWG may want to address
+%as a drive-by when processing this paper.
+%}
+%
+%\pnum
+%The
+%\defn{line number}
+%of the current source line is one greater than
+%the number of new-line characters read or introduced
+%in translation phase 1\iref{lex.phases}
+%while processing the source file to the current token.
+%
+%\pnum
+%A preprocessing directive of the form
+%\begin{ncsimplebnf}
+%    \terminal{\# line} digit-sequence new-line
+%\end{ncsimplebnf}
+%causes the implementation to behave as if
+%the following sequence of source lines begins with a
+%source line that has a line number as specified
+%by the digit sequence (interpreted as a decimal integer).
+%If the digit sequence specifies zero
+%or a number greater than 2147483647,
+%the behavior is undefined.
+%
+%\pnum
+%A preprocessing directive of the form
+%
+%\begin{ncsimplebnf}
+%    \terminal{\# line} digit-sequence \terminal{"} \opt{s-char-sequence} \terminal{"} new-line
+%\end{ncsimplebnf}
+%
+%sets the presumed line number similarly and changes the
+%presumed name of the source file to be the contents
+%of the \removed{character} string literal.
+%
+%\pnum
+%A preprocessing directive of the form
+%
+%\begin{ncsimplebnf}
+%    \terminal{\# line} pp-tokens new-line
+%\end{ncsimplebnf}
+%
+%(that does not match one of the two previous forms)
+%is permitted.
+%The preprocessing tokens after
+%\tcode{line}
+%on the directive are processed just as in normal text
+%(each identifier currently defined as a macro name is replaced by its
+%replacement list of preprocessing tokens).
+%If the directive resulting after all replacements does not match
+%one of the two previous forms, the behavior is undefined;
+%otherwise, the result is processed as appropriate.
+
+%\rSec1[cpp.pragma.op]{Pragma operator}%
+%\indextext{macro!pragma operator}%
+%\indextext{operator!pragma|see{macro, pragma operator}}
+%
+%\begin{addedblock}
+%The \grammarterm{string-literal} of a Pragma operator shall satisfy the semantic constraints of an \grammarterm{unevaluated-string} [lex.string.unevaluated].
+%\end{addedblock}
+%
+%\pnum
+%A unary operator expression of the form:
+%
+%\begin{ncbnf}
+%    \terminal{_Pragma} \terminal{(} string-literal \terminal{)}
+%\end{ncbnf}
+%
+%is processed as follows: The \grammarterm{string-literal}
+%is \defnx{destringized}{destringization} by
+%\removed{deleting the \tcode{L} prefix, if present,} deleting the leading and trailing
+%double-quotes,replacing each escape sequence \tcode{\textbackslash"} by a double-quote, and
+%replacing each escape sequence \tcode{\textbackslash\textbackslash} by a single
+%backslash. The resulting sequence of characters is processed through translation phase 3
+%to produce preprocessing tokens that are executed as if they were the
+%\grammarterm{pp-tokens} in a pragma directive. The original four preprocessing
+%tokens in the unary operator expression are removed.
+%
+%\pnum
+%\begin{example}
+%\begin{codeblock}
+%    #pragma listing on "..\listing.dir"
+%\end{codeblock}
+%can also be expressed as:
+%\begin{codeblock}
+%    _Pragma ( "listing on \"..\\listing.dir\"" )
+%\end{codeblock}
+%The latter form is processed in the same way whether it appears literally
+%as shown, or results from macro replacement, as in:
+%\begin{codeblock}
+%    #define LISTING(x) PRAGMA(listing on #x)
+%    #define PRAGMA(x) _Pragma(#x)
+%
+%    LISTING( ..\listing.dir )
+%\end{codeblock}
+%\end{example}
+
+
+\section{Acknowledgments}
+
+Thank you to Masayoshi Kanke and Peter Brett who offered valuable feedback on this paper!
+
+
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+
+\renewcommand{\section}[2]{}%
+\begin{thebibliography}{9}
+
+\bibitem[N4885]{N4885}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4885}
+
+\end{thebibliography}
+
+\end{document}

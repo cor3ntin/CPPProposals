@@ -1,0 +1,531 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{user-generated \tcode{static\_assert} messages}
+\docnumber{P2741R3}
+\audience{EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\newcommand{\replaceucs}{\changed{UCS}{Unicode}}
+
+\usepackage{color, colortbl}
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+We propose that \tcode{static_assert} should accept user-generated string-like objects as their diagnostic message.
+
+\section{Revisions}
+
+\subsection{R3}
+
+Expand the design section to explain how instantiation and recursion work, following BSI comments.
+
+\subsection{R2}
+
+Following SG-16 review:
+
+\begin{itemize}
+\item Remove support for \tcode{char8_t} for now.
+\item Improve wording
+\end{itemize}
+
+\subsection{R1}
+
+\begin{itemize}
+ \item Expand discussion on the encoding of compile time expressions.
+ \item Remove wording for volatile types as they cannot be constant-evaluated per \href{https://eel.is/c++draft/expr.const#5.9}{[expr.const]} (Thanks Jens!).
+\end{itemize}
+
+
+\subsection{R0}
+
+Initial revision
+
+\subsection{Motivation}
+
+We propose that the message of a \tcode{static_assert} could be an arbitrary constant expression producing a sequence of characters,
+rather than be limited to string literals.
+This would allow libraries doing work at compile time to be able to better diagnose the exact problem.
+This could be used, for example, to
+\begin{itemize}
+    \item Explain why a formatting string in format is invalid
+    \item Explain why as compile time regex in \href{https://github.com/hanickadot/compile-time-regular-expressions}{CTRE} is invalid. In general, this would be helpful for any library that generates code at compile time, such as DSL generators (\href{https://github.com/foonathan/lexy}{lexy}), Unicode table generators, unit test frameworks, or any other library or DSL who needs to diagnose complex constraints.
+    \item Better explain the constraints of compile-times APIs
+    \item Reduce the reliance on the preprocessor and stringification of identifiers
+    \item Avoid duplication in static assert messages
+\end{itemize}
+
+\pagebreak
+\subsection{Without this proposal}
+
+\begin{colorblock}
+template <typename T, auto Expected, unsigned long Size = sizeof(T)>
+constexpr bool ensure_size() {
+    static_assert(sizeof(T) == Expected, "Unexpected sizeof");
+    return true;
+}
+static_assert(ensure_size<S, 1>());
+\end{colorblock}
+
+\begin{quoteblock}
+\begin{codeblock}
+error: static assertion failed due to requirement 'sizeof(S) == 1':
+    Unexpected sizeof
+static_assert(sizeof(T) == Expected, "Unexpected sizeof");
+^             ~~~~~~~~~~~~~~~~~~~~~
+note: in instantiation of function template specialization
+    @\textbf{'ensure_size<S, 1, 4ULL>'}@ requested here
+static_assert(ensure_size<S, 1>());
+^
+note: expression evaluates to '4 == 1'
+static_assert(sizeof(T) == Expected, "Unexpected sizeof");
+~~~~~~~~~~^~~~~~~~~~~
+1 error generated.
+Compiler returned: 1
+\end{codeblock}
+\end{quoteblock}
+
+\subsection{With this proposal}
+
+\begin{colorblock}
+static_assert(sizeof(S) == 1,
+    std::format("Unexpected sizeof: expected 1, got {}", sizeof(S))); // *
+\end{colorblock}
+
+\begin{quoteblock}
+\begin{codeblock}
+error: static assertion failed due to requirement 'sizeof(S) == 1':
+    @\textbf{Unexpected sizeof: expected 1, got 4}@
+static_assert(sizeof(S) == 1,
+^             ~~~~~~~~~~~~~~
+note: expression evaluates to '4 == 1'
+static_assert(sizeof(S) == 1,
+~~~~~~~~~~^~~~
+1 error generated.
+Compiler returned: 1
+\end{codeblock}
+\end{quoteblock}
+
+* \tcode{constexpr std::format} is not proposed in this proposal (and very much intentionally so this is but one building block).
+We should note however that \tcode{libfmt} has supported constexpr formatting since \href{https://github.com/fmtlib/fmt/releases}{version 8.0.0, mid-2021}.
+
+This both simplifies the code and makes the diagnostic clearer.
+
+
+\subsection{Interaction with reflection}
+
+The capabilities presented here would be made more useful by reflection (\paper{P1240}), notably for the ability to use the name of an instantiated template parameters
+in diagnostic messages, however, both features are independently useful and do not overlap and there is no need to tie these features together.
+
+\subsection{Community use cases}
+
+Here is a sampling of discussions of this facility online
+
+\begin{itemize}
+\item \href{https://stackoverflow.com/questions/11526526/how-to-combine-static-assert-with-sizeof-and-stringify}{Stackoverflow - How to combine static_assert with sizeof and stringify?}
+\begin{quoteblock}
+Memory usage is quite critical in my application. Therefore I have specific asserts that check for the memory size at compile time and give a static_assert if the size is different from what we considered correct before. [..] The problem is that when this static_assert goes off, it might be quite difficult to find out what the new size should be. [...] It would be much handier if I could include the actual size.
+\end{quoteblock}
+
+People replying suggest instead injecting a template parameter in the function enclosing the static_assert, which would be outputted by most compilers. The generated error message is not user-friendly.
+
+\begin{quoteblock}
+\begin{colorblock}
+In instantiation of ‘void check_size() [with ToCheck = foo; long unsigned int ExpectedSize = 8ul; long unsigned int RealSize = 16ul]’:
+bla.cpp:15:22:   required from here
+bla.cpp:5:1: error: static assertion failed: Size is off!
+\end{colorblock}
+\end{quoteblock}
+
+\item \href{https://stackoverflow.com/questions/11526526/how-to-combine-static-assert-with-sizeof-and-stringify}{Stackoverflow - Better Message For `static_assert` on Object Size}
+
+Similar use case.
+
+\item \href{https://stackoverflow.com/questions/13837668/display-integer-at-compile-time-in-static-assert}{Display integer at compile time in static_assert()}
+
+The user would like to express the following code:
+
+\begin{quoteblock}
+\begin{colorblock}
+enum First
+{
+    a,
+    b,
+    c,
+    nbElementFirstEnum,
+};
+enum Second
+{
+    a,
+    b,
+    c,
+    nbElementSecondEnum,
+};
+
+static_assert(
+First::nbElementFirstEnum == Second::nbElementSecondEnum,
+"Not the same number of element in the enums."s + to_string(First::nbElementFirstEnum) + " "s + to_string(Second::nbElementSecondEnum);
+\end{colorblock}
+\end{quoteblock}
+
+There again, the suggestion is to surface these values as a template parameter, hoping the compiler would show enough content to surface them.
+
+\item \href{https://stackoverflow.com/questions/57501016/how-to-pass-a-not-explicitly-string-literal-error-message-to-a-static-assert}{Stack overflow - How to pass a not explicitly string literal error message to a static_assert?}
+
+In this question, the user would like to reuse the same message in multiple static_assert and is reluctant to either copy-paste their code or use a macro.
+Alas, there is no better solution.
+
+
+\item Many other questions in stack overflow would require reflection to be fully solved:
+They are all more or less identical to this one:
+\href{https://stackoverflow.com/questions/11050511/c11-static-assert-parameterized-error-messages}{C++11 static_assert: Parameterized error messages}
+
+\item That feature was previously requested and discussed on std-proposals \href{https://lists.isocpp.org/std-proposals/2019/07/0155.php}{here}, and \href{https://groups.google.com/a/isocpp.org/g/std-proposals/c/eKNlsA4Vd-M}{here}.
+
+\end{itemize}
+\section{Design}
+
+We proposed to allow a constant expression string as the second parameter of \tcode{static_assert}.
+That's it. In particular, we propose no way to construct a string, as these are orthogonal concerns that can be
+handled by reflection, making \tcode{std::format} \tcode{constexpr}, or by string interpolation (\paper{P1819r0}), or simply by concatenating \tcode{std::string}{s} or using third-party libraries, or, a combination of some or all of the above.
+The question we are answering in this paper is: I have a string, can I use it as my \tcode{static_assert} message?
+
+\subsection{What is a string?}
+
+We do not think this core-language feature should be tied to a specific type or header like \tcode{std::string_view}.
+Indeed many user-defined types can be used to form and store a diagnostic message, and relying on details of the standard libraries are likely to be more complicated than note for
+implementers and users alike.
+Instead, we propose a definition of a string-like type that allows the support of \tcode{string} and \tcode{string_view}, as well as similar user-defined types.
+A compatible string-like type is a type that:
+\begin{itemize}
+ \item Has a \tcode{size()} method that produces an integer
+ \item Has a \tcode{data()} method that produces a pointer of character type such that
+ \item The elements in the range \tcode{[data(), data()+size())} are valid.
+\end{itemize}
+
+This is consistent with how structured bindings and range for loops work.
+
+\subsection{Non-contiguous ranges}
+
+We only propose to support ranges that offer \tcode{size()} and \tcode{data()}.
+There are a few reasons for that.
+
+Defining what a range is is slightly more involved - although we could reuse the definition used by ranged-base \tcode{for}, and it seem less motivated.
+ie, string-like are usually contiguous.
+
+But the main reason is that implenters expressed some slight performance concerns.
+constant evaluating \tcode{operator++} and \tcode{operaor*} for each character at compile time is a lot less efficient than evaluating a pointer.
+It could even be faster to convert a list to string and then use it in a diagnostic message, than to use the list directly, as the later forces
+us to get in and out of the constant evaluation domain.
+
+\subsection{What if the expression producing the message is ill-formed?}
+
+The message-producing expression is intended to be always instantiated, but only evaluated if the assertion failed.
+
+\begin{colorblock}
+    template <auto N>
+    consteval std::string_view oups() {
+        static_assert(N, "this always fires");
+        return "oups!";
+    }
+    void f() {
+        static_assert(true, oups<false>());
+    }
+\end{colorblock}
+
+\href{https://godbolt.org/z/PdvKsjTxq}{[Compiler explorer]}
+
+\tcode{oups<false>} is instantiated even though the static_assert never triggers.
+This behavior is consistent with the rest of the language - except for discarded statements, and is motivated by the fact that if the message-producing
+is ill-formed, it would otherwise not be detected until the \tcode{static_assert} triggers. In effect, it could hide bugs in code whose purpose is to diagnose bugs,
+and this seems extremely user-hostile.
+
+We should also note that in the example above both static_assert would trigger, but it is very much implementation defined whether an implementation could
+evaluate \tcode{oups<false>} despite it being ill-formed.
+
+\subsection{Could this thing recurse forever?}
+
+Consider:
+
+\begin{colorblock}
+    template <auto N>
+    consteval std::string_view oups() {
+        if constexpr(N == 0)
+        return "oups";
+        else
+        static_assert(!N, oups<N-1>());
+        return "oups!";
+    }
+
+    void f() {
+        static_assert(false, oups<99999>());
+    }
+\end{colorblock}
+
+\href{https://godbolt.org/z/Kc9cPbqz6}{[Compiler explorer]}
+
+This naturally falls into implementation limits.
+No message is likely to be produced as we cannot evaluate the terminal branch until bumping into the limits.
+
+with a more reasonable limit, say
+
+\begin{colorblock}
+    static_assert(false, oups<5>());
+\end{colorblock}
+
+\href{https://godbolt.org/z/eqsj6GavG}{[Compiler explorer]}
+
+In this example, the static assert messages are produced from 1 to 5 (again, it is mostly QOI and context-dependent whether the user-generated message can be produced).
+
+\subsection{Encodings}
+
+Constant evaluation deals with literal encoding, which may not be UTF-8.
+As such, \tcode{static_assert} should allow both \tcode{char} and \tcode{char8\_t} as messages and will need to convert both to the encoding of diagnostic messages.
+This is different from string literals in static assert which are not evaluated and converted directly from Unicode (likely UTF-8) to the encoding of diagnostic messages.
+
+Support for \tcode{wchar_t}, \tcode{char16_t}, \tcode{char32_t} is not proposed, but would not be an issue.
+
+Note however that, if an implementation did not have the ability to convert from the literal encoding to the diagnostic encoding,
+properly rendering non-basic characters in a sequence of \tcode{char} might be the most involved part of this proposal. same if we were to support \tcode{wchar_t}.
+Supporting any of the UTF encodings is however a non-issue.
+
+Note that in the case of \tcode{char} and \tcode{wchar_t} there is very little room to treat these things as anything but strings in the (wide) ordinary literal encoding.
+character and string literals are in the literal encoding and so would be any expression that would concatenate or otherwise be composed from
+character and string literals in some way.
+Treating them in any other way would lead to mojibake (as it always does when interpreting a string in an encoding that is different from the one it is constructed with).
+
+We shouldn't either try to evaluate these expressions using an encoding, as they may refer to variables already evaluated.
+
+Should we want another encoding here (and we really should not, C++ has enough encodings as it is), we would need a new kind of literals and a new set of types from distinguishing them. Such type actually exist: \tcode{char8_t}!
+
+In other words, given the following code:
+
+\begin{colorblock}
+constexpr string_view str = "Hello";
+static_assert(false, str);
+\end{colorblock}
+
+The abstract machine leaves no room to consider \tcode{str} as anything but as a string literal in the ordinary literal as
+it was already evaluated at the point the variable is used.
+
+\subsubsection{What if the string literal encoding cannot represent the diagnostic message in some environments?}
+
+\paper{P1854R3} makes mojibake in literals ill-formed (as it already is on most platforms). It is still possible to produce mojibake using
+escape sequences, for example.
+
+Given there are 2 possibles opportunities for losses here, namely that the ordinary literal cannot encode some text, and that the
+output of the compiler may have a different encoding to, only one of these could theoretically be remedied, I do not think there is much of a concern here: compilers will, as QOI, present any potential encoding issues in a way that is useful to users, escaping invalid code units for example.
+They already do so.
+
+There isn't much value in trying to legislate more than that.
+If a \tcode{static_assert} fires, the program is ill-formed. If the diagnostic message has encoding errors, is it double ill-formed?
+Should we care about potential mojibake in \tcode{static_assert} that do not fire?
+
+\subsubsection{Should we expose the encoding of the compiler's output?}
+
+For completeness, as I was asked if i considered that: No
+
+Knowing the execution encoding is useful as it allows users to perform conversions.
+Knowing the encoding of the compiler output does not allow to do anything the compiler cannot do on its own:
+Having established that strings are in the ordinary encoding, the compiler can transcode that and the user could not do it better.
+And we'd have to make constexpr all the existing text manipulations facility to do anything useful EVEN if somehow we could form strings in that
+theoretical compiler encoding, which we can't do, short of some magic conversion from an u8 string of some form.
+At this point, why did we not use u8 to begin with?
+
+Maybe \tcode{std::format} cannot produce u8 and so we'd fail to support a motivating use case.
+Fair enough, but if we are concerned about that, we should add u8 support to \tcode{std::format} !
+
+
+\subsection{What about null-terminated strings?}
+
+Null-terminated strings are mostly useful to communicate with C libraries and systems and are rarely useful at compile time.
+While it would not be a huge effort to support them, maybe it's best to keep the design simple.
+
+SG-16 expressed a slight preference to not support null-terminated string.
+
+\subsection{Alternatives}
+
+In the status quo, depending on the specific use case, macros can be used to stringify some arguments, or
+the \tcode{static_assert} can be lifted in a function template such that most compilers should print the value
+of this template parameters as part of the diagnostic message.
+
+Neither of these solutions is really satisfying or complete.
+
+\subsection{Previous work}
+
+A similar capability was previously proposed in 2014 by \paper{N4433}.
+At the time, the consensus was that it required too many pieces that did not exist then.
+As string and string_view are constexpr, \tcode{std::format} could be made constexpr (and the fmt lib already can create messages at compile times), and reflection is upon us,
+we think this feature could be immediately useful.
+
+\subsection{Future work}
+
+As \tcode{static_assert} is constantly evaluated, it cannot be used to diagnose, for example, unsatisfied preconditions on parameters and local variables.
+For that, we will need an additional facility composed of \tcode{consteval} functions, as proposed by \paper{P0596R1} and \paper{P2758R0}.
+
+\section{Implementation}
+
+This feature was implemented in Circle and prototyped in Clang, with no difficulties.
+
+\section{Wording}
+
+\ednote{This wording assumes \tcode{P2361R5} has been applied to the working draft}.
+
+\gramSec[gram.dcl]{Declarations}
+
+\indextext{linkage specification|see{specification, linkage}}
+
+\rSec1[dcl.pre]{Preamble}
+
+\begin{bnf}
+    \nontermdef{simple-declaration}\br
+    decl-specifier-seq \opt{init-declarator-list} \terminal{;}\br
+    attribute-specifier-seq decl-specifier-seq init-declarator-list \terminal{;}\br
+    \opt{attribute-specifier-seq} decl-specifier-seq \opt{ref-qualifier} \terminal{[} identifier-list \terminal{]} initializer \terminal{;}
+\end{bnf}
+
+\begin{addedblock}
+\begin{bnf}
+    \nontermdef{static_assert-message}\br
+        unevaluated-string\br
+        conditional-expression\br
+\end{bnf}
+\end{addedblock}
+
+\begin{bnf}
+    \nontermdef{static_assert-declaration}\br
+    \keyword{static_assert} \terminal{(} constant-expression \terminal{)} \terminal{;}\br
+    \keyword{static_assert} \terminal{(} constant-expression \terminal{,} \changed{unevaluated-string}{static_assert-message} \terminal{)} \terminal{;}\br
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{empty-declaration}\br
+    \terminal{;}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{attribute-declaration}\br
+    attribute-specifier-seq \terminal{;}
+\end{bnf}
+
+
+
+\pnum
+\indextext{\idxgram{static_assert}}%
+
+\textcolor{noteclr}{[...]}
+
+\pnum
+\indextext{definition!declaration as}%
+Syntactic components beyond those found in the general form of
+\grammarterm{simple-declaration} are added to a function declaration to make a
+\grammarterm{function-definition}. An object declaration, however, is also
+a definition unless it contains the \keyword{extern} specifier and has no
+initializer\iref{basic.def}.
+\indextext{initialization!definition and}%
+An object definition causes storage of appropriate size and alignment to be reserved and
+any appropriate initialization\iref{dcl.init} to be done.
+
+\pnum
+A \grammarterm{nodeclspec-function-declaration} shall declare a
+constructor, destructor, or conversion function.
+\begin{note}
+ Because a member function cannot be subject to a non-defining declaration
+ outside of a class definition\iref{class.mfct}, a \grammarterm{nodeclspec-function-declaration}
+ can only be used in a \grammarterm{template-declaration}\iref{temp.pre},
+ \grammarterm{explicit-instantiation}\iref{temp.explicit}, or
+ \grammarterm{explicit-specialization}\iref{temp.expl.spec}.
+\end{note}
+
+
+\begin{addedblock}
+\pnum
+
+If a \grammarterm{static_assert-message} matches the syntactic requirements of \grammarterm{unevaluated-string},
+it is an \grammarterm{unevaluated-string} and the text of the \grammarterm{static_assert-message} is the text of the \grammarterm{unevaluated-string}.
+
+Otherwise, a \grammarterm{static_assert-message} shall be an expression $M$ such that
+\begin{itemize}
+    \item the expression \tcode{$M$.size()} is implicitly convertible to \tcode{std::size_t}, and
+    \item the expression \tcode{$M$.data()} is implicitly convertible to "pointer to \tcode{const char}".
+\end{itemize}
+
+\end{addedblock}
+
+In a \grammarterm{static_assert-declaration},
+the \grammarterm{constant-expression} \added{$E$}
+is contextually converted to \keyword{bool} and
+the converted expression shall be a constant expression \iref{expr.const}.
+
+If the value of the expression \added{$E$} when
+so converted is \tcode{true} or the expression is evaluated in the context of a template definition,
+the declaration has no effect \added{and the \grammarterm{static_assert-message} is an unevaluated operand [expr.context]} .
+
+Otherwise,
+the \grammarterm{static_assert-declaration} \defnx{fails}{\idxcode{static_assert}!failed}\changed{,}{ and}
+\removed{the program is ill-formed, and the resulting
+diagnostic message \iref{intro.compliance} should include the text of
+the \grammarterm{string-literal}, if one is supplied}.
+
+\begin{addedblock}
+\begin{itemize}
+\item the program is ill-formed, and
+\item if the \grammarterm{static_assert-message} is a \grammarterm{conditional-expression} $M$,
+\begin{itemize}
+	\item \tcode{$M$.size()} shall be a converted constant expression of type \tcode{std::size_t} and let $N$ denote the value of that expression,
+	\item \tcode{$M$.data()}, implicitly converted to the type "pointer to \tcode{const char}", shall be a core constant expression and let $D$ denote the converted expression,
+	\item for each $i$ where $0 \le  i < N$, \tcode{$D$[$i$]} shall be an integral constant expression, and
+	\item the text of the \grammarterm{static_assert-message} is formed by the sequence\\
+	of $N$ code units, starting at \tcode{$D$}, of the ordinary literal encoding [lex.charset].
+\end{itemize}
+\end{itemize}
+\end{addedblock}
+
+\begin{addedblock}
+\recommended
+
+When a \grammarterm{static_assert-declaration} fails, the resulting diagnostic message should
+include the text of the \grammarterm{static_assert-message}, if one is supplied.
+\end{addedblock}
+
+\begin{example}
+\begin{codeblock}
+    static_assert(sizeof(int) == sizeof(void*), "wrong pointer size");
+    static_assert(sizeof(int[2]));          // OK, narrowing allowed
+\end{codeblock}
+\end{example}
+
+
+
+\subsection{Feature test macro}
+
+\ednote{In \tcode{[tab:cpp.predefined.ft]}, bump the value of\tcode{__cpp_static_assert} to the date of adoption}.
+
+\begin{addedblock}
+\begin{codeblock}
+#define __cpp_static_assert 2023XX // date of adoption
+\end{codeblock}
+\end{addedblock}
+
+\section{References}
+
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21, extra}
+
+\begin{thebibliography}{9}
+
+\bibitem[N4892]{N4892}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4892}
+
+
+\end{thebibliography}
+
+\end{document}

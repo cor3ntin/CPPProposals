@@ -63,18 +63,18 @@
 \usepackage{xparse}
 \usepackage{xstring}
 
-\IfFontExistsTF{Noto Sans}{
-  \setmainfont{Noto Sans}
-}{}
+%\IfFontExistsTF{Noto Sans}{
+%  \setmainfont{Noto Sans}
+%}{}
 
-\IfFontExistsTF{Inconsolatazi4}{
-  \setmonofont[
-    AutoFakeSlant,
-    BoldItalicFeatures={FakeSlant},
-  ]{Inconsolatazi4}
-}{}
+%\IfFontExistsTF{Inconsolatazi4}{
+%  \setmonofont[
+%    AutoFakeSlant,
+%    BoldItalicFeatures={FakeSlant},
+%  ]{Inconsolatazi4}
+%}{}
 
-\newcommand{\emoji}[1]{ {\setmainfont{Noto Color Emoji}[Renderer=Harfbuzz]{#1}} }
+%\newcommand{\emoji}[1]{ {\setmainfont{Noto Color Emoji}[Renderer=Harfbuzz]{#1}} }
 
 
 
@@ -213,7 +213,9 @@
 \newcommand{\changednb}[3]{\removednb{#1}{#2}\added{#3}}
 \newcommand{\remitem}[1]{\item\removed{#1}}
 
-\newcommand{\ednote}[1]{\textcolor{noteclr}{[Editor's note: #1] }}
+\newcommand{\ednote}[1]{\textcolor{noteclr}{[\emph{Editor's note:} #1] }}
+\newcommand{\draftnote}[1]{\textcolor{noteclr}{\emph{Drafting note:} #1}}
+
 
 \newenvironment{addedblock}
 {
@@ -273,7 +275,7 @@
     export,extern,false,float,for,friend,goto,if,inline,int,long,mutable,namespace,new,noexcept,
     not,not\_eq,nullptr,operator,or,or\_eq,private,protected,public,reflexpr,register,reinterpret\_cast,
     requires,return,short,signed,sizeof,static,static\_assert,static\_cast,struct,switch,synchronized,template,
-    this,thread\_local,throw,true,try,typedef,typeid,typename,union,unsigned,using,virtual,void,
+    this,thread\_local,throw,true,try,typedef,typeid,typename,union,unsigned,using,virtual,void,universal,
     volatile,wchar\_t,while,xor,xor\_eq}
 }
 \lstdefinestyle{color}{language=C++,
@@ -288,7 +290,7 @@
         export,extern,false,float,for,friend,goto,if,inline,int,long,mutable,namespace,new,noexcept,
         not,not\_eq,nullptr,operator,or,or\_eq,private,protected,public,reflexpr,register,reinterpret\_cast,
         requires,return,short,signed,sizeof,static,static\_assert,static\_cast,struct,switch,synchronized,template,
-        this,thread\_local,throw,true,try,typedef,typeid,typename,union,unsigned,using,virtual,void,
+        this,thread\_local,throw,true,try,typedef,typeid,typename,union,unsigned,using,virtual,void,universal,
         volatile,wchar\_t,while,xor,xor\_eq}
 }
 

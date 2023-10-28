@@ -1,0 +1,1813 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{Concept and variable-template template-parameters}
+\docnumber{P2841R0}
+\audience{EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Gašper Ažman}{gasper.azman@gmail.com}
+\usepackage[dvipsnames]{xcolor}
+
+
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+C++ allows passing templates as template parameters.
+It does not, however, support these template template-parameters to be non-types, i.e., either variables or concepts, which
+represents a hole in the template facilities and is the topic of this paper.
+
+\section{Motivation}
+
+Template template-parameters allow for higher-order templates and greater composability.
+They can be used, for example, to parametrize a function that operates on any container of any type or to write CRTP-based interfaces.
+
+C++23 limits template template-parameters to be class templates or alias templates.
+A variable template (C++14) or a concept (concepts are themselves templates) cannot be passed as a template argument in C++23.
+
+The motivation for passing a concept as a template argument is very much the same as our reason for supporting class templates as template arguments: to allow higher-level constructs.
+
+Being able to define a concept adaptor, for instance, would be very nice:
+
+\begin{colorblock}
+template <typename T, template <typename> concept C>
+concept decays_to = C<decay_t<T>>;
+\end{colorblock}
+
+Being able to use it with any concept constraint would also be helpful:
+
+\begin{colorblock}
+template <decays_to<copyable> T>
+auto f(T&& x);
+\end{colorblock}
+
+
+Other such constructs might, for example, include the following.
+\begin{itemize}
+\item \tcode{range_of}\\
+    Many algorithms can operate on a sequence of integer or string-like types and while it is possible to express
+    \tcode{range<T> \&\& SomeConcept<ranges::range_reference_t<R>>}, some codebases do that enough that they might want to have a shorter way to express that idea,
+    one that would let them use the abbreviated syntax in more cases.
+
+\item \tcode{tuple_of} \\
+    This follows the same idea, but expressing this idea in the require clause of each function or class that might need it would be an exercise in frustration and a maintenance nightmare. We explore a \tcode{tuple_of} concept later in this paper.
+    Representing vectors as tuples-like things of numbers is common in the scientific community, and these scientific libraries have no ideal way to express these constraints.
+
+\item Avoiding duplication.\\
+     In his \href{https://brevzin.github.io/c++/2019/01/09/concept-templates/}{blog post} on this very topic, Barry Revzin observed that \tcode{std::ranges} defines a handful of concepts that are very
+     similar to one another except they use different concepts internally. Concept template-parameters can reduce a lot of duplication.
+     Compare the \href{https://eel.is/c++draft/indirectcallable.indirectinvocable}{definitions in the Standard} and \href{https://godbolt.org/z/ohKsoKh9G}{the implementation with our proposal}.
+\end{itemize}
+
+To quote Barry's aforementioned blog post
+\begin{quoteblock}
+I’d rather write a one-line definition per metaconcept, not a one-line definition per metaconcept instantiation.
+\end{quoteblock}
+
+So part of the motivation for concept template-parameters is the same motivation  we have for functions, templates, and classes:
+We want to be able to reuse code and to make it less repetitive and error-prone.
+
+
+We also demonstrated how this feature can be leveraged to provide better diagnostics when a concept is not satisfied \href{https://compiler-explorer.com/z/sPz5faEbP}{[Compiler Explorer]}.
+
+
+There is community interest in these features.
+\begin{itemize}
+\item \href{https://stackoverflow.com/questions/63098070/is-it-possible-to-pass-a-concept-as-a-template-parameter}{Is it possible to pass a concept as a template parameter?}
+\item \href{https://stackoverflow.com/questions/72488554/concept-to-assert-an-argument-is-another-concept-with-whatever-parameters}{Concept to assert an argument is another concept, with whatever parameters}
+\item \href{https://stackoverflow.com/questions/58875829/passing-a-concept-to-a-function}{Passing a concept to a function}
+\item \href{https://stackoverflow.com/questions/61664468/how-to-pass-a-variable-template-as-template-argument}{How to pass a variable template as template argument}
+\item \href{https://stackoverflow.com/questions/58592312/can-a-variable-template-be-passed-as-a-template-template-argument}{Can a variable template be passed as a template template argument?}
+\end{itemize}
+
+Unfortunately, this is one of those features that truly shows its power on large examples that don't tend to fit into papers.
+
+
+\subsection{Variable-template template-parameters}
+
+Variable-template template-parameters (previously proposed in \paper{P2008R0}) are arguably less useful.
+They can be emulated with a template class with a static public \tcode{value} data member.
+Most standard type traits are defined as a type and have an equivalent \tcode{_v} variable:
+\begin{colorblock}
+template <typename T, typename U>
+constexpr bool is_same_v = is_same<T, U>::value;
+\end{colorblock}
+
+But this is not compile-time efficient: A class has to be instantiated, which is usually slow on most implementations.
+Then we still need to instantiate the variable. This performance issue is explored in more detail in \paper{P1715R1}.
+
+Wrapping variables in class templates also adds complexity for users: The main reason we expose both a variable template and a class template for every boolean
+trait is because the language does not support variable-template template-parameters. (Note that we are aware of some codebases using traits as tags for dispatch but this far from the common case.)
+
+For instance, counting elements that satisfy a specific predicate could be done as
+
+\begin{colorblock}
+template <template <typename> auto p, typename... Ts>
+std::size_t count_if_v = (... + p<Ts>);
+\end{colorblock}
+
+We could do the same thing with a type, but it incurs a class template instantiation for each element:
+
+\begin{colorblock}
+template <template <typename> typename p, typename... Ts>
+std::size_t count_if_v = (... + p<Ts>::value);
+\end{colorblock}
+
+It will always be more work for the compiler to instantiate a whole class together with its body (not just its declaration) to allow access to the inner value member than just instantiating a variable template, no matter how much we try to optimize this pattern. \paper{P1715R1} makes the same case.
+
+The authors have use cases that don't fit in the paper (typical for the most \emph{interesting} use cases) where type-based vs variable-based metaprogramming means the difference of 300s compile-times per unit vs. more than an hour (currently by textually duplicating definitions that could have been genericized if variable template template-parameters were available).
+
+\subsection{Previous works}
+
+Variable-template template-parameters were proposed in \paper{P2008R0} and were part of the original design for variable templates \paper{N3615}.
+Concept template-parameters have been described by Barry Revzin (back when Concept names were uppercase) in his blog \href{https://brevzin.github.io/c++/2019/01/09/concept-templates/}{here} and \href{https://brevzin.github.io/c++/2019/03/24/concept-templates-2/}{here}.
+We mentioned them in \paper{P2632R0} and \paper{P1985R3}.
+
+\subsection{Universal template-parameters}
+
+The fact that variable-template template-parameters and concept template-parameters appear in the same papers is not accidental.
+For a universal template-parameter to be universal, we need to make sure it covers the set of entities we could possibly want to ever use as template-parameters.
+There is, therefore, an important order of operations.
+If we were to add universal template-parameters before concept template-parameters and variable-template template-parameters, we would be in a situation where either
+\begin{itemize}
+\item we can't ever add concept template-parameters and variable-template template-parameters
+\item "universal template-parameters would not be truly universal"
+\item we would feel forced to come up with some kind of "more universal template-parameter" syntax
+\end{itemize}
+
+None of these outcomes seems desirable; therefore, the best course of action is to ensure that we
+support as best we can the full set of entities we might ever want to support as template-parameters, before adding support for universal template-parameters.
+
+\section{Design}
+
+\subsection{Syntax}
+
+We propose the following syntax for the declaration of a template head accepting a concept as parameter:
+
+\begin{colorblock}
+template<
+    template <@\placeholder{template-parameter-list}@> concept C
+>
+\end{colorblock}
+
+We propose the following syntax for the declaration of a template head accepting a variable template as parameter:
+
+\begin{colorblock}
+template<
+    template <@\placeholder{template-parameter-list}@> auto C
+>
+\end{colorblock}
+
+This forms a natural, somewhat intuitive extension of the existing syntax for template extension:
+\begin{colorblock}
+template<
+    typename T,
+    auto V,
+    template <@\placeholder{template-parameter-list}@> typename TT,
+    template <@\placeholder{template-parameter-list}@> auto VT,
+    template <@\placeholder{template-parameter-list}@> concept C,
+>
+\end{colorblock}
+
+\subsection{Default Arguments}
+
+Like type template template parameters, concepts, and variable template template
+parameters can have a default argument that is a concept name or the name of a variable template respectively.
+Packs can't be defaulted. (That's a separate paper!)
+
+\subsection{Usage}
+
+Within the definition of a templated entity, a concept template-parameter
+can be used anywhere a concept name can be used, including as a type constraint, in the requires clause, and so forth.
+
+For example, the following should be valid:
+
+\begin{colorblock}
+template <template <typename T> concept C>
+struct S {
+    void f(C auto);
+
+};
+\end{colorblock}
+
+\subsection{Concept template-parameters and subsumption}
+
+Consider:
+\begin{colorblock}
+template <typename T>
+requires view<T> && input_range<T>
+void f(); // #1
+
+template <typename T>
+requires view<T> && contiguous_range<T>
+void f(); // #2
+\end{colorblock}
+
+We expect \#2 to be more specialized than \#1 because \tcode{contiguous_range} subsumes\\
+\tcode{input_range}.
+
+Now, consider:
+
+\begin{colorblock}
+template <typename T>
+requires all_of<T, view, input_range>
+void f(); // #1
+
+template <typename T>
+requires all_of<T, view, contiguous_range>
+void f(); // #2
+\end{colorblock}
+
+[\href{https://compiler-explorer.com/z/71qjW1WWP}{Run this example on Compiler Explorer}]
+
+This example ought to be isomorphic to the previous one, and \#2 should still be more specialized than \#1.
+To do that, we need to be able to substitute concept template arguments in constraint expressions when normalizing constraints.
+
+When establishing subsumption, we have historically not substituted template arguments, instead establishing a mapping of template parameters to arguments for each
+constraint and comparing those mappings.
+
+But to establish subsumption rules for concept template-parameters, we need to depart from that somewhat.
+
+Concepts have the particularity of never being explicitly specialized, deduced, dependent, or even instantiated.
+Substituting a concept template argument is only a matter of replacing the corresponding template parameter with the list of constraints of the substituted
+concept, recursively.
+
+As such, subsumption for concept template-parameters does not violate the guiding principle of subsumption.
+
+\begin{colorblock}
+template<typename T, template <typename...> concept C>
+concept range_of = std::ranges::range<T> && @\textbf{C}@<std::remove_cvref_t<std::ranges::range_reference_t<T>>>; // #1
+
+template<typename T>
+concept range_of_integrals = std::ranges::range<T> && @\textbf{std::integral}@<std::remove_cvref_t<std::ranges::range_reference_t<T>>>; // #2
+
+\end{colorblock}
+
+Note that this transformation does not change any other behavior of normalization, i.e., concept template-parameters that appear within other atomic constraints
+are not substituted, and arguments that are not concept names are not substituted either.
+
+\subsection{Fold expressions involving concept template-parameters}
+
+When the fold expression is over a pack of \emph{concepts}, we must be a bit more careful.
+
+\begin{colorblock}
+template <
+    typename T,
+    template <typename...> concept... C>
+concept all_of = (C<T> && ...);
+\end{colorblock}
+
+Once substituted, the sequence of binary \tcode{\&\&} or \tcode{||} is normalized,
+\tcode{all_of}, \tcode{any_of}, and so on can then be implemented in a way that supports subsumption.
+
+One very important case where this facility is absolutely essential is constraining tuples (and other algebraic data-types) by dimension:
+
+\begin{colorblock}
+template <typename X, template <typename> concept... C>
+concept product_type_of = (... && C<std::tuple_element_t<C...[?], X>>);
+//   index-of-current-element, not proposed, but needed  ~~~~~~~
+\end{colorblock}
+
+\paper{P2632R0} discusses alternatives to the awful index-of-current-element syntax above.
+
+\subsection{ADL}
+
+Similar to variables, variable templates and concepts are not associated entities when performing argument-dependent lookup.
+This is consistent with previous work (for example \paper{N3595} and \paper{P0934R0}) and the general consensus toward ADL.
+
+\subsection{Deduction and partial ordering}
+
+Variable and concept template-parameters should be deducible from a template argument of a class template, used in the argument list of a function,
+including a function that is synthesized for the purpose of partial ordering; i.e., the intent is that the following is well-formed:
+
+\begin{colorblock}
+template <template <class> auto V, template <class> concept C>
+struct A {}; // A takes a variable template template argument
+
+template <template <class T> auto V, template <class> concept C>
+void foo(A<V, C>);  // can accept any specialization of A; V and C are deduced
+
+template <class T>
+auto Var = 0;
+
+template <class T>
+concept Concept = true;
+
+void test() {
+    foo(A<Var, Concept>{});
+}
+\end{colorblock}
+
+[\href{https://compiler-explorer.com/z/66dr6fnKj}{Run this example on Compiler Explorer}]
+
+\subsection{Equivalence of atomic constraints}
+
+One interesting concept to consider is \tcode{tuple_of}, which would e.g., allow constraining a function on a \placeholder{tuple-like}
+of integrals, a frequent use case in scientific computation.
+
+In the absence of member and alias packs, a \tcode{tuple_like} concept could look like
+
+\begin{colorblock}
+template <typename T, int N>
+constexpr bool __tuple_check_elements = [] {
+    if constexpr (N == 0)
+      return true;
+    else if constexpr(requires (T t) {
+        typename std::tuple_element_t<N-1, T>;
+        { std::get<N-1>(t) };
+    })
+      return  __tuple_check_elements<T, N-1>;
+    return false;
+}();
+
+template <typename T>
+concept tuple_like = requires {
+    typename std::tuple_size<T>::type;
+} &&  __tuple_check_elements<T, std::tuple_size_v<T>>;
+\end{colorblock}
+
+Here, we use a constexpr variable template to check the constraint on individual elements.
+We can trivially adapt this code to take a concept argument:
+
+\begin{colorblock}
+template <typename T, template <typename> concept C>
+concept decays_to = C<std::decay_t<T>>;
+
+template <typename T, int N, template <typename> concept C>
+constexpr bool __tuple_check_elements = [] {
+    if constexpr (N == 0)
+      return true;
+    else if constexpr(requires (T t) {
+        typename std::tuple_element_t<N-1, T>;
+        { std::get<N-1>(t) } -> decays_to<C>;
+    })
+      return  __tuple_check_elements<T, N-1, C>;
+    return false;
+}();
+
+template <typename T, template <typename> concept C>
+concept tuple_of = requires {
+    typename std::tuple_size<T>::type;
+} &&  __tuple_check_elements<T, std::tuple_size_v<T>, C>;
+\end{colorblock}
+
+And this works fine, but \tcode{__tuple_check_elements} is an atomic constraint, so we cannot
+establish a subsumption relationship for this concept.
+
+With a sufficient number of pack features, we could probably write a concept that checks all elements with a single constraint,
+i.e.,
+
+\begin{colorblock}
+template <typename T, typename E, int N, template <typename> concept C>
+concept __tuple_of_element = requires (T t) {
+    typename std::tuple_element_t<N, T>;
+    { std::get<N>(t) } -> decays_to<C>;
+} &&  C<std::tuple_element_t<0, T>>;
+
+template <typename T, template <typename> concept C>
+concept tuple_of = requires {
+    typename std::tuple_size<T>::type;
+} &&  (__tuple_of_element<T, T::[:], current_expansion_index_magic(), C> && ...);
+\end{colorblock}
+
+But in addition to relying on imaginary features, this is pretty inefficient since ordering complexity would be proportional to the square of the number of tuple elements.
+
+Fortunately, while checking satisfaction does require looking at every element, we can look at just one element to establish subsumption in this particular case.
+
+We can rewrite our concept as
+
+\begin{colorblock}
+template <typename T, int N, template <typename> concept C>
+concept __tuple_of_element = requires (T t) {
+    typename std::tuple_element_t<N, T>;
+    { std::get<N>(t) } -> decays_to<C>;
+} &&  C<std::tuple_element_t<0, T>>;
+
+template <typename T, int N, template <typename> concept C>
+constexpr bool __check_tuple_elements = [] {
+    if constexpr (N == 1)
+        return true;
+    else if constexpr(__tuple_of_element<T, N-1, C>)
+        return  __check_tuple_elements<T, N-1, C>;
+    return false;
+}();
+
+template <typename T, template <typename> concept C>
+concept tuple_of = requires {
+    typename std::tuple_size<T>::type;
+} &&  (std::tuple_size_v<T>  == 0 || (
+         // Check the first element with a concept to establish subsumption
+        __tuple_of_element<T, 0, C> &&
+        // Check constraint satisfaction for subsequent elements
+        __check_tuple_elements<T, std::tuple_size_v<T>, C>
+));
+\end{colorblock}
+
+[\href{https://compiler-explorer.com/z/n6nsdj37j}{Run this example on Compiler Explorer}]
+
+For this to work, the concept template-parameter C needs to be substituted
+in the concept \tcode{__tuple_of_element} but not in the atomic constraint
+\tcode{__check_tuple_elements<T, std::tuple_size_v<T>, C>}.
+
+Atomic constraints also need to ignore concept template-parameters for the purpose
+of comparing their template arguments when establishing atomic constraint equivalence during subsumption.
+
+
+\section{Partially applied concepts}
+
+The first argument of a concept is the entity for which we are checking satisfaction.
+Concepts can take additional arguments parameterizing the concept.
+
+For example, \tcode{invocable<T, int>} checks whether an object of type \tcode{T} can be called
+with an \tcode{int} argument.
+
+In specific contexts, a \tcode{type-constraint} can appear in a template head, or before \tcode{auto} to constrain --- or assert ---
+a type. In that case, the compiler injects the type to which the concept is applied, rather than this type being specified by the user.
+
+For example, the following two declarations are equivalent:
+
+\begin{colorblock}
+template<invocable<int> T>
+void f();
+
+template<typename T>
+void f() requires invocable<T, int>;
+\end{colorblock}
+
+This is helpful because a great many concepts are binary or n-ary.
+In the \tcode{concepts} header, half of the concepts are not unary.
+
+
+When passing concepts as template arguments, this becomes quickly apparent.
+Let us consider a \tcode{range_of} concept constraining the range's value type with a concept template-parameter:
+
+\begin{colorblock}
+template <typename R, template <typename> concept C>
+concept range_of = std::ranges::range<R> && C<std::ranges::range_value_t<R>>;
+\end{colorblock}
+
+We can then have an algorithm taking a range of \tcode{integral}:
+
+\begin{colorblock}
+auto median(range_of<std::integral> auto&&);
+\end{colorblock}
+
+
+But maybe we want to be a little more specific. Can we accept only a range of ints?
+Given that our \tcode{range_of} expects a concept (it should really accept a universal template parameter!),
+maybe we could use \tcode{same_as}.
+But \tcode{same_as} requires arguments. Can we make something like that work?
+
+\begin{colorblock}
+auto f(range_of<same_as<int>> auto&&);
+\end{colorblock}
+
+
+We can rewrite our \tcode{range_of} concept to take an extra argument pack forwarded to the concept parameter:
+
+\begin{colorblock}
+template <typename R, template <typename...> concept C,  typename... Args>
+concept range_of = std::ranges::range<R> && C<std::ranges::range_value_t<R>, Args...>;
+void f(range_of<std::same_as, int> auto &&);
+\end{colorblock}
+
+
+This is not the clearest interface. And crucially, it doesn't compose. For example, a range of \tcode{regular} and also convertible to int
+type is not expressible.
+
+One workaround would be to lift the concept and its argument into a type:
+
+\begin{colorblock}
+template <template <typename...> concept C, typename... Args>
+struct packed_concept {
+    template <typename T>
+    static constexpr bool apply  = C<T, Args...>;
+};
+
+template <typename R, typename... PackedConcept>
+concept range_of = std::ranges::range<R>
+                   && (PackedConcept::template apply<std::ranges::range_value_t<R>> && ...);
+void f(range_of<packed_concept<std::convertible_to, int>,
+                packed_concept<std::regular>> auto &&);
+\end{colorblock}
+
+This works.
+It is also not particularly usable or readable, and all hope of subsumption is lost.
+Concepts cannot be class members for a very good reason: It would fundamentally break subsumption. So \tcode{apply} is a \tcode{bool} variable, an atomic constraint.
+
+Can we still support making something similar in the language? Could we make something like
+
+\begin{colorblock}
+void f(range_of<@\textbf{concept convertible_to<int>}@> auto)
+\end{colorblock}
+
+simply work? Yes!\\
+
+[\href{https://compiler-explorer.com/z/36sqoGsr7}{Run this example on Compiler Explorer}]
+
+We can indeed create a new kind of template argument --- or a new kind of template-id --- that carries additional arguments that are injected
+when the corresponding concept template-parameter is specialized.
+\begin{colorblock}
+// Given this declaration,
+template <typename @\textbf{\textcolor{OliveGreen}{T}}@, template <typename> concept @\textbf{\textcolor{WildStrawberry}{C}}@>
+constexpr bool b = @\textbf{\textcolor{WildStrawberry}{C}}@<@\textbf{\textcolor{OliveGreen}{T}}@>;
+
+// this specialization
+b<@\textbf{\textcolor{OliveGreen}{double}}@, concept std::convertible_to<@\textbf{\textcolor{Plum}{int}}@>>;
+
+// is rewritten like that by injecting the arguments passed to the concept argument.
+template<>
+constexpr bool b<@\textbf{\textcolor{OliveGreen}{double}}@, concept @\textbf{\textcolor{WildStrawberry}{convertible_to}}@<@\textbf{\textcolor{Plum}{int}}@>> = @\textbf{\textcolor{WildStrawberry}{convertible_to}}@<@\textbf{\textcolor{OliveGreen}{double}}@, @\textbf{\textcolor{Plum}{int}}@>;
+\end{colorblock}
+
+Notice that in this example, \tcode{C} is a concept template-parameter that accepts exactly one argument,
+even though \tcode{convertible_to} needs two.
+The other arguments will be filled in automatically.
+
+In effect, it's like we created a new concept
+
+\begin{colorblock}
+template <typename T>
+concept convertible_to_int = convertible_to<T, int>;
+\end{colorblock}
+
+but we did it inline, directly in the template argument.
+This feature (which we call partial application) expresses intent very clearly and works with subsumption.
+
+\subsection{Syntax of partially applied concepts}
+
+Partially applied concepts can appear as template arguments matching a concept template-parameter (and nowhere else).
+You might have noticed the \tcode{concept} keyword prefixing template arguments in previous examples and wonder why \tcode{range_of<concept convertible_to<int>>} rather than simply \tcode{range_of<convertible_to<int>>}?
+
+Of course, there is an undeniable parallel with the syntax of concept declaration, which is nice, but the keyword is there to avoid ambiguity.
+
+If the concept accepts a variable number of arguments (because it has defaulted or variadic parameters),
+whether \tcode{ConceptName<Args>} is a partial application or a complete specialization
+(which is then a boolean expression) can be ambiguous .
+
+This has not been an issue with \grammarterm{type-constraint}{s} because they only ever appear in a context where the first parameter is always injected.
+
+However, the ambiguity between a partial concept application and a boolean expression can appear in a couple of cases.
+\begin{enumerate}
+    \item In the presence of universal template parameters: Should a given argument matching a UTP be considered a bool or a concept template-parameter?
+    \item In an overload set, the concept could be matched to both a bool and a concept, as in this example courtesy of Barry Revzin:
+\begin{colorblock}
+template <bool B> void f();
+template <template <typename> concept C> void f();
+f<invocable<int>>(); // boolean or partially applied concept?
+\end{colorblock}
+\end{enumerate}
+
+We explored various solutions to this ambiguity, including always treating something that \emph{could} be a concept as a concept
+and forcing an explicit cast to bool to force a boolean expression or making the concept keyword optional when the concept has a fixed number of arguments.
+
+Both approaches suffer the same issue: They could change the meaning of code when the concept is modified by adding defaulted or variadic
+parameters. It could also break pre-C++26 code.
+So they do not appear to be robust solutions.
+
+We also refrained from any solution that would make the nature of template arguments somehow deduced from the corresponding parameter
+during overload resolution, for this would be madness (and it would not really solve the question for universal template parameters).
+
+Ultimately, the \tcode{concept} keyword is a great way to show intent and mirrors concept declaration. The following syntax would be valid:
+
+\begin{colorblock}
+some_template_name <
+    std::regular,  /// can pass the name directly
+    concept regular<>, // no reason this should not work
+    invocable<int>, // that is a bool - it will get diagnosed
+                    // if no overload or specialization expect a bool
+    concept invocable<int> // ok
+>;
+\end{colorblock}
+
+\subsubsection{Generalized partially applied template template-parameters?}
+
+A question that arises when considering this partial application of concepts is whether it generalizes to other kinds of template-parameters.
+
+Concepts are unique in that the first parameter has a special meaning, and as such,
+that you can pass the first parameter at a different time than all other parameters does make a lot of sense.
+After all, this is why \tcode{type-constraint}{s} exist.
+
+To generalize partial application
+to other template template-parameters, we would need to be able to provide --- or not --- arbitrary parameters;
+we could imagine, for example, being able to write some kind of code where some but not all template arguments are provided.
+
+\begin{colorblock}
+Foo<std::map<?, ? , my_comparator>>;
+\end{colorblock}
+
+However, this is more complicated than what we need for concepts, and whether it would be useful is debatable.
+How arguments and parameters would be matched is less clear.
+Besides, unlike concepts, aliases and variable templates can be created at class scope.
+
+Therefore the motivation for partially applied concepts does not necessarily generalize terribly well.
+We did consider whether this sort of placeholder syntax would be a good fit for concepts in isolation, but
+we think \tcode{concept \grammarterm{type-constraint}} is more consistent, less novel, and
+therefore more teachable than a placeholder syntax.
+
+\subsection{Packs of partial concepts?}
+
+Arguably one could imagine a scenario in which a pack of partial concepts could be constructed:
+
+\begin{colorblock}
+template <typename T, template <typename> concept... Concepts>
+concept AllOf  = (Concepts<T> && ...);
+
+template <typename T, template <typename...> concept... Concepts>
+concept Foo = AllOf<T, concept Concepts<double>...>;
+\end{colorblock}
+
+But it seems difficult to imagine a scenario where this would be useful; i.e., when do different concepts accept the same arguments (besides the first one)?
+Supporting that does not seem like a good time investment.
+
+\section{Status of this proposal and further work}
+
+Our main priority should be to make progress on some form of universal template parameters.
+We will have an implementation of universal template parameters for the Standards Committee meeting in Kona.
+Before that, we need to ensure concepts and variable-template template-parameters are supported features so that universal
+template-parameters support the gamut of entities that could reasonably be used as template-parameters.
+
+As part of that, subsumption for concept template-parameters, as proposed in this paper, as well as subsumption of fold expressions
+should be considered an integral part of the design since adding them later might be somewhat annoying. (It could affect existing code, in theory.)
+
+However, partial concept application does not affect template-parameters; it's a new kind of template argument or template name.
+So this can --- and probably should --- be pursued as a separate effort to avoid blocking progress on universal template-parameters.
+
+\section{Things to be careful about}
+
+Concepts have carefully designed limitations aimed to make subsumption possible and reasonably efficient.
+Care has to be taken not to change that.
+
+In particular, specialization of concepts is not allowed nor is declaring concepts in classes or other non-global (potentially dependent)
+contexts.
+
+Concept template-parameters need to be substituted when evaluating constraints, but other arguments do not.
+Efficient memoization is still possible by caching concept template arguments (and only concept template arguments) along the concept.
+
+Concept template-parameters do not allow a concept to refer to itself, i.e., recursion.
+Universal template-parameters may allow recursion.
+
+\begin{colorblock}
+template <typename T, __any C, typename...Args>
+concept Y = C<C, Args...>;
+
+template <typename T, template <typename...> Concept , typename...Args>
+concept Foo = Concept<T, Args...>;
+
+Y<int, Foo>;
+\end{colorblock}
+
+This will need careful consideration, but we have options, such as preventing the same concept name from appearing multiple times
+or having an implementation-defined limit for how many concepts can be replaced during subsumption.
+
+\section{Implementation}
+
+The paper as proposed has been implemented in a fork of Clang and is available on compiler-explorer.
+The implementation revealed no particular challenge. In particular, we confirmed that the proposed changes
+do not prevent memoization for subsumption and satisfiability, i.e., a concept and the set of its concept parameters
+are what needs to be cached.
+
+Partial concept application was also implemented, modeled by a new kind of template argument.
+This is still a work in progress.
+
+\section{Wording}
+
+\rSec1[basic.pre]{Preamble}
+
+\pnum
+Every name is introduced by a \defn{declaration}, which is a
+\begin{itemize}
+    \item
+    \grammarterm{name-declaration},
+    \grammarterm{block-declaration}, or
+    \grammarterm{member-declaration} \iref{dcl.pre,class.mem},
+    \item
+    \grammarterm{init-declarator} \iref{dcl.decl},
+    \item
+    \grammarterm{identifier}
+    in a structured binding declaration \iref{dcl.struct.bind},
+    \item
+    \grammarterm{init-capture} \iref{expr.prim.lambda.capture},
+    \item
+    \grammarterm{condition} with a \grammarterm{declarator} \iref{stmt.pre},
+    \item
+    \grammarterm{member-declarator} \iref{class.mem},
+    \item
+    \grammarterm{using-declarator} \iref{namespace.udecl},
+    \item
+    \grammarterm{parameter-declaration} \iref{dcl.fct},
+    \item
+    \grammarterm{type-parameter} \iref{temp.param},\textbf{}
+    \begin{addedblock}
+    \item
+    \grammarterm{template-template-parameter} \iref{temp.param},
+    \end{addedblock}
+    \item
+    \grammarterm{elaborated-type-specifier}
+    that introduces a name \iref{dcl.type.elab},
+    \item
+    \grammarterm{class-specifier} \iref{class.pre},
+    \item
+    \grammarterm{enum-specifier} or
+    \grammarterm{enumerator-definition} \iref{dcl.enum},
+    \item
+    \grammarterm{exception-declaration} \iref{except.pre}, or
+    \item
+    implicit declaration of an injected-class-name \iref{class.pre}.
+\end{itemize}
+
+
+\rSec2[basic.lookup.argdep]{Argument-dependent name lookup}%
+
+\pnum
+For each argument type \tcode{T} in the function call,
+there is a set of zero or more \defnx{associated entities}{entity!associated}
+to be considered.
+The set of entities is determined entirely by
+the types of the function arguments
+(and any \changed{template}{\grammarterm{type-template-parameter}
+} template arguments).
+Any \grammarterm{typedef-name}s and \grammarterm{using-declaration}{s}
+used to specify the types
+do not contribute to this set.
+The set of entities
+is determined in the following way:
+\begin{itemize}
+    \item If \tcode{T} is a fundamental type, its associated set of
+    entities is empty.
+
+    \item If \tcode{T} is a class type (including unions),
+    its associated entities are:
+    the class itself;
+    the class of which it is a member, if any;
+    and its direct and indirect base classes.
+    Furthermore, if \tcode{T} is a class template specialization,
+    its associated entities also include:
+    the entities
+    associated with the types of the template arguments
+    provided for template type parameters;
+    the templates used as template template arguments; and
+    the classes of which any member templates used as template template
+    arguments are members.
+    \begin{note}
+        Non-type template arguments do not
+        contribute to the set of associated entities.
+    \end{note}
+
+    \item If \tcode{T} is an enumeration type,
+    its associated entities are \tcode{T}
+    and, if it is a class member, the member's class.
+
+    \item If \tcode{T} is a pointer to \tcode{U} or an array of \tcode{U},
+    its associated entities are those associated with \tcode{U}.
+
+    \item If \tcode{T} is a function type, its associated
+    entities are those associated with the function parameter types and those
+    associated with the return type.
+
+    \item If \tcode{T} is a pointer to a member function of a class
+    \tcode{X}, its associated entities are those associated
+    with the function parameter types and return type, together with those
+    associated with \tcode{X}.
+
+    \item If \tcode{T} is a pointer to a data member of class \tcode{X}, its
+    associated entities are those associated with the member
+    type together with those associated with \tcode{X}.
+\end{itemize}
+In addition, if the argument is an overload set or the address of such a set,
+its associated entities
+are the union of those associated with each of the
+members of the set, i.e., the entities associated with its
+parameter types and return type.
+Additionally, if the aforementioned overload set is named with
+a \grammarterm{template-id}, its associated entities also include
+its template \grammarterm{template-argument}{s} \added{denoting a class template or an alias template} and
+those associated with its type \grammarterm{template-argument}s.
+
+\pnum
+The \term{associated namespaces} for a call are
+the innermost enclosing non-inline namespaces for its associated entities
+as well as every element of the inline namespace set \iref{namespace.def}
+of those namespaces.
+Argument-dependent lookup finds
+all declarations of functions and function templates that
+\begin{itemize}
+    \item
+    are found by a search of any associated namespace, or
+    \item
+    are declared as a friend \iref{class.friend} of any class
+    with a reachable definition in the set of associated entities, or
+    \item
+    are exported,
+    are attached to a named module \tcode{M} \iref{module.interface},
+    do not appear in the translation unit containing the point of the lookup, and
+    have the same innermost enclosing non-inline namespace scope as
+    a declaration of an associated entity attached to \tcode{M} \iref{basic.link}.
+\end{itemize}
+If the lookup is for a dependent name \iref{temp.dep,temp.dep.candidate},
+the above lookup is also performed
+from each point in the instantiation context \iref{module.context} of the lookup,
+additionally ignoring any declaration that
+appears in another translation unit,
+is attached to the global module, and
+is either discarded \iref{module.global.frag} or has internal linkage.
+
+\rSec2[dcl.typedef]{The \keyword{typedef} specifier}%
+
+
+\pnum
+\indextext{class name!\idxcode{typedef}}%
+A \grammarterm{simple-template-id} is only a \grammarterm{typedef-name}
+if its \grammarterm{template-name} names
+an alias template or \changed{a template \grammarterm{template-parameter}}{a \grammarterm{type-template-parameter} template-parameter}.
+\begin{note}
+    A \grammarterm{simple-template-id} that names a class template specialization
+    is a \grammarterm{class-name} \iref{class.name}.
+    If a \grammarterm{typedef-name} is used to identify the subject of an
+    \grammarterm{elaborated-type-specifier} \iref{dcl.type.elab}, a class
+    definition \iref{class}, a constructor
+    declaration \iref{class.ctor}, or a destructor
+    declaration \iref{class.dtor}, the program is ill-formed.
+\end{note}
+
+\rSec1[temp.names]{Names of template specializations}
+
+\pnum
+A template specialization \iref{temp.spec} can be referred to by a
+\grammarterm{template-id}:
+
+\begin{bnf}
+    \nontermdef{simple-template-id}\br
+    template-name \terminal{<} \opt{template-argument-list} \terminal{>}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{template-id}\br
+    simple-template-id\br
+    operator-function-id \terminal{<} \opt{template-argument-list} \terminal{>}\br
+    literal-operator-id \terminal{<} \opt{template-argument-list} \terminal{>}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{template-name}\br
+    identifier
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{template-argument-list}\br
+    template-argument \opt{\terminal{...}}\br
+    template-argument-list \terminal{,} template-argument \opt{\terminal{...}}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{template-argument}\br
+    constant-expression\br
+    type-id\br
+    id-expression\br
+    \added{concept-name}
+\end{bnf}
+
+\ednote{[...]}
+
+\pnum
+A \defn{concept-id} is a \grammarterm{simple-template-id}
+where the \grammarterm{template-name} is a \grammarterm{concept-name} \added{or names a \grammarterm{concept-parameter}}.
+A concept-id is a prvalue of type \tcode{bool}, and
+does not name a template specialization.
+A concept-id evaluates to \tcode{true}
+if the concept's
+normalized \grammarterm{constraint-expression} \iref{temp.constr.decl}
+is satisfied \iref{temp.constr.constr} by the specified template arguments and
+\tcode{false} otherwise.
+\begin{note}
+    Since a \grammarterm{constraint-expression} is an unevaluated operand,
+    a concept-id appearing in a \grammarterm{constraint-expression}
+    is not evaluated except as necessary
+    to determine whether the normalized constraints are satisfied.
+\end{note}
+\begin{example}
+    \begin{codeblock}
+        template<typename T> concept C = true;
+        static_assert(C<int>);      // OK
+    \end{codeblock}
+\end{example}
+
+
+\rSec1[temp.param]{Template parameters}
+
+\pnum
+The syntax for
+\grammarterm{template-parameter}{s}
+is:
+
+\begin{bnf}
+    \nontermdef{template-parameter}\br
+    type-parameter\br
+    parameter-declaration\br
+    \added{template-template-parameter}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{type-parameter}\br
+    type-parameter-key \opt{\terminal{...}} \opt{identifier}\br
+    type-parameter-key \opt{identifier} \terminal{=} type-id\br
+    type-constraint \opt{\terminal{...}} \opt{identifier}\br
+    type-constraint \opt{identifier} \terminal{=} type-id\br
+    \removed{template-head type-parameter-key \opt{\terminal{...}} \opt{identifier}\br}
+    \removed{template-head type-parameter-key \opt{identifier} \terminal{=} id-expression}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{type-parameter-key}\br
+    \keyword{class}\br
+    \keyword{typename}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{type-constraint}\br
+    \opt{nested-name-specifier} concept-name\br
+    \opt{nested-name-specifier} concept-name \terminal{<} \opt{template-argument-list} \terminal{>}
+\end{bnf}
+
+\begin{addedblock}
+ \begin{bnf}
+\nontermdef{template-template-parameter}\br
+    type-template-parameter \br
+    variable-template-parameter \br
+    concept-parameter
+\end{bnf}
+
+\begin{bnf}
+\nontermdef{type-template-parameter}\br
+template-head type-parameter-key \opt{\terminal{...}} \opt{identifier}\br
+template-head type-parameter-key \opt{identifier} \terminal{=} id-expression
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{variable-template-parameter}\br
+    template-head \terminal{auto} \opt{\terminal{...}} \opt{identifier}\br
+    template-head \terminal{auto} \opt{identifier} \terminal{=} id-expression
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{concept-parameter}\br
+    template < template-parameter-list > \terminal{concept} \opt{\terminal{...}} \opt{identifier}\br
+    template < template-parameter-list > \terminal{concept} \opt{identifier} \terminal{=} id-expression
+\end{bnf}
+
+\end{addedblock}
+
+\indextext{component name}%
+The component names of a \grammarterm{type-constraint} are
+its \grammarterm{concept-name} and
+those of its \grammarterm{nested-name-specifier} (if any).
+\begin{note}
+    The \tcode{>} token following the
+    \grammarterm{template-parameter-list} of a
+    \grammarterm{type-parameter}
+    can be the product of replacing a
+    \tcode{>>} token by two consecutive \tcode{>}
+    tokens \iref{temp.names}.
+\end{note}
+
+\pnum
+There is no semantic difference between
+\keyword{class}
+and
+\keyword{typename}
+in a
+\grammarterm{type-parameter-key}.
+\keyword{typename}
+followed by an
+\grammarterm{unqualified-id}
+names a template type parameter.
+\keyword{typename}
+followed by a
+\grammarterm{qualified-id}
+denotes the type in a non-type
+\begin{wfootnote}
+    \changed{Since template
+    \grammarterm{template-parameter}{s}
+    and template
+    \grammarterm{template-argument}{s}
+    are treated as types for descriptive purposes, t}{T}he terms
+    \term{non-type parameter}
+    and
+    \term{non-type argument}
+    are used to refer to non-type, non-template parameters and arguments.
+\end{wfootnote} \grammarterm{parameter-declaration}.
+A \grammarterm{template-parameter} of the form
+\keyword{class} \grammarterm{identifier} is a \grammarterm{type-parameter}.
+\begin{example}
+    \begin{codeblock}
+        class T { /*...*/ };
+        int i;
+
+        template<class T, T i> void f(T t) {
+            T t1 = i;         // template-parameters \tcode{T} and \tcode{i}
+            ::T t2 = ::i;     // global namespace members \tcode{T} and \tcode{i}
+        }
+    \end{codeblock}
+    Here, the template \tcode{f} has a \grammarterm{type-parameter}
+    called \tcode{T}, rather than an unnamed non-type
+    \grammarterm{template-parameter} of class \tcode{T}.
+\end{example}
+A storage class shall not be specified in a
+\grammarterm{template-parameter}
+declaration.
+Types shall not be defined in a \grammarterm{template-parameter}
+declaration.
+
+\pnum
+The \grammarterm{identifier} in a \grammarterm{type-parameter} is not looked up.
+A \grammarterm{type-parameter}
+whose \grammarterm{identifier} does not follow an ellipsis
+defines its
+\grammarterm{identifier}
+to be a
+\grammarterm{typedef-name}
+\removed{(if declared without
+\keyword{template})
+or
+\grammarterm{template-name}
+(if declared with
+\keyword{template})}
+in the scope of the template declaration.
+
+\begin{addedblock}
+The \grammarterm{identifier} in a \grammarterm{template-template-parameter} is not looked up.
+A \grammarterm{template-template-parameter} whose \grammarterm{identifier} does not follow an ellipsis defines its
+\grammarterm{identifier} to be a \grammarterm{template-name}.
+\end{addedblock}
+
+\begin{note}
+A template argument can be a class template or alias template.
+For example,
+
+\begin{codeblock}
+    template<class T> class myarray { /*...*/ };
+
+    template<class K, class V, template<class T> class C = myarray>
+    class Map {
+        C<K> key;
+        C<V> value;
+    };
+\end{codeblock}
+\end{note}
+
+\ednote{Modify [temp.param]/p16 As follow}
+
+\pnum
+If a \grammarterm{template-parameter} is \removed{a
+\grammarterm{type-parameter} with an ellipsis prior to its
+optional \grammarterm{identifier} or is a
+\grammarterm{parameter-declaration} that declares a
+pack \iref{dcl.fct}}
+\begin{addedblock}
+\begin{itemize}
+\item a \grammarterm{type-parameter} with an ellipsis prior to its optional \grammarterm{identifier},
+\item a \grammarterm{parameter-declaration} that declares a pack \iref{dcl.fct}, or
+\item a \grammarterm{template-template-parameter} with an ellipsis prior to its optional \grammarterm{identifier},
+\end{itemize}
+\end{addedblock}
+then the \grammarterm{template-parameter}
+is a template parameter pack \iref{temp.variadic}.
+A template parameter pack that is a \grammarterm{parameter-declaration} whose type
+contains one or more unexpanded packs is a pack expansion. Similarly,
+a template parameter pack that is a \grammarterm{type-parameter} with a
+\grammarterm{template-parameter-list} containing one or more unexpanded
+packs is a pack expansion.
+A type parameter pack with a \grammarterm{type-constraint} that
+contains an unexpanded parameter pack is a pack expansion.
+A template parameter pack that is a pack
+expansion shall not expand a template parameter pack declared in the same
+\grammarterm{template-parameter-list}.
+
+\rSec2[temp.arg.template]{Template template arguments}
+
+\rSec2[temp.arg.general]{General}
+
+\pnum
+\indextext{argument!template}%
+There are three forms of
+\grammarterm{template-argument},
+corresponding to the three forms of
+\grammarterm{template-parameter}:
+type, non-type and template.
+\begin{addedblock}
+A template template argument can name a type or alias template, a variable template or a concept.
+\end{addedblock}
+
+The type and form of each
+\grammarterm{template-argument}
+specified in a
+\grammarterm{template-id}
+shall match the type and form specified for the corresponding
+parameter declared by the template in its
+\grammarterm{template-parameter-list}.
+When the parameter declared by the template is a template
+parameter pack \iref{temp.variadic}, it will correspond to zero or more
+\grammarterm{template-argument}{s}.
+\begin{example}
+\begin{codeblock}
+    template<class T> class Array {
+        T* v;
+        int sz;
+        public:
+        explicit Array(int);
+        T& operator[](int);
+        T& elem(int i) { return v[i]; }
+    };
+
+    Array<int> v1(20);
+    typedef std::complex<double> dcomplex;  // \tcode{std::complex} is a standard library template
+    Array<dcomplex> v2(30);
+    Array<dcomplex> v3(40);
+
+    void bar() {
+        v1[3] = 7;
+        v2[3] = v3.elem(4) = dcomplex(7,8);
+    }
+\end{codeblock}
+\end{example}
+
+\pnum
+\removed{A
+\grammarterm{template-argument}
+for a template
+\grammarterm{template-parameter}
+shall be the name of a class template or an alias template, expressed as
+\grammarterm{id-expression}.}
+
+\begin{addedblock}
+A \grammarterm{template-argument} for a template \grammarterm{template-parameter} shall be an \grammarterm{id-expression} denoting
+\begin{itemize}
+\item the name of a class template or an alias template for a \grammarterm{type-template-parameter},
+\item the name of a variable template for a \grammarterm{variable-template-parameter}, and
+\item the name of a concept for a \grammarterm{concept-template-parameter}.
+\end{itemize}
+\end{addedblock}
+
+Only primary templates are considered when matching the template template
+argument with the corresponding parameter; partial specializations are not
+considered even if their parameter lists match that of the template template
+parameter.
+
+\pnum
+Any partial specializations \iref{temp.spec.partial} associated with the
+primary template are considered when a
+specialization based on the template
+\grammarterm{template-parameter}
+is instantiated.
+If a specialization is not reachable from the point of instantiation,
+and it would have been selected had it been reachable, the program is ill-formed,
+no diagnostic required.
+\begin{example}
+    \begin{codeblock}
+        template<class T> class A {     // primary template
+            int x;
+        };
+        template<class T> class A<T*> { // partial specialization
+            long x;
+        };
+        template<template<class U> class V> class C {
+            V<int>  y;
+            V<int*> z;
+        };
+        C<A> c;             // \tcode{V<int>} within \tcode{C<A>} uses the primary template, so \tcode{c.y.x} has type \tcode{int}
+        // \tcode{V<int*>} within \tcode{C<A>} uses the partial specialization, so \tcode{c.z.x} has type \tcode{long}
+    \end{codeblock}
+\end{example}
+
+\begin{addedblock}
+Two template parameters are of the same kind if:
+\begin{itemize}
+\item they are both \grammarterm{type-parameter},
+\item they are both non-type parameter,
+\item they are both \grammarterm{type-template-parameter},
+\item they are both \grammarterm{variable-template-parameter}, or
+\item they are both \grammarterm{concept-parameter}.
+\end{itemize}
+
+A template template parameter \placeholder{P} and a template argument \placeholder{A} are compatible if
+\begin{itemize}
+\item \placeholder{A} denotes the name of a class template or alias template and \placeholder{P} is a \grammarterm{type-template-parameter},
+\item \placeholder{A} denotes the name of a variable template and \placeholder{P} is a \grammarterm{variable-template-parameter}, or
+\item \placeholder{A} denotes the name of a concept and \placeholder{P} is a \grammarterm{concept-parameter}.
+\end{itemize}
+
+\end{addedblock}
+
+\pnum
+A \grammarterm{template-argument} matches a template
+\grammarterm{template-parameter} \tcode{P} when \added{\tcode{A} and \tcode{P} are compatible and}
+\tcode{P} is at least as specialized as the \grammarterm{template-argument} \tcode{A}.
+In this comparison, if \tcode{P} is unconstrained,
+the constraints on \tcode{A} are not considered.
+If \tcode{P} contains a template parameter pack, then \tcode{A} also matches \tcode{P}
+if each of \tcode{A}'s template parameters
+matches the corresponding template parameter in the
+\grammarterm{template-head} of \tcode{P}.
+Two template parameters match if they are of the same kind \removed{(type, non-type, template)},
+for non-type \grammarterm{template-parameter}{s}, their types are
+equivalent \iref{temp.over.link}, and for template \grammarterm{template-parameter}{s},
+each of their corresponding \grammarterm{template-parameter}{s} matches, recursively.
+When \tcode{P}'s \grammarterm{template-head} contains a template parameter
+pack \iref{temp.variadic}, the template parameter pack will match zero or more template
+parameters or template parameter packs in the \grammarterm{template-head} of
+\tcode{A} with the same type and form as the template parameter pack in \tcode{P}
+(ignoring whether those template parameters are template parameter packs).
+
+\begin{example}
+\begin{codeblock}
+    template<class T> class A { /*...*/ };
+    template<class T, class U = T> class B { /*...*/ };
+    template<class ... Types> class C { /*...*/ };
+    template<auto n> class D { /*...*/ };
+    template<template<class> class P> class X { /*...*/ };
+    template<template<class ...> class Q> class Y { /*...*/ };
+    template<template<int> class R> class Z { /*...*/ };
+
+    X<A> xa;            // OK
+    X<B> xb;            // OK
+    X<C> xc;            // OK
+    Y<A> ya;            // OK
+    Y<B> yb;            // OK
+    Y<C> yc;            // OK
+    Z<D> zd;            // OK
+\end{codeblock}
+\end{example}
+\begin{example}
+\begin{codeblock}
+    template <class T> struct eval;
+
+    template <template <class, class...> class TT, class T1, class... Rest>
+    struct eval<TT<T1, Rest...>> { };
+
+    template <class T1> struct A;
+    template <class T1, class T2> struct B;
+    template <int N> struct C;
+    template <class T1, int N> struct D;
+    template <class T1, class T2, int N = 17> struct E;
+
+    eval<A<int>> eA;                // OK, matches partial specialization of \tcode{eval}
+    eval<B<int, float>> eB;         // OK, matches partial specialization of \tcode{eval}
+    eval<C<17>> eC;                 // error: \tcode{C} does not match \tcode{TT} in partial specialization
+    eval<D<int, 17>> eD;            // error: \tcode{D} does not match \tcode{TT} in partial specialization
+    eval<E<int, float>> eE;         // error: \tcode{E} does not match \tcode{TT} in partial specialization
+\end{codeblock}
+\end{example}
+\begin{example}
+    \begin{codeblock}
+        template<typename T> concept C = requires (T t) { t.f(); };
+        template<typename T> concept D = C<T> && requires (T t) { t.g(); };
+
+        template<template<C> class P> struct S { };
+
+        template<C> struct X { };
+        template<D> struct Y { };
+        template<typename T> struct Z { };
+
+        S<X> s1;            // OK, \tcode{X} and \tcode{P} have equivalent constraints
+        S<Y> s2;            // error: \tcode{P} is not at least as specialized as \tcode{Y}
+        S<Z> s3;            // OK, \tcode{P} is at least as specialized as \tcode{Z}
+    \end{codeblock}
+\end{example}
+
+\pnum
+A template \grammarterm{template-parameter} \tcode{P} is
+at least as specialized as a template \grammarterm{template-argument} \tcode{A}
+if, given the following rewrite to two function templates,
+the function template corresponding to \tcode{P}
+is at least as specialized as
+the function template corresponding to \tcode{A}
+according to the partial ordering rules
+for function templates \iref{temp.func.order}.
+Given an invented class template \tcode{X}
+with the \grammarterm{template-head} of \tcode{A} (including default arguments
+and \grammarterm{requires-clause}, if any):
+
+\begin{itemize}
+    \item
+    Each of the two function templates has the same template parameters
+    and \grammarterm{requires-clause} (if any),
+    respectively, as \tcode{P} or \tcode{A}.
+    \item
+    Each function template has a single function parameter
+    whose type is a specialization of \tcode{X}
+    with template arguments corresponding to the template parameters
+    from the respective function template where,
+    for each template parameter \tcode{PP}
+    in the \grammarterm{template-head} of the function template,
+    a corresponding template argument \tcode{AA} is formed.
+    If \tcode{PP} declares a template parameter pack,
+    then \tcode{AA} is the pack expansion \tcode{PP...} \iref{temp.variadic};
+    otherwise, \tcode{AA} is the \grammarterm{id-expression} \tcode{PP}.
+\end{itemize}
+If the rewrite produces an invalid type,
+then \tcode{P} is not at least as specialized as \tcode{A}.
+
+
+\rSec2[temp.constr.order]{Partial ordering by constraints}
+\indextext{subsume|see{constraint, subsumption}}
+
+\pnum
+A constraint $P$ \defnx{subsumes}{constraint!subsumption} a constraint $Q$
+if and only if,
+for every disjunctive clause $P_i$
+in the disjunctive normal form
+\begin{wfootnote}
+    A constraint is in disjunctive normal form when it is a disjunction of
+    clauses where each clause is a conjunction of atomic constraints.
+    For atomic constraints $A$, $B$, and $C$, the disjunctive normal form
+    of the constraint
+    $A \land (B \lor C)$
+    is
+    $(A \land B) \lor (A \land C)$.
+    %
+    Its disjunctive clauses are $(A \land B)$ and $(A \land C)$.
+\end{wfootnote}
+of $P$, $P_i$ subsumes every conjunctive clause $Q_j$
+in the conjunctive normal form
+\begin{wfootnote}
+    A constraint is in conjunctive normal form when it is a conjunction
+    of clauses where each clause is a disjunction of atomic constraints.
+    For atomic constraints $A$, $B$, and $C$, the constraint
+    $A \land (B \lor C)$ is in conjunctive normal form.
+    %
+    Its conjunctive clauses are $A$ and $(B \lor C)$.
+\end{wfootnote}
+of $Q$, where
+\begin{itemize}
+    \item
+    a disjunctive clause $P_i$ subsumes a conjunctive clause $Q_j$ if and only
+    if there exists an atomic constraint $P_{ia}$ in $P_i$ for which there exists
+    an atomic constraint $Q_{jb}$ in $Q_j$ such that $P_{ia}$ subsumes $Q_{jb}$, and
+
+    \item an atomic constraint $A$ subsumes another atomic constraint
+    $B$ if and only if $A$ and $B$ are identical using the
+    rules described in \ref{temp.constr.atomic}.
+
+
+    \ednote{Add wording for fold expressions}
+
+\end{itemize}
+%
+\begin{example}
+    Let $A$ and $B$ be atomic constraints \iref{temp.constr.atomic}.
+    %
+    The constraint $A \land B$ subsumes $A$, but $A$ does not subsume $A \land B$.
+    %
+    The constraint $A$ subsumes $A \lor B$, but $A \lor B$ does not subsume $A$.
+    %
+    Also note that every constraint subsumes itself.
+\end{example}
+
+\pnum
+\begin{note}
+The subsumption relation defines a partial ordering on constraints.
+This partial ordering is used to determine
+\begin{itemize}
+    \item the best viable candidate of non-template functions \iref{over.match.best},
+    \item the address of a non-template function \iref{over.over},
+    \item the matching of template template arguments \iref{temp.arg.template},
+    \item the partial ordering of class template specializations \iref{temp.spec.partial.order}, and
+    \item the partial ordering of function templates \iref{temp.func.order}.
+\end{itemize}
+\end{note}
+
+
+\rSec2[temp.constr.normal]{Constraint normalization}
+\indextext{constraint!normalization|(}%
+
+\pnum
+The \defnx{normal form}{normal form!constraint} of an \grammarterm{expression} \tcode{E} is
+a constraint \iref{temp.constr.constr} that is defined as follows:
+%
+\begin{itemize}
+    \item
+    The normal form of an expression \tcode{( E )} is
+    the normal form of \tcode{E}.
+
+    \item
+    The normal form of an expression \tcode{E1 || E2} is
+    the disjunction \iref{temp.constr.op} of
+    the normal forms of \tcode{E1} and \tcode{E2}.
+
+    \item
+    The normal form of an expression \tcode{E1 \&\& E2}
+    is the conjunction of
+    the normal forms of \tcode{E1} and \tcode{E2}.
+
+    \item
+    The normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>}
+    is the normal form of the \grammarterm{constraint-expression} of \tcode{C},
+    after \removed{substituting \tcode{A$_1$, A$_2$, ..., A$_n$}}
+    \begin{itemize}
+    \begin{addedblock}
+    \item substituting each use of A$_i$'s corresponding template parameter in the \grammarterm{constraint-expression} of \tcode{C} if A$_i$ denotes a \grammarterm{concept-name} % lah: and? or?
+    \end{addedblock}
+    \item
+    \added{substituting each A$_i$ that is not a \grammarterm{concept-name}} for \tcode{C}{'s} respective template parameters in the
+    parameter mappings in each atomic constraint.
+    If any such substitution results in an invalid type or expression,
+    the program is ill-formed; no diagnostic is required.
+
+    \end{itemize}
+    \begin{example}
+        \begin{codeblock}
+            template<typename T> concept A = T::value || true;
+            template<typename U> concept B = A<U*>;
+            template<typename V> concept C = B<V&>;
+        \end{codeblock}
+        Normalization of \tcode{B}{'s} \grammarterm{constraint-expression}
+        is valid and results in
+        \tcode{T::value} (with the mapping $\tcode{T} \mapsto \tcode{U*}$)
+        $\lor$
+        \tcode{true} (with an empty mapping),
+        despite the expression \tcode{T::value} being ill-formed
+        for a pointer type \tcode{T}.
+        Normalization of \tcode{C}{'s} \grammarterm{constraint-expression}
+        results in the program being ill-formed,
+        because it would form the invalid type \tcode{V\&*}
+        in the parameter mapping.
+    \end{example}
+
+    \begin{addedblock}
+    \item The normal form of a \grammarterm{fold-expression} \iref{expr.prim.fold} \tcode{F}
+    whose \grammarterm{fold-operator} \tcode{op} is either \tcode{\&\&} or \tcode{||}
+    and whose pattern is a \tcode{concept-name} \tcode{C} is the normal form of the expanded expression F'
+    produced by the expansion of \tcode{C}:
+
+    \pnum
+    \begin{itemize}
+        \item
+        % Note: "\space" used below because " " inside tcode adds too much whitespace;
+        % one could optionally use mathfont inside tcode, e.g., "\tcode{($ $}".
+        \tcode{(}\space
+        \tcode{((}$\mathtt{E}_1$
+        \placeholder{op} $\mathtt{E}_2$\tcode{)}
+        \placeholder{op} $\cdots$\tcode{)}
+        \placeholder{op} $\mathtt{E}_N$
+        \space\tcode{)}
+        for a unary left fold,
+        \item
+        \tcode{(}\space
+        $\mathtt{E}_1$     \placeholder{op}
+        \tcode{(}$\cdots$           \placeholder{op}
+        \tcode{(}$\mathtt{E}_{N-1}$ \placeholder{op}
+        $\mathtt{E}_N$\tcode{))}
+        \space\tcode{)}
+        for a unary right fold,
+        \item
+        \tcode{(}\space
+        \tcode{(((}$\mathtt{E}$
+        \placeholder{op} $\mathtt{E}_1$\tcode{)}
+        \placeholder{op} $\mathtt{E}_2$\tcode{)}
+        \placeholder{op} $\cdots$\tcode{)}
+        \placeholder{op} $\mathtt{E}_N$
+        \space\tcode{)}
+        for a binary left fold, and
+        \item
+        \tcode{(}\space
+        $\mathtt{E}_1$     \placeholder{op}
+        \tcode{(}$\cdots$           \placeholder{op}
+        \tcode{(}$\mathtt{E}_{N-1}$ \placeholder{op}
+        \tcode{(}$\mathtt{E}_{N}$   \placeholder{op}
+        $\mathtt{E}$\tcode{)))}
+        \space\tcode{)}
+        for a binary right fold.
+    \end{itemize}
+    \end{addedblock}
+
+
+    \item
+    The normal form of any other expression \tcode{E} is
+    the atomic constraint
+    whose expression is \tcode{E} and
+    whose parameter mapping is the identity mapping.
+\end{itemize}
+
+\pnum
+The process of obtaining the normal form of a
+\grammarterm{constraint-expression}
+is called
+\defnx{normalization}{normalization!constraint|see{constraint, normalization}}.
+\begin{note}
+    Normalization of \grammarterm{constraint-expression}{s}
+    is performed
+    when determining the associated constraints \iref{temp.constr.constr}
+    of a declaration
+    and
+    when evaluating the value of an \grammarterm{id-expression}
+    that names a concept specialization \iref{expr.prim.id}.
+\end{note}
+
+\pnum
+\begin{example}
+    \begin{codeblock}
+        template<typename T> concept C1 = sizeof(T) == 1;
+        template<typename T> concept C2 = C1<T> && 1 == 2;
+        template<typename T> concept C3 = requires { typename T::type; };
+        template<typename T> concept C4 = requires (T x) { ++x; };
+
+        template<C2 U> void f1(U);      // \#1
+        template<C3 U> void f2(U);      // \#2
+        template<C4 U> void f3(U);      // \#3
+    \end{codeblock}
+    The associated constraints of \#1 are
+    \tcode{sizeof(T) == 1} (with mapping $\tcode{T} \mapsto \tcode{U}$) $\land$ \tcode{1 == 2}.\\
+    The associated constraints of \#2 are
+    \tcode{requires \{ typename T::type; \}} (with mapping $\tcode{T} \mapsto \tcode{U}$).\\
+    The associated constraints of \#3 are
+    \tcode{requires (T x) \{ ++x; \}} (with mapping $\tcode{T} \mapsto \tcode{U}$).
+\end{example}
+\indextext{constraint!normalization|)}
+
+
+\rSec2[temp.variadic]{Variadic templates}
+
+\pnum
+A \defn{template parameter pack} is a template parameter
+that accepts zero or more template arguments.
+\begin{example}
+    \begin{codeblock}
+        template<class ... Types> struct Tuple { };
+
+        Tuple<> t0;                     // \tcode{Types} contains no arguments
+        Tuple<int> t1;                  // \tcode{Types} contains one argument: \tcode{int}
+        Tuple<int, float> t2;           // \tcode{Types} contains two arguments: \tcode{int} and \tcode{float}
+        Tuple<0> error;                 // error: \tcode{0} is not a type
+    \end{codeblock}
+\end{example}
+
+\pnum
+A \defn{function parameter pack} is a function parameter
+that accepts zero or more function arguments.
+\begin{example}
+    \begin{codeblock}
+        template<class ... Types> void f(Types ... args);
+
+        f();                            // \tcode{args} contains no arguments
+        f(1);                           // \tcode{args} contains one argument: \tcode{int}
+        f(2, 1.0);                      // \tcode{args} contains two arguments: \tcode{int} and \tcode{double}
+    \end{codeblock}
+\end{example}
+
+\pnum
+An \defnx{\grammarterm{init-capture} pack}{init-capture pack@\fakegrammarterm{init-capture} pack}
+is a lambda capture that introduces an \grammarterm{init-capture}
+for each of the elements in the pack expansion of its \grammarterm{initializer}.
+\begin{example}
+    \begin{codeblock}
+        template <typename... Args>
+        void foo(Args... args) {
+            [...xs=args]{
+                bar(xs...);             // \tcode{xs} is an \grammarterm{init-capture} pack
+            };
+        }
+
+        foo();                          // \tcode{xs} contains zero \grammarterm{init-capture}s
+        foo(1);                         // \tcode{xs} contains one \grammarterm{init-capture}
+    \end{codeblock}
+\end{example}
+
+\pnum
+A \defn{pack} is
+a template parameter pack,
+a function parameter pack,
+or an \grammarterm{init-capture} pack.
+The number of elements of a template parameter pack
+or a function parameter pack
+is the number of arguments provided for the parameter pack.
+The number of elements of an \grammarterm{init-capture} pack
+is the number of elements in the pack expansion of its \grammarterm{initializer}.
+
+\pnum
+\indextext{pattern|see{pack expansion, pattern}}%
+A \defn{pack expansion}
+consists of a \defnx{pattern}{pack expansion!pattern} and an ellipsis, the instantiation of which
+produces zero or more instantiations of the pattern in a list (described below).
+The form of the pattern
+depends on the context in which the expansion occurs. Pack
+expansions can occur in the following contexts:
+
+\begin{itemize}
+\item In a function parameter pack \iref{dcl.fct}; the pattern is the
+\grammarterm{parameter-declaration} without the ellipsis.
+
+\item In a \grammarterm{using-declaration} \iref{namespace.udecl};
+the pattern is a \grammarterm{using-declarator}.
+
+\item In a template parameter pack that is a pack expansion \iref{temp.param}:
+\begin{itemize}
+    \item
+    if the template parameter pack is a \grammarterm{parameter-declaration};
+    the pattern is the \grammarterm{parameter-declaration} without the ellipsis;
+
+    \item
+    if the template parameter pack is a \grammarterm{type-parameter};
+    the pattern is the corresponding \grammarterm{type-parameter}
+    without the ellipsis. % lah: set the period as replaced by a semicomma
+
+    \begin{addedblock}
+    \item
+    if the template parameter pack is a \grammarterm{template-template-parameter};
+    the pattern is the corresponding \grammarterm{template-template-parameter}
+    without the ellipsis.
+    \end{addedblock}
+\end{itemize}
+
+\item In an \grammarterm{initializer-list} \iref{dcl.init};
+the pattern is an \grammarterm{initializer-clause}.
+
+\item In a \grammarterm{base-specifier-list} \iref{class.derived};
+the pattern is a \grammarterm{base-specifier}.
+
+\item In a \grammarterm{mem-initializer-list} \iref{class.base.init} for a
+\grammarterm{mem-initializer} whose \grammarterm{mem-initializer-id} denotes a
+base class; the pattern is the \grammarterm{mem-initializer}.
+
+\item In a \grammarterm{template-argument-list} \iref{temp.arg};
+the pattern is a \grammarterm{template-argument}.
+
+\item In an \grammarterm{attribute-list} \iref{dcl.attr.grammar}; the pattern is
+an \grammarterm{attribute}.
+
+\item In an \grammarterm{alignment-specifier} \iref{dcl.align}; the pattern is
+the \grammarterm{alignment-specifier} without the ellipsis.
+
+\item In a \grammarterm{capture-list} \iref{expr.prim.lambda.capture}; the pattern is
+the \grammarterm{capture} without the ellipsis.
+
+\item In a \tcode{sizeof...} expression \iref{expr.sizeof}; the pattern is an
+\grammarterm{identifier}.
+
+\item In a \grammarterm{fold-expression} \iref{expr.prim.fold};
+the pattern is the \grammarterm{cast-expression}
+that contains an unexpanded pack.
+\end{itemize}
+
+\begin{example}
+    \begin{codeblock}
+        template<class ... Types> void f(Types ... rest);
+        template<class ... Types> void g(Types ... rest) {
+            f(&rest ...);     // ``\tcode{\&rest ...}'' is a pack expansion; ``\tcode{\&rest}'' is its pattern
+        }
+    \end{codeblock}
+\end{example}
+
+
+\rSec1[temp.type]{Type equivalence}
+
+\pnum
+\indextext{equivalence!template type}%
+Two \grammarterm{template-id}{s} are the same if
+\begin{itemize}
+\item
+their \grammarterm{template-name}{s},
+\grammarterm{operator-function-id}{s}, or
+\grammarterm{literal-operator-id}{s}
+refer to the same template, and
+
+\item
+their corresponding type \grammarterm{template-argument}{s}
+are the same type, and
+
+\item
+their corresponding non-type \grammarterm{template-argument}{s}
+are template-argument-equivalent (see below)
+after conversion to the type of the \grammarterm{template-parameter}, and
+
+\item
+their corresponding template \grammarterm{template-argument}{s}
+refer to the same template.
+\end{itemize}
+Two \grammarterm{template-id}{s} that are the same
+refer to the same class, function, \added{concept, }or variable.
+
+\rSec3[temp.func.order]{Partial ordering of function templates}
+
+\pnum
+\indextext{overloading!resolution!template}%
+\indextext{ordering!function template partial|see{template, function, partial ordering}}%
+If multiple function templates share a name,
+the use of that name can be ambiguous because
+template argument deduction \iref{temp.deduct} may identify
+a specialization for more than one function template.
+\defnx{Partial ordering}{template!function!partial ordering}
+of overloaded function template declarations is used in the following contexts
+to select the function template to which a function template specialization
+refers:
+\begin{itemize}
+    \item
+    during overload resolution for a call to a function template specialization \iref{over.match.best};
+    \item
+    when the address of a function template specialization is taken;
+    \item
+    when a placement operator delete that is a
+    function template
+    specialization
+    is selected to match a placement operator new
+    \iref{basic.stc.dynamic.deallocation,expr.new};
+    \item
+    when a friend function declaration \iref{temp.friend}, an
+    explicit instantiation \iref{temp.explicit} or an explicit specialization \iref{temp.expl.spec} refers to
+    a function template specialization.
+\end{itemize}
+
+\pnum
+Partial ordering selects which of two function templates is more
+specialized than the other by transforming each template in turn
+(see next paragraph) and performing template argument deduction
+using the function type.
+The deduction process determines whether
+one of the templates is more specialized than the other. If so, the
+more specialized template is the one chosen by the partial ordering
+process.
+If both deductions succeed, the partial ordering selects
+the more constrained template (if one exists) as determined below.
+
+\pnum
+To produce the transformed template, for each type, non-type, or template
+template parameter (including template parameter packs \iref{temp.variadic}
+thereof) synthesize a unique type, value, or class template
+respectively and substitute it for each occurrence of that parameter
+in the function type of the template.
+
+
+\ednote{Do we need to change anything here?} % lah: it doesn't seem you want this to be in your final paper.
+
+\begin{note}
+    The type replacing the placeholder
+    in the type of the value synthesized for a non-type template parameter
+    is also a unique synthesized type.
+\end{note}
+Each function template $M$ that is a member function
+is considered to have
+a new first parameter of type $X(M)$, described below,
+inserted in its function parameter list.
+If exactly one of the function templates was considered by overload resolution
+via a rewritten candidate \iref{over.match.oper}
+with a reversed order of parameters,
+then the order of the function parameters in its transformed template
+is reversed.
+For a function template $M$ with cv-qualifiers \cv{}
+that is a member of a class $A$:
+
+
+\rSec3[temp.deduct.type]{Deducing template arguments from a type}
+
+\ednote{Modify [temp.deduct.type]/p8 As follow}
+
+\pnum
+A template type argument
+\tcode{T},
+a template template argument \added{denoting a class template or an alias template}
+\tcode{TT},
+or a template non-type argument
+\tcode{i}
+can be deduced if
+\tcode{P}
+and
+\tcode{A}
+have one of the following forms:
+\begin{codeblock}
+    @\opt{\cv{}}@ T
+    T*
+    T&
+    T&&
+    @\opt{T}@[@\opt{i}@]
+    @\opt{T}@(@\opt{T}@) noexcept(@\opt{i}@)
+    @\opt{T}@ @\opt{T}@::*
+    @\opt{TT}@<T>
+    @\opt{TT}@<i>
+    @\opt{TT}@<TT>
+    @\opt{TT}@<>
+\end{codeblock}
+
+%\ednote{Could a variable template parameter ever be deduced?}
+
+\section{Acknowledgments}
+Many people contributed valuable discussions and feedbacks to this paper, notably
+Nina Dinka Ranns, Alisdair Meredith, Joshua Berne, Pablo Halpern, Lewis Baker, Bengt Gustafsson,
+Hannеs Hauswedell and Barry Revzin.
+
+We also want to thank Lori Hughes for helping editing this paper and Bloomberg for sponsoring this work.
+
+
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+
+\renewcommand{\section}[2]{}%
+
+\begin{thebibliography}{9}
+
+
+\end{thebibliography}
+\end{document}
