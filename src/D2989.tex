@@ -45,7 +45,19 @@ for limited benefits. In this paper, we propose a much simpler approach to the s
 \section{Difference with \paper{P1985R3}}
 
 This paper is really a follow-up on \paper{P1985R3}.
-The main difference is that we are merely proposing that universal template parameters can be used only as template arguments, to side step parsing ambiguities, syntax disambiguators, and so on.
+The main difference is that we are merely proposing that universal template parameters can be used only as template arguments of other templates.
+They cannot be used in any other context.
+
+\begin{colorblock}
+template <universal template U>
+void f() {
+  SomeOtherTemplate<U>(); // ok.
+  U foo; // error: U is not used as a template argument.
+  U = 0; // error: U is not used as a template argument.
+}
+\end{colorblock}
+
+This change was made to simplify the design as it completely side step parsing ambiguities, syntax disambiguators, and so on.
 
 Other than this change, the feature and the design are still very much the same (this feature presents few design options).
 We present some new design questions not considered in earlier papers and report on early implementation efforts in Clang.
@@ -134,7 +146,7 @@ The design involves as few elements as possible.
 
 Anything that can be a template argument can be the argument of a universal template parameter, hence the name \emph{universal template parameter}.
 
-Consequently, universal template oarameters are less specialized than any other sort of template with which they are compared,
+Consequently, universal template parameters are less specialized than any other sort of template with which they are compared,
 which allows specializing an entity based on template parameter kind.
 
 \begin{colorblock}
