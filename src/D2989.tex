@@ -23,7 +23,7 @@
 \section{Abstract}
 In \paper{P1985R3}, we explore universal template parameters (a template parameter that can be a type, non-type, or template name).
 We proposed allowing the use of universal template parameters in all contexts, which would have added a large amount of complexity to both the specification and implementations
-for limited benefits. In this paper, we propose a much simpler approach to the same feature.
+for limited benefits. In this paper, we propose the much simpler subset of the feature.
 
 
 \section{Revisions}
@@ -33,6 +33,7 @@ for limited benefits. In this paper, we propose a much simpler approach to the s
 \begin{itemize}
     \item Update the implementation experience
     \item Fix code examples and add compiler explorer links
+    \item Expand the section about deduction of universal template arguments, and propose a new solution to deduce the type of value template parameters deduced fron a univeral template argument.
 \end{itemize}
 
 \subsection{R0}
@@ -59,7 +60,7 @@ void f() {
 
 This change was made to simplify the design as it completely side step parsing ambiguities, syntax disambiguators, and so on.
 
-Other than this change, the feature and the design are still very much the same (this feature presents few design options).
+Other than this change, the feature and the design are still very much the same, as this feature presents few design options.
 We present some new design questions not considered in earlier papers and report on early implementation efforts in Clang.
 
 
@@ -134,17 +135,18 @@ Such a change would allow \tcode{llvm::SmallVector} and similar classes (e.g., \
 \section{Design}
 
 The design involves as few elements as possible.
+
 \begin{itemize}
-\item A universal template parameter can be declared in the template head of a function, class, or variable template.
-\item The name of a universal parameter (which is found by unqualified lookup) can only be used as a template argument (and nowhere else).
+\item A universal template parameter can be declared in the template-head of a function, class, or variable template.
+\item The name of a universal template parameter (which is found by unqualified lookup) can only be used as an argument to a template (and nowhere else).
 \item Universal template parameters can be packs.
 \item Universal template parameters cannot be defaulted.
-\item Forwarding a universal template to another template, as well as partial specializations, are the main way to handle universal template parameters.
+\item Forwarding a universal template argument to another template combined with partial template specialization is the main mechanism of use of universal template parameters.
 \end{itemize}
 
 \subsection{Partial ordering of universal template parameters}
 
-Anything that can be a template argument can be the argument of a universal template parameter, hence the name \emph{universal template parameter}.
+Anything that can be a template argument can be the argument binding to a universal template parameter, hence the name \emph{universal template parameter}.
 
 Consequently, universal template parameters are less specialized than any other sort of template with which they are compared,
 which allows specializing an entity based on template parameter kind.
@@ -158,37 +160,69 @@ constexpr bool is_variable<a> = true; // #2
 
 Here, \tcode{\#2} is more specialized than \tcode{\#1} because a universal template parameter is less specialized than a non-type parameter.
 
-\subsection{Universal template parameter deduction}
+\subsection{Deduction of universal template arguments}
 
-The \emph{kind} of a universal parameter is determined by the \emph{kind} of the corresponding template argument.
-That is, if the template argument is a type, the corresponding template parameter will be a type template parameter.
+The guiding principle for this is that whatever the universal template parameter is compared with, that's what it deduces to.
+
+To specify this fully, we have to consider every \emph{kind} of binding.
+
+\subsubsection{typenames}
+
+If the corresponding template argument is a type, the corresponding template parameter deduces to that type.
+
+\begin{colorblock}
+template <universal template T>
+struct S {};
+template <universal template U, template <universal template> typename T>
+void f(T<U> x);
+
+using A = S<int>; // T deduces to int
+void h1() {
+  f(A{}); // calls f<int, S>
+}
+\end{colorblock}
+
+\subsubsection{template names}
 
 If the template argument denotes a template name (or concept name), the corresponding universal template parameter
 is deduced to be a template (or concept) template parameter with the same template head.
 
 \begin{colorblock}
-template <universal template T>
-struct S;
+// S and f from the previous section
+using B = S<std::pair>; // T is compared against template <typename T, typename U> struct pair;
+using C = S<std::conditional_t>; // T is a type-alias std::conditional_t
+using D = S<std::regular>; // T is a concept-name std::regular
+using E = S<std::is_same_v>; // T is a variable-template std::is_same_v
 
-using A = S<std::pair>; // T is compared against template <typename T, typename U> typename
+void h2() {
+  f(B{}); // calls f<std::pair, S>
+  f(C{}); // calls f<std::conditional_t, S>
+  f(D{}); // calls f<std::regular, S>
+  f(E{}); // calls f<std::is_same_v, S>
+}
 \end{colorblock}
 
+\subsubsection{Expressions}
+
 If the template argument is an expression, the corresponding universal template parameter becomes a non-type template parameter.
+But the question of how the type of these non-type parameters are deduced.
 
-\subsection{NTTP deduction}
+We considered the following options:
 
-We arrive at an interesting question: When replacing a universal template parameter with a non-type argument, what type should we deduce against?
-We could deduce the non-reference type (i.e., \tcode{auto}), but doing so goes against one of the main goal of this feature to be able to forward arbitrary template arguments.
+\begin{itemize}
+\item Using \tcode{auto} semantics: This would prevent deducing reference types. And while the use cases for references in template parameter is somewhat limited, there are use cases,
+and preventing them would be against the main motivation of universal template parameters, which is to forward arbitrary templates argument.
+\textbf{This is the option we implemented}, but it is also the worst option.
 
-So instead, we propose to deduce the exact type (i.e., \tcode{decltype(auto)}.
+\item Using \tcode{decltype(auto)} semantics (proposed in R0 of this paper). This works for most cases and is fairly easy to implement.
 
 Consequently, the following would be ill-formed:
 
 \begin{colorblock}
-template <universal template>
-struct s{};
-constexpr int && i = 0;
-s<i> a; // int&& is not a valid NTTP
+template <int&> struct A { };
+template <universal template U> B : A<U> { };
+int x;
+B<x> b1;
 \end{colorblock}
 
 And it makes partial specialization somewhat subtle:
@@ -212,12 +246,73 @@ void test() {
 }
 \end{colorblock}
 
-However, these subtleties are unlikely to manifest in practice; NTTP of reference type are uncomonn, and explicitely specializing a universal template parameter
-for a specific value should also be rare.
+\item Apply \tcode{decltype(auto)} rules but deduce a reference for \grammarterm{id-expression}{s}.
+This almost works, except it would create an inconsistency for parameter forwarded to a \tcode{decltype(auto)} template parameter (\tcode{C} case):
 
-We considered letting users control whether to deduce a reference with some syntax, but this would add more complexity than it would solve problems.
+\begin{colorblock}
+template <auto&> struct A { };
+template <auto> struct B { };
+template <decltype(auto)> struct C { };
+
+template <template<universal template> class Z, universal template U>
+struct Foo : Z<U> { };
+
+int x;
+Foo<A, x> b1; // Ok: type of U is int&, instantiate A<int&>
+Foo<B, x> b1; // Ok: type of U is int&, instantiate B<int>
+Foo<C, x> b1; // Unexpected: type of U is int&, instantiate C<int&>,
+              // wheras C<x> would be ill-formed.
+\end{colorblock}
+
+
+\item Defer type deduction of \grammarterm{id-expressions}.
+
+To make \tcode{decltype(auto)} consistent, instead of deducing the type of an id-expression used as argument to a universal template parameter,
+we could defer the deduction to the point at which it is used (as a template argument for a value template parameter):
+
+\begin{colorblock}
+template <int&> struct A { };
+template <universal template U> struct B : A<U> { };
+int x;
+B<x> b1;
+\end{colorblock}
+
+If we try to deduce the type of \tcode{U} from \tcode{x}, then \tcode{U} is \tcode{int} and the program is ill-formed (because \tcode{int\&} cannot bind to \tcode{int})
+If instead, \tcode{U} is deduced to be a sort of symbolic reference to the variable \tcode{x}, and we then perform argument deduction for \tcode{A<U>}, which in effect would be identical
+to performing deduction for \tcode{A<x>}, then the program above would be well-formed.
+
+Under this model:
+
+\begin{colorblock}
+
+template <decltype(auto)> struct A { };
+template <auto&> struct B { };
+template <template <universal template> class Z, universal template U>
+using Alias = Z<U>;
+
+int i;
+
+Alias<A, i> a1;   // ill-formed (non-constant expression used as template argument)
+Alias<A, (i)> a2; // ok A<int&>
+Alias<B, i> a3;   // ok B<int&>
+\end{colorblock}
+
+
+To achieve this behavior, \grammarterm{id-expression}{s} bound to a universal template parameter would behave as sort of symbolic references to
+the variable they denote, a bit like structured binding of aggregates.
+They would presumably always be type-dependent even if the variable they denote is not.
+We think this might be the better model, as it allows ""perfect forwarding"" of variables through universal parameters.
+
+However, this idea came quite close to Kona, such that we have not had time to implement it or to iron out the specifics.
+Nevertheless, we think this approach is the most promising, as it is uncompromising.
+
+
+\item We considered letting users control whether to deduce a reference with some syntax, but this would add more complexity than it would solve problems.
 Deducing the exact type has the big advantage of making universal template parameters always be the exact same thing as the argument from which they are deduced,
 which is easier to teach.
+
+\end{itemize}
+
 
 \subsection{Concepts}
 
@@ -511,6 +606,7 @@ TBD!
 We would like to thank Bengt Gustafsson, Brian Bi, Joshua Berne, and Pablo Halpern for their
 valuable feedback on this paper.
 
+Thanks to Barry Revzin for suggesting an alternative to deduce the type of value template parameters.
 
 We also want to thank Lori Hughes for helping edit this paper on short notice.
 
