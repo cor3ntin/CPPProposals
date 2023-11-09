@@ -25,7 +25,9 @@ This paper reports implementation experience on this proposal and provides updat
 
 \subsection{Revision 3}
 
-CWG pointed out that the restrictions on volatile variables and mutable subobjects in the definition of "usable in constant expressions" have undesirable consequences. Those restrictions have therefore been moved to [basic.def.odr]. An unintentional omission in R2 has also been fixed: a local static constexpr reference shall not refer to a variable with automatic storage duration. Examples have also been added to the wording section.
+CWG pointed out that the restrictions on volatile variables and mutable subobjects in the definition of ``usable in constant expressions'' have undesirable consequences. Those restrictions have therefore been moved to [basic.def.odr]. An unintentional omission in R2 has also been fixed: a local static constexpr reference shall not refer to a variable with automatic storage duration. Examples have also been added to the wording section.
+
+Following discussion in EWG, we have also expanded the rationale for the restriction that constexpr references can only refer to automatic storage duration variables that have the same innermost enclosing function.
 
 \subsection{Revision 2}
 
@@ -186,9 +188,7 @@ Pointers and references to variables with automatic storage duration cannot be u
 
 Similarly, we can construct an automatic storage duration \tcode{constexpr} reference to a static variable but not a static \tcode{constexpr} reference bound to an automatic storage duration object.
 
-\subsection{Additional considerations}
-
-\subsubsection{Thread-local variables}
+\subsection{Thread-local variables}
 
 Taking the address of a thread-local variable may initialize the variable, and that initialization may not be a constant expression.
 Supporting references/pointers to thread-local variables would therefore require additional consideration, and we would probably want to allow it only if it were  already initialized
@@ -196,7 +196,7 @@ on declaration.
 
 We could exclude thread locals from the design entirely as we're not sure a compelling use case exists for constexpr references to thread-local objects.
 
-\subsubsection{Lambda capture of \tcode{constexpr} references bound to automatic storage duration objects}
+\subsection{Lambdas that reference automatic storage duration objects from the enclosing function}
 
 \tcode{constexpr} references are not ODR-used.  Therefore, a constexpr reference used in a lambda does not trigger a capture.
 This would be problematic for references bound to automatic storage duration objects:
@@ -209,13 +209,252 @@ auto f() {
         return ref;
     });
 }
-f(); //# ! try to access i outside of its lifetime
+f();
 \end{colorblock}
 
-We will have to modify \href{http://eel.is/c++draft/basic.def.odr#5.1}{[basic.def.odr]/p5.1} so that \tcode{constexpr} references to automatic storage duration variables (or subobjects thereof) are ODR-used.
+The current rules never require odr-use of \tcode{constexpr} references because
+any use of a \tcode{constexpr} reference can always be evaluated as if it were
+replaced by its initializer. However, in the above example, such a
+transformation is not desirable since it would require \tcode{i} to be captured.
+Instead, we need to
+modify \href{http://eel.is/c++draft/basic.def.odr#5.1}{[basic.def.odr]/p5.1} so that \tcode{constexpr} references to automatic storage duration variables (or subobjects thereof) are ODR-used.
+In the above example, \tcode{ref} therefore needs to be captured.
 
+Lambdas also present other design questions. During EWG review in Kona (November
+2023), examples similar to the following were discussed:
+\begin{colorblock}
+auto f1() {
+    int i = 0;
+    constexpr const int & ref = i;
+    return [&] {
+        constexpr const int & ref2 = i;
+        return ref2;
+    }();
+}
+auto f2() {
+    int i = 0;
+    constexpr const int & ref = i;
+    return [&] {
+        constexpr const int & ref2 = i;
+        return ref2;
+    };
+}
+\end{colorblock}
+We propose that when a \tcode{constexpr} reference binds to a variable with
+automatic storage duration, that variable must belong to the same innermost
+function definition as the reference in order to ensure that \tcode{constexpr}
+references cannot become dangling as a result of the referenced entity going out
+of scope. Therefore, we propose that the definitions of \tcode{f1} and
+\tcode{f2} both be ill formed.
 
-\section{Wording for Option 3 (symbolic addressing)}
+Some participants in EWG expressed the sentiment that \tcode{f1} should be
+well-formed but \tcode{f2} should be ill formed. In \tcode{f1}, the reference
+\tcode{ref2} never bceomes dangling because the lambda is invoked immediately,
+while in \tcode{f2}, the lambda may be invoked by the caller of \tcode{f2}, at
+which point the behavior is necessarily undefined. Specifically, the concern was
+raised that the restrictions that we propose are difficult to teach. We
+therefore discuss and evaluate a number of suboptions of Option 3.
+
+\subsubsection{Referenced variable must be in the same function (Suboption 3a)}
+The suboption we propose (and provide wording for below) is that a
+\tcode{constexpr} reference cannot bind to a variable with automatic storage
+duration unless that variable is defined in the same innermost function. This
+makes both \tcode{f1} and \tcode{f2} ill formed. The advantages of this approach
+are:
+\begin{itemize}
+\item It is easy to specify.
+\item In every case where a \tcode{constexpr} reference might become dangling
+as a result of the referenced entity going out of scope, a diagnostic is
+guaranteed.
+\item The diagnostic is easy to understand.
+\item It leaves open the possibility of the restrictions being relaxed by a
+future proposal (i.e., if \tcode{f1} is not allowed now, it can be made allowed
+later).
+\end{itemize}
+The main disadvantage of this approach is that it is conservative in terms of
+what it accepts. In \tcode{f1}, the reference inside the lambda will never be
+dangling, but this approach rejects it anyway. While it is easy to describe the
+restriction to C++ learners, it is difficult to teach the rationale.
+
+\subsubsection{Specified escape analysis (Suboption 3b)}
+It may be desirable for \tcode{f1} to be well formed but \tcode{f2} ill formed
+because in \tcode{f1}, the \tcode{constexpr} reference can never dangle (because
+the lambda doesn't ``escape'' the function that \tcode{i} belongs to) whereas in
+\tcode{f2} the reference can dangle (and, in fact, always does). But it is not
+possible for a compiler to accept all \tcode{constexpr} references that never
+dangle while rejecting all \tcode{constexpr} references that potentially dangle,
+because doing so would require solving arbitrary decision problems. In other
+words, suboption 3b only has the potential to get us \emph{closer} to the
+``line'' between all \tcode{constexpr} variables being safe to use and all safe
+uses of \tcode{constexpr} variables being accepted by the compiler; it's not
+possible to land exactly \emph{on} that line.
+
+Instead, the following specification strategy could be pursued. Define the term
+\emph{constexpr-closes over}, where a lambda constexpr-closes over any variable
+that is bound to any \tcode{constexpr} reference defined in the lambda body. So
+in both \tcode{f1} and \tcode{f2}, the lambdas potentially constexpr-close over
+the respective \tcode{i} variables. Then, specify a set of core language rules
+that define when an expression or variable \emph{potentially references} a
+lambda. For example, a ternary expression potentially references any lambda that
+is potentially referenced by its second or third operand, and a reference
+variable potentially references any lambda that is potentially referenced by its
+initializer. Finally, we would say that a \tcode{return} statement is ill
+formed if the returned expression potentially references any lambda that
+constexpr-closes over any variable with automatic storage duration that is
+defined in the function. In \tcode{f1} above, the rules would eventually
+determine that the \tcode{return} statement inside the lambda doesn't
+potentially reference the lambda itself, which implies that the result of
+invoking the lambda doesn't potentially reference the lambda. Thus, as long as
+only the result of invoking the lambda is returned from \tcode{f1}, the returned
+expression from \tcode{f1} doesn't potentially reference any lambda that
+constexpr-closes over \tcode{i}. However, in \tcode{f2}, the returned expression
+does potentially reference the lambda, so its \tcode{return} statement would be
+ill formed.
+
+We would also need to introduce restrictions that would prevent copies of or
+references to such lambdas from leaking out of the function in other ways, such
+as by being assigned to a global variable with a \tcode{std::function} type.
+
+The main advantages of this approach are:
+\begin{itemize}
+\item In every case where a \tcode{constexpr} reference might become dangling
+as a result of the referenced entity going out of scope, a diagnostic is
+guaranteed.
+\item It allows a wider range of well-formed code than suboption 3a.
+\end{itemize}
+The main disadvantages are:
+\begin{itemize}
+\item It is extraordinarily difficult to specify, requiring careful analysis of
+all constructs that potentially allow references to escape.
+\item It burdens implementations by requiring them to track the sets of
+potentially referenced lambdas.
+\item It still has a teachability burden. This is because the specification will
+necessarily result in some false positives, i.e., situations in which the human
+programmer knows that the \tcode{constexpr} reference doesn't escape, but the
+specification says that the containing lambda \emph{is} potentially referenced.
+In those situations, the programmer will need to understand the path through
+which the alleged potential reference escapes, and restructure their code in
+order to satisfy the compiler.
+\item The diagnostics that would be produced in both true positive and false
+positive cases would not be easy to understand. If they just said that a
+particular local variable potentially escapes, the programmer would need to
+figure out why. On the other hand, the diagnostic could actually describe the
+path, but such a diagnostic would not necessarily be easy to read. (It could be
+compared with e.g. current diagnostics that attempt to explain why a constraint
+on a templated entity is not satisfied or recursively references itself.)
+\end{itemize}
+
+\subsubsection{Allow \tcode{constexpr} references to dangle (Suboptions 3c and 3d)}
+We could \emph{not} introduce the same-function restriction, and thus permit
+both \tcode{f1} and \tcode{f2}. In this case, if the user ever invokes the
+lambda returned from \tcode{f2} at runtime, the behavior is undefined. However,
+the fact that the definition of \tcode{f2} can ever compile is strange, because
+any invocation of the lambda returned from \tcode{f2} would result in control
+flow passing through the initialization of \tcode{ref2}, and such an
+initialization would fail to be a constant expression (because binding a
+reference to an object that doesn't exist has undefined behavior). So in this
+particular case, the fact that the initialization of a \tcode{constexpr}
+variable is not a constant expression would not be diagnosed---nor could it be,
+because that initialization is not evaluated until runtime!
+
+In current C++, a \tcode{constexpr} reference \tcode{r} with automatic storage
+duration is, in the abstract machine, initialized any number of times (depending
+on how many times control flow passes through its definition) but the
+implementation really evaluates it only once: i.e., it evaluates the initializer
+of \tcode{r} as if \tcode{r} were a variable with static storage duration (and
+thus subject to constant initialization); and whatever object \tcode{o} the
+resulting reference ends up referring to, every \grammarterm{id-expression}
+denoting \tcode{r} is transformed into one that denotes \tcode{o}. If we pursue
+suboption 3c, then in order to handle the case where \tcode{r} may refer to an
+object with automatic storage duration, we will need to actually change the
+\emph{abstract machine rules} to say that whether or not the initialization of
+\tcode{r} is a constant expression is checked exactly once, at compile time, and
+then at runtime, the implementation may assume that every time control flow
+passes through the definition of \tcode{r}, if the initialization \emph{were}
+evaluated, it would bind \tcode{r} to the same object as if \tcode{o} were
+nominated, and if this assumption does not hold, the behavior is undefined.
+
+The advantages of this approach are:
+\begin{itemize}
+\item The programmer never needs to restructure their code in order to convince
+the compiler not to reject it for having a potentially dangling
+\tcode{constexpr} reference.
+\item The feature as a whole might end up being easier to explain to a learner.
+In fact, this approach may be the one that most closely approximates the
+one-sentence title of this paper. The restrictions imposed by approaches 3a and
+3b would not need to be taught since they would not be present at all, and UB
+would not result as long as the programmer writes ``reasonable'' code.
+\item This approach is the most consistent with the general philosophy that
+\tcode{constexpr} has been moving toward, i.e., that you only get an ill-formed
+program when undefined behavior is \emph{actually reached} during constant
+evaluation.
+\end{itemize}
+The main disadvantages are:
+\begin{itemize}
+\item The specification and implementation difficulties are unknown.
+\item In current C++, programmers do not need to worry about the lifetime of an
+object that is bound to a \tcode{constexpr} reference. Thus, an lvalue-to-rvalue
+conversion on the name of the reference will always have well-defined behavior,
+just like an lvalue-to-rvalue conversion on the name of a \tcode{constexpr}
+object. Under this approach, programmers who have never needed to worry about
+the lifetime of referents of \tcode{constexpr} references may write code that
+has undefined behavior because they are used to not worrying about the lifetime.
+\end{itemize}
+The approach described above is suboption 3c. Suboption 3d is very similar, but
+also allows the compiler to reject \tcode{f2} as a matter of quality of
+implementation (QoI). To be more precise, the implementation can reject the
+program if it determines that there is any combination of function argument
+values and global state that would result in a \tcode{constexpr} reference to
+one of that function's automatic variables escaping from the function, but if
+the implementation doesn't know whether or not this is possible, then the
+program merely has UB at runtime if such a dangling reference is accessed (just
+like if the reference were not \tcode{constexpr}). In jargon, we say that such
+a function is ``unspeciformed'' (i.e., it's unspecified whether the
+implementation treats it as if it were ill formed). The main advantages of
+suboption 3d are:
+\begin{itemize}
+\item As long as the programmer can prove that no possible values of function
+arguments can result in a \tcode{constexpr} reference to a local variable
+escaping from the function, they won't need to worry about the compiler
+rejecting the code.
+\item Some unsafe constructs may be diagnosed, which makes this approach safer
+than suboption 3c.
+\end{itemize}
+The main disadvantages are:
+\begin{itemize}
+\item As with suboption 3c, the specification and implementation difficulties of
+requiring a single abstract machine initialization of a \tcode{constexpr}
+reference with automatic storage duration are unknown.
+\item Unspeciformed behavior is novel. CWG has not yet had the opportunity to
+weigh in on any potential specification or implementation issues that would
+arise as a result of unspeciformed behavior being in the standard.
+\item This approach has false negatives; in cases where the programmer has
+written defective code because they assumed that \tcode{constexpr} references
+never dangle, the compiler will not always be able to detect this defective
+assumption.
+\item It might be that the program logic prevents the function from ever being
+called with arguments that result in escape, but this cannot be determined by
+the compiler, because those function argument values could e.g. come from
+calling a function whose definition is in another translation unit. Thus, in a
+sense, this approach has false positives: the compiler would be permitted to
+diagnose the function definition because it has determined that there is a set
+of argument values that results in escape, even though it doesn't know whether
+any set of inputs to the program could result in those argument values.
+\item Unspeciformed behavior has a teachability burden because the same code may
+be accepted by some implementations and rejected by others; learners will wonder
+what the ``right'' answer is.
+\end{itemize}
+
+\subsubsection{Conclusion}
+We consider suboption 3a to be the most preferable because it is easy to
+specify, we believe there are no implementation difficulties, and it has not
+been shown that any other suboption is more teachable, with the possible
+exception of 3c, which suffers from unknown specification and implementation
+difficulty. To be more precise, suboption 3a is the simplest approache that
+achieves the design goals of symbolic addressing (and thus, \tcode{constexpr}
+structured bindings with automatic storage duration).
+
+\section{Wording for Option 3a (symbolic addressing with the same-function restriction)}
 
 \rSec1[basic.def.odr]{One-definition rule}%
 
@@ -870,6 +1109,9 @@ Thanks to Nina Dinka Ranns, Pablo Halpern, and Joshua Berne for their feedback.
 Thanks to Richard Smith for the original discussion of possible solutions on the Core reflector and for feedback on the wording.
 
 Thanks to Nicolas Lesser for the original work on \paper{P1481R0}.
+
+Thanks to Daisy Hollman for input on the issue of lambdas that reference
+variables from their enclosing functions.
 
 \section{References}
 
