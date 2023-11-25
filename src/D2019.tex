@@ -82,7 +82,7 @@ The following code illustrates the totality of the proposed additions:
 \begin{colorblock}
 void f(int);
 int main() {
-    std::jthread thread(std::thread_name("Worker"), std::thread_stack_size(512*1024), f, 42);
+    std::jthread thread(std::thread_name_hint("Worker"), std::thread_stack_size_hint(512*1024), f, 42);
     return 0;
 }
 \end{colorblock}
@@ -414,13 +414,13 @@ Here is a conforming minimal implementation
 \begin{colorblock}
 namespace std {
 
-struct thread_name  {
-   constexpr thread_name(std::string_view str) noexcept {};
-   constexpr thread_name(std::u8string_view str) noexcept {};
+struct thread_name_hint  {
+   constexpr explicit thread_name_hint(std::string_view str) noexcept {};
+   constexpr explicit thread_name_hint(std::u8string_view str) noexcept {};
 };
 
-struct thread_stack_size {
-    constexpr thread_stack_size(std::size_t) noexcept {}
+struct thread_stack_size£_hint {
+    constexpr explicit thread_stack_size_hint(std::size_t) noexcept {}
 };
 
 \end{colorblock}
@@ -494,7 +494,7 @@ contortion to extract the different parameters (attribute, invocable, arguments)
 This is made slightly easier by pack indexing (\paper{P2662R2}) \href{https://compiler-explorer.com/z/n8vYb7Tar}{[Compiler Explorer]}.
 
 
-\tcode{thread_name} makes a copy of this argument and supports non-null terminated strings, and \tcode{u8} strings, as to
+\tcode{thread_name_hint} makes a copy of this argument and supports non-null terminated strings, and \tcode{u8} strings, as to
 portably support environments with utf-8 execution encodings (Linux), environments where Unicode encodings can be preserved (Windows),
 and other environments.
 
@@ -544,6 +544,49 @@ This would allow to place better compile-time constraints:
 In that design, the attributes types are then only used by the \tcode{getter} as a tag to indicate to the implementation which attribute to return.
 
 This could be added later (and isn't ABI breaking).
+
+
+\subsection{\tcode{constexpr} Constructors}
+
+During R4 it was suggested to remove the constexpr on the constructor of thread attributes.
+The idea was that an implementation could eagerly set the attribute on a pthread_attr_t.
+However, pthread_attr_t is a collection of attributes rather than a single attribute so this
+implementation strategy is not viable. Besides, on platforms were \tcode{pthread_attr_t} is
+available the thread name size can't be more than a few bytes.
+And on platforms where large thread names are theoretically possible (ie windows), a copy is
+unavoidable. As such, removing \tcode{constexpr} would pessimize the windows case, and not
+improve the posix case.
+
+\subsection{Copyable attributes}
+
+LEWG suggested making attributes non-copyable. While we do not know of a technical limitation
+with that, we also do not see a motivation for doing so, nor can we imagine a case where using thread attributes
+would lead to performance degradation.
+
+\subsection{Copy in \tcode{thread_name_hint}}
+
+\tcode{thread_name_hint} copies the constructor argument to avoid lifetime issues.
+Making the constructors move-only or non-movable would not avoid the lifetime issues.
+
+
+\subsection{\tcode{thread::name_hint} vs \tcode{thread_name_hint}}
+
+LEWG had a mild suggestion of using \tcode{thread::name_hint} instead of \tcode{std::thread_name_hint}.
+I do not have a strong opinion.
+
+\begin{colorblock}
+class thread {
+	class id;
+	class name_hint;
+	class stack_size_hint;
+};
+
+class jthread {
+	using id = thread::id;
+	using name_hint = thread::name_hint;
+	using stack_size_hint = thread::stack_size_hint;
+};
+\end{colorblock}
 
 \section{Implementation}
 
@@ -617,118 +660,49 @@ As such, we allow but do not require an implementation to throw when a stack siz
 
 \rSec1[thread.threads]{Threads}
 
-\rSec2[thread.threads.general]{General}
-
-\pnum
-\ref{thread.threads} describes components that can be used to create and manage threads.
-\begin{note}
-    These threads are intended to map one-to-one with operating system threads.
-\end{note}
-
-\rSec2[thread.syn]{Header \tcode{<thread>} synopsis}
-
-\begin{codeblock}
-#include <compare>              // see \ref{compare.syn}
-
-namespace std {
-\end{codeblock}
+%\rSec2[thread.threads.general]{General}
+%
+%\pnum
+%\ref{thread.threads} describes components that can be used to create and manage threads.
+%\begin{note}
+%    These threads are intended to map one-to-one with operating system threads.
+%\end{note}
+%
+%\rSec2[thread.syn]{Header \tcode{<thread>} synopsis}
+%
+%\begin{codeblock}
+%#include <compare>              // see \ref{compare.syn}
+%
+%namespace std {
+%\end{codeblock}
+%\begin{addedblock}
+%\begin{codeblock}
+%  %  class thread_name_hint;
+%   % class thread_stack_size_hint;
+%\end{codeblock}
+%\end{addedblock}
+%\begin{codeblock}
+%    // \ref{thread.thread.class}, class \tcode{thread}
+%    class thread;
+%
+%    void swap(thread& x, thread& y) noexcept;
+%
+%    // \ref{thread.jthread.class}, class \tcode{jthread}
+%    class jthread;
+%
+%    // \ref{thread.thread.this}, namespace \tcode{this_thread}
+%    namespace this_thread {
+%        thread::id get_id() noexcept;
+%
+%        void yield() noexcept;
+%        template<class Clock, class Duration>
+%        void sleep_until(const chrono::time_point<Clock, Duration>& abs_time);
+%        template<class Rep, class Period>
+%        void sleep_for(const chrono::duration<Rep, Period>& rel_time);
+%    }
+%}
+%\end{codeblock}
 \begin{addedblock}
-\begin{codeblock}
-    class thread_name;
-    class thread_stack_size;
-\end{codeblock}
-\end{addedblock}
-\begin{codeblock}
-    // \ref{thread.thread.class}, class \tcode{thread}
-    class thread;
-
-    void swap(thread& x, thread& y) noexcept;
-
-    // \ref{thread.jthread.class}, class \tcode{jthread}
-    class jthread;
-
-    // \ref{thread.thread.this}, namespace \tcode{this_thread}
-    namespace this_thread {
-        thread::id get_id() noexcept;
-
-        void yield() noexcept;
-        template<class Clock, class Duration>
-        void sleep_until(const chrono::time_point<Clock, Duration>& abs_time);
-        template<class Rep, class Period>
-        void sleep_for(const chrono::duration<Rep, Period>& rel_time);
-    }
-}
-\end{codeblock}
-\begin{addedblock}
-
-\rSec2[thread.attributes]{Thread Attributes}
-
-Thread attributes can be used to define additional implementation-defined behaviors on a \tcode{thread} or \tcode{jthread} object.
-
-%\recommended
-%Implementations may provide additional platform-specific thread attributes derived from \tcode{thread_attribute} using reserved names.
-
-\rSec3[thread.thread.name.class]{Class \tcode{thread_name}}
-
-\begin{codeblock}
-class thread_name {
-public:
-    constexpr thread_name(std::string_view name) noexcept;
-    constexpr thread_name(std::u8string_view name) noexcept;
-private:
-    @\impdefnc@ __name[@\impdefnc@]; // \expos
-};
-\end{codeblock}
-
-\recommended
-
-The \tcode{thread_name} thread attribute, can be used
-to set the name of a thread such that the name could be used for debugging or platform-specific display mechanisms.
-The name should not be stored in the \tcode{std::thread} or \tcode{std::jthread} object.
-
-\begin{itemdecl}
-constexpr thread_name(std::string_view name) noexcept;
-constexpr thread_name(std::u8string_view name) noexcept;
-\end{itemdecl}
-
-\begin{itemdescr}
-\effects Initializes \tcode{__name} with \tcode{name} in an implementation-defined manner.
-
-\recommended If \tcode{__name} is not large enough to store the value of \tcode{name},
-             the thread name might be truncated. If the implementation performs a text conversion
-             during the initialization of \tcode{__name} and if \tcode{name} is a valid code unit sequence
-             in the encoding associated with its type, \tcode{__name} should be a valid code unit sequence in its
-             associated encoding.
-\end{itemdescr}
-
-\rSec3[thread.thread.stack.size.class]{Class \tcode{thread_stack_size}}
-
-\begin{codeblock}
-class thread_stack_size {
-public:
-    constexpr thread_stack_size(std::size_t size) noexcept;
-private:
-    constexpr std::size_t __size; // \expos
-};
-\end{codeblock}
-
-\recommended
-Configure a desired stack size as if by POSIX \mbox{\tcode{pthread_attr_setstacksize()}}.\\
-The stack size set by the implementation may be adjusted up or down to meet platform-specific requirements
-
-If \tcode{__size == 0} is \tcode{true} the thread attribute should be ignored.
-
-
-\begin{itemdecl}
-constexpr thread_stack_size(std::size_t size) noexcept;
-\end{itemdecl}
-
-\begin{itemdescr}
-\effects Initializes \tcode{__size} with \tcode{size} in an implementation-defined manner.
-\end{itemdescr}
-
-\end{addedblock}
-
 \rSec2[thread.thread.class]{Class \tcode{thread}}
 
 \rSec3[thread.thread.class.general]{General}
@@ -779,6 +753,79 @@ class thread {
 };
 }
 \end{codeblock}
+
+
+\rSec3[thread.attributes]{Thread Attributes}
+
+Thread attributes can be used to define additional implementation-defined behaviors on a \tcode{thread} or \tcode{jthread} object.
+
+%\recommended
+%Implementations may provide additional platform-specific thread attributes derived from \tcode{thread_attribute} using reserved names.
+
+\rSec4[thread.thread.name.hint]{Class \tcode{thread::name_hint}}
+
+\begin{codeblock}
+namespace std {
+class name_hint {
+	public:
+		constexpr explicit name_hint(std::string_view name) noexcept;
+		constexpr explicit name_hint(std::u8string_view name) noexcept;
+	private:
+		@\impdefnc@ __name[@\impdefnc@]; // \expos
+};
+}
+\end{codeblock}
+
+\recommended
+
+The \tcode{name_hint} thread attribute, can be used
+to set the name of a thread such that the name could be used for debugging or platform-specific display mechanisms.
+The name should not be stored in the \tcode{std::thread} or \tcode{std::jthread} object.
+
+\begin{itemdecl}
+	constexpr name_hint(std::string_view name) noexcept;
+	constexpr name_hint(std::u8string_view name) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\effects Initializes \tcode{__name} with \tcode{name} in an implementation-defined manner.
+
+	\recommended If \tcode{__name} is not large enough to store the value of \tcode{name},
+	the thread name might be truncated. If the implementation performs a text conversion
+	during the initialization of \tcode{__name} and if \tcode{name} is a valid code unit sequence
+	in the encoding associated with its type, \tcode{__name} should be a valid code unit sequence in its
+	associated encoding.
+\end{itemdescr}
+
+\rSec4[thread.thread.stack.hint]{Class \tcode{thread::stack_size_hint}}
+
+\begin{codeblock}
+namespace std {
+class thread::stack_size_hint {
+	public:
+		constexpr stack_size_hint(std::size_t size) noexcept;
+	private:
+		constexpr std::size_t __size; // \expos
+};
+}
+\end{codeblock}
+
+\recommended
+Configure a desired stack size as if by POSIX \mbox{\tcode{pthread_attr_setstacksize()}}.\\
+The stack size set by the implementation may be adjusted up or down to meet platform-specific requirements
+
+If \tcode{__size == 0} is \tcode{true} the thread attribute should be ignored.
+
+
+\begin{itemdecl}
+	constexpr stack_size_hint(std::size_t size) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+	\effects Initializes \tcode{__size} with \tcode{size} in an implementation-defined manner.
+\end{itemdescr}
+
+\end{addedblock}
 
 
 \rSec3[thread.thread.constr]{Constructors}
