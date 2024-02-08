@@ -9,7 +9,7 @@
 
 
 \title{Thread attributes}
-\docnumber{P2019R4}
+\docnumber{P2019R5}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -38,9 +38,12 @@ The absence of these features make \tcode{std::thread} and \tcode{std::jthread} 
 \subsection{R5}
 
 \begin{itemize}
-\item rename thread_name => thread_name_hint following LEWG feedback
-\item rename thread_stack_size => thread_stack_size_hint following LEWG feedback
-\item Make single argument explicit.
+\item rename thread_name => thread::name_hint following LEWG feedback
+\item rename thread_stack_size => thread::stack_size_hint following LEWG feedback
+\item At LEWG's request, make single argument constructors explicit.
+\item At LEWG's request, make thread::name_hint an immovable type so that it does not have to copy its argument, which allows passing large thread names without blowing up the stack.
+      The intent is for \tcode{thread::name_hint} to behave like the platonic idea of a named parameter.
+\item Add full wording for \tcode{jthread}.
 \end{itemize}
 
 \subsection{R4}
@@ -364,22 +367,6 @@ but we still don't think it is worth it.
 \item While less convenient facility, it is at least possible to query available properties after creation from \tcode{native_handle}.
 \end{itemize}
 
-
-\subsection{Threads should have names??? What next, \tcode{mutex} should have a name? \tcode{vector}?}
-
-Naming threads is standard practice across many operating systems and environments.
-This proposal merely proposes to expose this widely available and used system feature.
-We observe that it is common for threads to have names as processes do.
-
-Windows indeed has the concept of named mutexes which are used to share mutexes across processes.
-However, \tcode{std::mutex} is not intended to be shared across processes and as such does not need
-a name nor should it have one.
-A quick review of platforms reveals that it is not standard practice to use a mutex across processes (many UNIX systems rely on lock files).
-
-\tcode{std::vector} and other C++ objects are not visible outside the program, except by debuggers which can identify them
-by their identifiers. Giving them a name would make little sense.
-
-
 \subsection{I don't need that and don't want to pay for it}
 
 None of the proposed attributes is stored in the thread object nor in any object associated with the thread or its associated \tcode{thread} object.
@@ -409,21 +396,9 @@ The author of this proposal is aware of the limited resources of the committee, 
 The cost of re-implementing classes similar to \tcode{std::thread} is great for the industry.
 
 \subsection{I cannot implement that on my platform?}
-Here is a conforming minimal implementation
 
-\begin{colorblock}
-namespace std {
+An implementation which does not support any or all attributes can ignore them entierly.
 
-struct thread_name_hint  {
-   constexpr explicit thread_name_hint(std::string_view str) noexcept {};
-   constexpr explicit thread_name_hint(std::u8string_view str) noexcept {};
-};
-
-struct thread_stack_size£_hint {
-    constexpr explicit thread_stack_size_hint(std::size_t) noexcept {}
-};
-
-\end{colorblock}
 
 \subsection{This belongs in a library?}
 
@@ -494,14 +469,6 @@ contortion to extract the different parameters (attribute, invocable, arguments)
 This is made slightly easier by pack indexing (\paper{P2662R2}) \href{https://compiler-explorer.com/z/n8vYb7Tar}{[Compiler Explorer]}.
 
 
-\tcode{thread_name_hint} makes a copy of this argument and supports non-null terminated strings, and \tcode{u8} strings, as to
-portably support environments with utf-8 execution encodings (Linux), environments where Unicode encodings can be preserved (Windows),
-and other environments.
-
-This interface is made possible by the realization that lambdas alleviate the needs for \tcode{(j)thread} to support parameter forwarding,
-and so we don't need attributes + function + arguments but just function + attributes.
-
-
 \subsubsection{What about using NTTP?}
 
 During this review of this paper, it was suggested we could pass thread attributes as NTTP.
@@ -557,22 +524,16 @@ And on platforms where large thread names are theoretically possible (ie windows
 unavoidable. As such, removing \tcode{constexpr} would pessimize the windows case, and not
 improve the posix case.
 
-\subsection{Copyable attributes}
+\subsection{Non movable attributes}
 
-LEWG suggested making attributes non-copyable. While we do not know of a technical limitation
-with that, we also do not see a motivation for doing so, nor can we imagine a case where using thread attributes
-would lead to performance degradation.
+Following review in Kona (23), \tcode{thread::name_hint} is non longer copyable nor movable, and only stores a \tcode{string_view}.
+This avoid copying the name entierly, and aspproximate some notion of named parameter.
+This design strategy allows an implementation to support arbitrary long names on windows.
 
-\subsection{Copy in \tcode{thread_name_hint}}
-
-\tcode{thread_name_hint} copies the constructor argument to avoid lifetime issues.
-Making the constructors move-only or non-movable would not avoid the lifetime issues.
-
-
-\subsection{\tcode{thread::name_hint} vs \tcode{thread_name_hint}}
+\subsection{\tcode{thread::name_hint} vs \tcode{thread::name_hint}}
 
 LEWG had a mild suggestion of using \tcode{thread::name_hint} instead of \tcode{std::thread_name_hint}.
-I do not have a strong opinion.
+This design was adopted in R5 of this paper.
 
 \begin{colorblock}
 class thread {
@@ -702,7 +663,6 @@ As such, we allow but do not require an implementation to throw when a stack siz
 %    }
 %}
 %\end{codeblock}
-\begin{addedblock}
 \rSec2[thread.thread.class]{Class \tcode{thread}}
 
 \rSec3[thread.thread.class.general]{General}
@@ -725,9 +685,24 @@ execution.
 \begin{codeblock}
 namespace std {
 class thread {
-    public:
-    class thread::id;
+public:
     class id;
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+    template <typename T>
+    class name_hint;
+    template <typename T>
+    name_hint(const T*) -> name_hint<T>;
+    template <typename T>
+    name_hint(const std::basic_string<T>&) -> name_hint<T>;
+
+    class stack_size_hint;
+
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+
     using native_handle_type = @\impdefnc@;         // see~\ref{thread.req.native}
 
     // construct/copy/destroy
@@ -754,7 +729,7 @@ class thread {
 }
 \end{codeblock}
 
-
+\begin{addedblock}
 \rSec3[thread.attributes]{Thread Attributes}
 
 Thread attributes can be used to define additional implementation-defined behaviors on a \tcode{thread} or \tcode{jthread} object.
@@ -765,15 +740,15 @@ Thread attributes can be used to define additional implementation-defined behavi
 \rSec4[thread.thread.name.hint]{Class \tcode{thread::name_hint}}
 
 \begin{codeblock}
-namespace std {
-class name_hint {
-	public:
-		constexpr explicit name_hint(std::string_view name) noexcept;
-		constexpr explicit name_hint(std::u8string_view name) noexcept;
-	private:
-		@\impdefnc@ __name[@\impdefnc@]; // \expos
+template <typename T>
+class thread::name_hint {
+    explicit constexpr
+    name_hint(std::basic_string_view<T> name) noexcept;
+    name_hint(name_hint&&) = delete;
+    name_hint(const name_hint&) = delete;
+private:
+    std::basic_string_view<T> __name; // exposition-only
 };
-}
 \end{codeblock}
 
 \recommended
@@ -783,18 +758,14 @@ to set the name of a thread such that the name could be used for debugging or pl
 The name should not be stored in the \tcode{std::thread} or \tcode{std::jthread} object.
 
 \begin{itemdecl}
-	constexpr name_hint(std::string_view name) noexcept;
-	constexpr name_hint(std::u8string_view name) noexcept;
+explicit constexpr name_hint(std::basic_string_view<T> str);
 \end{itemdecl}
 
 \begin{itemdescr}
-	\effects Initializes \tcode{__name} with \tcode{name} in an implementation-defined manner.
+\constraints
+\tcode{std::same_as<T, char> || std::same_as<T, char8_t>} is \tcode{true}.
 
-	\recommended If \tcode{__name} is not large enough to store the value of \tcode{name},
-	the thread name might be truncated. If the implementation performs a text conversion
-	during the initialization of \tcode{__name} and if \tcode{name} is a valid code unit sequence
-	in the encoding associated with its type, \tcode{__name} should be a valid code unit sequence in its
-	associated encoding.
+\effects Initializes \tcode{__name} with \tcode{name}.
 \end{itemdescr}
 
 \rSec4[thread.thread.stack.hint]{Class \tcode{thread::stack_size_hint}}
@@ -803,7 +774,7 @@ The name should not be stored in the \tcode{std::thread} or \tcode{std::jthread}
 namespace std {
 class thread::stack_size_hint {
 	public:
-		constexpr stack_size_hint(std::size_t size) noexcept;
+		constexpr explicit stack_size_hint(std::size_t size) noexcept;
 	private:
 		constexpr std::size_t __size; // \expos
 };
@@ -816,13 +787,12 @@ The stack size set by the implementation may be adjusted up or down to meet plat
 
 If \tcode{__size == 0} is \tcode{true} the thread attribute should be ignored.
 
-
 \begin{itemdecl}
-	constexpr stack_size_hint(std::size_t size) noexcept;
+constexpr stack_size_hint(std::size_t size) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-	\effects Initializes \tcode{__size} with \tcode{size} in an implementation-defined manner.
+\effects Initializes \tcode{__size} with \tcode{size} in an implementation-defined manner.
 \end{itemdescr}
 
 \end{addedblock}
@@ -860,7 +830,6 @@ If no such $i$ exists, the program is ill-formed.
 \item Let \tcode{fargs} a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
 \end{itemize}
 \end{addedblock}
-
 
 \pnum
 \mandates
@@ -927,63 +896,194 @@ synchronizes with the beginning of the invocation of the copy of \tcode{f}.
 \end{itemize}
 \end{itemdescr}
 
-%
-%\begin{addedblock}
-%\rSec3[thread.thread.factory]{Factory functions}
-%
-%\indexlibraryctor{thread}%
-%\begin{itemdecl}
-%template<class F, class... Args>
-%static thread make_with_attributes(F&& f, Args&&... args);
-%\end{itemdecl}
-%
-%\begin{itemdescr}
-%\pnum
-%\constraints
-%\pnum
-%\mandates
-%The following are all \tcode{true}:
-%\begin{itemize}
-%    \item \tcode{is_constructible_v<decay_t<F>, F>},
-%    \item \tcode{(is_base_of_v<thread_attribute, Attrs>) \&\& ...)},
-%    \item \tcode{(is_invocable_v<decay_t<F>>}.
-%    \item \tcode{(is_base_of_v<thread_attribute, Attrs>) \&\& ...)},
-%    \item \tcode{(is_invocable_v<decay_t<F>>}.
-%\end{itemize}
-%
-%\returns \tcode{thread(\placeholder{attribute-tag}\{\}, std::forward<F>(f), std::forward<Args>(args)...));}
-%
-%    %The following are all \tcode{true}:
-%    %\begin{itemize}
-%    %    \item \tcode{is_constructible_v<decay_t<F>, F>},
-%    %    \item \tcode{(is_constructible_v<decay_t<Args>, Args> \&\& ...)},
-%    %    \item \tcode{is_move_constructible_v<decay_t<F>>},
-%    %    \item \tcode{(is_move_constructible_v<decay_t<Args>> \&\& ...)}, and
-%    %    \item \tcode{is_invocable_v<decay_t<F>, decay_t<Args>...>}.
-%    %\end{itemize}
-%    %\end{removedblock}
-%    %\begin{addedblock}
-%    %\begin{itemize}
-%    %    \item \tcode{is_constructible_v<decay_t<F>, F>} is \tcode{true},
-%    %    \item \tcode{is_move_constructible_v<decay_t<F>>} is \tcode{true}.
-%    %
-%    %    \item For the first overload, the following are all true:
-%    %    \begin{itemize}
-%        %    \item \tcode{(is_constructible_v<decay_t<Args>, Args> \&\& ...)},
-%        %    \item \tcode{(is_move_constructible_v<decay_t<Args>> \&\& ...)}, and
-%        %    \item \tcode{is_invocable_v<decay_t<F>, decay_t<Args>...>}.
-%        %    \end{itemize}
-%    %
-%    %    \item For the second overload, the following are all true:
-%    %    \begin{itemize}
-%        %
-%        %    \end{itemize}
-%    %\end{itemize}
-%\end{itemdescr}
-%\end{addedblock}
 \section{\tcode{jthread}}
 
-\ednote{TODO: exact same wording as for thread}.
+\rSec2[thread.jthread.class]{Class \tcode{jthread}}
+
+\rSec3[thread.jthread.class.general]{General}
+
+\pnum
+The class \tcode{jthread} provides a mechanism
+to create a new thread of execution.
+The functionality is the same as for
+class \tcode{thread}\iref{thread.thread.class}
+with the additional abilities to provide
+a \tcode{stop_token}\iref{thread.stoptoken} to the new thread of execution,
+make stop requests, and automatically join.
+
+\indexlibraryglobal{jthread}%
+\begin{codeblock}
+namespace std {
+  class jthread {
+  public:
+    // types
+    using id = thread::id;
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+    template <typename T>
+    using name_hint = thread_name::name_hint<T>;
+    using stack_size_hint = thread::stack_size_hint;
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+    using native_handle_type = thread::native_handle_type;
+
+    // \ref{thread.jthread.cons}, constructors, move, and assignment
+    jthread() noexcept;
+    template<@\removed{class F,}@ class... Args> explicit jthread(@\removed{F\&\& f,}@ Args&&... args);
+    ~jthread();
+    jthread(const jthread&) = delete;
+    jthread(jthread&&) noexcept;
+    jthread& operator=(const jthread&) = delete;
+    jthread& operator=(jthread&&) noexcept;
+
+    // \ref{thread.jthread.mem}, members
+    void swap(jthread&) noexcept;
+    [[nodiscard]] bool joinable() const noexcept;
+    void join();
+    void detach();
+    [[nodiscard]] id get_id() const noexcept;
+    [[nodiscard]] native_handle_type native_handle();   // see~\ref{thread.req.native}
+
+    // \ref{thread.jthread.stop}, stop token handling
+    [[nodiscard]] stop_source get_stop_source() noexcept;
+    [[nodiscard]] stop_token get_stop_token() const noexcept;
+    bool request_stop() noexcept;
+
+    // \ref{thread.jthread.special}, specialized algorithms
+    friend void swap(jthread& lhs, jthread& rhs) noexcept;
+
+    // \ref{thread.jthread.static}, static members
+    [[nodiscard]] static unsigned int hardware_concurrency() noexcept;
+
+  private:
+    stop_source ssource;        // \expos
+  };
+}
+\end{codeblock}
+
+\rSec3[thread.jthread.cons]{Constructors, move, and assignment}
+
+\indexlibraryctor{jthread}%
+\begin{itemdecl}
+jthread() noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Constructs a \tcode{jthread} object that does not represent
+a thread of execution.
+
+\pnum
+\ensures
+\tcode{get_id() == id()} is \tcode{true}
+and \tcode{ssource.stop_possible()} is \tcode{false}.
+\end{itemdescr}
+
+\indexlibraryctor{jthread}%
+\begin{itemdecl}
+template<@\removed{class F,}@ class... Args>
+explicit jthread(@\removed{F\&\& f,}@ Args&&... args);\end{itemdecl}\begin{itemdescr}\begin{itemize}\begin{addedblock}
+\item \tcode{sizeof...(Args) > 0} is \tcode{true}, and
+\end{addedblock}
+\item \tcode{remove_cvref_t<\changed{F}{Args[0]}>} is not the same type as \tcode{jthread}.
+\end{itemize}
+
+\begin{addedblock}
+\begin{itemize}[leftmargin=*]
+\item Let $i$ be the smallest value such that \tcode{decay_t<Args...[$i$]>} is not a thread attribute type. \ednote{We need to define that}
+
+If no such $i$ exists, the program is ill-formed.
+
+\item Let \tcode{F} be \tcode{Args...[$i$]}.
+\item Let \tcode{f} be \tcode{args...[$i$]}.
+%\item Let \tcode{Attrs} a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
+\item Let \tcode{attrs} a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
+\item Let \tcode{FArgs} a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
+\item Let \tcode{fargs} a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
+\end{itemize}
+\end{addedblock}
+
+\pnum
+\mandates
+The following are all \tcode{true}:
+\begin{itemize}
+    \begin{removedblock}
+        \item \tcode{is_constructible_v<decay_t<F>, F>},
+    \end{removedblock}
+    \item \tcode{(is_constructible_v<decay_t<Args>, Args> \&\& ...)},
+    \begin{removedblock}
+        \item \tcode{is_move_constructible_v<decay_t<F>>},
+    \end{removedblock}
+    \item \tcode{(is_move_constructible_v<decay_t<Args>> \&\& ...)}, \removed{and}
+    \item \tcode{is_invocable_v<decay_t<F>, decay_t<\added{F}Args>...>}\changed{.}{, and}
+    \begin{addedblock}
+        \item No type is present more than once in the pack \tcode{remove_cvref_t<Attrs>}. \ednote{// is there a better way to say that ?}
+    \end{addedblock}
+\end{itemize}
+
+\pnum
+\expects
+\removed{\tcode{decay_t<F>} and} each type in \tcode{decay_t<Args>} meet the
+\oldconcept{MoveConstructible} requirements
+
+\pnum
+\effects
+Initializes \tcode{ssource}.
+The new thread of execution executes
+\begin{codeblock}
+invoke(auto(std::forward<F>(f)), get_stop_token(),
+       auto(std::forward<@\added{F}@Args>(@\added{f}@args))...)
+\end{codeblock}
+if that expression is well-formed,
+otherwise
+\begin{codeblock}
+invoke(auto(std::forward<F>(f)), auto(std::forward<Args>(args))...)
+\end{codeblock}
+with the values produced by \tcode{auto}
+being materialized\iref{conv.rval} in the constructing thread.
+Any return value from this invocation is ignored.
+\begin{note}
+This implies that any exceptions not thrown from the invocation of the copy
+of \tcode{f} will be thrown in the constructing thread, not the new thread.
+\end{note}
+If the \tcode{invoke} expression exits via an exception,
+\tcode{terminate} is called.
+
+\begin{addedblock}
+\tcode{attrs} can be used to tailor the thread with additional implementation-defined behaviors. (see [thread.attributes]).
+\end{addedblock}
+
+\pnum
+\sync
+The completion of the invocation of the constructor
+synchronizes with the beginning of the invocation of the copy of \tcode{f}.
+
+\pnum
+\ensures
+\tcode{get_id() != id()} is \tcode{true}
+and \tcode{ssource.stop_possible()} is \tcode{true}
+and \tcode{*this} represents the newly started thread.
+\begin{note}
+The calling thread can make a stop request only once,
+because it cannot replace this stop token.
+\end{note}
+
+\pnum
+\throws
+\tcode{system_error} if unable to start the new thread.
+
+\pnum
+\errors
+\begin{itemize}
+\item \tcode{resource_unavailable_try_again} --- the system lacked
+the necessary resources to create another thread,
+or the system-imposed limit on the number of threads in a process
+would be exceeded.
+\end{itemize}
+\end{itemdescr}
 
 \section{Feature test macros}
 

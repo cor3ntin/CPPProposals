@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Ordering of constraints involving fold expressions}
-\docnumber{D2963R1}
+\docnumber{P2963R1}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \usepackage[dvipsnames]{xcolor}
@@ -24,7 +24,10 @@ We propose rules for the normalization and ordering of fold expressions over \tc
 \subsection{R1}
 
 \begin{itemize}
-\item Wording improvements.
+\item Wording improvements: The previous version of this paper incorrectly looked at the size of the packs involved in the fold expressions.
+This was unnecessary and was removed. The current design does not look at the template argument/parameter mapping to establish subsumption of fold expressions.
+\item A complete implementation of this proposal is available on Compiler Explorer. The implementation section was expanded.
+\item Add an additional example.
 \end{itemize}
 
 \section{Motivation}
@@ -47,9 +50,9 @@ The expectation that these features should interoperate well then appear long-st
 Consider:
 
 \begin{colorblock}
-template <class T> concept bool A = std::is_move_constructible_v<T>;
-template <class T> concept bool B = std::is_copy_constructible_v<T>;
-template <class T> concept bool C = A<T> && B<T>;
+template <class T> concept A = std::is_move_constructible_v<T>;
+template <class T> concept B = std::is_copy_constructible_v<T>;
+template <class T> concept C = A<T> && B<T>;
 
 template <class... T>
 requires (A<T> && ...)
@@ -72,9 +75,41 @@ concept environment_of = (... && requires (X& x) { { get<T>(x) } -> std::same_as
 auto f(sender auto&& s, environment_of<std::stop_token> auto env); // uses std::allocator
 auto f(sender auto&& s, environment_of<std::stop_token, std::pmr::allocator> auto env); // uses given allocator
 \end{colorblock}
+Without the subsumption fixes to fold expressions, the above two overloads conflict, even though they should be partially ordered.\\
 
-Without the subsumption fixes to fold expressions, the above two overloads conflict, even though they should by rights be partially ordered.
+A similar example courtesy of Barry Revzin:\\
 
+
+\begin{colorblock}
+template <std::ranges::bidirectional_range R> void f(R&&); // #1
+template <std::ranges::random_access_range R> void f(R&&); // #2
+
+template <std::ranges::bidirectional_range... R> void g(R&&...); // #3
+template <std::ranges::random_access_range... R> void g(R&&...); // #4
+\end{colorblock}
+
+\begin{center}
+\begin{tabular}{l|l}
+C++23 & This Paper\\ \hline
+
+\begin{minipage}[t]{0.65\textwidth}
+\begin{colorblock}
+f(std::vector{1, 2, 3}); // Ok
+@\textcolor{red}{g(std::vector\{1, 2, 3\})}@; // Error: call to 'g' is ambiguous
+\end{colorblock}
+\end{minipage}
+&
+\begin{minipage}[t]{0.4\textwidth}
+\begin{colorblock}
+f(std::vector{1, 2, 3}); // Ok, calls #2
+g(std::vector{1, 2, 3}); // Ok, calls #4
+\end{colorblock}
+\end{minipage}
+\\\\ \hline
+\end{tabular}
+\end{center}
+
+\href{https://compiler-explorer.com/z/xojh8eo4x}{[Compiler Explorer Demo]}
 
 \subsection{Impact on the standard}
 
@@ -82,13 +117,18 @@ This change makes ambiguous overload valid and should not break existing valid c
 
 \subsection{Implementabiliy}
 
-This was partially implemented in Clang.
-Importantly, we know that what we propose does not affect compilers' ability to partially order functions by constraints without instantiating them, nor does it affect
-the caching of subsumption, which is important to minimize the cost of concepts on compile time.
+This was implemented in Clang.
+Importantly, what we propose does not affect compilers' ability to partially order functions by constraints without instantiating them, nor does it affect
+the caching of subsumption, which is important to minimize the cost of concepts on compile time: The template arguments of the constraint expressions do not need to be observed
+to establish subsumption.
+
+An implementation does need to track whether an atomic constraint that contains an unexpanded pack was originally part of a and/or fold expression to properly
+implement the subsumption rules (\tcode{\&\&} subsumes \tcode{||} \& \tcode{\&\&} and \tcode{||} subsumes \tcode{||}).
+
 
 \subsection{What this paper is not}
 
-When the pattern of the \tcode{fold-expressions} is a `concept` template parameter, this paper does not apply. In that case, we need different rules which are covered in \paper{P2841R0} along with the rest of the "concept template parameter" feature (specifically, for concepts patterns we need to decompose each concepts into its constituent atomic constraints and produce a fully decomposed sequence of conjunction/disjunction)
+When the pattern of the \tcode{fold-expressions} is a `concept` template parameter, this paper does not apply. In that case, we need different rules which are covered in \paper{P2841R0} along with the rest of the "concept template parameter" feature (specifically, for concept patterns we need to decompose each concept into its constituent atomic constraints and produce a fully decomposed sequence of conjunction/disjunction)
 
 
 \subsection{Design and wording strategy}
@@ -190,17 +230,19 @@ in the conjunctive normal form of $Q$, where
     $B$ if \changed{and only if $A$ and $B$ are identical using the
     rules described in [temp.constr.atomic].}{:}
     \begin{addedblock}
+        \begin{itemize}
         \item $A$ is a \grammarterm{fold-expression} of the form \tcode{($P$ \&\&...)},
         $B$ is a \grammarterm{fold-expression} of the form \tcode{($Q$ \&\&...)} or \tcode{($Q$ || ...)}
         %and let $P'$ be the \grammarterm{template-argument} corresponding to the unexpanded pack contained in $P$ in the parameter mapping of $A$, and let $Q'$ be the \grammarterm{template-argument} corresponding to the unexpanded pack contained in $Q$ in the parameter mapping of $B$, \tcode{sizeof...($P'$) == sizeof...($Q'$)} is \tcode{true}
-        $P$ subsumes $Q$.
+        and $P$ subsumes $Q$.
 
-        \item $A$ is a \grammarterm{fold-expression} of the form \tcode{($P$ ||...)} or \tcode{($P$ \&\&...)}
+        \item Otherwise, $A$ is a \grammarterm{fold-expression} of the form \tcode{($P$ ||...)} or \tcode{($P$ \&\&...)}
         and $B$ is a \grammarterm{fold-expression} of the form \tcode{($Q$   ||...)}
         % and let $P'$ be the \grammarterm{template-argument} corresponding to the unexpanded pack contained in $P$ in the parameter mapping of $A$, and let $Q'$ be the \grammarterm{template-argument} corresponding to the unexpanded pack contained in $Q$ in the parameter mapping of $B$, \tcode{sizeof...($P'$) == sizeof...($Q'$)} is \tcode{true},
-        $P$ subsumes $Q$.
+        and $P$ subsumes $Q$.
 
-        \item $A$ and $B$ are identical using the rules described in [temp.constr.atomic].
+        \item Otherwise, $A$ and $B$ are identical using the rules described in [temp.constr.atomic].
+        \end{itemize}
     \end{addedblock}
 \end{itemize}
 %
@@ -218,6 +260,8 @@ in the conjunctive normal form of $Q$, where
 \section{Acknowledgments}
 
 Thanks to Robert Haberlach for creating the original  \href{http://cplusplus.github.io/concepts-ts/ts-active.html#28}{Concept TS issue}.
+
+Thanks to Jens Mauer and Barry Revzin for their input on the wording.
 
 \bibliographystyle{plain}
 \bibliography{wg21}

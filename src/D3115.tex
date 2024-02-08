@@ -1,0 +1,457 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{Data Members, Variables and Alias Declarations Can Introduce A Pack}
+\docnumber{D3115R0}
+\audience{EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+
+\usepackage{color, colortbl}
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+\section{Motivation}
+
+\begin{itemize}
+    \item tuple
+    \item variant
+    \item SOA Vector
+    \item mdspan
+    \item integer sequence
+    \item MP11
+    \item reflection
+    \item P2300
+    \item ranges
+\end{itemize}
+
+\section{The grand organic plan}
+
+Before C++11, if you wanted a tuple, it might have looked like that
+\begin{colorblock}
+// boost::tuple
+template <
+class T0 = null_type, class T1 = null_type, class T2 = null_type,
+class T3 = null_type, class T4 = null_type, class T5 = null_type,
+class T6 = null_type, class T7 = null_type, class T8 = null_type,
+class T9 = null_type>
+class tuple;
+\end{colorblock}
+
+WG21 saw that this could be improved and \paper{N2242} added variadic template parameters and function parameter packs in C++11.
+This was a huge success, and it is used in virtually every C++ library from tuples to JSON parsers, CTRE, fmt, Qt, testing frameworks,
+HPC applications, std::exec, TensorFlow, embed applications, and everything in between.
+
+In C++17, we realized that if a base specifier could be a pack, then we needed to allow using declarations to be packs too (\paper{P0195R2}).
+This enables efficient implementation of the least-terrible way to visit a variant.
+
+In C++20, we fixed that lambdas could not capture a function parameter pack (\paper{P0780R2}).
+
+And more recently we made packs indexable (\paper{P2662R3}), a feature that library vendors promptly requested to be made available to them
+in older language modes, as it has the potential to simplify standard library implementations as well as compile times.
+
+We are about to allow befriending packs (\paper{P2893R1}), so we clearly like them.
+
+I think this success can be explained by making metaprogramming less arcane and allowing a surprisingly expressible functional style to build
+types and expressions in linear times.
+
+Fold expressions in particular, even if their syntax takes some getting used to are a very powerful way to express some ideas and are less bug-prone than trying to write the same computation manually.
+
+And then there is "Structured Bindings can introduce a Pack" (\paper{P1061R6}), currently making its way through the committee.
+This paper is of particular significance because
+\begin{itemize}
+    \item Packs are no longer tied to templates in some way (lambda \grammarterm{init-capture}{s} already did that arguably, but lambdas are weird).
+    \item Consequently, expansions can now appear in non-templated entities, which is novel.
+\end{itemize}
+
+Untangling packs from parameters in implementation is going to require some work, if only because some implementations might refer internally to parameter packs :).
+However, it does create a model and the groundwork to support packs outside of templates.
+
+In summary, pack declarations can appear in:
+\begin{itemize}
+  \item Template parameters
+  \item Function parameter
+  \item Init capture
+  \item Structured bindings
+\end{itemize}
+
+That list feels rather incomplete, and in this paper, we explore extending it to data members, variables, and alias declarations.
+
+It should be noted that this paper is entirely based on existing work, and the ideas presented here have been discussed since at least 2016.
+Notably, in the trailblazing \paper{P0341R0} and excellent \paper{P1858R2}.
+The Circle C++ Compiler extensively experimented with most of the same ideas.
+
+But before talking about exciting new features, let's build a common understanding of packs as they exist today.
+
+\section{A primer on pack syntax}
+
+A pack is a name that represents a sequence of entities (variables, types, template template parameters).
+
+Packs can be part of a wider pattern, and once the pack is no longer dependent, it is replaced by some transformation of the pattern, ie an expansion.
+Any substitution of the pattern is an expansion (including \tcode{sizeof...} and pack indexing).
+
+So there are really 2 fundamental categories of operations that can be done to a pack:
+\begin{itemize}
+\item Designating an entity as being a pack.
+\item Expanding a pack, potentially as part of a wider pattern.
+\end{itemize}
+
+That's really all there is to it.  However
+\begin{itemize}
+\item Expansion can be arbitrarily complex (for example, they may involve lambdas).
+\item A number of proposals (this one, expansion statements (\paper{P1306R1}), the generalized unpacking mechanism proposed in \paper{P1858R2}) introduce
+constructs that, if not very carefully designed, could lead to a host of grammar ambiguities.
+\end{itemize}
+
+The syntactic model that we have is, for some pack \tcode{T}:
+
+\begin{itemize}
+\item \tcode{...T} introduced a pack
+\item \tcode{T...} expands (consummes) the pack.
+\end{itemize}
+
+We have been pretty good at following that model, even if \tcode{sizeof...(T)} is somewhat of an outlier (but that does not lead to any ambiguity concern, so it is fine),
+and even if we had to operate some breakage to arcane/unused/unimplemented syntax to ensure pack indexing is consistent with that model.
+
+Consistency is important for teaching, implementability, and making sure we don't close evolutionary doors or introduce hard-to-fix ambiguities.
+
+Multiple packs can be expanded at once, in lockstep, as long as they have the same size.
+
+Keeping that in mind, what are we actually proposing?
+We are going to present Alias Declaration Packs, Variable Packs, and Member Packs in that order because the notions, design, and implementation challenges roughly build up in that order.
+
+\pagebreak
+\section{Alias Declaration Packs}
+If an alias declaration introduces a type, an alias pack declaration introduces a pack of type, and the defining-type-id is the pattern that will be substituted when the type is used.
+
+\begin{center}
+\begin{tabular}{l|l}
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+template <typename T>
+struct S{
+    using value_type = std::remove_cvref_t<T>;
+};
+\end{colorblock}
+\end{minipage}
+&
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+template <typename ...Ts>
+struct S{
+    using ...value_types = std::remove_cvref_t<Ts>;
+};
+\end{colorblock}
+\end{minipage}
+\\
+\end{tabular}
+\end{center}
+
+This brings the bulk of the design and implementation questions of this proposal, the rest are incremental additions.
+
+\subsection{Packs outside of templates}
+
+Because alias declarations can appear at namespace and class scope, they can be named outside of template entities.
+
+\begin{colorblock}
+template <typename ...Ts>
+void g();
+void f() {
+    g<S<int, int>::value_types...>();
+}
+\end{colorblock}
+
+
+Packs outside of templates are not a new feature. At least, assuming \paper{P1306R1} gets adopted, the specification
+and implementation will be able to support them.
+
+But EDG in particular might rely on the fact that \paper{P1306R1} can only declare packs at function scope, in a statement that appears
+before any expression might expand the pack.
+Depending on that implementation choice, dealing with a pack that appears out of thin air in an expansion might be quite a bit harder to
+support than the limited scenario where a pack is previously introduced.
+This problem has been described in \paper{P2277R0}.
+
+We have roughly two options here:
+
+\begin{itemize}
+\item Not allowing some packs to be expanded outside of templates (users would have to whip out a function / generic lambdas)
+\item Bite the bullet understanding it will take significant implementation efforts.
+\end{itemize}
+
+I did briefly consider a third alternative: Adding some syntax to advertise the presence of packs in the function.
+However this would be a transient solution pushing the burden of implementation toward users, and neither transient solutions,
+not putting undue burden on users seems compelling.
+
+Plus, if we wanted a transient syntax to advertise the possibility of pack expansion in a function... making the function a template ought to be good enough.
+
+\begin{colorblock}
+template <std::same_as<void> T = void> // not great, not terrible
+auto get_deduplicated_variant()  {
+    auto variant = get_variant();
+    return std::variant <
+        unique_types_ts<decltype(variant)...
+    >(std::visit(std::identity{}, variant));
+}
+\end{colorblock}
+
+
+But ultimately, I think we should bite the bullet.
+Knowing this is going to require significant effort for some implementations, knowing our resources are scarce and our time is limited, we should bite the bullet.
+
+We have been having that discussion for many years now, making incremental progress in that direction with \paper{P1306R1} for example,
+and there is a lot of interest in the features presented here, so we have an understanding the effort would justify itself...
+
+But mostly, I think we have a shared understanding getting there is unavoidable.
+Indeed, a range of meta info is a pack, and so reflection needs this feature to
+
+Citing \paper{P1306R1}:
+
+\begin{quoteblock}
+However, range splicing of dependent arguments is at least an order of magnitude harder to implement than ordinary splicing. We think that not including range splicing gives us a better chance of having reflection in C++26. Especially since, as this paper’s examples demonstrate, a lot can be done without them.
+\end{quoteblock}
+
+It would be a missed opportunity to design reflection without the ability to expand ranges of reflections, and we risk introducing mismatched facilites and inconsistencies.
+Concepts, Modules, constexpr cmaths, parallel algorithms, etc were all standardized with the understanding of being long-term efforts.
+
+We should note that the implementation concerns for packs outside of templates discussed here would overlap with module implementation concerns.
+Implementations retaining an internal representation of template entities during translations are not impacted by that specific concern.
+
+\subsection{Nested Packs? Dependent Pack Names}
+
+Given
+
+\begin{colorblock}
+template <typename ...Ts>
+struct S {
+    using ...types = Ts;
+};
+
+using Type = S<int, int>;
+
+template <typename T>
+int f() {
+    do_something<Type::types...>(); // # 1
+    return do_something<typename T::types...>(); // # 2
+}
+int a = f<Type>();
+\end{colorblock}
+
+In \tcode{\#1}, \tcode{Type::types} is a pack of type, which the compiler knows, so that does not present any particular issue.
+In \tcode{\#2}, \tcode{T::types} is a dependent name. The compiler doesn't know it is a type, which it needs to in order to resolve parsing ambiguities,
+hence the use of \tcode{typename} as disambiguator in \tcode{typename T::types}.
+
+But we don't know that \tcode{T::types} names a pack either.
+This is something we need to communicate so that we can diagnose invalid expansion in non-instantiated templates...
+but more crucially, we need to be able to identify where the packs are so that we can extract their size prior to extraction.
+
+We use the \tcode{...} \textbf{prefix} to designate a dependent name as a pack.
+This is very much purposefully consistent with the declaration of packs; In both places, we are telling the compiler a name is that of a pack.
+and the syntax ought to be the same.
+
+The \tcode{...} prefix should be allowed everywhere a nested pack is named, but required only for dependent names.
+Unlike \tcode{typename}, (and more like \tcode{template}), the \tcode{...} applies to a name, rather than a fully qualified type.
+This is because a qualified name could contain more than one pack.
+
+\subsection{Nested packs? No}
+
+Consider:
+
+\begin{colorblock}
+template <typename ...Ts>
+struct A {
+    using ...inner = Ts;
+};
+
+template <typename ...Ts>
+struct B {
+    using ...outer = Ts;
+};
+
+using Matryoshka = B<A<int>>;
+
+\end{colorblock}
+
+Both \tcode{Matryoshka::outer} and \tcode{Matryoshka::outer::inner} are packs.
+And this is perfectly fine.
+
+However, we do not have a good model for expanding multiple levels of packs at once,
+although this is something that was explored by Barry Revzin.
+
+But it is something that would require a lot more thought and implementation experience.
+In particular the generalization of that idea is a cartesian product in the language,
+which seems unwieldy.
+
+Ideally, simple ideas should be easy to express and complex ideas should be possible.
+If multiple levels of pack expansion are necessary, then other techniques might be more legible.
+
+Maybe there is an argument to be made for the specific case of turning a pack of tuple-like
+into a pack of their elements.
+
+So for this paper, In a pack expansion, if the pattern would expand multiple component names, the program is ill-formed.
+
+\begin{colorblock}
+DoSomething<Matryoshka>(); // Ok
+DoSomething<Matryoshka::...outer...>(); // Ok
+DoSomething<Matryoshka::...outer...[0]::...types...>(); // Ok
+DoSomething<Matryoshka::...outer::...types...>(); // Error
+\end{colorblock}
+
+Like any other packs, packs presented in this paper can also be expanded in step with other (non-nested) packs of the same size.
+
+\subsubsection{Dependent packs need to be substituted before they can be expanded}
+
+\begin{colorblock}
+template <typename ...Ts>
+struct A {
+    using ...types = Ts;
+};
+template <typename T>
+void f() {
+  std::variant<T::...types...> v;  // #1
+}
+
+f<A<int, int>>();
+\end{colorblock}
+
+Currently, the size of packs is inferred from template arguments or (in the case of init captures, structured bindings),
+from entities already instantiated.
+The presence of packs in dependent names introduces the need to substitute dependent packs before they can be expanded.
+This represents extra work for the compiler compared to expanding a pack whose size is known.
+However, this is still a lot less work than expressing the same idea without access to nested packs.
+
+\subsubsection{packs in type requirements}
+
+\begin{colorblock}
+
+template <typename T>
+concept tuple_like = requires {
+    typename T::...elements...;
+};
+
+\end{colorblock}
+
+\subsection{Variable Packs}
+
+[TODO]
+Initialization?
+
+=> useful init sequences
+
+\subsection{Member Packs}
+
+\begin{center}
+\begin{tabular}{l|l}
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+template <typename T>
+struct monotype {
+    [[no_unique_address]] T elem;
+};
+\end{colorblock}
+\end{minipage}
+&
+\begin{minipage}[t]{0.5\textwidth}
+\begin{colorblock}
+template <typename ...Ts>
+struct tuple{
+    [[no_unique_address]] Ts ... elems;
+};
+\end{colorblock}
+\end{minipage}
+\\
+\end{tabular}
+\end{center}
+
+\subsubsection{Member initializers}
+
+\subsubsection{CTAD}
+
+\subsubsection{Member Expressions, Prvalues, and Packs}
+
+A member expression can name a pack produced by a pr-value.
+
+How many times should \tcode{f} be evaluated?
+
+\begin{colorblock}
+template <typename... Ts>
+struct S {
+    S(Ts... ts) : elems(ts)... {}
+    Ts... elems;
+};
+
+template <typename... Ts>
+S(Ts...) -> S<Ts...>;
+
+auto f (auto... args) {
+    std::puts("f");
+    return S{args...};
+}
+
+int main() {
+    return (f(1, 2, 3).elems + ... );
+}
+\end{colorblock}
+
+\section{Implementations}
+
+\subsubsection{Circle}
+
+\subsubsection{Clang}
+
+Done:
+
+\begin{itemize}
+\item Alias packs
+\item Member packs
+\item Member initializers
+\end{itemize}
+
+Todo:
+
+\begin{itemize}
+\item Lots of bugs, missing diags
+\item Variables
+\item Members of anonymous unions
+\item Implicit CTAD
+\item Member expression materialized temporary reuse
+\end{itemize}
+
+
+\section{Next Steps}
+
+\section{Relation with Reflection}
+
+\section{Future work}
+
+\subsection{Unpacking}
+
+\subsection{Pack Literals}
+
+\subsection{Slicing}
+
+\subsection{Splicing}
+
+\section{Wording}
+
+\section{References}
+
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21, extra}
+
+\begin{thebibliography}{9}
+
+\bibitem[N4971]{N4971}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4971}
+
+
+\end{thebibliography}
+
+\end{document}

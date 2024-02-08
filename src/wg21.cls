@@ -74,7 +74,7 @@
   ]{Inconsolatazi4}
 }{}
 
-%\newcommand{\emoji}[1]{ {\setmainfont{Noto Color Emoji}[Renderer=Harfbuzz]{#1}} }
+\newcommand{\emoji}[1]{ {\setmainfont{Noto Color Emoji}[Renderer=Harfbuzz]{#1}} }
 
 
 
