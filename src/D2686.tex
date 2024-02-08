@@ -290,8 +290,8 @@ auto f2() {
     return __lambda(i);
 }
 \end{colorblock}
-In the above ``desugared lambdas'', the \tcode{*this} always refers to an
-object of type \tcode{lambda} whose lifetime begins before that of
+In the above ""desugared lambdas"", the \tcode{*this} always refers to an
+object of type \tcode{__lambda} whose lifetime begins before that of
 \tcode{ref2}. Consequently,
 \href{http://eel.is/c++draft/expr.const#9}{[expr.const]/p9} applies: during the
 checking of whether \tcode{ref2}'s initializer is a constant expression,
@@ -311,13 +311,16 @@ to introduce such control flow analysis to C++ as would be necessary to lift
 the restrictions in [expr.const]/p9 and [expr.const]/p5.13.
 
 \subsection{Other cases that are not allowed}
-We also propose to disallow the following case:
+
+We also do not propose to make the following code well-formed:
+
 \begin{colorblock}
 int& foo(int x) { return x; }
 int bar() {
     constexpr int& r = foo(1);
 }
 \end{colorblock}
+
 On a callee-destroy implementation, the lvalue result of \tcode{foo(1)} is
 dangling because the parameter object \tcode{x} is destroyed immediately after
 \tcode{foo} returns to its caller. On a caller-destroy implementation, the
