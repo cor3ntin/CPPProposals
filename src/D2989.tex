@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{A Simple Approach to Universal Template Parameters}
-\docnumber{D2989R1}
+\docnumber{P2989R1}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Gašper Ažman}{gasper.azman@gmail.com}
@@ -34,6 +34,7 @@ for limited benefits. In this paper, we propose the much simpler subset of the f
     \item Update the implementation experience
     \item Fix code examples and add compiler explorer links
     \item Expand the section about deduction of universal template arguments, and propose a new solution to deduce the type of value template parameters deduced fron a univeral template argument.
+    \item Add a CPO example
 \end{itemize}
 
 \subsection{R0}
@@ -68,6 +69,45 @@ We present some new design questions not considered in earlier papers and report
 
 We presented motivating examples in \paper{P1985R3}, but we offer two more here.
 
+\subsection{Template CPOs}
+
+Applied to a tuple-like \tcode{std::get}, can return either the Nth element, or the element of a specific type.
+Indeed, std::get has multiple overloads with types and non-types template parameters
+
+\begin{colorblock}
+template<std::size_t I, class... Types >
+const auto & get( const tuple<Types...>& t ) noexcept;
+template<class T, class... Types >
+const auto & get( const tuple<Types...>& t ) noexcept;
+
+int main() {
+    std::tuple t{1, 2.0};
+    get<0>(t); // extract the 0th element
+    get<double>(t); // extract the element that is a double
+}
+\end{colorblock}
+
+This is great, but it only works for free functions, not CPOs.
+LEWG wants a CPO alternative to \tcode{std::get} as described in \paper{P2769R1}.
+
+So we can implement \tcode{std::get_element<N>(t)}, but not \tcode{std::get_element<T>(t)}.
+The best we could do would be to give that second CPO a different name, maybe \tcode{std::get_element_from_type<T>(t)}.
+Not great, not terrible.
+
+Universal template parameters solve that problem nicely:
+
+\begin{colorblock}
+template <universal template>
+inline constexpr int get_element = /*delete*/0;
+
+template <typename T>
+inline constexpr __get_element_t::__cpo<T> get_element<T>;
+
+template <std::size_t I>
+inline constexpr __get_element_v::__cpo<I> get_element<I>;
+\end{colorblock}
+
+\href{https://compiler-explorer.com/z/YfEP79qqb}{[Full example on Compiler Explorer]}.
 \subsection{Generic rebind}
 
 Consider this allocator:

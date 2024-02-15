@@ -16,19 +16,186 @@
 
 \section{Abstract}
 
+In \paper{P1858R2}, Barry Revzin presented a design for alias and member packs.
+A similar set of features has been available for several years in Circle.
+
+In this paper, we refine that set of features with the goal of standardization in C++26, report on implementation experience
+in another C++ compiler (clang) and explore synergies with reflection.
+
+\textbf{This paper is a work-in-progress that we hope to update ahead of the Tokyo meeting.}
+
 \section{Motivation}
 
-\begin{itemize}
-    \item tuple
-    \item variant
-    \item SOA Vector
-    \item mdspan
-    \item integer sequence
-    \item MP11
-    \item reflection
-    \item P2300
-    \item ranges
-\end{itemize}
+Here are some examples showing the use of the features presented in this paper.
+They are accompanied by working compiler explorer links, showcasing an in-progress Clang implementation.
+
+\subsection{Tuple-like types}
+
+\begin{colorblock}
+template <typename ...Ts>
+struct tuple {
+    [[no_unique_address]]  Ts ...elems;
+
+    tuple(Ts... ts) : elems(ts)... {};
+};
+
+template <typename ...Ts>
+tuple(Ts...) -> tuple<Ts...>;
+\end{colorblock}
+
+\href{https://compiler-explorer.com/z/e954x5v6a}{[Compiler Explorer]}
+
+Making \tcode{tuple} easier to implement would help with the quality of diagnostic and compile-time performance of the standard libraries.
+But more importantly, there are reasons for users to want to write their own tuple-like types.
+
+They might want a tuple that behaves like an aggregate, or they might want to use a lighter data structure, have data member specific to their use cases,
+etc.
+
+\subsection{bind-like utilities}
+
+\begin{colorblock}
+template <typename Functor, typename... Args>
+struct bind {
+    [[no_unique_address]] Functor f;
+    [[no_unique_address]] Args... args;
+    template <typename Self, typename... Xs>
+    auto operator()(this Self&& self, Xs&&... xs) -> decltype(auto) {
+        return std::invoke(
+        std::forward<Self>(self).f,
+        (std::forward<Self>(self)....args)...,
+        std::forward<Xs>(xs)...);
+    }
+};
+template <typename Functor, typename... Args>
+bind(Functor&& f, Args&&... args) -> bind<Functor, Args...>;
+
+
+template <typename = void>
+auto test() {
+    return bind{[](int a, int b, int c) {
+            return a + b + c;
+        }, 1, 2}(3);
+}
+\end{colorblock}
+
+\href{https://compiler-explorer.com/z/an67jnsqP}{[Compiler Explorer]}
+
+
+\subsection{Monadic Transform}
+
+\begin{colorblock}
+template <typename Functor, typename... Args>
+struct transform {
+    [[no_unique_address]] Functor f;
+    Args... args;
+    template <some_optional Optional, typename Self>
+    requires std::same_as<std::decay_t<Self>, transform>
+    friend auto operator|(Optional&& opt, Self&& self) {
+        using f_result = decltype(std::invoke(std::forward<Self>(self).f,
+                                  std::forward<Optional>(opt).value(),
+                                  (std::forward<Self>(self)....args)...));
+        using return_type = std::optional<std::remove_cvref_t<f_result>>;
+        if (opt)
+            return return_type(std::invoke(std::forward<Self>(self).f,
+                                           std::forward<Optional>(opt).value(),
+                                           (std::forward<Self>(self)....args)...));
+        return return_type(std::nullopt);
+    }
+};
+template <typename Functor, typename... Args>
+transform(Functor&& f, Args&&... args) -> transform<Functor, Args...>;
+
+template <typename = void>
+auto test() {
+    return (std::optional{2} | transform{[](int a, int b, int c) {
+            return a + b + c;
+        }, 2, 3}).value();
+}
+\end{colorblock}
+\href{https://compiler-explorer.com/z/nnr58rEM4}{[Compiler Explorer]}
+
+Similar to the previous example, this shows how easy it is to
+construct functors that can behave as aggregate.
+
+
+\subsection{std::execution (P2300)}
+
+In \paper{P2300R7}, senders provide a list of completion signatures, ie a list of list of parameters they may pass
+to the \tcode{set_value} and \tcode{set_error} functions of a receiver.
+This helps check whether a given sender could be connected to a given sender.
+
+
+\subsection{Variant types}
+
+Pack members can be member of an anonymous union.
+This allows implementing variant as a union (rather than an aligned buffer).
+
+\begin{colorblock}
+template <typename ...Ts>
+struct variant {
+    union {
+        Ts ...data;
+    };
+};
+\end{colorblock}
+
+The implementation of the constructors is not trivial (and left as an exercise for the reader!).
+While it is true that there is already a variant class in the standard, there are valid cases for rolling out
+variant implementation for specific use cases, for example in some cases it is possible to use unused bytes of the
+types to store the variant discriminant.
+
+\subsection{Struct of arrays container}
+
+A few months ago, a \href{https://www.reddit.com/r/cpp/comments/19aidho/circlelang_vs_c26_soa_vector/}{Reddit} user posted a comparison of using circle vs C+++26 reflection (as implemented in EDG):
+
+We have reproduced the circle implementation in clang. Note that in the absence of aggregate unpacking,
+our implementation requires a tuple-like type:
+
+\begin{colorblock}
+template<class T>
+class soa_vector {
+    public:
+    constexpr void push_back(const T & value) {
+        // We could use structured binding here
+        (v.push_back(UNPACK(value)), ...);
+    }
+
+    [[nodiscard]] constexpr auto operator[](const auto pos) const {
+        return T(v[pos]...);
+    }
+    private:
+    std::vector<...tuple_elements_ts<T>> ...v;
+};
+
+template <typename T>
+void test() {
+    using vec3_t = tuple<float, float, float>;
+    soa_vector<vec3_t> v{};
+    v.push_back({1, 2, 3});
+    assert(1 == v[0].elems...[0] and 2 == v[0].elems...[1] and 3 == v[0].elems...[2]);
+}
+\end{colorblock}
+
+\href{https://compiler-explorer.com/z/x3fde3f5f}{[Compiler Explorer]}.
+
+Note that this was also presented by Sean Baxter at \href{https://www.youtube.com/watch?v=15j4bkipuAg&t=783s}{CppNow}.
+
+
+\subsection{More ergonomic \tcode{std::integer_sequence}}
+
+A one-line change to \tcode{std::integer_sequence}
+could make it a lot easier to use, as we would not need to pass it to a lambda/function to extract the actual
+pack on integers.
+
+\begin{colorblock}
+namespace std {
+    template<class T, T... I> struct integer_sequence {
+        using value_type = T;
+        static constexpr size_t size() noexcept { return sizeof...(I); }
+        @\added{static constexpr decltype(I)  ...values = I;}@
+    };
+}
+\end{colorblock}
 
 \section{The grand organic plan}
 
@@ -65,12 +232,12 @@ Fold expressions in particular, even if their syntax takes some getting used to 
 And then there is "Structured Bindings can introduce a Pack" (\paper{P1061R6}), currently making its way through the committee.
 This paper is of particular significance because
 \begin{itemize}
-    \item Packs are no longer tied to templates in some way (lambda \grammarterm{init-capture}{s} already did that arguably, but lambdas are weird).
+    \item Packs are no longer tied to templates in some way.
     \item Consequently, expansions can now appear in non-templated entities, which is novel.
 \end{itemize}
 
 Untangling packs from parameters in implementation is going to require some work, if only because some implementations might refer internally to parameter packs :).
-However, it does create a model and the groundwork to support packs outside of templates.
+However, it does create a model and the groundwork to support tside of templates.
 
 In summary, pack declarations can appear in:
 \begin{itemize}
@@ -92,7 +259,7 @@ But before talking about exciting new features, let's build a common understandi
 
 A pack is a name that represents a sequence of entities (variables, types, template template parameters).
 
-Packs can be part of a wider pattern, and once the pack is no longer dependent, it is replaced by some transformation of the pattern, ie an expansion.
+Packs can be part of a wider pattern, and when instantiated, they are replaced by some transformation of the pattern, ie an expansion.
 Any substitution of the pattern is an expansion (including \tcode{sizeof...} and pack indexing).
 
 So there are really 2 fundamental categories of operations that can be done to a pack:
@@ -112,17 +279,17 @@ The syntactic model that we have is, for some pack \tcode{T}:
 
 \begin{itemize}
 \item \tcode{...T} introduced a pack
-\item \tcode{T...} expands (consummes) the pack.
+\item \tcode{T...} expands (consumes) the pack.
 \end{itemize}
 
-We have been pretty good at following that model, even if \tcode{sizeof...(T)} is somewhat of an outlier (but that does not lead to any ambiguity concern, so it is fine),
-and even if we had to operate some breakage to arcane/unused/unimplemented syntax to ensure pack indexing is consistent with that model.
+We have been pretty good at following that model, even if \tcode{sizeof...(T)} is somewhat of an outlier,
+and even if we had to break some arcane/unused/unimplemented syntax in order to ensure pack indexing is consistent with that model.
 
 Consistency is important for teaching, implementability, and making sure we don't close evolutionary doors or introduce hard-to-fix ambiguities.
 
 Multiple packs can be expanded at once, in lockstep, as long as they have the same size.
 
-Keeping that in mind, what are we actually proposing?
+Keeping that in mind, what is this paper actually proposing?
 We are going to present Alias Declaration Packs, Variable Packs, and Member Packs in that order because the notions, design, and implementation challenges roughly build up in that order.
 
 \pagebreak
@@ -167,19 +334,26 @@ void f() {
 \end{colorblock}
 
 
-Packs outside of templates are not a new feature. At least, assuming \paper{P1306R1} gets adopted, the specification
-and implementation will be able to support them.
+Packs outside of templates are not really a new feature, assuming \paper{P1061R6} gets adopted, the specification
+and implementation will be able to support them (including at namespace scope).
 
-But EDG in particular might rely on the fact that \paper{P1306R1} can only declare packs at function scope, in a statement that appears
+But compilers that are not AST-based might rely on the fact that \paper{P1061R6} can only declare packs at function scope in a statement that appears
 before any expression might expand the pack.
 Depending on that implementation choice, dealing with a pack that appears out of thin air in an expansion might be quite a bit harder to
-support than the limited scenario where a pack is previously introduced.
+support for such implementations, than the limited scenario where a pack is previously introduced.
 This problem has been described in \paper{P2277R0}.
+
+Note that this argument might be bit moot as \paper{P1061R6} is going in the direction of allowing structure bindings at global scope.
+So all implementation will have to be prepared to see a pack in any function, if a structured binding is declared at namespace scope.
+
+And so, extending to member packs would not have any additional complexity.
+To be clear, we are aware that for one implementation the complexity will be great... but the present paper is not materially affecting that one way or another.
 
 We have roughly two options here:
 
 \begin{itemize}
-\item Not allowing some packs to be expanded outside of templates (users would have to whip out a function / generic lambdas)
+\item Not allowing some packs to be expanded outside of templates (users would have to whip out a function / generic lambdas), creating inconsistencies
+for users.
 \item Bite the bullet understanding it will take significant implementation efforts.
 \end{itemize}
 
@@ -187,7 +361,7 @@ I did briefly consider a third alternative: Adding some syntax to advertise the 
 However this would be a transient solution pushing the burden of implementation toward users, and neither transient solutions,
 not putting undue burden on users seems compelling.
 
-Plus, if we wanted a transient syntax to advertise the possibility of pack expansion in a function... making the function a template ought to be good enough.
+Plus, if we wanted a transient syntax to advertise the possibility of pack expansion in a function then making the function a template ought to be good enough.
 
 \begin{colorblock}
 template <std::same_as<void> T = void> // not great, not terrible
@@ -207,7 +381,7 @@ We have been having that discussion for many years now, making incremental progr
 and there is a lot of interest in the features presented here, so we have an understanding the effort would justify itself...
 
 But mostly, I think we have a shared understanding getting there is unavoidable.
-Indeed, a range of meta info is a pack, and so reflection needs this feature to
+Indeed, a range of meta info is a pack, and so reflection needs this feature too.
 
 Citing \paper{P1306R1}:
 
@@ -215,8 +389,8 @@ Citing \paper{P1306R1}:
 However, range splicing of dependent arguments is at least an order of magnitude harder to implement than ordinary splicing. We think that not including range splicing gives us a better chance of having reflection in C++26. Especially since, as this paper’s examples demonstrate, a lot can be done without them.
 \end{quoteblock}
 
-It would be a missed opportunity to design reflection without the ability to expand ranges of reflections, and we risk introducing mismatched facilites and inconsistencies.
-Concepts, Modules, constexpr cmaths, parallel algorithms, etc were all standardized with the understanding of being long-term efforts.
+It would be a missed opportunity to design reflection without the ability to expand ranges of reflections, and we risk introducing mismatched facilities and inconsistencies.
+Concepts, Modules, constexpr cmaths, parallel algorithms, etc. were all standardized with the understanding of being long-term efforts.
 
 We should note that the implementation concerns for packs outside of templates discussed here would overlap with module implementation concerns.
 Implementations retaining an internal representation of template entities during translations are not impacted by that specific concern.
@@ -241,7 +415,7 @@ int f() {
 int a = f<Type>();
 \end{colorblock}
 
-In \tcode{\#1}, \tcode{Type::types} is a pack of type, which the compiler knows, so that does not present any particular issue.
+In \tcode{\#1}, \tcode{Type::types} is a pack of types, which the compiler knows, so that does not present any particular issue.
 In \tcode{\#2}, \tcode{T::types} is a dependent name. The compiler doesn't know it is a type, which it needs to in order to resolve parsing ambiguities,
 hence the use of \tcode{typename} as disambiguator in \tcode{typename T::types}.
 
@@ -283,10 +457,10 @@ However, we do not have a good model for expanding multiple levels of packs at o
 although this is something that was explored by Barry Revzin.
 
 But it is something that would require a lot more thought and implementation experience.
-In particular the generalization of that idea is a cartesian product in the language,
+In particular, the generalization of that idea is a cartesian product in the language,
 which seems unwieldy.
 
-Ideally, simple ideas should be easy to express and complex ideas should be possible.
+Ideally, simple ideas should be easy to express, and complex ideas should be possible.
 If multiple levels of pack expansion are necessary, then other techniques might be more legible.
 
 Maybe there is an argument to be made for the specific case of turning a pack of tuple-like
@@ -297,8 +471,8 @@ So for this paper, In a pack expansion, if the pattern would expand multiple com
 \begin{colorblock}
 DoSomething<Matryoshka>(); // Ok
 DoSomething<Matryoshka::...outer...>(); // Ok
-DoSomething<Matryoshka::...outer...[0]::...types...>(); // Ok
-DoSomething<Matryoshka::...outer::...types...>(); // Error
+DoSomething<Matryoshka::...outer...[0]::...inner...>(); // Ok
+DoSomething<Matryoshka::...outer::...inner...>(); // Error
 \end{colorblock}
 
 Like any other packs, packs presented in this paper can also be expanded in step with other (non-nested) packs of the same size.
@@ -320,11 +494,11 @@ f<A<int, int>>();
 
 Currently, the size of packs is inferred from template arguments or (in the case of init captures, structured bindings),
 from entities already instantiated.
-The presence of packs in dependent names introduces the need to substitute dependent packs before they can be expanded.
+The presence of packs in dependent names introduces the need to substitute dependent packs before they can be expanded (\tcode{\#1}).
 This represents extra work for the compiler compared to expanding a pack whose size is known.
 However, this is still a lot less work than expressing the same idea without access to nested packs.
 
-\subsubsection{packs in type requirements}
+\subsubsection{Packs in type requirements}
 
 \begin{colorblock}
 
@@ -337,12 +511,37 @@ concept tuple_like = requires {
 
 \subsection{Variable Packs}
 
-[TODO]
-Initialization?
+The case for variable packs may be less strong than the other features presented in this paper.
+However, It would be very inconsistent to support structured bindings (really, a form of variable declaration, data members, and using declarations),
+but not variable pack declarations.
+So, we propose them.
 
-=> useful init sequences
+And they do have some use cases of their own.
+For example, we can improve the ergonomics of \tcode{std::integer_sequence}.
+
+\begin{colorblock}
+template <typename T, T... V>
+struct __ints {
+    static constexpr decltype(V) ...values = V;
+};
+template <auto N>
+constexpr auto ...ints = __make_integer_seq<__ints, decltype(N), N>::...values;
+
+
+template<typename... Ts>
+void print_tuple(const std::tuple<Ts...>& t) {
+    constexpr std::size_t size = sizeof...(Ts);
+    (print(std::get<...ints<size>>(t)), ...);
+}
+
+\end{colorblock}
+
+That same technique can be used, with ranges, to produce a pack out of arbitrary sequences
+of numbers, for example.
 
 \subsection{Member Packs}
+
+Member packs is the most interesting part of this proposal and builds on what has been presented so far.
 
 \begin{center}
 \begin{tabular}{l|l}
@@ -367,15 +566,108 @@ struct tuple{
 \end{tabular}
 \end{center}
 
+Simply, a data member can be declared to be a pack, and that packs expand N members (which then behave like regular data members).
+This is supported in classes, union and struct, for data members and anonymous members, with the exception of bit-fields.
+
+[TODO: Is there actually a reason to disallow bit-fields]?
+
+\subsubsection{Accessing dependent member packs}
+
+As previously discussed, dependent pack names are disambiguated with a \tcode{...} prefix.
+From that, a dependent member expression whose right-hand side is a pack looks like this:
+
+\begin{colorblock}
+template <typename... T>
+void f(tuple<T...> t) {
+   do_something(t. ...elems...);
+   do_something_else(t....elems...); // not sensitive to spacing
+   do_something_else((&t)->...elems...); // not sensitive to spacing
+};
+\end{colorblock}
+
+While four consecutive dots is a bit odd, it is consistent (and consistency is important).
+Previous works explored different syntaxes, like the introduction of a disambiguator keyword (\tcode{t. packname elems...}),
+but that does not look better.
+
+To avoid making C++ sensitive to spaces, we propose a tweak to the maximal munch behavior such that a sequence of exactly 4 period
+is recognized as Period, Ellipsis (rather than Ellipsis, Period), without affecting sequences of 6 periods (\tcode{f(auto......)} being valid syntax!).
+
+\begin{tabular}{|c|l|}
+\hline
+\tcode{.}& Period \\
+\hline
+\tcode{..}& Period, Period \\
+\hline
+\tcode{...}& Ellipsis \\
+\hline
+\tcode{....}& Period, Ellipsis \\
+\hline
+\tcode{.....}& Period, Ellipsis, Period\\
+\hline
+\tcode{......}& Ellipsis, Ellipsis \\
+\hline
+\end{tabular}
+
+
 \subsubsection{Member initializers}
+
+Member initializers can be pack expansions, in the same way that base initializers already can be
+
+\begin{colorblock}
+template <typename... Ts>
+struct S : Ts... {
+    S(Ts... ts) :
+        Ts(ts)...,   // can initialize a pack of bases
+        elems(ts)... {}   // NEW! can initialize a pack of members
+         {}
+    Ts... elems;
+};
+\end{colorblock}
 
 \subsubsection{CTAD}
 
+It is possible to write deduction guides for a class
+or aggregate that has a member pack.
+
+\begin{colorblock}
+template <typename... Ts>
+struct S {
+    S(Ts... ts) : elems(ts)... {}
+    Ts... elems;
+};
+
+template <typename... Ts>
+S(Ts...) -> S<Ts...>;
+\end{colorblock}
+
+However, we should not add deduction guides automatically for
+
+\begin{itemize}
+\item Aggregates with multiple member packs
+\item Aggregates with non-trailing packs
+\item Aggregates with bases that themselves contain member packs.
+\end{itemize}
+
+\subsection{Designated initializers}
+
+TBD
+
+
+\subsection{Pointer to members}
+
+TBD
+
+
 \subsubsection{Member Expressions, Prvalues, and Packs}
 
-A member expression can name a pack produced by a pr-value.
+If member expressions can name a pack and the LHS of a member expression
+can be a pr-value, then a member expression can name a pack produced by a pr-value.
 
-How many times should \tcode{f} be evaluated?
+This introduces a new design question, perhaps the biggest design question in this paper
+as everything else is a relatively straightforward application of existing features.
+Indeed, every other pack expression so far is an l-value.
+
+To illustrate the question, how many times should \tcode{f} be evaluated? 1 or 3.
 
 \begin{colorblock}
 template <typename... Ts>
@@ -397,46 +689,253 @@ int main() {
 }
 \end{colorblock}
 
-\section{Implementations}
+The question is that of the nature of \tcode{f(1, 2, 3).elems}.
 
-\subsubsection{Circle}
+Either we consider \tcode{f(1, 2, 3).elems} a pattern, which is trivial
+and does not require additional specification or implementation work (in which case \tcode{f}) is called 3 times.).
+or we realize that \tcode{f(1, 2, 3).elems}
+\textbf{produces} a pack which is then expanded (in which case \tcode{f}) is called once).
 
-\subsubsection{Clang}
+The second model is less surprising for users (after talking with a lot of people with various levels of experience).
+if the function producing the pack either has side effects or takes time to execute, etc, calling it multiple times
+does not match the intent.
 
-Done:
+Worse, if \tcode{f()} is evaluated more than once, each expansion of the pack could produce a different result.
 
-\begin{itemize}
-\item Alias packs
-\item Member packs
-\item Member initializers
-\end{itemize}
+\begin{colorblock}
+template <typename... Ts>
+struct S { Ts... elems; };
 
-Todo:
+auto f (auto... args) {
+    static int i = 0;
+    i++;
+    return S{(args * i)... };
+}
 
-\begin{itemize}
-\item Lots of bugs, missing diags
-\item Variables
-\item Members of anonymous unions
-\item Implicit CTAD
-\item Member expression materialized temporary reuse
-\end{itemize}
+int main() {
+    return (f(1, 2, 3).elems + ... );
+}
+\end{colorblock}
+
+This program returns... 14 (\tcode{1*1 + 2*2 + 3*3}), which is confusing.
+
+In other words, if the left-hand side of a member expression is evaluated for each
+expansion of the pack, the identity of the pack itself changes, which seems extremely confusing.
+
+Note that any expression that does not produce the pack being expanded
+(and that can only be the LHS of a member expression) would be evaluated for each expansion.
+This itself can arguably be confusing: In the example below, \tcode{f} is evaluated 4 times.
+
+\begin{colorblock}
+
+template <typename... Ts>
+struct S {
+    Ts... elems;
+    operator int();
+};
+
+auto f (auto... args) {
+    return S{1, 2, 3 };
+}
+
+int main() {
+    return ((f(1, 2, 3).elems + f()) + ... );
+}
+
+\end{colorblock}
 
 
-\section{Next Steps}
+The other issue with the "Produce the pack once" model,
+is that we ought to preserve value categories of expansions.
+So if a pack is produced by a pr value, the elements of the
+packs should be x-values.
+
+This could potentially be an issue if pack elements have a reference to the
+object they are part of.
+
+We haven't implemented the "LHS is called once" model yet (we certainly plan to).
+The idea would be that each member expression would reuse the same materialized temporary.
+
+The 3rd option is to make member pack expansions where the LHS is not an \grammarterm{id-expression} ill-formed,
+forcing users to declare a variable.
+
+This seems reasonable in the context of this proposal, and it would allow us to make forward progress.
+The same question will however appear in other contexts notably for reflection range splicers and
+an an unpacking expression that would unpack an aggregate/constant range/tuple-like entity without
+introducing a structured binding (such things are described in "Future work" and in \paper{P1858R2}).
+
+\section{Implementation experiences}
+
+The features presented in this paper, and previous work, have demonstrated implementability twice.
+First in Sean Baxter's Circle, and more recently in Clang.
+
+Neither implementations cover everything implemented here:
+Circle does not support packs of aliases.
+
+And Clang (an experimental branch thereof), only has limited support for alias packs and member packs.
+
+Our implementations has no support for packs outside of templates (although I did some experience to validate viability).
+We intent to complete that work as part of \paper{P1061R6}.
+
+Implementation of variable packs and variable packs initialization, implicit deduction guides, anonymous union pack members,
+missing diagnostics, will be worked on both ahead of Tokyo, and ahead of St Louis.
+What we have so far is an incomplete prototype.
+
+Nevertheless, the implementation effort done so far is sufficient to assert the viability of this paper and to give some
+measure of the effort involved.
+
+A lot of the architecture changes to support packs outside of templates will be brought about by \paper{P1061R6},
+and what is presented here constitutes incremental changes over that (at least for AST-based implementations).
+
+This is not to say that the implementation effort would not be substantial as we introduce additional ideas.
+Notably packs in dependent types and nested name specifiers, as well as new syntax to disambiguate packs.
+More generally we increase the number of entities that can be or contain a pack.
+
+In all, for AST-based implementations, this is a medium-sized set of features,
+probably accounting for a few months of work.
+
+And it would reduce the burden put on library implementers, which I am sure would be appreciated.
 
 \section{Relation with Reflection}
 
-\section{Future work}
+Consider a facility to unique a list of types.
+This is not a theoretical problem, such things are pretty widely used for example in P2300 implementations.
+Writing that entirely as a template meta program is certainly possible.
+Both \tcode{boost::hana} and \tcode{mp11} do provide such an algorithm, for example.
+But these things are widely inefficient in terms of the number of template instantiations, and they are hard to write.
 
-\subsection{Unpacking}
+A better alternative would be to use reflection, and  leverage existing algorithms like
+\tcode{std::ranges::sort} / \tcode{std::ranges::unique} to produce the list of type.
+
+\begin{colorblock}
+std::vector<std::meta::info> unique(std::vector<std::meta::info> v) {
+    std::ranges::stable_sort(v);
+    const auto [first, last] = std::ranges::unique(v);
+    v.erase(first, last);
+    return v;
+}
+\end{colorblock}
+And then, every time you want a produce a uniqued list of types, you could write
+\begin{colorblock}
+typename [: ...unique({^Ts...}) :]...;
+\end{colorblock}
+
+At the time of writing reflections are not less-than comparable (which is sensible), nor are they hashable (which is surprising),
+so this example does actually require some amount of suspension of disbelief.
+Ranges of reflection are also not expandables in the current proposal, so maybe you'd write something like that
+(assuming you are willing to call \tcode{unique} N times, which is certainly a bad idea).
+
+\begin{colorblock}
+typename [: unique({^Ts...})[ints<sizeof...(Ts)>] :]...
+\end{colorblock}
+
+This is a lot of syntax, resulting from the fact that we are exposing users directly to these domain switches.
+Instead, we can expose the algorithm as a trait:
+
+\begin{colorblock}
+template <typename... Ts>
+using ...unique_types = typename [: ...unique({^Ts...}) :];
+\end{colorblock}
+
+\begin{colorblock}
+static_assert(std::same_as<
+    std::tuple<unique_types<int, double, int, int double, int>...>,
+    std::tuple<int, double>
+>);
+\end{colorblock}
+
+This is still using reflection, and this is still efficient in the number of instantiations.
+But reflection is an implementation detail of a more expressive and concise interface.
+
+The point is that there is no conflict between reflection and packs.
+In fact, they complement.
+Reflection is an objectively better way to apply non-trivial transformation to a sequence of types,
+both in terms of being more natural to write and, a lot more efficient in terms of compile time.
+
+At the same time, an API that returns a \tcode{meta::info}, or a \tcode{range::meta::info}
+is always going to be clunky compared to producing a type, or a range of type.
+
+Ultimately, reflection and what we propose here are not in conflict,
+and they complement each other.
+
+The combination of this proposal and reflection enables efficient handling of lists of types.
+There is a lot of synergies to be found.
+And generally, "Reflection for C++ 26" should support splicing ranges.
+
+\section{Future work}
 
 \subsection{Pack Literals}
 
+During review of the paper, several people have expressed the desire for a way to
+initialize packs of types / values with some sort of pack literal syntax.
+
+That idea was also introduced in \paper{P0341R0}, there is really nothing new here.
+A pack literal syntax would be useful to give default values to packs of variables, for example.
+
+This is not proposed because it can be fairly emulated with other features presented here
+
+\begin{colorblock}
+template <typename ...T>
+struct Pack {
+    T ...values;
+};
+
+constexpr Ts ...a = Pack{0, "Hello", 42}....values;
+\end{colorblock}
+
+It does bring the question of whether a variable pack can be declared
+when its type is not a pack but its initializer is.
+
+\subsection{Unpacking}
+
+In the past, we discussed an expression syntax to expand a tuple-like type or an aggregate without the need to introduce
+a declaration. This would run into the same design question that are discussed for member expressions.
+Otherwise, it is an orthogonal feature, but one that would be fairly easy to add on top of what we are proposing here,
+as most of the implementation challenges would have been resolved.
+Please refer to \paper{P1858R2} for more discussion of that feature.
+
 \subsection{Slicing}
+
+Taking a slice of a pack would be useful, especially considering a lot
+of variadic constructors may have different constraints for the first element.
+However it is otherwise a fairly orthogonal feature, one that can be pursued independently of this paper,
+or other pack-related papers.
 
 \subsection{Splicing}
 
+Splicing ranges of reflection, in particular ranges of members has a lot of overlap with
+the design questions presented there.
+
+The inability to go from the reflection domain to a pack is going to force clunky syntaxes
+like the use of integer sequences, and is contributing to making these domain boundaries more verbose than
+they need to be.
+
+\section{Next Steps}
+
+Our implementation is not complete, and we evidently do not yet have wording.
+If EWG is interested in seeing more, we plan to produce both wording and implementation for St Louis.
+
+The main questions we are seeking guidance on at this point are:
+
+\begin{itemize}
+\item Are we interested in seeing more?
+\item Do we agree with the full set of features (aliases, data members, static data members, namespace scope variable templates, and alias templates)?
+\item Do we think the initial version of this work needs some sort of pack literal feature to initialize variable packs?
+\item Do we want to solve the question of member expressions where the LHS is not an \grammarterm{id-expression}?
+\end{itemize}
+
+
 \section{Wording}
+
+TBD
+
+\section{Acknowledgments}
+
+Many people contributed interesting ideas to this paper, including but not limited to
+Lewis Baker, Hana Dusíková, Sean Baxter, David Ledger, Gašper Ažman, Miro Knejp, Christopher Di Bella,
+Luke D'Alessandro.
+
+I would also like to thank Barry Revzin for his work on P1858.
 
 \section{References}
 
