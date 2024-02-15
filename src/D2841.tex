@@ -793,7 +793,7 @@ Let us introduce three concepts that refine eachother \tcode{A}, \tcode{B}, and 
 as well as a class template \tcode{S} that carries a concept \tcode{X} and a type \tcode{T}.
 
 \begin{colorblock}
-template <concept X, typename T>
+template <template <typename T> concept X, typename T>
 struct S {};
 template <typename T>
 concept A = true;
@@ -807,26 +807,23 @@ If we then define an overload set of two functions where one deduces the concept
 we get into an interesting situation where the choice of template arguments of \tcode{S} can change the subsumption order.
 
 \begin{colorblock}
-template <concept X, typename T>
+template <template <typename T>  concept X, typename T>
 int answer(S<X, T>) requires B<T> { return 42; }
-template <concept X, typename T>
+template <template <typename T> concept X, typename T>
 int answer(S<X, T>) requires X<T> { return 43; }
 \end{colorblock}
 
 Observe:
 
 \begin{colorblock}
-answer(S<A, int>); // 42 -- B subsumes A
-answer(S<C, int>); // 43 -- C subsumes B
-answer(S<B, int>); // error; ambiguous
+answer(S<A, int>{}); // 42 -- B subsumes A
+answer(S<C, int>{}); // 43 -- C subsumes B
+answer(S<B, int>{}); // error; ambiguous
 \end{colorblock}
 
 In c++23, given two function templates, it is always possible to determine their partial ordering before substitution.
 
 This has allowed compilers to cache partial orderings of function templates.
-
-The implemntation in clang showed that with the cache key of (function template ID, concept arguments...) allows correct caching of partial orderings.
-Non-concept template arguments do not matter for caching partial orderings. There were no significant challenges with the clang implementation.
 
 Even though the compiler isn't confused, one might legitimately be concerned that the users might be.
 On the face of it, it seems valuable for a c++ programmer to be able to partially order function templates in their head,
