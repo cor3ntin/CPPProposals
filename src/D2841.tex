@@ -18,11 +18,13 @@
 \section{Abstract}
 
 C++ allows passing templates as template parameters.
-It does not, however, support these template template-parameters to be non-types, i.e., either variables or concepts, which
-represents a hole in the template facilities and is the topic of this paper.
+However, they are forced to be typenames (either type alias templates or class templates).
+Variable templates or concepts are not supported.
+This is a hole in the template facilities and is the topic of this paper.
 
-We introduce a way to pass concepts and variable templates as template parameters
+We introduce a way to pass concepts and variable templates as template parameters.
 
+Example:
 
 \begin{colorblock}
 template<
@@ -40,7 +42,7 @@ constexpr auto Var = 42;
 S<Concept, Var> s;
 \end{colorblock}
 
-
+Note: this paper is a subset of the larger \paper{P1985R3} (Universal Template Parameters); the authors felt this topic is subtle enough to warrant its own paper.
 
 \section{Revisions}
 
@@ -78,6 +80,7 @@ The motivation for passing a concept as a template argument is very much the sam
 
 While there are workarounds - for example by wrapping a variable in a struct with a \tcode{value} member that can then be passed as a type template template parameter, these workarounds
 all suffer the same limitations:
+
 \begin{itemize}
     \item They have terrible ergonomics
     \item They have a noticeable impact on performance - instantiating types is expensive
@@ -104,27 +107,28 @@ auto f(T&& x);
 
 Other such constructs might, for example, include the following.
 \begin{itemize}
-\item \tcode{range_of}\\
+\item \tcode{range_of<Concept>}\\
     Many algorithms can operate on a sequence of integer or string-like types and while it is possible to express
     \tcode{range<T> \&\& SomeConcept<ranges::range_reference_t<R>>}, some codebases do that enough that they might want to have a shorter way to express that idea,
     one that would let them use the abbreviated syntax in more cases.
 
-\item \tcode{tuple_of} \\
+\item \tcode{tuple_of<Concept>} \\
     This follows the same idea, but expressing this idea in the require clause of each function or class that might need it would be an exercise in frustration and a maintenance nightmare. We explore a \tcode{tuple_of} concept later in this paper.
     Representing vectors as tuples-like things of numbers is common in the scientific community, and these scientific libraries have no ideal way to express these constraints.
 
 \item Avoiding duplication.\\
-     In his \href{https://brevzin.github.io/c++/2019/01/09/concept-templates/}{blog post} on this very topic, Barry Revzin observed that \tcode{std::ranges} defines a handful of concepts that are very
-     similar to one another except they use different concepts internally. Concept template-parameters can reduce a lot of duplication.
-     Compare the \href{https://eel.is/c++draft/indirectcallable.indirectinvocable}{definitions in the Standard} and \href{https://godbolt.org/z/ohKsoKh9G}{the implementation with our proposal}.
+    In his \href{https://brevzin.github.io/c++/2019/01/09/concept-templates/}{blog post} on this very topic, Barry Revzin observed that \tcode{std::ranges} defines a handful of concepts that are very
+    similar to one another except they use different concepts internally. Concept template-parameters can reduce a lot of duplication.
+    Compare the \href{https://eel.is/c++draft/indirectcallable.indirectinvocable}{definitions in the Standard} and \href{https://godbolt.org/z/ohKsoKh9G}{the implementation with our proposal}.
 \end{itemize}
 
 To quote Barry's aforementioned blog post
+
 \begin{quoteblock}
 I’d rather write a one-line definition per metaconcept, not a one-line definition per metaconcept instantiation.
 \end{quoteblock}
 
-So part of the motivation for concept template-parameters is the same motivation  we have for functions, templates, and classes:
+So part of the motivation for concept template-parameters is the same as for having functions, templates, and classes:
 We want to be able to reuse code and to make it less repetitive and error-prone.
 
 
@@ -147,15 +151,19 @@ Unfortunately, this is one of those features that truly shows its power on large
 Variable-template template-parameters (previously proposed in \paper{P2008R0}) are useful by themselves.
 They can be emulated with a template class with a static public \tcode{value} data member.
 Most standard type traits are defined as a type and have an equivalent \tcode{_v} variable:
+
 \begin{colorblock}
 template <typename T, typename U>
 constexpr bool is_same_v = is_same<T, U>::value;
 \end{colorblock}
 
-But this is not compile-time efficient: A class has to be instantiated, which is usually slow on most implementations.
-Then we still need to instantiate the variable. This performance issue is explored in more detail in \paper{P1715R1}.
+But this is not compile-time efficient: a class has to be instantiated in addition to generating the value for the constant, which is strictly more work than just producing the constant.
+For a `bool` constant, for instance, the difference is substantial; on apple clang15, it's about 60\% (so, less then half the time).
+The memory footprint is more difficult to gauge, but it seems around a 40\% difference.
 
-In microbenchmarks, Gašper has observed a minimum of 30\% speedup by not instantiating class bodies, and a 50\% memory usage reduction for programs with heavy traits usage, specifically when implementing P2300-like classes.
+This performance issue is also explored in more detail in \paper{P1715R1}.
+
+In other microbenchmarks, Gašper has observed a minimum of 30\% speedup by not instantiating class bodies, and a 50\% memory usage reduction for programs with heavy traits usage, specifically when implementing P2300-like classes.
 
 Also, if one has multiple metaprogramming libraries, relying on idioms like \tcode{::value} is fundamentally less composable than a value just being a value.
 Similarly, if you have a concept in your codebase, you shouldn't have to wrap it into a static constexpr \tcode{::value} member of a type to pass it to a metafunction.
@@ -305,7 +313,7 @@ Here the concepts we want to parametrize on are passed as a constrained generic 
 This allows not to have to create a new type for each concept, so it might be slightly easier to use, although the reader will agree that it particularly arcane.
 In addition to the usability concerns, lambdas are never a solution to compile times performance.
 
-All the existing swork around suffer similar performance and usability concerns, and of course none support subsumption.
+All the existing work arounds suffer similar performance and usability concerns, and of course none support subsumption.
 Yet, many such workarounds have been developed and number of them have been deployed in production.
 Daisy Hollman provided an \href{https://p2841.godbolt.org/z/efYK1crb3}{entire collection of such workarounds}.
 
@@ -575,8 +583,6 @@ There are existing cases where we make non-deductible partial specializations il
 however in the general case we don't seem to (\href{https://gcc.godbolt.org/z/fv1e8nnsf}{for example here is an example with a non-deducible pack})
 
 
-
-
 \subsection{Equivalence of atomic constraints}
 
 One interesting concept to consider is \tcode{tuple_of}, which would e.g., allow constraining a function on a \placeholder{tuple-like}
@@ -693,12 +699,14 @@ of comparing their template arguments when establishing atomic constraint equiva
 \section{Status of this proposal and further work}
 
 Our main priority should be to make progress on some form of universal template parameters.
-We will have an implementation of universal template parameters for the Standards Committee meeting in Kona.
+
+This paper has been implemented in an experimental version of clang, available on godbolt.
+
 Before that, we need to ensure concepts and variable-template template-parameters are supported features so that universal
 template-parameters support the gamut of entities that could reasonably be used as template-parameters.
 
 As part of that, subsumption for concept template-parameters, as proposed in this paper, as well as subsumption of fold expressions
-should be considered an integral part of the design since adding them later might be somewhat annoying. (It could affect existing code, in theory.)
+should be considered an integral part of the design since adding them later might be somewhat challenging, although it should not affect existing valid code.
 
 \section{Things to be careful about}
 
@@ -727,7 +735,121 @@ Y<int, Foo>;
 This will need careful consideration, but we have options, such as preventing the same concept name from appearing multiple times
 or having an implementation-defined limit for how many concepts can be replaced during subsumption.
 
+
+\section{Discussion on subsumption of deduced constraints}
+
+One of the basic motivations for this extension is the \tcode{decays_to<Concept>} concept adaptor.
+It would be a great shame if subsumption didn't work with it.
+Consider the user surprise if the following were ambiguous on random access ranges.
+
+\begin{colorblock}
+  template <typename T, template <typename> concept C>
+  concept decays_to = C<std::decay_t<T>>;
+
+  void f(decays_to<forward_range> auto&& range) {...}
+  void f(decays_to<bidirectional_range> auto&& range) {...}
+\end{colorblock}
+
+Note that \tcode{C} is a template-parameter of \tcode{decays_to}, and must therefore participate in subsumption to make the above work.
+
+It also seems sensible that concepts should be able to constrain class templates; perhaps to gate access to other parameters early:
+
+\begin{colorblock}
+template <typename Callback, template <typename> concept C>
+struct callback_wrapper {
+  Callback callback;
+  template <decays_to<copyable> Arg>
+  void operator()(Arg&& arg) const requires decays_to<Arg, C> {
+    // wrapper-y stuff with arg
+    // ...
+    callback(auto(std::forward<Arg>(arg)));
+  }
+};
+\end{colorblock}
+
+In order to accept such wrappers, a function needs to be able to pattern-match on their signature;
+preventing this seems user-hostile.
+
+\begin{colorblock}
+template <typename Callback, template <typename> concept C>
+void g(callback_wrapper<Callback, C> const& c) { ... }
+\end{colorblock}
+
+It seems natural, then, that a function should be able to constrain based on a pattern-matched concept.
+
+\begin{colorblock}
+template <typename Callback, template <typename> concept C>
+void h(callback_wrapper<Callback, C> const& c, C auto arg) {
+  // be nice to user, raise concept check to h
+  c(std::move(arg));
+}
+\end{colorblock}
+
+So far so good. However, this opens up an interesting corner-case,
+although the authors don't think anyone will ever intentionally write overload sets where this interaction of
+deduction and subsumption might come into play (unless someone is doing metaprogramming with this feature).
+
+Let us introduce three concepts that refine eachother \tcode{A}, \tcode{B}, and \tcode{C},
+as well as a class template \tcode{S} that carries a concept \tcode{X} and a type \tcode{T}.
+
+\begin{colorblock}
+template <template <typename T> concept X, typename T>
+struct S {};
+template <typename T>
+concept A = true;
+template <typename T>
+concept B = true && A<T>;
+template <typename T>
+concept C = true && B<T>;
+\end{colorblock}
+
+If we then define an overload set of two functions where one deduces the concept,
+we get into an interesting situation where the choice of template arguments of \tcode{S} can change the subsumption order.
+
+\begin{colorblock}
+template <template <typename T>  concept X, typename T>
+int answer(S<X, T>) requires B<T> { return 42; }
+template <template <typename T> concept X, typename T>
+int answer(S<X, T>) requires X<T> { return 43; }
+\end{colorblock}
+
+Observe:
+
+\begin{colorblock}
+answer(S<A, int>{}); // 42 -- B subsumes A
+answer(S<C, int>{}); // 43 -- C subsumes B
+answer(S<B, int>{}); // error; ambiguous
+\end{colorblock}
+
+In c++23, given two function templates, it is always possible to determine their partial ordering before substitution.
+
+This has allowed compilers to cache partial orderings of function templates.
+
+Even though the compiler isn't confused, one might legitimately be concerned that the users might be.
+On the face of it, it seems valuable for a c++ programmer to be able to partially order function templates in their head,
+and this feature seems to allow a corner-case where that is impossible before substitution.
+
+To consider whether this is an issue, let us revise some rules about overload set design where subsumption matters.
+
+\begin{itemize}
+  \item an overload set where subsumption matters has to be \textit{designed holistically}.
+    Only concepts that subsume each other correctly can be used;
+    iterator and range concepts are the poster-children of this.
+  \item the only reason an overload could change position is if the designer wrote it that way.
+    This would be exceedingly strange for a deduced concept, as it can't express a requirement of the function body,
+    since it's a parameter and therefore not known by the author.
+\end{itemize}
+
+On the question of whether to allow concept template parameters to participate in subsumption, we have,
+on one hand \tcode{decay_to} and all other metaconcepts,
+and on the other a corner-case that is unlikely to appear in practice, because it doesn't get into an overload set by accident.
+
+Choosing to not allow participation in subsumption is equivalent to making such concepts behave as atomic constraints.
+
+The authors are of the opinion that the value proposition leans pretty heavily on the side of allowing subsumption.
+
 \section{Implementation}
+
 
 The paper as proposed has been implemented in a fork of Clang and is available on compiler-explorer.
 The implementation revealed no particular challenge. In particular, we confirmed that the proposed changes
