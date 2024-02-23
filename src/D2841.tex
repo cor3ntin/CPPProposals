@@ -49,7 +49,8 @@ Note: this paper is a subset of the larger \paper{P1985R3} (Universal Template P
 \subsection{R2}
 
 \begin{itemize}
-\item Add a section in the deduction of template parameters from the arguments of a variable template/concept specialization
+\item Alter the design so that partial ordering remains independent of template arguments, following guidance given in Kona.
+\item Add a section on the deduction of template parameters from the arguments of a variable template/concept specialization
 \end{itemize}
 
 
@@ -118,7 +119,7 @@ Other such constructs might, for example, include the following.
 
 \item Avoiding duplication.\\
     In his \href{https://brevzin.github.io/c++/2019/01/09/concept-templates/}{blog post} on this very topic, Barry Revzin observed that \tcode{std::ranges} defines a handful of concepts that are very
-    similar to one another except they use different concepts internally. Concept template-parameters can reduce a lot of duplication.
+    similar to one another except they use different concepts internally. Concept template parameters can reduce a lot of duplication.
     Compare the \href{https://eel.is/c++draft/indirectcallable.indirectinvocable}{definitions in the Standard} and \href{https://godbolt.org/z/ohKsoKh9G}{the implementation with our proposal}.
 \end{itemize}
 
@@ -158,7 +159,7 @@ constexpr bool is_same_v = is_same<T, U>::value;
 \end{colorblock}
 
 But this is not compile-time efficient: a class has to be instantiated in addition to generating the value for the constant, which is strictly more work than just producing the constant.
-For a `bool` constant, for instance, the difference is substantial; on apple clang15, it's about 60\% (so, less then half the time).
+For a `bool` constant, for instance, the difference is substantial; on Apple clang15, it's about 60\% (so, less than half the time).
 The memory footprint is more difficult to gauge, but it seems around a 40\% difference.
 
 This performance issue is also explored in more detail in \paper{P1715R1}.
@@ -231,7 +232,7 @@ The authors have use cases that don't fit in the paper (typical for the most \em
 \subsection{Terse syntax, overloading, and reusing existing concepts}
 
 The following example, simplified from production code shows multiple interesting properties of concept template parameters.
-\tcode{with_values_t} takes a function and a predicate, and call the function with all the argument satisfying this predicate.
+\tcode{with_values_t} takes a function and a predicate, and calls the function with all the arguments satisfying this predicate.
 
 Here we demonstrate the function with \tcode{either} and \tcode{maybe}, but in reality, this is used with receiver types - which are also monadic.
 The call operator applies \tcode{f} to all engaged arguments. But all the arguments must be of the same shape (all optionals, all expected), etc.
@@ -314,7 +315,7 @@ This allows not to have to create a new type for each concept, so it might be sl
 In addition to the usability concerns, lambdas are never a solution to compile times performance.
 
 All the existing work arounds suffer similar performance and usability concerns, and of course none support subsumption.
-Yet, many such workarounds have been developed and number of them have been deployed in production.
+Yet, many such workarounds have been developed and a number of them have been deployed in production.
 Daisy Hollman provided an \href{https://p2841.godbolt.org/z/efYK1crb3}{entire collection of such workarounds}.
 
 \pagebreak
@@ -380,7 +381,7 @@ support as best we can the full set of entities we might ever want to support as
 
 \subsection{Syntax}
 
-We propose the following syntax for the declaration of a template head accepting a concept as parameter:
+We propose the following syntax for the declaration of a template head accepting a concept as a parameter:
 
 \begin{colorblock}
 template<
@@ -515,10 +516,9 @@ concept product_type_of = (... && C<std::tuple_element_t<C...[?], X>>);
 Similar to variables, variable templates and concepts are not associated entities when performing argument-dependent lookup.
 This is consistent with previous work (for example \paper{N3595} and \paper{P0934R0}) and the general consensus toward ADL.
 
-\subsection{Deduction and partial ordering}
+\subsection{Deduction of concept and template parameters}
 
-Variable and concept template-parameters should be deducible from a template argument of a class template, used in the argument list of a function,
-including a function that is synthesized for the purpose of partial ordering; i.e., the intent is that the following is well-formed:
+Variable and concept template-parameters should be deducible from a template argument of a class template, used in the argument list of a function.
 
 \begin{colorblock}
 template <template <class> auto V, template <class> concept C>
@@ -539,6 +539,154 @@ void test() {
 \end{colorblock}
 
 [\href{https://compiler-explorer.com/z/66dr6fnKj}{Run this example on Compiler Explorer}]
+
+\section{Partial ordering of function templates involving concept template parameters}
+
+Let us introduce three concepts that refine eachother \tcode{A}, \tcode{B}, and \tcode{C},
+as well as a class template \tcode{S} that carries a concept \tcode{X} and a type \tcode{T}.
+
+If we then define an overload set of two functions where one deduces the concept,
+we get into an interesting situation where if concept parameters are allowed participate in partial ordering, the choice of template arguments of \tcode{S} can change the subsumption order.
+
+\begin{colorblock}
+template <template <typename T> concept X, typename T>
+struct S {};
+template <typename T>
+concept A = true;
+template <typename T>
+concept B = true && A<T>;
+template <typename T>
+concept C = true && B<T>;
+
+template <template <typename T>  concept X, typename T>
+int answer(S<X, T>) requires B<T> { return 42; }
+template <template <typename T> concept X, typename T>
+int answer(S<X, T>) requires X<T> { return 43; }
+
+answer(S<A, int>{});
+answer(S<C, int>{});
+answer(S<B, int>{});
+
+\end{colorblock}
+
+
+In a previous version of this proposal, we proposed that the concept template argument (\tcode{A}, \tcode{B}, \tcode{C} respectively)
+would be substituted in each viable \tcode{answer overload} before determining partial ordering.
+
+However, historically, it was always possible to determine the partial ordering of two function templates before substitution, and independently
+of any template argument. This has notably allowed compilers to cache partial orderings of function templates, and even though the compiler isn't confused, one might legitimately be concerned that the users might be.
+On the face of it, it seems valuable for a C++ programmer to be able to partially order function templates in their head,
+and this feature seems to allow a corner-case where that is impossible before substitution.
+
+It was always the position of the authors that use cases where concepts are deduced from functions arguments were contrived but
+we did not want to outright limit the set of places were a concept template parameter could be used,
+and it took us a while to find a reasonable way to resolve these opposite design goals.
+
+Ultimately we found a solution that preserves all the uses cases this feature was designed for,
+while not making partial ordering dependent on arguments.
+
+The rule we are proposing is:
+
+\textbf{During partial ordering, if a \tcode{concept-id} that names a concept template parameter appears in the associated constraints of a declaration \tcode{D}, \tcode{D} is never at least as constrained as another constrained declaration}
+In the example above, the 3 calls to \tcode{answer} are, with is rule, ambiguous.
+
+This rule makes any overload that references a concept template parameter in its requires clause unorderable solely based on subsumption.
+
+
+We think this has nice properties:
+\begin{itemize}
+    \item It's fairly straightforward to teach
+    \item It's easy to produce a good diagnosis for.
+    \item It leaves the design space open.
+\end{itemize}
+
+Consider this slightly different example:
+
+\begin{colorblock}
+template <template <typename> concept C>
+concept A = C<int>;
+template <template <typename> concept C>
+concept B = true && A<C>;
+
+template <template <typename T> concept X>
+void f() {}; // #1
+template <template <typename T> concept X>
+void f() requires A<X> {} // #2
+template <template <typename T> concept X>
+void f() requires B<X> {} // #3
+
+template <typename T>
+concept Foo = true;
+
+f<Foo>(); // #4 (ambiguous between 2 and 3)
+\end{colorblock}
+
+Here, \#2 and \#3 are more specialized than \#1 (because they are constrained and \#1 is not).
+
+With the rule proposed above, neither \#2 or \#3 are as least as constrained as each other (as they refer to a concept templaste parameter \tcode{X}).
+As such \#2 is not more specialized than \#3 and \#3 is not more specialized than \#2, and the call \#4 is ambiguous.
+
+We could conceive an alternative design instead, such that we would \textbf{consider dependent \tcode{concept-id} (ie dependent on a concept template parameter of the function template) to be atomic constraints} (option 2).
+
+With that alternative design, for the example above the associated constraints of \#2 would be, after normalization \tcode{C<int>} (where \tcode{C<int>} is an atomic constraint and \tcode{C} refers to some invented template argument), and the associated constraints of \#3 would be, after normalization \tcode{true \&\& C<int>} (where \tcode{C<int>} is the same expression as \#2's).
+
+In that model, \#3 subsumes \#2 and the call is not ambiguous.
+The key observation is that, the nature of \tcode{C} does not affect subsumption whether it would be substituted or not.
+
+Not looking at template arguments (and considering dependent \tcode{concept-id}) can lead to situations where
+overloads are ambiguous, when they would not be if the concept argument was written verbatim and not passed via a parameter.
+
+\begin{colorblock}
+template <typename T>
+concept Foo = true;
+
+template <template <typename> concept C>
+concept B = true && C<int>;
+
+template <template <typename T> concept X>
+void f() requires Foo<int>{}; // #1
+
+template <template <typename T> concept X>
+void f() requires B<X> {} // #2
+
+f<Foo>(); // ambiguous between #1 and #2
+\end{colorblock}
+
+The opposite is not possible.
+
+There is a compromise between these two options. We could consider
+that a concept that appears (either as concept-id, or as concept template argument of another concept-id) in a subexpression of \tcode{\&\&} or \tcode{||}
+makes that subexpression atomic (and that subexpression only).
+
+\begin{colorblock}
+template <template <typename> concept X>
+concept AlwaysTrue = true; // X is not used
+template <typename T>
+concept A = true;
+template <typename T, template <typename> concept C>
+void f(T) requires
+A<T>
+|| C<int>  // atomic (depends on C)
+|| AlwaysTrue<T, C> {}  // atomic (depends on C, even if C is never used by AlwaysTrue)
+\end{colorblock}
+
+This would be less restrictive than Option 1, and less precise than Option 2, but easier to implement.
+Lets refer to this option as 1B.
+
+In no case do we expand concept template arguments when considering subsumption; the question is merely about how much subsumption depth we want to preserve, that is, how much rope for resolving ambiguity do we want to give users.
+
+Ultimately, while whe have a slight preference for option 1, we submit the following question to EWG:
+
+\textbf{Do we prefer}
+\begin{itemize}
+\item Option  1: Don't try to determine a more constrained overload at all in the presence of a referenced concept template parameter.
+\item Option 1B: Before normalization (ie at the top level), if a concept template parameter is referenced in the subexpression of of a logical \&\& or ||, consider that subexpression atomic
+\item Option 2:  After normalization of non-dependent concept-id, consider concept-id refering to a concept template parameter to be atomic constraints.
+\end{itemize}
+
+Option 1 and 1B can be evolved into option 2 later, the opposite would be a breaking change.
+
+
 
 \subsection{Deduction of template parameters from the argument list of a variable template argument}
 
@@ -576,7 +724,7 @@ above example can only work on a subset of variables (constexpr variables templa
 We would also need to decide whether \tcode{is_specialization_of_v<i, i<int>>} behaves differently from \tcode{is_specialization_of_v<i, (i<int>)>}
 and how that generalizes to arbitrary subexpressions involving variable template specializations.
 
-So, for now, arguments of variable template template parameter are not deduced.
+So, for now, arguments of variable template template parameters are not deduced.
 instead, we should make \#2 ill-formed, so that we have the opportunity to extend that at a later time if we find sufficient motivation for it.
 
 There are existing cases where we make non-deductible partial specializations ill-formed (see \href{https://eel.is/c++draft/temp.spec.partial#match-3}{[temp.spec.partial.match])},
@@ -734,119 +882,6 @@ Y<int, Foo>;
 
 This will need careful consideration, but we have options, such as preventing the same concept name from appearing multiple times
 or having an implementation-defined limit for how many concepts can be replaced during subsumption.
-
-
-\section{Discussion on subsumption of deduced constraints}
-
-One of the basic motivations for this extension is the \tcode{decays_to<Concept>} concept adaptor.
-It would be a great shame if subsumption didn't work with it.
-Consider the user surprise if the following were ambiguous on random access ranges.
-
-\begin{colorblock}
-  template <typename T, template <typename> concept C>
-  concept decays_to = C<std::decay_t<T>>;
-
-  void f(decays_to<forward_range> auto&& range) {...}
-  void f(decays_to<bidirectional_range> auto&& range) {...}
-\end{colorblock}
-
-Note that \tcode{C} is a template-parameter of \tcode{decays_to}, and must therefore participate in subsumption to make the above work.
-
-It also seems sensible that concepts should be able to constrain class templates; perhaps to gate access to other parameters early:
-
-\begin{colorblock}
-template <typename Callback, template <typename> concept C>
-struct callback_wrapper {
-  Callback callback;
-  template <decays_to<copyable> Arg>
-  void operator()(Arg&& arg) const requires decays_to<Arg, C> {
-    // wrapper-y stuff with arg
-    // ...
-    callback(auto(std::forward<Arg>(arg)));
-  }
-};
-\end{colorblock}
-
-In order to accept such wrappers, a function needs to be able to pattern-match on their signature;
-preventing this seems user-hostile.
-
-\begin{colorblock}
-template <typename Callback, template <typename> concept C>
-void g(callback_wrapper<Callback, C> const& c) { ... }
-\end{colorblock}
-
-It seems natural, then, that a function should be able to constrain based on a pattern-matched concept.
-
-\begin{colorblock}
-template <typename Callback, template <typename> concept C>
-void h(callback_wrapper<Callback, C> const& c, C auto arg) {
-  // be nice to user, raise concept check to h
-  c(std::move(arg));
-}
-\end{colorblock}
-
-So far so good. However, this opens up an interesting corner-case,
-although the authors don't think anyone will ever intentionally write overload sets where this interaction of
-deduction and subsumption might come into play (unless someone is doing metaprogramming with this feature).
-
-Let us introduce three concepts that refine eachother \tcode{A}, \tcode{B}, and \tcode{C},
-as well as a class template \tcode{S} that carries a concept \tcode{X} and a type \tcode{T}.
-
-\begin{colorblock}
-template <template <typename T> concept X, typename T>
-struct S {};
-template <typename T>
-concept A = true;
-template <typename T>
-concept B = true && A<T>;
-template <typename T>
-concept C = true && B<T>;
-\end{colorblock}
-
-If we then define an overload set of two functions where one deduces the concept,
-we get into an interesting situation where the choice of template arguments of \tcode{S} can change the subsumption order.
-
-\begin{colorblock}
-template <template <typename T>  concept X, typename T>
-int answer(S<X, T>) requires B<T> { return 42; }
-template <template <typename T> concept X, typename T>
-int answer(S<X, T>) requires X<T> { return 43; }
-\end{colorblock}
-
-Observe:
-
-\begin{colorblock}
-answer(S<A, int>{}); // 42 -- B subsumes A
-answer(S<C, int>{}); // 43 -- C subsumes B
-answer(S<B, int>{}); // error; ambiguous
-\end{colorblock}
-
-In c++23, given two function templates, it is always possible to determine their partial ordering before substitution.
-
-This has allowed compilers to cache partial orderings of function templates.
-
-Even though the compiler isn't confused, one might legitimately be concerned that the users might be.
-On the face of it, it seems valuable for a c++ programmer to be able to partially order function templates in their head,
-and this feature seems to allow a corner-case where that is impossible before substitution.
-
-To consider whether this is an issue, let us revise some rules about overload set design where subsumption matters.
-
-\begin{itemize}
-  \item an overload set where subsumption matters has to be \textit{designed holistically}.
-    Only concepts that subsume each other correctly can be used;
-    iterator and range concepts are the poster-children of this.
-  \item the only reason an overload could change position is if the designer wrote it that way.
-    This would be exceedingly strange for a deduced concept, as it can't express a requirement of the function body,
-    since it's a parameter and therefore not known by the author.
-\end{itemize}
-
-On the question of whether to allow concept template parameters to participate in subsumption, we have,
-on one hand \tcode{decay_to} and all other metaconcepts,
-and on the other a corner-case that is unlikely to appear in practice, because it doesn't get into an overload set by accident.
-
-Choosing to not allow participation in subsumption is equivalent to making such concepts behave as atomic constraints.
-
-The authors are of the opinion that the value proposition leans pretty heavily on the side of allowing subsumption.
 
 \section{Implementation}
 
@@ -1562,6 +1597,73 @@ This partial ordering is used to determine
 \end{itemize}
 \end{note}
 
+\begin{addedblock}
+The associated constraints \tcode{C} of a declaration \tcode{D} are \emph{subsumption-elligible} unless \tcode{D} is a template-declaration and a subexpression of \tcode{C}
+names a \grammarterm{concept-id} that designates a concept template parameter of D.
+\end{addedblock}
+
+\pnum
+A declaration \tcode{D1} is
+\defn{at least as constrained} as
+a declaration \tcode{D2} if
+\begin{itemize}
+    \item \tcode{D1} and \tcode{D2} are both constrained declarations and
+    \tcode{D1}'s associated constraints
+    \added{are subsumption eligible and} subsume those of \tcode{D2}; or
+
+    \item \tcode{D2} has no associated constraints.
+\end{itemize}
+
+\pnum
+A declaration \tcode{D1} is \defn{more constrained}
+than another declaration \tcode{D2} when \tcode{D1} is at least as
+constrained as \tcode{D2}, and \tcode{D2} is not at least as
+constrained as \tcode{D1}.
+\begin{example}
+\begin{codeblock}
+    template<typename T> concept C1 = requires(T t) { --t; };
+    template<typename T> concept C2 = C1<T> && requires(T t) { *t; };
+
+    template<C1 T> void f(T);       // \#1
+    template<C2 T> void f(T);       // \#2
+    template<typename T> void g(T); // \#3
+    template<C1 T> void g(T);       // \#4
+
+    f(0);                           // selects \#1
+    f((int*)0);                     // selects \#2
+    g(true);                        // selects \#3 because \tcode{C1<bool>} is not satisfied
+    g(0);                           // selects \#4
+\end{codeblock}
+\end{example}
+
+\begin{addedblock}
+\begin{example}
+\begin{codeblock}
+template <template <typename T> concept X, typename T>
+struct S {};
+template <typename T>
+concept A = true;
+template <typename T>
+concept B = true && A<T>;
+template <typename T>
+concept C = true && B<T>;
+
+template <template <typename T>  concept X, typename T>
+int answer(S<X, T>) requires B<T> { return 42; } // \#1
+template <template <typename T> concept X, typename T>
+int answer(S<X, T>) requires X<T> { return 43; } // \#2
+
+// error: the 3 following calls are ambiguous because \#1 and \#2 are not subsumption eligible
+// (their associated constraints depend on a concept template parameter X)
+answer(S<A, int>{});
+answer(S<C, int>{});
+answer(S<B, int>{});
+\end{codeblock}
+\end{example}
+\end{addedblock}
+
+
+
 
 \rSec2[temp.constr.normal]{Constraint normalization}
 \indextext{constraint!normalization|(}%
@@ -1978,6 +2080,8 @@ have one of the following forms:
 Many people contributed valuable discussions and feedbacks to this paper, notably
 Nina Dinka Ranns, Alisdair Meredith, Joshua Berne, Pablo Halpern, Lewis Baker, Bengt Gustafsson,
 Hannеs Hauswedell and Barry Revzin.
+
+We would like to thanks Daveed Vandevoorde for convince us to find a design that does not affect partial ordering.
 
 We also want to thank Lori Hughes for helping editing this paper and Bloomberg for sponsoring this work.
 
