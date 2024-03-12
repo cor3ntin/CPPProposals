@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Concept and variable-template template-parameters}
-\docnumber{P2841R2}
+\docnumber{D2841R3}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Gašper Ažman}{gasper.azman@gmail.com}
@@ -45,6 +45,13 @@ S<Concept, Var> s;
 Note: this paper is a subset of the larger \paper{P1985R3} (Universal Template Parameters); the authors felt this topic is subtle enough to warrant its own paper.
 
 \section{Revisions}
+
+
+\subsection{R3}
+
+\begin{itemize}
+\item Wording improvements
+\end{itemize}
 
 \subsection{R2}
 
@@ -473,13 +480,20 @@ concept, recursively.
 
 As such, subsumption for concept template-parameters does not violate the guiding principle of subsumption.
 
+For example, a \tcode{range_of_integrals} defined as follow:
+
+\begin{colorblock}
+template<typename T>
+concept range_of_integrals = std::ranges::range<T> && @\textbf{std::integral}@<std::remove_cvref_t<std::ranges::range_reference_t<T>>>;
+\end{colorblock}
+
+Can be mechanically lifted:
+
 \begin{colorblock}
 template<typename T, template <typename...> concept C>
-concept range_of = std::ranges::range<T> && @\textbf{C}@<std::remove_cvref_t<std::ranges::range_reference_t<T>>>; // #1
-
+concept range_of = std::ranges::range<T> && @\textbf{C}@<std::remove_cvref_t<std::ranges::range_reference_t<T>>>;
 template<typename T>
-concept range_of_integrals = std::ranges::range<T> && @\textbf{std::integral}@<std::remove_cvref_t<std::ranges::range_reference_t<T>>>; // #2
-
+concept range_of_integrals = range_of<T, @\textbf{std::integral}@>;
 \end{colorblock}
 
 Note that this transformation does not change any other behavior of normalization, i.e., concept template-parameters that appear within other atomic constraints
@@ -702,7 +716,7 @@ Consider:
     template <typename...> auto v,
     typename... Args
     >
-    inline constexpr bool is_specialization_of_v<v, v<Args...>> = false; // #2
+    inline constexpr bool is_specialization_of_v<v, v<Args...>> = true; // #2
 
     template <typename T>
     constexpr int i = 42;
@@ -1002,7 +1016,7 @@ members of the set, i.e., the entities associated with its
 parameter types and return type.
 Additionally, if the aforementioned overload set is named with
 a \grammarterm{template-id}, its associated entities also include
-its template \grammarterm{template-argument}{s} \added{denoting a class template or an alias template} and
+its template \grammarterm{template-argument}{s} \added{denoting a class template} and
 those associated with its type \grammarterm{template-argument}s.
 
 \pnum
@@ -1040,7 +1054,7 @@ is either discarded \iref{module.global.frag} or has internal linkage.
 \indextext{class name!\idxcode{typedef}}%
 A \grammarterm{simple-template-id} is only a \grammarterm{typedef-name}
 if its \grammarterm{template-name} names
-an alias template or \changed{a template \grammarterm{template-parameter}}{a \grammarterm{type-template-parameter} template-parameter}.
+an alias template or \changed{a template \grammarterm{template-parameter}}{a \grammarterm{type-template-parameter}}.
 \begin{note}
     A \grammarterm{simple-template-id} that names a class template specialization
     is a \grammarterm{class-name} \iref{class.name}.
@@ -1092,7 +1106,7 @@ A template specialization \iref{temp.spec} can be referred to by a
 
 \pnum
 A \defn{concept-id} is a \grammarterm{simple-template-id}
-where the \grammarterm{template-name} is a \grammarterm{concept-name} \added{or names a \grammarterm{concept-parameter}}.
+where the \grammarterm{template-name} is a \grammarterm{concept-name}.
 A concept-id is a prvalue of type \tcode{bool}, and
 does not name a template specialization.
 A concept-id evaluates to \tcode{true}
@@ -1115,6 +1129,7 @@ is satisfied \iref{temp.constr.constr} by the specified template arguments and
 
 
 \rSec1[temp.param]{Template parameters}
+
 
 \pnum
 The syntax for
@@ -1185,7 +1200,7 @@ those of its \grammarterm{nested-name-specifier} (if any).
 \begin{note}
     The \tcode{>} token following the
     \grammarterm{template-parameter-list} of a
-    \grammarterm{type-parameter}
+    \grammarterm{\changed{type}{template-template}-parameter}
     can be the product of replacing a
     \tcode{>>} token by two consecutive \tcode{>}
     tokens \iref{temp.names}.
@@ -1205,7 +1220,7 @@ names a template type parameter.
 \keyword{typename}
 followed by a
 \grammarterm{qualified-id}
-denotes the type in a non-type
+denotes the type in a non-type \grammarterm{parameter-declaration}.
 \begin{wfootnote}
     \changed{Since template
     \grammarterm{template-parameter}{s}
@@ -1216,7 +1231,10 @@ denotes the type in a non-type
     and
     \term{non-type argument}
     are used to refer to non-type, non-template parameters and arguments.
-\end{wfootnote} \grammarterm{parameter-declaration}.
+\end{wfootnote}
+
+\ednote{We should get rid of that}
+
 A \grammarterm{template-parameter} of the form
 \keyword{class} \grammarterm{identifier} is a \grammarterm{type-parameter}.
 \begin{example}
@@ -1257,8 +1275,10 @@ in the scope of the template declaration.
 
 \begin{addedblock}
 The \grammarterm{identifier} in a \grammarterm{template-template-parameter} is not looked up.
-A \grammarterm{template-template-parameter} whose \grammarterm{identifier} does not follow an ellipsis defines its
-\grammarterm{identifier} to be a \grammarterm{template-name} in the scope of the template declaration.
+A \grammarterm{template-template-parameter} \tcode{P} whose \grammarterm{identifier} does not follow an ellipsis defines its
+\grammarterm{identifier} to be a \grammarterm{concept-name} \tcode{T} if \tcode{P} is a \grammarterm{concept-parameter}
+or a \grammarterm{template-name} \tcode{T} otherwise.
+\tcode{T} is declared in the scope of the template declaration.
 \end{addedblock}
 
 \begin{note}
@@ -1295,7 +1315,7 @@ then the \grammarterm{template-parameter}
 is a template parameter pack \iref{temp.variadic}.
 A template parameter pack that is a \grammarterm{parameter-declaration} whose type
 contains one or more unexpanded packs is a pack expansion. Similarly,
-a template parameter pack that is a \grammarterm{type-parameter} with a
+a template parameter pack that is a \grammarterm{\changed{type-}{template-template-}parameter} with a
 \grammarterm{template-parameter-list} containing one or more unexpanded
 packs is a pack expansion.
 A type parameter pack with a \grammarterm{type-constraint} that
@@ -1352,6 +1372,40 @@ parameter pack \iref{temp.variadic}, it will correspond to zero or more
 \end{codeblock}
 \end{example}
 
+
+\rSec2[temp.arg.type]{Template type arguments}
+
+\pnum
+A \grammarterm{template-argument} for \changed{a \grammarterm{template-parameter} which is a type}{\grammarterm{type-parameter}} shall be a \grammarterm{type-id}.
+
+\pnum
+\begin{example}
+    \begin{codeblock}
+        template <class T> class X { };
+        template <class T> void f(T t) { }
+        struct { } unnamed_obj;
+
+        void f() {
+            struct A { };
+            enum { e1 };
+            typedef struct { } B;
+            B b;
+            X<A> x1;          // OK
+            X<A*> x2;         // OK
+            X<B> x3;          // OK
+            f(e1);            // OK
+            f(unnamed_obj);   // OK
+            f(b);             // OK
+        }
+    \end{codeblock}
+\end{example}
+\begin{note}
+A template type argument can be an incomplete type\iref{term.incomplete.type}.
+\end{note}
+
+
+\rSec2[temp.arg.template]{Template template arguments}
+
 \pnum
 \removed{A
 \grammarterm{template-argument}
@@ -1361,11 +1415,11 @@ shall be the name of a class template or an alias template, expressed as
 \grammarterm{id-expression}.}
 
 \begin{addedblock}
-A \grammarterm{template-argument} for a template \grammarterm{template-parameter} shall be an \grammarterm{id-expression} denoting
+A \grammarterm{template-argument} for a \grammarterm{template-template-parameter} shall be an \grammarterm{id-expression} denoting
 \begin{itemize}
 \item the name of a class template or an alias template for a \grammarterm{type-template-parameter},
 \item the name of a variable template for a \grammarterm{variable-template-parameter}, and
-\item the name of a concept for a \grammarterm{concept-template-parameter}.
+\item a \grammarterm{concept-name} for a \grammarterm{concept-template-parameter}.
 \end{itemize}
 \end{addedblock}
 
@@ -1403,21 +1457,22 @@ no diagnostic required.
 \begin{addedblock}
 Two template parameters are of the same kind if:
 \begin{itemize}
-\item they are both \grammarterm{type-parameter},
-\item they are both non-type parameter,
-\item they are both \grammarterm{type-template-parameter},
-\item they are both \grammarterm{variable-template-parameter}, or
-\item they are both \grammarterm{concept-parameter}.
+\item they are both \grammarterm{type-parameter}{s},
+\item they are both non-type parameters,
+\item they are both \grammarterm{type-template-parameter}{s},
+\item they are both \grammarterm{variable-template-parameter}{s}, or
+\item they are both \grammarterm{concept-parameter}{s}.
 \end{itemize}
 
 A template template parameter \placeholder{P} and a template argument \placeholder{A} are compatible if
 \begin{itemize}
-\item \placeholder{A} denotes the name of a class template or alias template and \placeholder{P} is a \grammarterm{type-template-parameter},
-\item \placeholder{A} denotes the name of a variable template and \placeholder{P} is a \grammarterm{variable-template-parameter}, or
-\item \placeholder{A} denotes the name of a concept and \placeholder{P} is a \grammarterm{concept-parameter}.
+\item \placeholder{A} denotes a class template or alias template and \placeholder{P} is a \grammarterm{type-template-parameter},
+\item \placeholder{A} denotes a variable template and \placeholder{P} is a \grammarterm{variable-template-parameter}, or
+\item \placeholder{A} denotes a \grammarterm{concept-name} and \placeholder{P} is a \grammarterm{concept-parameter}.
 \end{itemize}
-
 \end{addedblock}
+
+\ednote {See CWG2398}
 
 \pnum
 A \grammarterm{template-argument} matches a template
@@ -1598,8 +1653,7 @@ This partial ordering is used to determine
 \end{note}
 
 \begin{addedblock}
-The associated constraints \tcode{C} of a declaration \tcode{D} are \emph{subsumption-elligible} unless \tcode{D} is a template-declaration and a subexpression of \tcode{C}
-names a \grammarterm{concept-id} that designates a concept template parameter of D.
+The associated constraints \tcode{C} of a declaration \tcode{D} are \emph{subsumption-eligible} unless \tcode{D} is a \grammarterm{template-declaration} and a subexpression of \tcode{C} denotes a concept template parameter of D.
 \end{addedblock}
 
 \pnum
@@ -1609,7 +1663,7 @@ a declaration \tcode{D2} if
 \begin{itemize}
     \item \tcode{D1} and \tcode{D2} are both constrained declarations and
     \tcode{D1}'s associated constraints
-    \added{are subsumption eligible and} subsume those of \tcode{D2}; or
+    \added{are subsumption-eligible and} subsume those of \tcode{D2}; or
 
     \item \tcode{D2} has no associated constraints.
 \end{itemize}
@@ -1887,7 +1941,7 @@ expansions can occur in the following contexts:
 \item In a \grammarterm{using-declaration} \iref{namespace.udecl};
 the pattern is a \grammarterm{using-declarator}.
 
-\item In a template parameter pack that is a pack expansion \iref{temp.param}:
+\item In a template parameter pack that is a pack expansion \iref{}:
 \begin{itemize}
     \item
     if the template parameter pack is a \grammarterm{parameter-declaration};
@@ -2044,6 +2098,55 @@ For a function template $M$ with cv-qualifiers \cv{}
 that is a member of a class $A$:
 
 
+\rSec3[temp.dep.type]{Dependent types}
+\pnum
+A type is dependent if it is
+\begin{itemize}
+\item
+a template parameter,
+\item
+denoted by a dependent (qualified) name,
+\item
+a nested class or enumeration that is a direct member of
+a class that is the current instantiation,
+\item
+a cv-qualified type where the cv-unqualified type is dependent,
+\item
+a compound type constructed from any dependent type,
+\item
+an array type whose element type is dependent or whose
+bound (if any) is value-dependent,
+\item
+a function type whose parameters include one or more function parameter packs,
+\item
+a function type whose exception specification is value-dependent,
+\item
+denoted by a dependent placeholder type,
+\item
+denoted by a dependent placeholder for a deduced class type,
+\item
+denoted by a \grammarterm{simple-template-id}
+in which either the template name is a template parameter or any of the
+template arguments \added{names a \grammarterm{template-template-parameter} or }is a dependent type or an expression that is type-dependent
+or value-dependent or is a pack expansion,
+\begin{wfootnote}
+    This includes an injected-class-name\iref{class.pre} of a class template
+    used without a \grammarterm{template-argument-list}.
+\end{wfootnote}
+\item a \grammarterm{pack-index-specifier}, or
+\item denoted by \tcode{decltype(}\grammarterm{expression}{}\tcode{)},
+where \grammarterm{expression} is type-dependent\iref{temp.dep.expr}.
+\end{itemize}
+
+\pnum
+\begin{note}
+    Because typedefs do not introduce new types, but
+    instead simply refer to other types, a name that refers to a
+    typedef that is a member of the current instantiation is dependent
+    only if the type referred to is dependent.
+\end{note}
+
+
 \rSec3[temp.deduct.type]{Deducing template arguments from a type}
 
 \ednote{Modify [temp.deduct.type]/p8 As follow}
@@ -2053,6 +2156,7 @@ A template type argument
 \tcode{T},
 a template template argument \added{denoting a class template or an alias template}
 \tcode{TT},
+\added{a template template argument denoting a variable template or a concept \tcode{VV},}
 or a template non-type argument
 \tcode{i}
 can be deduced if
@@ -2072,13 +2176,14 @@ have one of the following forms:
     @\opt{TT}@<i>
     @\opt{TT}@<TT>
     @\opt{TT}@<>
+    @\added{\opt{TT}<VV>}@
 \end{codeblock}
 
 %\ednote{Could a variable template parameter ever be deduced?}
 
 \section{Acknowledgments}
 Many people contributed valuable discussions and feedbacks to this paper, notably
-Nina Dinka Ranns, Alisdair Meredith, Joshua Berne, Pablo Halpern, Lewis Baker, Bengt Gustafsson,
+Brian Bi, Nina Dinka Ranns, Alisdair Meredith, Joshua Berne, Pablo Halpern, Lewis Baker, Bengt Gustafsson,
 Hannеs Hauswedell and Barry Revzin.
 
 We would like to thanks Daveed Vandevoorde for convince us to find a design that does not affect partial ordering.
