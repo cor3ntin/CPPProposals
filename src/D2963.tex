@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Ordering of constraints involving fold expressions}
-\docnumber{P2963R1}
+\docnumber{D2963R2}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \usepackage[dvipsnames]{xcolor}
@@ -24,10 +24,16 @@ We propose rules for the normalization and ordering of fold expressions over \tc
 \subsection{R1}
 
 \begin{itemize}
-\item Wording improvements: The previous version of this paper incorrectly looked at the size of the packs involved in the fold expressions.
-This was unnecessary and was removed. The current design does not look at the template argument/parameter mapping to establish subsumption of fold expressions.
+\item Wording improvements: The previous version of this paper incorrectly looked at the size of the packs involved in the fold expressions (as it forced partial ordering to look at template arguments).
+The current design does not look at the template argument/parameter mapping to establish subsumption of fold expressions.
 \item A complete implementation of this proposal is available on Compiler Explorer. The implementation section was expanded.
 \item Add an additional example.
+\end{itemize}
+
+\subsection{R2}
+
+\begin{itemize}
+	\item Wording improvements.
 \end{itemize}
 
 \section{Motivation}
@@ -189,16 +195,45 @@ in the parameter mapping.
 \end{example}
 
 \begin{addedblock}
-\item For a \grammarterm{fold-operator}  [expr.prim.fold] that is either \tcode{\&\&} or \tcode{||}, the normal form of an expression \tcode{( ... \grammarterm{fold-operator} E )} is \tcode{( E \grammarterm{fold-operator}...)}.
-\item The normal form of an expression \tcode{( E1 \&\& ... \&\& E2 )} or \tcode{( E2 \&\& ... \&\& E1 )} where \tcode{E1} contains an unexpanded pack is the conjunction of
-the normal forms of \tcode{E2} and \tcode{(E1 \&\&...)}.
+\item For a \grammarterm{fold-operator}  [expr.prim.fold] that is either \tcode{\&\&} or \tcode{||}, the normal form of an expression \tcode{( ... \grammarterm{fold-operator} E )} is the normal form of \tcode{( E \grammarterm{fold-operator}...)}.
+\item The normal form of an expression \tcode{( E1 \grammarterm{fold-operator}  ... \grammarterm{fold-operator}  E2 )}
+where \tcode{E1} contains an unexpanded pack is the the normal form of \tcode{(E1 \grammarterm{fold-operator}...) \grammarterm{fold-operator}  E2}.
+
+\item The normal form of an expression \tcode{( E2 \grammarterm{fold-operator}  ... \grammarterm{fold-operator}  E1 )}
+where \tcode{E1} contains an unexpanded pack is the the normal form of \tcode{(E2 \grammarterm{fold-operator}...) \grammarterm{fold-operator}  E1}.
 
 \ednote{With \paper{P2841}, we want to treat fold expression differently when the pattern of the fold expression denotes a concept template parameter.}
 
 \item The normal form of an expression \tcode{( E1 || ... || E2 )} or \tcode{( E2 || ... || E1 )} where \tcode{E1} is an unexpanded pack is the disjunction of
 the normal forms of \tcode{E2} and \tcode{(E1 || ...)}.
 
-\item In an expression of the form \tcode{(E \emph{op} ...)} where \emph{op} is \tcode{||} or \tcode{\&\&}, \tcode{E} is replaced by its normal form.
+\item The normal form of \tcode{(E \&\& ...)} is a \grammarterm{fold-expanded-conjunction-constraint} whose constraint is the normal form of \tcode{E}.
+
+\item The normal form of \tcode{(E || ...)} is a \grammarterm{fold-expanded-disjunction-constraint} whose constraint is the normal form of \tcode{E}.
+
+% Fold constraint under the atomic section.
+% A fold constrained is associated with a constrain
+% Define the conjunction/disjunction
+
+% Explain satisfaction checking
+% Should substitution be done piece wise?
+%  -> EWG
+
+
+% Remove mixed disjunction / conjunction subsumption
+% Because it is observable
+
+% template <typename ...T> struct Tuple { };
+% template <typename T> concept bool P = true;
+% template <typename T, typename U, typename V, typename X> struct A;
+% template <typename ...T, typename ...U, typename V, typename X>
+% requires P<X> || ((P<V> && P<T>) && ...)
+% void foo(A<Tuple<T ...>, Tuple<U ...>, V, X> *); // #1
+% template <typename ...T, typename ...U, typename V, typename X>
+% requires P<X> || ((P<V> || P<U>) || ...)
+% void foo(A<Tuple<T ...>, Tuple<U ...>, V, X> *); // #2
+% void bar(A<Tuple<int>, Tuple<>, int, int> *p) { foo(p); }
+
 \end{addedblock}
 
 \item
@@ -207,7 +242,6 @@ the atomic constraint
 whose expression is \tcode{E} and
 whose parameter mapping is the identity mapping.
 \end{itemize}
-
 
 \rSec2[temp.constr.order]{Partial ordering by constraints}
 \indextext{subsume|see{constraint, subsumption}}
@@ -231,15 +265,14 @@ in the conjunctive normal form of $Q$, where
     rules described in [temp.constr.atomic].}{:}
     \begin{addedblock}
         \begin{itemize}
-        \item $A$ is a \grammarterm{fold-expression} of the form \tcode{($P$ \&\&...)},
-        $B$ is a \grammarterm{fold-expression} of the form \tcode{($Q$ \&\&...)} or \tcode{($Q$ || ...)}
-        %and let $P'$ be the \grammarterm{template-argument} corresponding to the unexpanded pack contained in $P$ in the parameter mapping of $A$, and let $Q'$ be the \grammarterm{template-argument} corresponding to the unexpanded pack contained in $Q$ in the parameter mapping of $B$, \tcode{sizeof...($P'$) == sizeof...($Q'$)} is \tcode{true}
-        and $P$ subsumes $Q$.
+        \item $A$ is a \grammarterm{fold-expanded-conjunction-constraint},
+        $B$ is a \grammarterm{fold-expanded-conjunction-constraint} or a \grammarterm{fold-expanded-disjunction-constraint}
+        and the constraint of $A$ subsumes that of $B$.
 
-        \item Otherwise, $A$ is a \grammarterm{fold-expression} of the form \tcode{($P$ ||...)} or \tcode{($P$ \&\&...)}
-        and $B$ is a \grammarterm{fold-expression} of the form \tcode{($Q$   ||...)}
+        \item Otherwise, $A$ is a \grammarterm{fold-expanded-conjunction-constraint} or a  \grammarterm{fold-expanded-disjunction-constraint}
+        and $B$ is a \grammarterm{fold-expanded-disjunction-constraint}
         % and let $P'$ be the \grammarterm{template-argument} corresponding to the unexpanded pack contained in $P$ in the parameter mapping of $A$, and let $Q'$ be the \grammarterm{template-argument} corresponding to the unexpanded pack contained in $Q$ in the parameter mapping of $B$, \tcode{sizeof...($P'$) == sizeof...($Q'$)} is \tcode{true},
-        and $P$ subsumes $Q$.
+        and the constraint of $A$ subsumes that of $B$.
 
         \item Otherwise, $A$ and $B$ are identical using the rules described in [temp.constr.atomic].
         \end{itemize}
