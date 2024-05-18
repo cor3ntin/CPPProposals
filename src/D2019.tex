@@ -9,7 +9,7 @@
 
 
 \title{Thread attributes}
-\docnumber{P2019R5}
+\docnumber{P2019R6}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -34,6 +34,13 @@ as we demonstrate, current practices in many domains.
 The absence of these features make \tcode{std::thread} and \tcode{std::jthread} unfit or unsatisfactory for many use cases.
 
 \section{Revisions}
+
+\subsection{R6}
+
+\begin{itemize}
+\item Improve wording.
+\item Constraints thread arguments to not be lvalue reference to improve safety.
+\end{itemize}
 
 \subsection{R5}
 
@@ -734,14 +741,18 @@ public:
 
 Thread attributes can be used to define additional implementation-defined behaviors on a \tcode{thread} or \tcode{jthread} object.
 
-%\recommended
-%Implementations may provide additional platform-specific thread attributes derived from \tcode{thread_attribute} using reserved names.
+The set of thread attributes types contains \tcode{thread::name_hint}, \tcode{thread::stack_size_hint} and an implementation-defined
+set of additional thread-attributes.
+
+\recommended
+Implementations may provide additional platform-specific thread attributes.
 
 \rSec4[thread.thread.name.hint]{Class \tcode{thread::name_hint}}
 
 \begin{codeblock}
 template <typename T>
 class thread::name_hint {
+public:
     explicit constexpr
     name_hint(std::basic_string_view<T> name) noexcept;
     name_hint(name_hint&&) = delete;
@@ -758,7 +769,7 @@ to set the name of a thread such that the name could be used for debugging or pl
 The name should not be stored in the \tcode{std::thread} or \tcode{std::jthread} object.
 
 \begin{itemdecl}
-explicit constexpr name_hint(std::basic_string_view<T> str);
+explicit constexpr name_hint(std::basic_string_view<T> name);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -788,11 +799,11 @@ The stack size set by the implementation may be adjusted up or down to meet plat
 If \tcode{__size == 0} is \tcode{true} the thread attribute should be ignored.
 
 \begin{itemdecl}
-constexpr stack_size_hint(std::size_t size) noexcept;
+constexpr explicit stack_size_hint(std::size_t size) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-\effects Initializes \tcode{__size} with \tcode{size} in an implementation-defined manner.
+\effects Initializes \tcode{__size} with \tcode{size}.
 \end{itemdescr}
 
 \end{addedblock}
@@ -818,16 +829,16 @@ explicit thread(@\removed{F\&\& f,}@ Args&&... args);
 
 \begin{addedblock}
 \begin{itemize}[leftmargin=*]
-\item Let $i$ be the smallest value such that \tcode{decay_t<Args...[$i$]>} is not a thread attribute type. \ednote{We need to define that}
+\item Let $i$ be the smallest value such that \tcode{decay_t<Args...[$i$]>} is not a thread attribute type.
 
 If no such $i$ exists, the program is ill-formed.
 
 \item Let \tcode{F} be \tcode{Args...[$i$]}.
 \item Let \tcode{f} be \tcode{args...[$i$]}.
-%\item Let \tcode{Attrs} a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
-\item Let \tcode{attrs} a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
-\item Let \tcode{FArgs} a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
-\item Let \tcode{fargs} a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
+\item Let \tcode{Attrs} be a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
+\item Let \tcode{attrs} be a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
+\item Let \tcode{FArgs} be a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
+\item Let \tcode{fargs} be a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
 \end{itemize}
 \end{addedblock}
 
@@ -835,14 +846,13 @@ If no such $i$ exists, the program is ill-formed.
 \mandates
 The following are all \tcode{true}:
 \begin{itemize}
-\begin{removedblock}
     \item \tcode{is_constructible_v<decay_t<F>, F>},
-\end{removedblock}
-    \item \tcode{(is_constructible_v<decay_t<Args>, Args> \&\& ...)},
-\begin{removedblock}
+    \item \tcode{(is_constructible_v<decay_t<\added{F}Args>, Args> \&\& ...)},
+\begin{addedblock}
+    \item \tcode{(!is_lvalue_reference_v<Attrs> \&\& ...)},
+\end{addedblock}
     \item \tcode{is_move_constructible_v<decay_t<F>>},
-\end{removedblock}
-    \item \tcode{(is_move_constructible_v<decay_t<Args>> \&\& ...)}, \removed{and}
+    \item \tcode{(is_move_constructible_v<decay_t<\added{F}Args>> \&\& ...)}\removed{, and}
     \item \tcode{is_invocable_v<decay_t<F>, decay_t<\added{F}Args>...>}\changed{.}{, and}
 \begin{addedblock}
     \item No type is present more than once in the pack \tcode{remove_cvref_t<Attrs>}. \ednote{// is there a better way to say that ?}
@@ -851,7 +861,7 @@ The following are all \tcode{true}:
 
 \pnum
 \expects
-\removed{\tcode{decay_t<F>} and} each type in \tcode{decay_t<Args>} meet the
+\tcode{decay_t<F>} and each type in \tcode{decay_t<\added{F}Args>} meet the
 \oldconcept{MoveConstructible} requirements
 
 \pnum
@@ -993,13 +1003,13 @@ explicit jthread(@\removed{F\&\& f,}@ Args&&... args);\end{itemdecl}\begin{itemd
 
 \begin{addedblock}
 \begin{itemize}[leftmargin=*]
-\item Let $i$ be the smallest value such that \tcode{decay_t<Args...[$i$]>} is not a thread attribute type. \ednote{We need to define that}
+\item Let $i$ be the smallest value such that \tcode{decay_t<Args...[$i$]>} is not a thread attribute type.
 
 If no such $i$ exists, the program is ill-formed.
 
 \item Let \tcode{F} be \tcode{Args...[$i$]}.
 \item Let \tcode{f} be \tcode{args...[$i$]}.
-%\item Let \tcode{Attrs} a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
+\item Let \tcode{Attrs} a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
 \item Let \tcode{attrs} a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
 \item Let \tcode{FArgs} a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
 \item Let \tcode{fargs} a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
@@ -1010,23 +1020,22 @@ If no such $i$ exists, the program is ill-formed.
 \mandates
 The following are all \tcode{true}:
 \begin{itemize}
-    \begin{removedblock}
-        \item \tcode{is_constructible_v<decay_t<F>, F>},
-    \end{removedblock}
-    \item \tcode{(is_constructible_v<decay_t<Args>, Args> \&\& ...)},
-    \begin{removedblock}
-        \item \tcode{is_move_constructible_v<decay_t<F>>},
-    \end{removedblock}
-    \item \tcode{(is_move_constructible_v<decay_t<Args>> \&\& ...)}, \removed{and}
-    \item \tcode{is_invocable_v<decay_t<F>, decay_t<\added{F}Args>...>}\changed{.}{, and}
-    \begin{addedblock}
-        \item No type is present more than once in the pack \tcode{remove_cvref_t<Attrs>}. \ednote{// is there a better way to say that ?}
-    \end{addedblock}
+\item \tcode{is_constructible_v<decay_t<F>, F>},
+\item \tcode{(is_constructible_v<decay_t<\added{F}Args>, Args> \&\& ...)},
+\begin{addedblock}
+    \item \tcode{(!is_lvalue_reference_v<Attrs> \&\& ...)},
+\end{addedblock}
+\item \tcode{is_move_constructible_v<decay_t<F>>},
+\item \tcode{(is_move_constructible_v<decay_t<\added{F}Args>> \&\& ...)}\removed{, and}
+\item \tcode{is_invocable_v<decay_t<F>, decay_t<\added{F}Args>...>}\changed{.}{, and}
+\begin{addedblock}
+    \item No type is present more than once in the pack \tcode{remove_cvref_t<Attrs>}. \ednote{// is there a better way to say that ?}
+\end{addedblock}
 \end{itemize}
 
 \pnum
 \expects
-\removed{\tcode{decay_t<F>} and} each type in \tcode{decay_t<Args>} meet the
+\tcode{decay_t<F>} and each type in \tcode{decay_t<\added{F}Args>} meet the
 \oldconcept{MoveConstructible} requirements
 
 \pnum
@@ -1094,7 +1103,7 @@ would be exceeded.
 
 Thanks to Martin Hořeňovský, Kamil Rytarowski, Clément Grégoire, Bruce Dawson, Patrice Roy, Ronen Friedman, Billy Baker, and others for their valuable feedback.
 
-Thanks to Tomasz Kamiński, as well as Jonathan Wakely and Mathias Stearn for their wording suggestions.
+Thanks to Tomasz Kamiński, Lewis Baker, as well as Jonathan Wakely and Mathias Stearn for their wording suggestions.
 
 
 \bibliographystyle{plain}

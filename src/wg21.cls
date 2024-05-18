@@ -251,6 +251,23 @@
 \color{black}
 }
 
+\newenvironment{removedblockTwo}
+{
+\color{RubineRed}
+}
+{
+\color{black}
+}
+
+\newenvironment{edblock}
+{
+\color{noteclr}
+}
+{
+\color{black}
+}
+
+
 %%--------------------------------------------------
 %% Grammar extraction.
 \def\gramSec[#1]#2{}
@@ -440,6 +457,7 @@
 \newcommand{\placeholder}[1]{\textit{#1}}
 \newcommand{\placeholdernc}[1]{\textit{#1\nocorr}}
 \newcommand{\exposid}[1]{\tcode{\placeholder{#1}}}
+\newcommand{\exposidnc}[1]{\tcode{\placeholdernc{#1}}\itcorr[-1]}           % macro length: 10
 \newcommand{\ecname}[1]{\tcode{\placeholder{#1}}}
 
 \newcommand{\cname}[1]{\tcode{#1}}
@@ -450,6 +468,9 @@
 \newcommand{\exposconceptx}[2]{\ecname{#1}}
 \newcommand{\exposconceptnc}[1]{\ecname{#1\nocorr}}
 \newcommand{\defexposconcept}[1]{\ecname{#1}}
+\newcommand{\libglobal}[1]{\indexlibraryglobal{#1}#1}
+\newcommand{\libmember}[2]{\indexlibrarymember{#1}{#2}#1}
+\newcommand{\libspec}[2]{\indexlibrarymemberx{#1}{#2}#1}
 
 %%--------------------------------------------------
 %% allow line break if needed for justification
@@ -672,6 +693,9 @@
  \renewcommand{\term}[1]{\textit{##1}}
  \renewcommand{\grammarterm}[1]{\textit{##1}}
 }
+
+\newcommand{\fmtnontermdef}[1]{{\BnfNontermshape#1\itcorr}\textnormal{:}}
+\newcommand{\fmtgrammarterm}[1]{\textit{#1}}
 
 \lstnewenvironment{codeblock}{\CodeBlockSetup}{}
 
@@ -960,7 +984,7 @@
 % by LaTeX.
 \newenvironment{floattable}[3]
 {
- \begin{floattablebase}{#1}{#2}{#3}{htbp}
+ \begin{floattablebase}{#1}{#2}{#3}{h}
 }
 {
  \end{floattablebase}

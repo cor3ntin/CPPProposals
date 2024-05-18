@@ -5,8 +5,8 @@
 \documentclass{wg21}
 
 \title{Ordering of constraints involving fold expressions}
-\docnumber{D2963R2}
-\audience{EWG}
+\docnumber{P2963R2}
+\audience{EWG, CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \usepackage[dvipsnames]{xcolor}
 
@@ -21,6 +21,15 @@ We propose rules for the normalization and ordering of fold expressions over \tc
 
 \section{Revisions}
 
+\subsection{R2}
+
+\begin{itemize}
+\item Wording improvements following CWG review in Tokyio. Notablywe added a description of how satisfaction is established.
+\item Clarify that subsumption checking short-circuits. Add a design discussion.
+\item A fold expression constraint can now only subsume another if they both have the same fold operator. This avoid inconsistent subsumption and checking results in the presence of empty packs.
+\end{itemize}
+
+
 \subsection{R1}
 
 \begin{itemize}
@@ -28,12 +37,6 @@ We propose rules for the normalization and ordering of fold expressions over \tc
 The current design does not look at the template argument/parameter mapping to establish subsumption of fold expressions.
 \item A complete implementation of this proposal is available on Compiler Explorer. The implementation section was expanded.
 \item Add an additional example.
-\end{itemize}
-
-\subsection{R2}
-
-\begin{itemize}
-	\item Wording improvements.
 \end{itemize}
 
 \section{Motivation}
@@ -131,6 +134,40 @@ to establish subsumption.
 An implementation does need to track whether an atomic constraint that contains an unexpanded pack was originally part of a and/or fold expression to properly
 implement the subsumption rules (\tcode{\&\&} subsumes \tcode{||} \& \tcode{\&\&} and \tcode{||} subsumes \tcode{||}).
 
+\subsection{Subsection with mixed fold operators}
+
+Consider this example provided by Hubert Tong
+
+\begin{colorblock}
+template <typename ...T> struct Tuple { };
+template <typename T> concept P = true;
+
+template <typename T, typename U, typename V, typename X> struct A;
+
+
+template <typename ...T, typename ...U, typename V, typename X>
+requires P<X> || ((P<V> || P<U>) || ...)         // #A
+void foo(A<Tuple<T ...>, Tuple<U ...>, V, X> *); // #1
+
+template <typename ...T, typename ...U, typename V, typename X>
+requires P<X> || ((P<V> && P<T>) && ...)         // #B
+void foo(A<Tuple<T ...>, Tuple<U ...>, V, X> *); // #2
+
+
+void bar(A<Tuple<int>, Tuple<>, int, int> *p) { foo(p); }
+\end{colorblock}
+
+In this example, under the rule proposed in R1, of this paper, \#A subsumed \#B, and so \#1 would have been be a better choice.
+However here, \tcode{U} is empty. So A's constraints are equivalent to just \tcode{P<X>} which make B more constrained.
+
+To avoid inconsistencies between constraint checking and subsumption, a fold expression can only subsume another if they both have the same fold operator
+(they are both folding over \tcode{\&\&} or they are both folding over \tcode{||}).
+
+\subsection{Short circuiting}
+
+To be consistent with conjunction constraint and disjection constraints, we propose that fold expanded constrait short circuit (both their evaluation and substitution).
+
+
 
 \subsection{What this paper is not}
 
@@ -144,6 +181,283 @@ and transform \tcode{(... \&\& A)} into \tcode{(A \&\& ...)} as they are semanti
 We then are left with either \tcode{(A \&\& ...)} or \tcode{(A || ...)}, and for packs of the same size, the rules of subsumptions are the same as for that of atomic constraints.
 
 \section{Wording}
+
+\rSec2[temp.constr.constr]{Constraints}
+
+\rSec3[temp.constr.constr.general]{General}
+
+\indextext{satisfy|see{constraint, satisfaction}}%
+
+\pnum
+A \defn{constraint} is a sequence of logical operations and
+operands that specifies requirements on template arguments.
+The operands of a logical operation are constraints.
+There are \changed{three}{four} different kinds of constraints:
+\begin{itemize}
+    \item conjunctions \iref{temp.constr.op},
+    \item disjunctions \iref{temp.constr.op}, \removed{and}
+    \item atomic constraints \iref{temp.constr.atomic}\added{, and}
+\begin{addedblock}
+    \item fold expanded constraints [temp.constr.fold].
+\end{addedblock}
+\end{itemize}
+
+\pnum
+In order for a constrained template to be instantiated \iref{temp.spec},
+its associated constraints \iref{temp.constr.decl}
+shall be satisfied as described in the following subclauses.
+\begin{note}
+    Forming the name of a specialization of
+    a class template,
+    a variable template, or
+    an alias template \iref{temp.names}
+    requires the satisfaction of its constraints.
+    Overload resolution \iref{over.match.viable}
+    requires the satisfaction of constraints
+    on functions and function templates.
+\end{note}
+
+\rSec3[temp.constr.op]{Logical operations}
+
+\pnum
+There are two binary logical operations on constraints: conjunction
+and disjunction.
+\begin{note}
+    These logical operations have no corresponding \Cpp{} syntax.
+    For the purpose of exposition, conjunction is spelled
+    using the symbol $\land$ and disjunction is spelled using the
+    symbol $\lor$.
+    The operands of these operations are called the left
+    and right operands. In the constraint $A \land B$,
+    $A$ is the left operand, and $B$ is the right operand.
+\end{note}
+
+\pnum
+A \defn{conjunction} is a constraint taking two
+operands.
+To determine if a conjunction is
+\defnx{satisfied}{constraint!satisfaction!conjunction},
+the satisfaction of
+the first operand is checked.
+If that is not satisfied, the conjunction is not satisfied.
+Otherwise, the conjunction is satisfied if and only if the second
+operand is satisfied.
+
+\pnum
+A \defn{disjunction} is a constraint taking two
+operands.
+%
+To determine if a disjunction is
+\defnx{satisfied}{constraint!satisfaction!disjunction},
+the satisfaction of
+the first operand is checked.
+If that is satisfied, the disjunction is satisfied.
+Otherwise, the disjunction is satisfied if and only if the second
+operand is satisfied.
+
+\pnum
+\begin{example}
+    \begin{codeblock}
+        template<typename T>
+        constexpr bool get_value() { return T::value; }
+
+        template<typename T>
+        requires (sizeof(T) > 1) && (get_value<T>())
+        void f(T);      // has associated constraint \tcode{sizeof(T) > 1 $\land$ get_value<T>()}
+
+        void f(int);
+
+        f('a'); // OK, calls \tcode{f(int)}
+    \end{codeblock}
+    In the satisfaction of the associated constraints\iref{temp.constr.decl}
+    of \tcode{f}, the constraint \tcode{sizeof(char) > 1} is not satisfied;
+    the second operand is not checked for satisfaction.
+\end{example}
+
+\pnum
+\begin{note}
+A logical negation expression \iref{expr.unary.op} is an atomic constraint;
+the negation operator is not treated as a logical operation on constraints.
+As a result, distinct negation \grammarterm{constraint-expression}{s}
+that are equivalent under~\ref{temp.over.link}
+do not subsume one another under~\ref{temp.constr.order}.
+Furthermore, if substitution to determine
+whether an atomic constraint is satisfied \iref{temp.constr.atomic}
+encounters a substitution failure, the constraint is not satisfied,
+regardless of the presence of a negation operator.
+\begin{example}
+\begin{codeblock}
+template <class T> concept sad = false;
+
+template <class T> int f1(T) requires (!sad<T>);
+template <class T> int f1(T) requires (!sad<T>) && true;
+int i1 = f1(42);        // ambiguous, \tcode{!sad<T>} atomic constraint expressions \iref{temp.constr.atomic}
+// are not formed from the same \grammarterm{expression}
+
+template <class T> concept not_sad = !sad<T>;
+template <class T> int f2(T) requires not_sad<T>;
+template <class T> int f2(T) requires not_sad<T> && true;
+int i2 = f2(42);        // OK, \tcode{!sad<T>} atomic constraint expressions both come from \tcode{not_sad}
+
+template <class T> int f3(T) requires (!sad<typename T::type>);
+int i3 = f3(42);        // error: associated constraints not satisfied due to substitution failure
+
+template <class T> concept sad_nested_type = sad<typename T::type>;
+template <class T> int f4(T) requires (!sad_nested_type<T>);
+int i4 = f4(42);        // OK, substitution failure contained within \tcode{sad_nested_type}
+\end{codeblock}
+    Here,
+    \tcode{requires (!sad<typename T::type>)} requires
+    that there is a nested \tcode{type} that is not \tcode{sad},
+    whereas
+    \tcode{requires (!sad_nested_type<T>)} requires
+    that there is no \tcode{sad} nested \tcode{type}.
+\end{example}
+\end{note}
+
+\rSec3[temp.constr.atomic]{Atomic constraints}
+
+\pnum
+An \defnadj{atomic}{constraint} is formed from
+an expression \tcode{E}
+and a mapping from the template parameters
+that appear within \tcode{E} to
+template arguments that are formed via substitution during constraint normalization
+in the declaration of a constrained entity (and, therefore, can involve the
+unsubstituted template parameters of the constrained entity),
+called the \defn{parameter mapping}\iref{temp.constr.decl}.
+\begin{note}
+    Atomic constraints are formed by constraint normalization\iref{temp.constr.normal}.
+    \tcode{E} is never a logical and expression\ref{expr.log.and}
+    nor a logical or expression\ref{expr.log.or}.
+\end{note}
+
+\pnum
+Two atomic constraints, $e_1$ and $e_2$, are
+\indextext{identical!atomic constraints|see{atomic constraint, identical}}%
+\defnx{identical}{atomic constraint!identical}
+if they are formed from the same appearance of the same
+\grammarterm{expression}
+and if, given a hypothetical template $A$
+whose \grammarterm{template-parameter-list} consists of
+\grammarterm{template-parameter}s corresponding and equivalent\iref{temp.over.link} to
+those mapped by the parameter mappings of the expression,
+a \grammarterm{template-id} naming $A$
+whose \grammarterm{template-argument}s are
+the targets of the parameter mapping of $e_1$
+is the same\iref{temp.type} as
+a \grammarterm{template-id} naming $A$
+whose \grammarterm{template-argument}s are
+the targets of the parameter mapping of $e_2$.
+\begin{note}
+    The comparison of parameter mappings of atomic constraints
+    operates in a manner similar to that of declaration matching
+    with alias template substitution\iref{temp.alias}.
+    \begin{example}
+        \begin{codeblock}
+            template <unsigned N> constexpr bool Atomic = true;
+            template <unsigned N> concept C = Atomic<N>;
+            template <unsigned N> concept Add1 = C<N + 1>;
+            template <unsigned N> concept AddOne = C<N + 1>;
+            template <unsigned M> void f()
+            requires Add1<2 * M>;
+            template <unsigned M> int f()
+            requires AddOne<2 * M> && true;
+
+            int x = f<0>();     // OK, the atomic constraints from concept \tcode{C} in both \tcode{f}s are \tcode{Atomic<N>}
+            // with mapping similar to $\tcode{N} \mapsto \tcode{2 * M + 1}$
+
+            template <unsigned N> struct WrapN;
+            template <unsigned N> using Add1Ty = WrapN<N + 1>;
+            template <unsigned N> using AddOneTy = WrapN<N + 1>;
+            template <unsigned M> void g(Add1Ty<2 * M> *);
+            template <unsigned M> void g(AddOneTy<2 * M> *);
+
+            void h() {
+                g<0>(nullptr);    // OK, there is only one \tcode{g}
+            }
+        \end{codeblock}
+    \end{example}
+    As specified in \ref{temp.over.link},
+    if the validity or meaning of the program depends on
+    whether two constructs are equivalent, and
+    they are functionally equivalent but not equivalent,
+    the program is ill-formed, no diagnostic required.
+    \begin{example}
+        \begin{codeblock}
+            template <unsigned N> void f2()
+            requires Add1<2 * N>;
+            template <unsigned N> int f2()
+            requires Add1<N * 2> && true;
+            void h2() {
+                f2<0>();          // ill-formed, no diagnostic required:
+                // requires determination of subsumption between atomic constraints that are
+                // functionally equivalent but not equivalent
+            }
+        \end{codeblock}
+    \end{example}
+\end{note}
+
+\pnum
+To determine if an atomic constraint is
+\defnx{satisfied}{constraint!satisfaction!atomic},
+the parameter mapping and template arguments are
+first substituted into its expression.
+If substitution results in an invalid type or expression
+in the immediate context of the atomic constraint\iref{temp.deduct.general},
+the constraint is not satisfied.
+Otherwise, the lvalue-to-rvalue conversion\iref{conv.lval}
+is performed if necessary,
+and \tcode{E} shall be a constant expression of type \tcode{bool}.
+The constraint is satisfied if and only if evaluation of \tcode{E}
+results in \tcode{true}.
+If, at different points in the program, the satisfaction result is different
+for identical atomic constraints and template arguments,
+the program is ill-formed, no diagnostic required.
+\begin{example}
+    \begin{codeblock}
+        template<typename T> concept C =
+        sizeof(T) == 4 && !true;      // requires atomic constraints \tcode{sizeof(T) == 4} and \tcode{!true}
+
+        template<typename T> struct S {
+            constexpr operator bool() const { return true; }
+        };
+
+        template<typename T> requires (S<T>{})
+        void f(T);                      // \#1
+        void f(int);                    // \#2
+
+        void g() {
+            f(0);                         // error: expression \tcode{S<int>\{\}} does not have type \tcode{bool}
+        }                               // while checking satisfaction of deduced arguments of \#1;
+        // call is ill-formed even though \#2 is a better match
+    \end{codeblock}
+\end{example}
+
+\begin{addedblock}
+\rSec3[temp.constr.fold]{Fold expanded constraint}
+
+A \defn{fold expanded constraint} is formed from a constraint and a \defn{fold-operator} which can either be \tcode{\&\&} or \tcode{||}.
+
+A fold expanded constraint whose \defn{fold-operator} is \tcode{\&\&} is a \defn{fold expanded conjunction constraint}.
+
+A fold expanded constraint whose \defn{fold-operator} is \tcode{||} is a \defn{fold expanded disjunction constraint}.
+
+A fold expanded constraint is a pack expansion. Let $N$ be the number of elements in the pack expansion that would result from its instantiation [temp.variadic].
+
+A fold expanded conjunction constraint is satisfied if $N$ equals $0$ or if for each $0 \le i < N$ in increasing order, its constraint is satisfied when replacing each pack expansion parameter with the corresponding $i$th element. No substitution takes place for any $i$ greater than the smallest $i$ for which the constraint is not satisfied.
+
+
+A fold expanded disjunction constraint is satisfied, if $N$ is not $0$ and for any $0 \le i < N$ in increasing order its constraint is satisfied when replacing each pack expansion parameter with the corresponding $i$th element. No substitution takes place for any $i$ greater than the smallest $i$ for which the constraint is satisfied.
+
+
+\end{addedblock}
+
+
+
+
+\ednote{[...]}
+
 
 \rSec2[temp.constr.normal]{Constraint normalization}
 \indextext{constraint!normalization|(}%
@@ -196,44 +510,13 @@ in the parameter mapping.
 
 \begin{addedblock}
 \item For a \grammarterm{fold-operator}  [expr.prim.fold] that is either \tcode{\&\&} or \tcode{||}, the normal form of an expression \tcode{( ... \grammarterm{fold-operator} E )} is the normal form of \tcode{( E \grammarterm{fold-operator}...)}.
-\item The normal form of an expression \tcode{( E1 \grammarterm{fold-operator}  ... \grammarterm{fold-operator}  E2 )}
-where \tcode{E1} contains an unexpanded pack is the the normal form of \tcode{(E1 \grammarterm{fold-operator}...) \grammarterm{fold-operator}  E2}.
-
-\item The normal form of an expression \tcode{( E2 \grammarterm{fold-operator}  ... \grammarterm{fold-operator}  E1 )}
-where \tcode{E1} contains an unexpanded pack is the the normal form of \tcode{(E2 \grammarterm{fold-operator}...) \grammarterm{fold-operator}  E1}.
-
-\ednote{With \paper{P2841}, we want to treat fold expression differently when the pattern of the fold expression denotes a concept template parameter.}
-
-\item The normal form of an expression \tcode{( E1 || ... || E2 )} or \tcode{( E2 || ... || E1 )} where \tcode{E1} is an unexpanded pack is the disjunction of
-the normal forms of \tcode{E2} and \tcode{(E1 || ...)}.
-
-\item The normal form of \tcode{(E \&\& ...)} is a \grammarterm{fold-expanded-conjunction-constraint} whose constraint is the normal form of \tcode{E}.
-
-\item The normal form of \tcode{(E || ...)} is a \grammarterm{fold-expanded-disjunction-constraint} whose constraint is the normal form of \tcode{E}.
-
-% Fold constraint under the atomic section.
-% A fold constrained is associated with a constrain
-% Define the conjunction/disjunction
-
-% Explain satisfaction checking
-% Should substitution be done piece wise?
-%  -> EWG
-
-
-% Remove mixed disjunction / conjunction subsumption
-% Because it is observable
-
-% template <typename ...T> struct Tuple { };
-% template <typename T> concept bool P = true;
-% template <typename T, typename U, typename V, typename X> struct A;
-% template <typename ...T, typename ...U, typename V, typename X>
-% requires P<X> || ((P<V> && P<T>) && ...)
-% void foo(A<Tuple<T ...>, Tuple<U ...>, V, X> *); // #1
-% template <typename ...T, typename ...U, typename V, typename X>
-% requires P<X> || ((P<V> || P<U>) || ...)
-% void foo(A<Tuple<T ...>, Tuple<U ...>, V, X> *); // #2
-% void bar(A<Tuple<int>, Tuple<>, int, int> *p) { foo(p); }
-
+\item The normal form of an expression \tcode{( E1 \grammarterm{fold-operator}  ... \grammarterm{fold-operator}  E2 )} is the the normal form of
+\begin{itemize}
+    \item \tcode{(E1 \grammarterm{fold-operator}...) \grammarterm{fold-operator}  E2} if \tcode{E1} contains an unexpanded pack, or
+    \item \tcode{E1 \grammarterm{fold-operator} (E2 \grammarterm{fold-operator}...)} otherwise.
+\end{itemize}
+\item The normal form of \tcode{(E \&\& ...)} is a fold expanded conjunction constraint \mbox{[temp.constr.fold]} whose constraint is the normal form of \tcode{E}.
+\item The normal form of \tcode{(E || ...)} is a fold expanded disjunction constraint whose constraint is the normal form of \tcode{E}.
 \end{addedblock}
 
 \item
@@ -261,21 +544,12 @@ in the conjunctive normal form of $Q$, where
     an atomic constraint $Q_{jb}$ in $Q_j$ such that $P_{ia}$ subsumes $Q_{jb}$, and
 
     \item an atomic constraint $A$ subsumes another atomic constraint
-    $B$ if \changed{and only if $A$ and $B$ are identical using the
-    rules described in [temp.constr.atomic].}{:}
-    \begin{addedblock}
-        \begin{itemize}
-        \item $A$ is a \grammarterm{fold-expanded-conjunction-constraint},
-        $B$ is a \grammarterm{fold-expanded-conjunction-constraint} or a \grammarterm{fold-expanded-disjunction-constraint}
-        and the constraint of $A$ subsumes that of $B$.
+    $B$ if and only if $A$ and $B$ are identical using the
+    rules described in [temp.constr.atomic].
 
-        \item Otherwise, $A$ is a \grammarterm{fold-expanded-conjunction-constraint} or a  \grammarterm{fold-expanded-disjunction-constraint}
-        and $B$ is a \grammarterm{fold-expanded-disjunction-constraint}
-        % and let $P'$ be the \grammarterm{template-argument} corresponding to the unexpanded pack contained in $P$ in the parameter mapping of $A$, and let $Q'$ be the \grammarterm{template-argument} corresponding to the unexpanded pack contained in $Q$ in the parameter mapping of $B$, \tcode{sizeof...($P'$) == sizeof...($Q'$)} is \tcode{true},
-        and the constraint of $A$ subsumes that of $B$.
-
-        \item Otherwise, $A$ and $B$ are identical using the rules described in [temp.constr.atomic].
-        \end{itemize}
+   \begin{addedblock}
+    \item a fold expanded constraint $A$ subsumes another fold expanded constraint
+    $B$ if both $A$ and $B$ have the same \grammarterm{fold-operator} and the constraint of $A$ subsumes that of $B$.
     \end{addedblock}
 \end{itemize}
 %

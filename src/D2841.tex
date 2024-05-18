@@ -167,7 +167,7 @@ constexpr bool is_same_v = is_same<T, U>::value;
 
 But this is not compile-time efficient: a class has to be instantiated in addition to generating the value for the constant, which is strictly more work than just producing the constant.
 For a `bool` constant, for instance, the difference is substantial; on Apple clang15, it's about 60\% (so, less than half the time).
-The memory footprint is more difficult to gauge, but it seems around a 40\% difference.
+The memory footisqprint is more difficult to gauge, but it seems around a 40\% difference.
 
 This performance issue is also explored in more detail in \paper{P1715R1}.
 
@@ -907,6 +907,152 @@ are what needs to be cached.
 
 \section{Wording}
 
+\subsection{\textcolor{noteclr}{1. Add a grammar production for qualified \grammarterm{concept-name}{s}}}
+
+
+\rSec2[temp.concept]{Concept definitions}
+
+\begin{bnf}
+    \nontermdef{concept-definition}\br
+    \keyword{concept} concept-name \opt{attribute-specifier-seq} \terminal{=} constraint-expression \terminal{;}
+\end{bnf}
+
+\begin{addedblock}
+\begin{bnf}
+    \nontermdef{qualified-concept-name}\br
+    \opt{nested-name-specifier} concept-name
+\end{bnf}
+\end{addedblock}
+
+\begin{bnf}
+    \nontermdef{concept-name}\br
+    identifier
+\end{bnf}
+
+\ednote{In [temp.param], use the new production}
+
+\begin{bnf}
+    \nontermdef{type-parameter-key}\br
+    \keyword{class}\br
+    \keyword{typename}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{type-constraint}\br
+    \changed{\opt{nested-name-specifier} concept-name}{qualified-concept-name}\br
+    \changed{\opt{nested-name-specifier} concept-name}{qualified-concept-name} \terminal{<} \opt{template-argument-list} \terminal{>}
+\end{bnf}
+
+
+\subsection{\textcolor{noteclr}{2. Unifying existing terminology}}
+
+\begin{edblock}
+The introduction of new non-type, non non-type template parameters might lead to confusion given the state of the current terminology.
+Beside actually specifying the behavior of concept parameters and variable template parameters, we recommend renaming non-type template parameters
+and distinguising type template parameters from type-parameters that are not types.
+
+\subsubsection{If it is not a type, what is is?}
+
+A non-type template parameter is neither an expression nor an object. It might be a variable but a non-type template argument is not.
+"value template parameter" might work, but we talk in a few places of the "value of a template parameter", and talking about the
+"value of a value template-parameter" might be a new source of confusion.
+Ultimately, we propose "constant template parameter".
+
+This gives us:
+
+\begin{tabular}{|l|l|}
+    \hline
+    Grammar&Prose \\
+    \hline
+    \grammarterm{type-parameter} & type template parameter \\
+    \hline
+    \grammarterm{constant-parameter}&  constant template parameter \\
+    \hline
+    \grammarterm{type-template-parameter}& type template template parameter  \\
+    \hline
+    \grammarterm{variable-template-parameter}& variable template template parameter\\
+    \hline
+    \grammarterm{concept-template-parameter}& concept template template parameter\\
+    \hline
+\end{tabular}
+
+\end{edblock}
+
+%We also perform a few cleanups
+%
+%\end{edblock}
+%
+%\rSec3[dcl.type.elab]{Elaborated type specifiers}%
+%
+%\pnum
+%If the \grammarterm{identifier} or \grammarterm{simple-template-id}
+%in an \grammarterm{elaborated-type-specifier}
+%resolves to a \grammarterm{class-name} or
+%\grammarterm{enum-name}, the \grammarterm{elaborated-type-specifier}
+%introduces it into the declaration the same way a
+%\grammarterm{simple-type-specifier} introduces
+%its \grammarterm{type-name}\iref{dcl.type.simple}.
+%If the \grammarterm{identifier} or \grammarterm{simple-template-id} resolves to a
+%\grammarterm{typedef-name}\iref{dcl.typedef,temp.names},
+%the \grammarterm{elaborated-type-specifier} is ill-formed.
+%\begin{note}
+%This implies that, within a class template with a template
+%\changed{\grammarterm{type-parameter}}{type parameter} \tcode{T}, the declaration
+%\begin{codeblock}
+%    friend class T;
+%\end{codeblock}
+%is ill-formed. However, the similar declaration \tcode{friend T;} is well-formed.\iref{class.friend}.
+%\end{note}
+%
+%\rSec3[temp.dep.type]{Dependent types}
+%
+%\pnum
+%A template argument that is equivalent to a template
+%parameter can be used in place of that
+%template parameter in a reference to the current instantiation.
+%For a template \changed{\grammarterm{type-parameter}}{type parameter},
+%a template argument is equivalent to a template parameter
+%if it denotes the same type.
+%For a non-type template parameter,
+%a template argument is equivalent to a template parameter
+%if it is an \grammarterm{identifier} that names a variable
+%that is equivalent to the template parameter.
+%
+%
+%\rSec3[temp.deduct.type]{Deducing template arguments from a type}
+%
+%\pnum
+%A
+%\grammarterm{template-argument}
+%can be deduced from a function, pointer to function, or
+%pointer-to-member-function type.
+%
+%\begin{example}
+%\begin{codeblock}
+%    template<class T> void f(void(*)(T,int));
+%    template<class T> void foo(T,int);
+%    void g(int,int);
+%    void g(char,int);
+%
+%    void h(int,int,int);
+%    void h(char,int);
+%    int m() {
+%        f(&g);            // error: ambiguous
+%        f(&h);            // OK, void \tcode{h(char,int)} is a unique match
+%        f(&foo);          // error: type deduction fails because \tcode{foo} is a template
+%    }
+%\end{codeblock}
+%\end{example}
+%
+%\pnum
+%A template
+%\grammarterm{type-parameter}
+%cannot be deduced from the type of a function default argument.
+
+
+\subsection{\textcolor{noteclr}{3. Wording for variable-template and concept template parameters}}
+
+
 \rSec1[basic.pre]{Preamble}
 
 \pnum
@@ -934,8 +1080,9 @@ Every name is introduced by a \defn{declaration}, which is a
     \item
     \grammarterm{type-parameter} \iref{temp.param},
     \begin{addedblock}
-    \item
-    \grammarterm{template-template-parameter} \iref{temp.param},
+    \item \grammarterm{type-template-parameter} \iref{temp.param},
+    \item \grammarterm{variable-template-parameter} \iref{temp.param},
+    \item \grammarterm{concept-parameter} \iref{temp.param},
     \end{addedblock}
     \item
     \grammarterm{elaborated-type-specifier}
@@ -1102,7 +1249,7 @@ A template specialization \iref{temp.spec} can be referred to by a
     \added{concept-name}
 \end{bnf}
 
-\ednote{[...]}
+\textcolor{noteclr}{[...]}
 
 \pnum
 A \defn{concept-id} is a \grammarterm{simple-template-id}
@@ -1140,7 +1287,11 @@ is:
     \nontermdef{template-parameter}\br
     type-parameter\br
     parameter-declaration\br
-    \added{template-template-parameter}
+\begin{addedblock}
+    type-template-parameter \br
+    variable-template-parameter \br
+    concept-parameter
+\end{addedblock}
 \end{bnf}
 
 \begin{bnf}
@@ -1161,17 +1312,11 @@ is:
 
 \begin{bnf}
     \nontermdef{type-constraint}\br
-    \opt{nested-name-specifier} concept-name\br
-    \opt{nested-name-specifier} concept-name \terminal{<} \opt{template-argument-list} \terminal{>}
+    qualified-concept-name \br
+    qualified-concept-name \terminal{<} \opt{template-argument-list} \terminal{>}
 \end{bnf}
 
 \begin{addedblock}
- \begin{bnf}
-\nontermdef{template-template-parameter}\br
-    type-template-parameter \br
-    variable-template-parameter \br
-    concept-parameter
-\end{bnf}
 
 \begin{bnf}
 \nontermdef{type-template-parameter}\br
@@ -1188,8 +1333,10 @@ template-head type-parameter-key \opt{identifier} \terminal{=} id-expression
 \begin{bnf}
     \nontermdef{concept-parameter}\br
     template < template-parameter-list > \terminal{concept} \opt{\terminal{...}} \opt{identifier}\br
-    template < template-parameter-list > \terminal{concept} \opt{identifier} \terminal{=} id-expression
+    template < template-parameter-list > \terminal{concept} \opt{identifier} \terminal{=} qualified-concept-name
 \end{bnf}
+
+A \defn{template template parameter} refers to either a \grammarterm{type-template-parameter}, a \grammarterm{variable-template-parameter},  or \grammarterm{concept-parameter}.
 
 \end{addedblock}
 
@@ -1200,7 +1347,7 @@ those of its \grammarterm{nested-name-specifier} (if any).
 \begin{note}
     The \tcode{>} token following the
     \grammarterm{template-parameter-list} of a
-    \grammarterm{\changed{type}{template-template}-parameter}
+    \changed{\grammarterm{type-parameter}}{template template parameter}
     can be the product of replacing a
     \tcode{>>} token by two consecutive \tcode{>}
     tokens \iref{temp.names}.
@@ -1275,7 +1422,7 @@ in the scope of the template declaration.
 
 \begin{addedblock}
 The \grammarterm{identifier} in a \grammarterm{template-template-parameter} is not looked up.
-A \grammarterm{template-template-parameter} \tcode{P} whose \grammarterm{identifier} does not follow an ellipsis defines its
+A template template parameter \tcode{P} whose \grammarterm{identifier} does not follow an ellipsis defines its
 \grammarterm{identifier} to be a \grammarterm{concept-name} \tcode{T} if \tcode{P} is a \grammarterm{concept-parameter}
 or a \grammarterm{template-name} \tcode{T} otherwise.
 \tcode{T} is declared in the scope of the template declaration.
@@ -1308,7 +1455,7 @@ pack \iref{dcl.fct}}
 \begin{itemize}
 \item a \grammarterm{type-parameter} with an ellipsis prior to its optional \grammarterm{identifier},
 \item a \grammarterm{parameter-declaration} that declares a pack \iref{dcl.fct}, or
-\item a \grammarterm{template-template-parameter} with an ellipsis prior to its optional \grammarterm{identifier},
+\item a template template parameter with an ellipsis prior to its optional \grammarterm{identifier},
 \end{itemize}
 \end{addedblock}
 then the \grammarterm{template-parameter}
@@ -1415,10 +1562,10 @@ shall be the name of a class template or an alias template, expressed as
 \grammarterm{id-expression}.}
 
 \begin{addedblock}
-A \grammarterm{template-argument} for a \grammarterm{template-template-parameter} shall be an \grammarterm{id-expression} denoting
+A \grammarterm{template-argument} for a template template parameter shall be an \grammarterm{id-expression} denoting
 \begin{itemize}
-\item the name of a class template or an alias template for a \grammarterm{type-template-parameter},
-\item the name of a variable template for a \grammarterm{variable-template-parameter}, and
+\item a class template or an alias template for a \grammarterm{type-template-parameter},
+\item a variable template for a \grammarterm{variable-template-parameter}, and
 \item a \grammarterm{concept-name} for a \grammarterm{concept-template-parameter}.
 \end{itemize}
 \end{addedblock}
@@ -1625,7 +1772,7 @@ of $Q$, where
     rules described in \ref{temp.constr.atomic}.
 
 
-    \ednote{Add wording for fold expressions}
+    %\ednote{Add wording for fold expressions}
 
 \end{itemize}
 %
@@ -1653,8 +1800,12 @@ This partial ordering is used to determine
 \end{note}
 
 \begin{addedblock}
-The associated constraints \tcode{C} of a declaration \tcode{D} are \emph{subsumption-eligible} unless \tcode{D} is a \grammarterm{template-declaration} and a subexpression of \tcode{C} denotes a concept template parameter of D.
+
+The associated constraints \tcode{C} of a declaration \tcode{D} are \emph{subsumption eligible}
+unless \tcode{D} is a template declaration and \tcode{C} is dependent on a \grammarterm{concept-parameter} of \tcode{D}.
+
 \end{addedblock}
+
 
 \pnum
 A declaration \tcode{D1} is
@@ -1663,7 +1814,7 @@ a declaration \tcode{D2} if
 \begin{itemize}
     \item \tcode{D1} and \tcode{D2} are both constrained declarations and
     \tcode{D1}'s associated constraints
-    \added{are subsumption-eligible and} subsume those of \tcode{D2}; or
+    \added{are subsumption eligible and} subsume those of \tcode{D2}; or
 
     \item \tcode{D2} has no associated constraints.
 \end{itemize}
@@ -1727,107 +1878,153 @@ The \defnx{normal form}{normal form!constraint} of an \grammarterm{expression} \
 a constraint \iref{temp.constr.constr} that is defined as follows:
 %
 \begin{itemize}
-    \item
-    The normal form of an expression \tcode{( E )} is
-    the normal form of \tcode{E}.
+\item
+The normal form of an expression \tcode{( E )} is
+the normal form of \tcode{E}.
 
-    \item
-    The normal form of an expression \tcode{E1 || E2} is
-    the disjunction \iref{temp.constr.op} of
-    the normal forms of \tcode{E1} and \tcode{E2}.
+\item
+The normal form of an expression \tcode{E1 || E2} is
+the disjunction \iref{temp.constr.op} of
+the normal forms of \tcode{E1} and \tcode{E2}.
 
-    \item
-    The normal form of an expression \tcode{E1 \&\& E2}
-    is the conjunction of
-    the normal forms of \tcode{E1} and \tcode{E2}.
+\item
+The normal form of an expression \tcode{E1 \&\& E2}
+is the conjunction of
+the normal forms of \tcode{E1} and \tcode{E2}.
 
-    \item
-    The normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>}
-    is the normal form of the \grammarterm{constraint-expression} of \tcode{C},
-    after \removed{substituting \tcode{A$_1$, A$_2$, ..., A$_n$}}
-    \begin{itemize}
-    \begin{addedblock}
-    \item substituting each use of A$_i$'s corresponding template parameter in the \grammarterm{constraint-expression} of \tcode{C} if A$_i$ denotes a \grammarterm{concept-name} % lah: and? or?
-    \end{addedblock}
-    \item
-    \added{substituting each A$_i$ that is not a \grammarterm{concept-name}} for \tcode{C}{'s} respective template parameters in the
-    parameter mappings in each atomic constraint.
-    If any such substitution results in an invalid type or expression,
-    the program is ill-formed; no diagnostic is required.
+\item
+The normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>}
+is the normal form of the \grammarterm{constraint-expression} of \tcode{C},
+after \removed{substituting \tcode{A$_1$, A$_2$, ..., A$_n$}}
+\begin{itemize}
+\begin{addedblock}
+\item substituting each use of A$_i$'s corresponding template parameter in the \grammarterm{constraint-expression} of \tcode{C} if A$_i$ denotes a \grammarterm{concept-name}
+\end{addedblock}
+\item
+\added{substituting each A$_i$ that is not a \grammarterm{concept-name}} for \tcode{C}{'s} respective template parameters in the
+parameter mappings in each atomic constraint.
+If any such substitution results in an invalid type or expression,
+the program is ill-formed; no diagnostic is required.
 
-    \end{itemize}
-    \begin{example}
-        \begin{codeblock}
-            template<typename T> concept A = T::value || true;
-            template<typename U> concept B = A<U*>;
-            template<typename V> concept C = B<V&>;
-        \end{codeblock}
-        Normalization of \tcode{B}{'s} \grammarterm{constraint-expression}
-        is valid and results in
-        \tcode{T::value} (with the mapping $\tcode{T} \mapsto \tcode{U*}$)
-        $\lor$
-        \tcode{true} (with an empty mapping),
-        despite the expression \tcode{T::value} being ill-formed
-        for a pointer type \tcode{T}.
-        Normalization of \tcode{C}{'s} \grammarterm{constraint-expression}
-        results in the program being ill-formed,
-        because it would form the invalid type \tcode{V\&*}
-        in the parameter mapping.
-    \end{example}
+\end{itemize}
 
-    \begin{addedblock}
-    \item The normal form of a \grammarterm{fold-expression} \iref{expr.prim.fold} \tcode{F}
-    whose \grammarterm{fold-operator} \tcode{op} is either \tcode{\&\&} or \tcode{||}
-    and whose pattern is a \tcode{concept-name} \tcode{C} is the normal form of the expanded expression F'
-    produced by the expansion of \tcode{C}:
+\ednote{We need wording to substitute C when C names a concept template parameter}
 
-    \pnum
-    \begin{itemize}
-        \item
-        % Note: "\space" used below because " " inside tcode adds too much whitespace;
-        % one could optionally use mathfont inside tcode, e.g., "\tcode{($ $}".
-        \tcode{(}\space
-        \tcode{((}$\mathtt{E}_1$
-        \placeholder{op} $\mathtt{E}_2$\tcode{)}
-        \placeholder{op} $\cdots$\tcode{)}
-        \placeholder{op} $\mathtt{E}_N$
-        \space\tcode{)}
-        for a unary left fold,
-        \item
-        \tcode{(}\space
-        $\mathtt{E}_1$     \placeholder{op}
-        \tcode{(}$\cdots$           \placeholder{op}
-        \tcode{(}$\mathtt{E}_{N-1}$ \placeholder{op}
-        $\mathtt{E}_N$\tcode{))}
-        \space\tcode{)}
-        for a unary right fold,
-        \item
-        \tcode{(}\space
-        \tcode{(((}$\mathtt{E}$
-        \placeholder{op} $\mathtt{E}_1$\tcode{)}
-        \placeholder{op} $\mathtt{E}_2$\tcode{)}
-        \placeholder{op} $\cdots$\tcode{)}
-        \placeholder{op} $\mathtt{E}_N$
-        \space\tcode{)}
-        for a binary left fold, and
-        \item
-        \tcode{(}\space
-        $\mathtt{E}_1$     \placeholder{op}
-        \tcode{(}$\cdots$           \placeholder{op}
-        \tcode{(}$\mathtt{E}_{N-1}$ \placeholder{op}
-        \tcode{(}$\mathtt{E}_{N}$   \placeholder{op}
-        $\mathtt{E}$\tcode{)))}
-        \space\tcode{)}
-        for a binary right fold.
-    \end{itemize}
-    \end{addedblock}
+\begin{example}
+    \begin{codeblock}
+        template<typename T> concept A = T::value || true;
+        template<typename U> concept B = A<U*>;
+        template<typename V> concept C = B<V&>;
+    \end{codeblock}
+    Normalization of \tcode{B}{'s} \grammarterm{constraint-expression}
+    is valid and results in
+    \tcode{T::value} (with the mapping $\tcode{T} \mapsto \tcode{U*}$)
+    $\lor$
+    \tcode{true} (with an empty mapping),
+    despite the expression \tcode{T::value} being ill-formed
+    for a pointer type \tcode{T}.
+    Normalization of \tcode{C}{'s} \grammarterm{constraint-expression}
+    results in the program being ill-formed,
+    because it would form the invalid type \tcode{V\&*}
+    in the parameter mapping.
+\end{example}
+
+\ednote{The wording in blue is added by P2963}
+\begin{addedblockTwo}
+\item For a \grammarterm{fold-operator}  [expr.prim.fold] that is either \tcode{\&\&} or \tcode{||}
+\end{addedblockTwo}
+\begin{itemize}
+\begin{addedblockTwo}
+\item The normal form of an expression \tcode{( ... \grammarterm{fold-operator} E )} is the normal form of \tcode{( E \grammarterm{fold-operator}...)}.
+\item The normal form of an expression \tcode{( E1 \grammarterm{fold-operator}  ... \grammarterm{fold-operator}  E2 )} is the the normal form of
+\begin{itemize}
+    \item \tcode{(E1 \grammarterm{fold-operator}...) \grammarterm{fold-operator}  E2} if \tcode{E1} contains an unexpanded pack, or
+    \item \tcode{E1 \grammarterm{fold-operator} (E2 \grammarterm{fold-operator}...)} otherwise.
+\end{itemize}
+\end{addedblockTwo}
+\ednote{The wording in pink is added by P2963 and removed by this paper}
+\begin{removedblockTwo}
+\item The normal form of \tcode{(E \&\& ...)} is a fold expanded conjunction constraint \mbox{[temp.constr.fold]} whose constraint is the normal form of \tcode{E}.
+\item The normal form of \tcode{(E || ...)} is a fold expanded disjunction constraint whose constraint is the normal form of \tcode{E}.
+\end{removedblockTwo}
+
+\ednote{Add the following two bullets}
+\begin{addedblock}
+\item If \tcode{E} contains an unexpanded pack \tcode{P} naming a concept-name, the normal form of \tcode{(E \grammarterm{fold-operator} ...)}
+is the normal form of \tcode{(} \tcode{((}$\mathtt{E'}_0$ \placeholder{op} $\mathtt{E'}_1$\tcode{)} \placeholder{op} $\cdots$\tcode{)} \placeholder{op} $\mathtt{E'}_{N-1}$ \tcode{)} where $\mathtt{E'}_i$ is formed by substituting the $ith$ element of the corresponding template parameter of \tcode{P} in \tcode{E}.
+\item Otherwise, the normal form of \tcode{(E \&\& ...)} is a fold expanded conjunction constraint \mbox{[temp.constr.fold]} whose constraint is the normal form of \tcode{E}
+      and the normal form of \tcode{(E || ...)} is a fold expanded disjunction constraint whose constraint is the normal form of \tcode{E}.
+
+\end{addedblock}
+\end{itemize}
+%\begin{removedblockTwo}
+%\item For a \grammarterm{fold-operator} [expr.prim.fold] that is either \tcode{\&\&} or \tcode{||},
+%
+%
+%
+%, the normal form of an expression \tcode{( ... \grammarterm{fold-operator} E )} is the normal form of \tcode{( E \grammarterm{fold-operator}...)}.
+%\item The normal form of an expression \tcode{( E1 \grammarterm{fold-operator}  ... \grammarterm{fold-operator}  E2 )} is the the normal form of
+%\begin{itemize}
+%    \item \tcode{(E1 \grammarterm{fold-operator}...) \grammarterm{fold-operator}  E2} if \tcode{E1} contains an unexpanded pack, or
+%    \item \tcode{E1 \grammarterm{fold-operator} (E2 \grammarterm{fold-operator}...)} otherwise.
+%\end{itemize}
+%\item The normal form of \tcode{(E \&\& ...)} is a fold expanded conjunction constraint \mbox{[temp.constr.fold]} whose constraint is the normal form of \tcode{E}.
+%\item The normal form of \tcode{(E || ...)} is a fold expanded disjunction constraint whose constraint is the normal form of \tcode{E}.
+%\end{removedblockTwo}
+%
+%
+%\item The normal form of a \grammarterm{fold-expression} \iref{expr.prim.fold} \tcode{F}
+%whose \grammarterm{fold-operator} \tcode{op} is either \tcode{\&\&} or \tcode{||}
+%and whose pattern is a \tcode{concept-name} \tcode{C} is the normal form of the expanded expression F'
+%produced by the expansion of \tcode{C}:
+%
+%\pnum
+%\begin{itemize}
+%    \item
+%    % Note: "\space" used below because " " inside tcode adds too much whitespace;
+%    % one could optionally use mathfont inside tcode, e.g., "\tcode{($ $}".
+%    \tcode{(}\space
+%    \tcode{((}$\mathtt{E}_1$
+%    \placeholder{op} $\mathtt{E}_2$\tcode{)}
+%    \placeholder{op} $\cdots$\tcode{)}
+%    \placeholder{op} $\mathtt{E}_N$
+%    \space\tcode{)}
+%    for a unary left fold,
+%    \item
+%    \tcode{(}\space
+%    $\mathtt{E}_1$     \placeholder{op}
+%    \tcode{(}$\cdots$           \placeholder{op}
+%    \tcode{(}$\mathtt{E}_{N-1}$ \placeholder{op}
+%    $\mathtt{E}_N$\tcode{))}
+%    \space\tcode{)}
+%    for a unary right fold,
+%    \item
+%    \tcode{(}\space
+%    \tcode{(((}$\mathtt{E}$
+%    \placeholder{op} $\mathtt{E}_1$\tcode{)}
+%    \placeholder{op} $\mathtt{E}_2$\tcode{)}
+%    \placeholder{op} $\cdots$\tcode{)}
+%    \placeholder{op} $\mathtt{E}_N$
+%    \space\tcode{)}
+%    for a binary left fold, and
+%    \item
+%    \tcode{(}\space
+%    $\mathtt{E}_1$     \placeholder{op}
+%    \tcode{(}$\cdots$           \placeholder{op}
+%    \tcode{(}$\mathtt{E}_{N-1}$ \placeholder{op}
+%    \tcode{(}$\mathtt{E}_{N}$   \placeholder{op}
+%    $\mathtt{E}$\tcode{)))}
+%    \space\tcode{)}
+%    for a binary right fold.
+%\end{itemize}
+%\end{addedblock}
 
 
-    \item
-    The normal form of any other expression \tcode{E} is
-    the atomic constraint
-    whose expression is \tcode{E} and
-    whose parameter mapping is the identity mapping.
+\item
+The normal form of any other expression \tcode{E} is
+the atomic constraint
+whose expression is \tcode{E} and
+whose parameter mapping is the identity mapping.
 \end{itemize}
 
 \pnum
@@ -1954,8 +2151,8 @@ the pattern is a \grammarterm{using-declarator}.
 
     \begin{addedblock}
     \item
-    if the template parameter pack is a \grammarterm{template-template-parameter};
-    the pattern is the corresponding \grammarterm{template-template-parameter}
+    if the template parameter pack is a template template parameter;
+    the pattern is the corresponding template template parameter
     without the ellipsis.
     \end{addedblock}
 \end{itemize}
@@ -2127,7 +2324,7 @@ denoted by a dependent placeholder for a deduced class type,
 \item
 denoted by a \grammarterm{simple-template-id}
 in which either the template name is a template parameter or any of the
-template arguments \added{names a \grammarterm{template-template-parameter} or }is a dependent type or an expression that is type-dependent
+template arguments \added{names a template template parameter or }is a dependent type or an expression that is type-dependent
 or value-dependent or is a pack expansion,
 \begin{wfootnote}
     This includes an injected-class-name\iref{class.pre} of a class template
