@@ -1,0 +1,1280 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\usepackage{luatexja-fontspec}
+%\setmainfont{Noto Sans}
+%\setmainjfont{Noto Sans CJK KR}
+
+\title{Formatting of \tcode{charN\_t}}
+\docnumber{P3258R0}
+\audience{LEWG, SG16}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+\usepackage[dvipsnames]{xcolor}
+
+
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+We propose to make \tcode{std::format("\{\}", u8"\emoji{🌸}")} well-formed.
+
+\section{Motivation}
+
+Despite having language support for Unicode character types since C++11 and C++20 (for \tcode{char8_t}), the standard library
+lacks support for these types, making adoption challenging.
+\tcode{std::format} is a great place to start.
+
+Having the ability to format and print sequences of Unicode characters would offer more options when considering the type of
+strings produced by reflection.
+
+\begin{colorblock}
+int 鳥居;
+std::format("{}", meta::name_of(^鳥居)).
+\end{colorblock}
+
+But there are many other use cases, ie anyone who tries to use \tcode{charN_t} will need this facility.
+It is important for usability, and teachability that the standard library and core language complement each other.
+Integration of Unicode character types has been unsatisfactory so far.
+
+\section{Design}
+
+\begin{itemize}
+\item \tcode{char8_t}, \tcode{char16_t}, \tcode{char32_t} characters and strings (NTBS, \tcode{std::string}, \tcode{std::string_view}, arrays, ranges) can be
+used as a formatted argument to \tcode{std::format}.
+\item They cannot be used as the type of the \grammarterm{format string}.
+\item We assume the encoding of the output is statically determined by the literal encoding of the \grammarterm{format-string}'s type.
+This is how \tcode{format} works already.
+\item From there, all string arguments are transcoded:
+\begin{itemize}
+\item Transcoding a \tcode{char} string is a copy.
+\item If the ordinary literal encoding is UTF-8, transcoding a \tcode{char8_t} string is a copy.
+\item Otherwise, transcoding is an implementation-defined process that will inject replacement characters for invalid or unrepresentable characters.
+\item Lossy conversions is the best we can achieve here.
+\end{itemize}
+\item Mixing \tcode{char}, \tcode{wchar_t} is still not supported to avoid asking the question of the encoding of the argument.
+\item \tcode{std::format(L"\{\}", u8"")} is supported, as this is something Windows users are likely to find useful.
+\item Escaping Unicode strings (\tcode{format("\{:?\}", u8"こんにちは")}) works the same as escaping other strings, except characters that have no
+representation in the associated literal encoding of the format-string's character type are replaced by \tcode{\textbackslash{}\{xxxx\}}.
+\end{itemize}
+
+\subsection{Impact on \tcode{std::print}}
+
+There are 2 scenarios here:
+\begin{itemize}
+\item For a format string in UTF-N, \tcode{std::format} will convert a \tcode{charN_t} argument to UTF-N, which is lossless, and on a Unicode terminal, the Unicode API will preserve information
+(but extra work may be performed)
+\item For a format string not in \tcode{UTF-N}, if \tcode{vprint_unicode} is called \textbf{manually}, \tcode{charN_t} will be first converted to the literal encoding, and the whole formatted string might
+be converting back to Unicode, potentially losing information.
+\end{itemize}
+
+This is fine because calling \tcode{vprint_nonunicode} manually is a limited use case and trying to preserve information here would be extremely challenging:
+An implementation would have to transcode the formatting string as it is produced, which would be a very different behavior from \tcode{format}.
+
+Ultimately \tcode{vprint_nonunicode} exists to support Windows terminals and should not be seen as a transcoding facility.
+Supporting \tcode{charN_t} \grammarterm{format-string} would be a better way to ensure information preservation when the literal encoding is not UTF-8
+(see "future work").
+
+\subsection{\tcode{basic_format_arg} is not modified}
+
+An earlier version of this paper modified \tcode{basic_format_arg} so that the newly added \tcode{charN_t} would be stored in a handle.
+However, after talking to Mark de Wever and Jonathan Wakely, we ultimately concluded that:
+
+\begin{itemize}
+\item We definitively cannot add all 9 types (\tcode{charN_T}, \tcode{basic_string_view<charN_t>}, \tcode{charN_t*}) as this would be an ABI break in several implementations
+(implementations use a custom variant-like type with a discriminant stored in a few bits).
+\item We do not care about the cost of type erasing these formatters (one of the motivations to store them in \tcode{basic_format_arg}'s variant), as in general the cost of transcoding would dominate, and we expect them to be less use than, eg the \tcode{char} formatters.
+\item Modifying \tcode{basic_format_arg}'s variant would technically be a source break if a user provides an exhaustive (ie non-generic) visitor to \tcode{basic_format_arg::visit}. This is a lesser concern are few users are likely to be impacted.
+\item Modifying \tcode{basic_format_arg}'s variant would allow users to provide custom u8 strings values to for example a \tcode{fill} option. It is also unclear how useful this would be.
+\end{itemize}
+
+This leaves us with 2 options:
+\begin{itemize}
+\item Leave \tcode{basic_format_arg} alone (this paper).
+\item Add custom handling of \tcode{char8_t*} and \tcode{u8string_view} to \tcode{basic_format_arg}, accepting it would be a potential source break.
+This would not be an ABI break for implementation as they have some margin to extend the variant (but it would eat on future extensions).
+It is plausible that users would want to parametrize their own formatters with u8 strings arguments. However, there is certainly no motivation to support
+\tcode{char16_t}, \tcode{char32_t} there.
+\end{itemize}
+
+\section{Implementability}
+
+There is sadly no great way to implement the transcoding part of this proposal with existing standard facilities.
+Here are a few implementation strategies and considerations:
+
+\begin{itemize}
+\item For an implementation that always uses UTF-8 as the type of character literals (libc++, clang), the only requirement is to weave support for the types,
+and add UTF-X->UTF-Y conversion routines, that are not hard to implement and already exist in implementations.
+\item For an implementation that supports additional character encodings, there needs to additionally exist a method that converts a UTF-8 sequence to the
+literal encoding.
+This can be achieved by using iconv or ICU, both of which can create a converter from a name (that one can get from \tcode{std::text_encoding}).
+On platforms where this would not be an option, or where no converter for the literal encoding would exist, assuming the execution encoding is a superset
+of the literal encoding is a reasonable assumption. For example, \tcode{c32rtomb} can be used.
+\end{itemize}
+
+The wording should leave enough room to allow an implementation that always produces a bunch of replacement characters.
+
+Adding \tcode{charN_t} in the various interfaces of format did not present implementation challenges.
+Most implementations already support Unicode for escaping and width computation. So the hard work is already done.
+
+\section{Future work}
+
+This paper is minimalist by design, here are a few considerations for the future
+
+\subsection{\tcode{constexpr format}}
+
+It is reasonable to expect \tcode{format} to become \tcode{constexpr} soon-ish.
+To make \tcode{charN_t} formatters constexpr, implementation will need some built-in to perform the conversion.
+This is a reasonable ask: implementations already need to have conversion routines to evaluate string literal, exposing them to the library
+is doable.
+
+We could imagine that built-in to be very similar to an iconv-style interface.
+\begin{colorblock}
+constexpr size_t
+__builtin_utf8_to_ordinary(const char8_t*&, size_t & N, char*& Outbuf, size_t & OutputSize);
+\end{colorblock}
+
+(And would use iconv or ICU or whatever transcoding facility the compiler already uses to encode string literals).
+
+\subsection{\tcode{charN_t} format strings}
+
+Ideally, we would support \tcode{charN_t} format strings (\tcode{std::format(u8"\{\}", "")}).
+However, the following questions would need to be answered:
+\begin{itemize}
+\item How does \tcode{to_chars} and \tcode{char8_t} interract? Unicode has a large set of numbers.
+\item Are existing locale facilities sufficient to support the needs of Unicode?
+\item What do we assume the encoding for \tcode{char} and \tcode{wchar_t} to be?
+\item What is the implementation burden?
+\item What is the interaction with user-defined formatters?
+\end{itemize}
+
+\subsection{\tcode{wchar_t} <-> \tcode{char}}
+
+We do not propose to allow implicit transcoding between \tcode{wchar_t} and \tcode{char}.
+This is because we would need a better understanding of the nature of formatting arguments (execution or literal encoding?),
+and there seems to be less demand for it.
+
+\subsection{Error handling options}
+
+We could imagine letting the user control the replacement character to use or whether to throw a formatting error on non-representable/invalid characters.
+This can be explored separately as it would impact existing character types.
+
+\subsection{Better specification}
+
+As both C and C++ gain better transcoding facilities in future standards, we can respecify in terms of these facilities.
+
+\subsection{What about \tcode{iostream}?}
+
+This is a story for another paper (One that an enthusiastic reader is encouraged to write!)
+
+\section{Wording}
+
+\rSec1[basic.types]{Types}%
+\rSec2[basic.fundamental]{Fundamental types}
+
+
+\pnum
+\indextext{Boolean type}%
+\indextext{type!Boolean}%
+Type \tcode{bool} is a distinct type that has
+the same object representation,
+value representation, and
+alignment requirements as
+an \impldef{underlying type of \tcode{bool}} unsigned integer type.
+The values of type \keyword{bool} are
+\keyword{true} and \keyword{false}.
+\begin{note}
+    There are no \keyword{signed}, \keyword{unsigned},
+    \keyword{short}, or \tcode{\keyword{long} \keyword{bool}} types or values.
+\end{note}
+
+\pnum
+\indextext{type!integral}%
+\added{The types \keyword{char8_t}, \keyword{char16_t}, and \keyword{char32_t}
+    are collectively called \defnadjx{Unicode character}{types}{type}.}
+The \added{The Unicode character types}, \keyword{char},  \added{and} \keyword{wchar_t}\removed{,
+\keyword{char8_t}, \keyword{char16_t}, and \keyword{char32_t}}
+are collectively called \defnadjx{character}{types}{type}.
+The character types, \keyword{bool},
+the signed and unsigned integer types,
+and cv-qualified versions\iref{basic.type.qualifier} thereof,
+are collectively termed
+\defnx{integral types}{integral type}.
+A synonym for integral type is \defn{integer type}.
+\begin{note}
+    Enumerations\iref{dcl.enum} are not integral;
+    however, unscoped enumerations can be promoted to integral types
+    as specified in \ref{conv.prom}.
+\end{note}
+
+\rSec1[format]{Formatting}
+
+\rSec3[format.string.std]{Standard format specifiers}
+
+\pnum
+The \fmtgrammarterm{align} option applies to all argument types.
+The meaning of the various alignment options is as specified in \tref{format.align}.
+\begin{note}
+    The \fmtgrammarterm{fill}, \fmtgrammarterm{align}, and \tcode{0} options
+    have no effect when the minimum field width
+    is not greater than the estimated field width
+    because padding width is \tcode{0} in that case.
+    Since fill characters are assumed to have a field width of \tcode{1},
+    use of a character with a different field width can produce misaligned output.
+    The UNICODE CLOWN FACE character has a field width of \tcode{2}.
+    The examples above that include that character
+    illustrate the effect of the field width
+    when that character is used as a fill character
+    as opposed to when it is used as a formatting argument.
+\end{note}
+
+\begin{floattable}{Meaning of \fmtgrammarterm{align} options}{format.align}{lp{.8\hsize}}
+    \topline
+    \lhdr{Option} & \rhdr{Meaning} \\ \rowsep
+    \tcode{<} &
+    Forces the formatted argument to be aligned to the start of the field
+    by inserting $n$ fill characters after the formatted argument
+    where $n$ is the padding width.
+    This is the default for
+    non-arithmetic non-pointer types, \added{the Unicode character types}, \tcode{charT}, and \tcode{bool},
+    unless an integer presentation type is specified.
+    \\ \rowsep
+    %
+    \tcode{>} &
+    Forces the formatted argument to be aligned to the end of the field
+    by inserting $n$ fill characters before the formatted argument
+    where $n$ is the padding width.
+    This is the default for
+    arithmetic types other than \added{the Unicode character types}, \tcode{charT} and \tcode{bool},
+    pointer types,
+    or when an integer presentation type is specified.
+    \\ \rowsep
+    %
+    \tcode{\caret} &
+    Forces the formatted argument to be centered within the field
+    by inserting
+    $\bigl\lfloor \frac{n}{2} \bigr\rfloor$
+    fill characters before and
+    $\bigl\lceil \frac{n}{2} \bigr\rceil$
+    fill characters after the formatted argument, where
+    $n$ is the padding width.
+    \\
+\end{floattable}
+
+\pnum
+The \fmtgrammarterm{sign} option is only valid
+for arithmetic types other than \added{the Unicode character types}, \tcode{charT} and \tcode{bool}
+or when an integer presentation type is specified.
+The meaning of the various options is as specified in \tref{format.sign}.
+
+
+\pnum
+% FIXME: What is a "string" here, exactly?
+The available string presentation types are specified in \tref{format.type.string}.
+%
+\begin{floattable}{Meaning of \fmtgrammarterm{type} options for strings}{format.type.string}{ll}
+    \topline
+    \lhdr{Type} & \rhdr{Meaning} \\ \rowsep
+    none, \tcode{s} &
+    Copies the \added{transcoded \iref{format.string.transcoded}} string to the output.
+    \\ \rowsep
+    %
+    \tcode{?} &
+    Copies the escaped string \iref{format.string.escaped} to the output.
+    \\
+\end{floattable}
+
+
+\begin{floattable}{Meaning of \fmtgrammarterm{type} options for integer types}{format.type.int}{lp{.8\hsize}}
+\topline
+\lhdr{Type} & \rhdr{Meaning} \\ \rowsep
+\tcode{b} &
+\tcode{to_chars(first, last, value, 2)};
+\indextext{base prefix}%
+the base prefix is \tcode{0b}.
+\\ \rowsep
+%
+\tcode{B} &
+The same as \tcode{b}, except that
+\indextext{base prefix}%
+the base prefix is \tcode{0B}.
+\\ \rowsep
+%
+\tcode{c} &
+Copies the character \tcode{static_cast<charT>(value)} to the output.
+Throws \tcode{format_error} if \tcode{value} is not
+in the range of representable values for \tcode{charT}.
+\\ \rowsep
+%
+\tcode{d} &
+\tcode{to_chars(first, last, value)}.
+\\ \rowsep
+%
+\tcode{o} &
+\tcode{to_chars(first, last, value, 8)};
+\indextext{base prefix}%
+the base prefix is \tcode{0} if \tcode{value} is nonzero and is empty otherwise.
+\\ \rowsep
+%
+\tcode{x} &
+\tcode{to_chars(first, last, value, 16)};
+\indextext{base prefix}%
+the base prefix is \tcode{0x}.
+\\ \rowsep
+%
+\tcode{X} &
+The same as \tcode{x}, except that
+it uses uppercase letters for digits above 9 and
+\indextext{base prefix}%
+the base prefix is \tcode{0X}.
+\\ \rowsep
+%
+none &
+The same as \tcode{d}.
+\begin{note}
+    If the formatting argument type is \tcode{charT}\added{, a Unicode character type,} or \tcode{bool},
+    the default is instead \tcode{c} or \tcode{s}, respectively.
+\end{note}
+\\
+\end{floattable}
+
+\begin{floattable}{Meaning of \fmtgrammarterm{sign} options}{format.sign}{lp{.8\hsize}}
+    \topline
+    \lhdr{Option} & \rhdr{Meaning} \\ \rowsep
+    \tcode{+} &
+    Indicates that a sign should be used for both non-negative and negative
+    numbers.
+    The \tcode{+} sign is inserted before the output of \tcode{to_chars} for
+    non-negative numbers other than negative zero.
+    \begin{note}
+        For negative numbers and negative zero
+        the output of \tcode{to_chars} will already contain the sign
+        so no additional transformation is performed.
+    \end{note}
+    \\ \rowsep
+    %
+    \tcode{-} &
+    Indicates that a sign should be used for
+    negative numbers and negative zero only (this is the default behavior).
+    \\ \rowsep
+    %
+    space &
+    Indicates that a leading space should be used for
+    non-negative numbers other than negative zero, and
+    a minus sign for negative numbers and negative zero.
+    \\
+\end{floattable}
+
+\pnum
+The \fmtgrammarterm{sign} option applies to floating-point infinity and NaN.
+\begin{example}
+    \begin{codeblock}
+        double inf = numeric_limits<double>::infinity();
+        double nan = numeric_limits<double>::quiet_NaN();
+        string s0 = format("{0:},{0:+},{0:-},{0: }", 1);        // value of \tcode{s0} is \tcode{"1,+1,1, 1"}
+        string s1 = format("{0:},{0:+},{0:-},{0: }", -1);       // value of \tcode{s1} is \tcode{"-1,-1,-1,-1"}
+        string s2 = format("{0:},{0:+},{0:-},{0: }", inf);      // value of \tcode{s2} is \tcode{"inf,+inf,inf, inf"}
+        string s3 = format("{0:},{0:+},{0:-},{0: }", nan);      // value of \tcode{s3} is \tcode{"nan,+nan,nan, nan"}
+    \end{codeblock}
+\end{example}
+
+\pnum
+The \tcode{\#} option causes the
+% FIXME: This is not a definition.
+\defnx{alternate form}{alternate form!format string}
+to be used for the conversion.
+This option is valid for arithmetic types other than
+\added{Unicode character types,} \tcode{charT} and \tcode{bool}
+or when an integer presentation type is specified, and not otherwise.
+For integral types,
+the alternate form inserts the
+base prefix (if any) specified in \tref{format.type.int}
+into the output after the sign character (possibly space) if there is one, or
+before the output of \tcode{to_chars} otherwise.
+For floating-point types,
+the alternate form causes the result of the conversion of finite values
+to always contain a decimal-point character,
+even if no digits follow it.
+% FIXME: This is a weird place for this part of the spec to appear.
+Normally, a decimal-point character appears in the result of these
+conversions only if a digit follows it.
+In addition, for \tcode{g} and \tcode{G} conversions,
+% FIXME: Are they normally? What does this even mean? Reach into to_chars and
+% alter its behavior?
+trailing zeros are not removed from the result.
+
+\pnum
+The \tcode{0} option is valid for arithmetic types
+other than \added{Unicode character types,} \tcode{charT} and \tcode{bool}, pointer types, or
+when an integer presentation type is specified.
+For formatting arguments that have a value
+other than an infinity or a NaN,
+this option pads the formatted argument by
+inserting the \tcode{0} character $n$ times
+following the sign or base prefix indicators (if any)
+where $n$ is \tcode{0} if the \fmtgrammarterm{align} option is present and
+is the padding width otherwise.
+\begin{example}
+    \begin{codeblock}
+        char c = 120;
+        string s1 = format("{:+06d}", c);       // value of \tcode{s1} is \tcode{"+00120"}
+        string s2 = format("{:#06x}", 0xa);     // value of \tcode{s2} is \tcode{"0x000a"}
+        string s3 = format("{:<06}", -42);      // value of \tcode{s3} is \tcode{"-42\ \ \ "} (\tcode{0} has no effect)
+        string s4 = format("{:06}", inf);       // value of \tcode{s4} is \tcode{"\ \ \ inf"} (\tcode{0} has no effect)
+    \end{codeblock}
+\end{example}
+
+\pnum
+The \fmtgrammarterm{width} option specifies the minimum field width.
+If the \fmtgrammarterm{width} option is absent,
+the minimum field width is \tcode{0}.
+
+\pnum
+If \tcode{\{ \opt{\fmtgrammarterm{arg-id}} \}} is used in
+a \fmtgrammarterm{width} or \fmtgrammarterm{precision} option,
+the value of the corresponding formatting argument is used as the value of the option.
+The option is valid only if the corresponding formatting argument is
+of standard signed or unsigned integer type.
+If its value is negative,
+an exception of type \tcode{format_error} is thrown.
+
+\pnum
+% FIXME: What if it's an arg-id?
+If \fmtgrammarterm{positive-integer} is used in a
+\fmtgrammarterm{width} option, the value of the \fmtgrammarterm{positive-integer}
+is interpreted as a decimal integer and used as the value of the option.
+
+\pnum
+For the purposes of width computation, \changed{a}{an ordinary or wide character} string is assumed to be in
+a locale-independent, \impldef{encoding assumption for \tcode{format} width computation} encoding.
+Implementations should use either UTF-8, UTF-16, or UTF-32, on platforms capable of displaying Unicode text in a terminal.
+\begin{note}
+    This is the case for Windows-based and many POSIX-based operating systems.
+\end{note}
+
+\begin{addedblock}
+\begin{note}
+    \tcode{char8_t}, \tcode{char16_t}, \tcode{char32_t} strings are assumed to be in UTF-8, UTF-16, or UTF-32 respectively.
+\end{note}
+\end{addedblock}
+
+\pnum
+The available \added{Unicode character type} anf \tcode{charT} presentation types are specified in \ednote{the table below}
+%
+\begin{floattable}{Meaning of \fmtgrammarterm{type} options for \tcode{charT}}{format.type.char}{lp{.8\hsize}}
+    \topline
+    \lhdr{Type} & \rhdr{Meaning} \\ \rowsep
+    none, \tcode{c} &
+    Copies the \added{transcoded \iref{format.string.transcoded} }character to the output.
+    \\ \rowsep
+    %
+    \tcode{b}, \tcode{B}, \tcode{d}, \tcode{o}, \tcode{x}, \tcode{X} &
+    As specified in \tref{format.type.int}
+    with \tcode{value} converted to the unsigned version of the underlying type.
+    \\ \rowsep
+    %
+    \tcode{?} &
+    Copies the escaped character \iref{format.string.escaped} to the output.
+    \\
+\end{floattable}
+
+
+\rSec3[format.formatter.spec]{Formatter specializations}
+\indexlibraryglobal{formatter}%
+
+\pnum
+% FIXME: Specify this in [format.functions], not here!
+The functions defined in \ref{format.functions} use
+specializations of the class template \tcode{formatter} to format
+individual arguments.
+
+\pnum
+Let \tcode{charT} be either \tcode{char} or \keyword{wchar_t}.
+Each specialization of \tcode{formatter} is either enabled or disabled,
+as described below.
+\indextext{\idxcode{formatter}!debug-enabled specialization of}%
+A \defn{debug-enabled} specialization of \tcode{formatter}
+additionally provides
+a public, constexpr, non-static member function \tcode{set_debug_format()}
+which modifies the state of the \tcode{formatter} to be as if
+the type of the \fmtgrammarterm{std-format-spec}
+parsed by the last call to \tcode{parse} were \tcode{?}.
+Each header that declares the template \tcode{formatter}
+provides the following enabled specializations:
+\begin{itemize}
+    \item
+    \indexlibrary{\idxcode{formatter}!specializations!character types}%
+    The debug-enabled specializations
+    \begin{codeblock}
+        template<> struct formatter<char, char>;
+        template<> struct formatter<char, wchar_t>;
+        template<> struct formatter<wchar_t, wchar_t>;\end{codeblock}\begin{addedblock}\begin{codeblock}
+        template<> struct formatter<char8_t, char>;
+        template<> struct formatter<char16_t, char>;
+        template<> struct formatter<char32_t, char>;
+        template<> struct formatter<char8_t,  wchar_t>;
+        template<> struct formatter<char16_t, wchar_t>;
+        template<> struct formatter<char32_t, wchar_t>;
+    \end{codeblock}
+    \end{addedblock}
+
+    \item
+    \indexlibrary{\idxcode{formatter}!specializations!string types}%
+    For each \tcode{charT}, \added{for each Unicode character type UcharT},
+    the debug-enabled string type specializations
+    \begin{codeblock}
+        template<> struct formatter<charT*, charT>;
+        template<> struct formatter<const charT*, charT>;
+        template<size_t N> struct formatter<charT[N], charT>;
+        template<class traits, class Allocator>
+        struct formatter<basic_string<charT, traits, Allocator>, charT>;
+        template<class traits>
+        struct formatter<basic_string_view<charT, traits>, charT>;\end{codeblock}\begin{addedblock}\begin{codeblock}
+        template<> struct formatter<UcharT*, charT>;
+        template<> struct formatter<const UcharT*, charT>;
+        template<size_t N> struct formatter<UcharT[N], charT>;
+        template<class traits, class Allocator>
+        struct formatter<basic_string<UcharT, traits, Allocator>, charT>;
+        template<class traits>
+        struct formatter<basic_string_view<UcharT, traits>, charT>;
+        \end{codeblock}
+    \end{addedblock}
+
+    \item
+    \indexlibrary{\idxcode{formatter}!specializations!arithmetic types}%
+    For each \tcode{charT},
+    for each cv-unqualified arithmetic type \tcode{ArithmeticT}
+    other than
+    \tcode{char},
+    \keyword{wchar_t},
+    \keyword{char8_t},
+    \keyword{char16_t}, or
+    \keyword{char32_t},
+    a specialization
+    \begin{codeblock}
+        template<> struct formatter<ArithmeticT, charT>;
+    \end{codeblock}
+
+    \item
+    \indexlibrary{\idxcode{formatter}!specializations!pointer types}%
+    \indexlibrary{\idxcode{formatter}!specializations!\idxcode{nullptr_t}}%
+    For each \tcode{charT},
+    the pointer type specializations
+    \begin{codeblock}
+        template<> struct formatter<nullptr_t, charT>;
+        template<> struct formatter<void*, charT>;
+        template<> struct formatter<const void*, charT>;
+    \end{codeblock}
+\end{itemize}
+The \tcode{parse} member functions of these formatters
+interpret the format specification
+as a \fmtgrammarterm{std-format-spec}
+as described in \ref{format.string.std}.
+In addition,
+for each type \tcode{T} for which
+a \tcode{formatter} specialization is provided above,
+each of the headers provides the following specialization:
+\begin{codeblock}
+    template<> inline constexpr bool enable_nonlocking_formatter_optimization<T> = true;
+\end{codeblock}
+\begin{note}
+    Specializations such as \tcode{formatter<wchar_t, char>}
+    and \tcode{formatter<const char*, wchar_t>}
+    that would require implicit
+    multibyte / wide string or character conversion are disabled.
+\end{note}
+
+\pnum
+For any types \tcode{T} and \tcode{charT} for which
+neither the library nor the user provides
+an explicit or partial specialization of
+the class template \tcode{formatter},
+\tcode{formatter<T, charT>} is disabled.
+
+\pnum
+If the library provides an explicit or partial specialization of
+\tcode{formatter<T, charT>}, that specialization is enabled
+and meets the \oldconcept{Formatter} requirements
+except as noted otherwise.
+
+\pnum
+If \tcode{F} is a disabled specialization of \tcode{formatter}, these
+values are \tcode{false}:
+\begin{itemize}
+    \item \tcode{is_default_constructible_v<F>},
+    \item \tcode{is_copy_constructible_v<F>},
+    \item \tcode{is_move_constructible_v<F>},
+    \item \tcode{is_copy_assignable_v<F>}, and
+    \item \tcode{is_move_assignable_v<F>}.
+\end{itemize}
+
+\pnum
+An enabled specialization \tcode{formatter<T, charT>} meets the
+\oldconcept{BasicFormatter} requirements \iref{formatter.requirements}.
+\begin{example}
+    \begin{codeblock}
+        #include <format>
+        #include <string>
+
+        enum color { red, green, blue };
+        const char* color_names[] = { "red", "green", "blue" };
+
+        template<> struct std::formatter<color> : std::formatter<const char*> {
+            auto format(color c, format_context& ctx) const {
+                return formatter<const char*>::format(color_names[c], ctx);
+            }
+        };
+
+        struct err {};
+
+        std::string s0 = std::format("{}", 42);         // OK, library-provided formatter
+        std::string s1 = std::format("{}", L"foo");     // error: disabled formatter
+        std::string s2 = std::format("{}", red);        // OK, user-provided formatter
+        std::string s3 = std::format("{}", err{});      // error: disabled formatter
+    \end{codeblock}
+\end{example}
+
+\begin{addedblock}
+\rSec3[format.string.transcoded]{Formatting transcoded characters and strings}
+
+The transcoded string \placeholder{E} representation of a string \placeholder{S}
+is constructed by encoding a sequence of characters as follows:
+
+
+Let \placeholder{ReplacementCharacter} be an implementation-defined code unit sequence in the the associated character encoding \placeholder{TE} for \tcode{charT}  ([lex.string.literal])
+
+If \placeholder{TE} is the same as the associated encoding \placeholder{SE} of the character type \placeholder{ST} of \placeholder{S} \ednote{This needs to be defined},
+each code unit of  \placeholder{S} is appended to E.
+
+Otherwise (\placeholder{ST} is a Unicode character type), for each code unit sequence \placeholder{X} in \placeholder{S} that either
+encodes a single character, or is a sequence of ill-formed code units,
+processing is in order as follows:
+\begin{itemize}
+\item If \placeholder{X} encodes a single character \placeholder{C}, then, if there exist an implementation-defined representation \placeholder{R}
+of \placeholder{C} in \placeholder{TE}, each code unit of \placeholder{R} is appended to \placeholder{E}. If no such representation exists, \placeholder{ReplacementCharacter} is appended to \placeholder{E}.
+\item Otherwise \placeholder{ReplacementCharacter} is appended to \placeholder{E}.
+\end{itemize}
+
+The transcoded string representation of a character \placeholder{C}
+is equivalent to the transcoded string representation
+of a string of \placeholder{C}.
+
+\end{addedblock}
+
+\rSec3[format.string.escaped]{Formatting escaped characters and strings}
+
+\pnum
+\indextext{string!formatted as escaped}%
+\indextext{character!formatted as escaped}%
+A character or string can be formatted as \defn{escaped}
+to make it more suitable for debugging or for logging.
+
+\pnum
+The escaped string \placeholder{E} representation of a string \placeholder{S}
+is constructed by encoding a sequence of characters as follows.
+
+\removed{The associated character encoding \placeholder{CE} for \tcode{charT}~(\tref{lex.string.literal})
+is used to both interpret \placeholder{S} and construct \placeholder{E}.}
+
+\added{Let \placeholder{TE} be the associated character encoding for \tcode{charT}.}
+\added{Let \placeholder{SE} be the associated character encoding for the character type of \placeholder{S}.}
+
+\begin{itemize}
+\item
+\unicode{0022}{quotation mark} (\tcode{"}) is appended to \placeholder{E}.
+
+\item
+For each code unit sequence \placeholder{X} in \placeholder{S} that either
+encodes a single character,
+is a shift sequence, or
+is a sequence of ill-formed code units,
+processing is in order as follows:
+
+\begin{itemize}
+\item
+If \placeholder{X} encodes a single character \placeholder{C}, then:
+
+\begin{itemize}
+    \item
+    If \placeholder{C} is one of the characters in \tref{format.escape.sequences},
+    then the two characters shown as the corresponding escape sequence
+    are appended to \placeholder{E}.
+
+    \item
+    Otherwise, if \placeholder{C} is not \unicode{0020}{space} and
+
+    \begin{itemize}
+        \item
+        \placeholder{\changed{CE}{SE}} is UTF-8, UTF-16, or UTF-32 and
+        \placeholder{C} corresponds to a Unicode scalar value
+        whose Unicode property \tcode{General_Category} has a value in the groups
+        \tcode{Separator} (\tcode{Z}) or \tcode{Other} (\tcode{C}),
+        as described by UAX 44 of the Unicode Standard, or
+
+        \item
+        \placeholder{\changed{CE}{SE}} is UTF-8, UTF-16, or UTF-32 and
+        \placeholder{C} corresponds to a Unicode scalar value
+        with the Unicode property \tcode{Grapheme_Extend=Yes}
+        as described by UAX 44 of the Unicode Standard and
+        \placeholder{C} is not immediately preceded in \placeholder{S} by
+        a character \placeholder{P} appended to \placeholder{E}
+        without translation to an escape sequence, or
+
+        \item
+        \placeholder{\changed{CE}{SE}} is neither UTF-8, UTF-16, nor UTF-32 and
+        \placeholder{C} is one of an implementation-defined set
+        of separator or non-printable characters
+
+        \begin{addedblock}
+        \item
+        \placeholder{SE} and \placeholder{TE} do not denote the same encoding and
+        \placeholder{C} has no implementation-defined representation in \placeholder{TE}
+        \end{addedblock}
+
+    \end{itemize}
+
+    then the sequence \tcode{\textbackslash u\{\placeholder{hex-digit-sequence}\}}
+    is appended to \placeholder{E},
+    where \tcode{\placeholder{hex-digit-sequence}}
+    is the shortest hexadecimal representation
+    of \placeholder{C} using lower-case hexadecimal digits.
+
+    \begin{addedblock}
+    Otherwise, if \placeholder{SE} and \placeholder{TE} do not denote the same encoding,
+    the implementation-defined representation of \placeholder{C} in \placeholder{TE} is appended to \placeholder{E}.
+    \end{addedblock}
+
+    \item
+    Otherwise, \placeholder{C} is appended to \placeholder{E}.
+\end{itemize}
+
+\item
+Otherwise, if \placeholder{X} is a shift sequence,
+the effect on \placeholder{E} and further decoding of \placeholder{S}
+is unspecified.
+
+\recommended
+A shift sequence should be represented in \placeholder{E}
+such that the original code unit sequence of \placeholder{S}
+can be reconstructed.
+
+\item
+Otherwise (\placeholder{X} is a sequence of ill-formed code units),
+each code unit \placeholder{U} is appended to \placeholder{E} in order
+as the sequence \tcode{\textbackslash x\{\placeholder{hex-digit-sequence}\}},
+where \tcode{\placeholder{hex-digit-sequence}}
+is the shortest hexadecimal representation of \placeholder{U}
+using lower-case hexadecimal digits.
+\end{itemize}
+
+\item
+Finally, \unicode{0022}{quotation mark} (\tcode{"})
+is appended to \placeholder{E}.
+\end{itemize}
+%
+\begin{floattable}{Mapping of characters to escape sequences}{format.escape.sequences}{ll}
+    \topline
+    \lhdr{Character} & \rhdr{Escape sequence} \\ \rowsep
+    \unicode{0009}{character tabulation} &
+    \tcode{\textbackslash t}
+    \\ \rowsep
+    %
+    \unicode{000a}{line feed} &
+    \tcode{\textbackslash n}
+    \\ \rowsep
+    %
+    \unicode{000d}{carriage return} &
+    \tcode{\textbackslash r}
+    \\ \rowsep
+    %
+    \unicode{0022}{quotation mark} &
+    \tcode{\textbackslash "}
+    \\ \rowsep
+    %
+    \unicode{005c}{reverse solidus} &
+    \tcode{\textbackslash\textbackslash}
+    \\
+\end{floattable}
+
+\pnum
+The escaped string representation of a character \placeholder{C}
+is equivalent to the escaped string representation
+of a string of \placeholder{C}, except that:
+
+\begin{itemize}
+    \item
+    the result starts and ends with \unicode{0027}{apostrophe} (\tcode{'})
+    instead of \unicode{0022}{quotation mark} (\tcode{"}), and
+    \item
+    if \placeholder{C} is \unicode{0027}{apostrophe},
+    the two characters \tcode{\textbackslash '} are appended to \placeholder{E}, and
+    \item
+    if \placeholder{C} is \unicode{0022}{quotation mark},
+    then \placeholder{C} is appended unchanged.
+\end{itemize}
+
+\begin{example}
+%    \begin{codeblock}
+%        string s0 = format("[{}]", "h\tllo");                   // \tcode{s0} has value: \tcode{[h\ \ \ \ llo]}
+%        string s1 = format("[{:?}]", "h\tllo");                 // \tcode{s1} has value: \tcode{["h\textbackslash tllo"]}
+%        string s2 = format("[{:?}]", "@\importexample[-2.5pt]{example_01}@");  @\kern1.25pt@// \tcode{s2} has value: \tcode{["\importexample[-2.5pt]{example_01}"]}
+%        string s3 = format("[{:?}, {:?}]", '\'', '"');          // \tcode{s3} has value: \tcode{['\textbackslash '', '"']}
+%
+%        // The following examples assume use of the UTF-8 encoding
+%        string s4 = format("[{:?}]", string("\0 \n \t \x02 \x1b", 9));
+%        // \tcode{s4} has value: \tcode{["\textbackslash u\{0\} \textbackslash n \textbackslash t \textbackslash u\{2\} \textbackslash u\{1b\}"]}
+%        string s5 = format("[{:?}]", "\xc3\x28");           // invalid UTF-8, \tcode{s5} has value: \tcode{["\textbackslash x\{c3\}("]}
+%        string s6 = format("[{:?}]", "@\importexample{example_02}@");                 @\kern0.75pt@// \tcode{s6} has value: \tcode{["\importexample{example_03}\textbackslash{u}\{200d\}\importexample{example_04}"]}
+%        string s7 = format("[{:?}]", "\u0301");             // \tcode{s7} has value: \tcode{["\textbackslash u\{301\}"]}
+%        string s8 = format("[{:?}]", "\\\u0301");           // \tcode{s8} has value: \tcode{["\textbackslash \textbackslash \textbackslash u\{301\}"]}
+%        string s9 = format("[{:?}]", "e\u0301\u0323");      // \tcode{s9} has value: \tcode{["\importexample[-2pt]{example_06}"]}
+%    \end{codeblock}
+\end{example}
+
+\ednote{[...]}
+
+
+\rSec3[format.range.formatter]{Class template \tcode{range_formatter}}
+
+\pnum
+The class template \tcode{range_formatter} is a utility
+for implementing \tcode{formatter} specializations for range types.
+
+\pnum
+\tcode{range_formatter} interprets \fmtgrammarterm{format-spec}
+as a \fmtgrammarterm{range-format-spec}.
+The syntax of format specifications is as follows:
+
+\begin{ncbnf}
+    \fmtnontermdef{range-format-spec}\br
+    \opt{range-fill-and-align} \opt{width} \opt{\terminal{n}} \opt{range-type} \opt{range-underlying-spec}
+\end{ncbnf}
+
+\begin{ncbnf}
+    \fmtnontermdef{range-fill-and-align}\br
+    \opt{range-fill} align
+\end{ncbnf}
+
+\begin{ncbnf}
+    \fmtnontermdef{range-fill}\br
+    \textnormal{any character other than} \terminal{\{} \textnormal{or} \terminal{\}} \textnormal{or} \terminal{:}
+\end{ncbnf}
+
+\begin{ncbnf}
+    \fmtnontermdef{range-type}\br
+    \terminal{m}\br
+    \terminal{s}\br
+    \terminal{?s}
+\end{ncbnf}
+
+\begin{ncbnf}
+    \fmtnontermdef{range-underlying-spec}\br
+    \terminal{:} format-spec
+\end{ncbnf}
+
+\pnum
+For \tcode{range_formatter<T, charT>},
+the \fmtgrammarterm{format-spec}
+in a \fmtgrammarterm{range-underlying-spec}, if any,
+is interpreted by \tcode{formatter<T, charT>}.
+
+\pnum
+The \fmtgrammarterm{range-fill-and-align} is interpreted
+the same way as a \fmtgrammarterm{fill-and-align}\iref{format.string.std}.
+The productions \fmtgrammarterm{align} and \fmtgrammarterm{width}
+are described in \ref{format.string}.
+
+\pnum
+The \tcode{n} option causes the range to be formatted
+without the opening and closing brackets.
+\begin{note}
+    This is equivalent to invoking \tcode{set_brackets(\{\}, \{\})}.
+\end{note}
+
+\pnum
+The \fmtgrammarterm{range-type} specifier changes the way a range is formatted,
+with certain options only valid with certain argument types.
+The meaning of the various type options
+is as specified in \tref{formatter.range.type}.
+
+\begin{concepttable}{Meaning of \fmtgrammarterm{range-type} options}{formatter.range.type}
+    {p{1in}p{1.4in}p{2.7in}}
+    \topline
+    \hdstyle{Option} & \hdstyle{Requirements} & \hdstyle{Meaning} \\ \capsep
+    %
+    \tcode{m} &
+    \tcode{T} shall be
+    either a specialization of \tcode{pair} or a specialization of \tcode{tuple}
+    such that \tcode{tuple_size_v<T>} is \tcode{2}. &
+    Indicates that
+    the opening bracket should be \tcode{"\{"},
+    the closing bracket should be \tcode{"\}"},
+    the separator should be \tcode{", "}, and
+    each range element should be formatted as if
+    \tcode{m} were specified for its \fmtgrammarterm{tuple-type}.
+    \begin{note}
+        If the \tcode{n} option is provided in addition to the \tcode{m} option,
+        both the opening and closing brackets are still empty.
+    \end{note}
+    \\ \rowsep
+    %
+    \tcode{s} &
+    \tcode{T} shall be \added{a Unicode character type or} \tcode{charT}. &
+    Indicates that the range should be formatted as \changed{a}{a transcoded string \iref{format.string.transcoded}} \tcode{string}.
+    \\ \rowsep
+    %
+    \tcode{?s} &
+    \tcode{T} shall be \added{a Unicode character type or} \tcode{charT}. &
+    Indicates that the range should be formatted as
+    an escaped string \iref{format.string.escaped}.
+    \\
+\end{concepttable}
+
+If the \fmtgrammarterm{range-type} is \tcode{s} or \tcode{?s},
+then there shall be
+no \tcode{n} option and no \fmtgrammarterm{range-underlying-spec}.
+
+\indexlibrarymember{set_separator}{range_formatter}%
+\begin{itemdecl}
+constexpr void set_separator(basic_string_view<charT> sep) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Equivalent to: \tcode{\exposid{separator_} = sep;}
+\end{itemdescr}
+
+\indexlibrarymember{set_brackets}{range_formatter}%
+\begin{itemdecl}
+constexpr void set_brackets(basic_string_view<charT> opening,
+basic_string_view<charT> closing) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+    @\exposid{opening-bracket\_}@ = opening;
+    @\exposid{closing-bracket\_}@ = closing;
+\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{parse}{range_formatter}%
+\begin{itemdecl}
+template<class ParseContext>
+constexpr typename ParseContext::iterator
+parse(ParseContext& ctx);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Parses the format specifiers as a \fmtgrammarterm{range-format-spec} and
+stores the parsed specifiers in \tcode{*this}.
+Calls \tcode{\exposid{underlying_}.parse(ctx)} to parse
+\fmtgrammarterm{format-spec} in \fmtgrammarterm{range-format-spec} or,
+if the latter is not present, an empty \fmtgrammarterm{format-spec}.
+The values of
+\exposid{opening-bracket_}, \exposid{closing-bracket_}, and \exposid{separator_}
+are modified if and only if required by
+the \fmtgrammarterm{range-type} or the \tcode{n} option, if present.
+If:
+\begin{itemize}
+    \item
+    the \fmtgrammarterm{range-type} is neither \tcode{s} nor \tcode{?s},
+    \item
+    \tcode{\exposid{underlying_}.set_debug_format()} is a valid expression, and
+    \item
+    there is no \fmtgrammarterm{range-underlying-spec},
+\end{itemize}
+then calls \tcode{\exposid{underlying_}.set_debug_format()}.
+
+\pnum\textbf{}
+\returns
+An iterator past the end of the \fmtgrammarterm{range-format-spec}.
+\end{itemdescr}
+
+\indexlibrarymember{format}{range_formatter}%
+\begin{itemdecl}
+template<ranges::@\libconcept{input\_range}@ R, class FormatContext>
+requires @\libconcept{formattable}@<ranges::range_reference_t<R>, charT> &&
+@\libconcept{same\_as}@<remove_cvref_t<ranges::range_reference_t<R>>, T>
+typename FormatContext::iterator
+format(R&& r, FormatContext& ctx) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Writes the following into \tcode{ctx.out()},
+adjusted according to the \fmtgrammarterm{range-format-spec}:
+
+\begin{itemize}
+    \item
+    If the \fmtgrammarterm{range-type} was \tcode{s},
+    then as if by formatting \tcode{basic_string<charT>(from_range, r)}
+    \added {as a transcoded string \iref{format.string.transcoded}}.
+    \item
+    Otherwise, if the \fmtgrammarterm{range-type} was \tcode{?s},
+    then as if by formatting \tcode{basic_string<charT>(from_range, r)}
+    as an escaped string \iref{format.string.escaped}.
+    \item
+    Otherwise,
+    \begin{itemize}
+        \item
+        \exposid{opening-bracket_},
+        \item
+        for each element \tcode{e} of the range \tcode{r}:
+        \begin{itemize}
+            \item
+            the result of writing \tcode{e} via \exposid{underlying_} and
+            \item
+            \exposid{separator_}, unless \tcode{e} is the last element of \tcode{r}, and
+        \end{itemize}
+        \item
+        \exposid{closing-bracket_}.
+    \end{itemize}
+\end{itemize}
+
+\pnum
+\returns
+An iterator past the end of the output range.
+\end{itemdescr}
+
+
+\rSec3[format.range.fmtstr]{Specialization of \exposid{range-default-formatter} for strings}
+
+\indexlibrary{range-default-formatter@\exposid{range-default-formatter}}%
+\begin{codeblock}
+namespace std {
+template<range_format K, ranges::@\libconcept{input\_range}@ R, class charT>
+requires (K == range_format::string || K == range_format::debug_string)
+struct @\exposid{range-default-formatter}@<K, R, charT> {
+    private:
+    @\added{using char\_type = remove\_cvref\_t<range\_reference\_t<R>;// \expos}@
+    formatter<basic_string<@\changed{charT}{char\_type}@>, charT> @\exposid{underlying\_}@;
+
+    public:
+    template<class ParseContext>
+    constexpr typename ParseContext::iterator
+    parse(ParseContext& ctx);
+
+    template<class FormatContext>
+    typename FormatContext::iterator
+    format(@\seebelow@& str, FormatContext& ctx) const;
+};
+}
+\end{codeblock}
+
+\pnum
+\mandates
+\changed{\tcode{\libconcept{same\_as}<remove_cvref_t<range_reference_t<R>>, charT>} is \tcode{true}}{\\
+    \tcode{char_type} denotes \tcode{charT} or a Unicode character type}.
+
+
+
+\begin{itemdecl}
+    template<class ParseContext>
+    constexpr typename ParseContext::iterator
+    parse(ParseContext& ctx);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Equivalent to:
+    \begin{codeblock}
+        auto i = @\exposid{underlying\_}@.parse(ctx);
+        if constexpr (K == range_format::debug_string) {
+            @\exposid{underlying\_}@.set_debug_format();
+        }
+        return i;
+    \end{codeblock}
+\end{itemdescr}
+
+\begin{itemdecl}
+    template<class FormatContext>
+    typename FormatContext::iterator
+    format(@\seebelow@& r, FormatContext& ctx) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    The type of \tcode{r} is \tcode{const R\&}
+    if \tcode{ranges::\libconcept{input\_range}<const R>} is \tcode{true} and
+    \tcode{R\&} otherwise.
+
+    \pnum
+    \effects
+    Let \tcode{\placeholder{s}} be a \tcode{basic_string<\changed{charT}{char_type}>} such that
+    \tcode{ranges::equal(\placeholder{s}, r)} is \tcode{true}.
+    Equivalent to: \tcode{return \exposid{underlying_}.format(\placeholder{s}, ctx);}
+\end{itemdescr}
+
+%\rSec2[format.arguments]{Arguments}
+%
+%\rSec3[format.arg]{Class template \tcode{basic_format_arg}}
+%
+%\indexlibraryglobal{basic_format_arg}%
+%\begin{codeblock}
+%namespace std {
+%template<class Context>
+%class basic_format_arg {
+%    public:
+%    class handle;
+%
+%    private:
+%    using char_type = typename Context::char_type;  // \expos
+%
+%    variant<monostate, bool, char_type,
+%        int, unsigned int, long long int, unsigned long long int,
+%        float, double, long double,
+%        const char_type*, basic_string_view<char_type>,
+%        @\added{const char8\_t*, basic\_string\_view<char8\_t>,}@
+%        @\added{const char16\_t*, basic\_string\_view<char16\_t>,}@
+%        @\added{const char32\_t*, basic\_string\_view<char32\_t>,}@
+%        const void*, handle
+%    > value; // \expos
+%
+%    template<class T> explicit basic_format_arg(T& v) noexcept; // \expos
+%
+%    public:
+%    basic_format_arg() noexcept;
+%
+%    explicit operator bool() const noexcept;
+%
+%    template<class Visitor>
+%    decltype(auto) visit(this basic_format_arg arg, Visitor&& vis);
+%    template<class R, class Visitor>
+%    R visit(this basic_format_arg arg, Visitor&& vis);
+%};
+%}
+%\end{codeblock}
+%
+%\pnum
+%An instance of \tcode{basic_format_arg} provides access to
+%a formatting argument for user-defined formatters.
+%
+%\pnum
+%The behavior of a program that adds specializations of
+%\tcode{basic_format_arg} is undefined.
+%
+%\indexlibrary{\idxcode{basic_format_arg}!constructor|(}%
+%\begin{itemdecl}
+%    basic_format_arg() noexcept;
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%    \pnum
+%    \ensures
+%    \tcode{!(*this)}.
+%\end{itemdescr}
+%
+%\begin{itemdecl}
+%    template<class T> explicit basic_format_arg(T& v) noexcept;
+%\end{itemdecl}
+%
+%\begin{itemdescr}
+%\pnum
+%\constraints
+%\tcode{T} satisfies \tcode{\exposconcept{formattable-with}<Context>}.
+%
+%\pnum
+%\expects
+%If \tcode{decay_t<T>} is \tcode{char_type*} \changed{or}{,} \tcode{const char_type*},
+%\added{or a pointer to a possibly const-qualified Unicode character type,} \tcode{static_cast<const char_type*>(v)} points to a NTCTS \iref{defns.ntcts}.
+%
+%\pnum
+%\effects
+%Let \tcode{TD} be \tcode{remove_const_t<T>}.
+%\begin{itemize}
+%    \item
+%    If \tcode{TD} is \tcode{bool} or \tcode{char_type},
+%    initializes \tcode{value} with \tcode{v};
+%    \item
+%    otherwise, if \tcode{TD} is \tcode{char} and \tcode{char_type} is
+%    \keyword{wchar_t}, initializes \tcode{value} with
+%    \tcode{static_cast<wchar_t>(static_cast<unsigned char>(v))};
+%    \begin{addedblock}
+%    \item
+%    otherwise, if \tcode{TD} is \added{a Unicode character type},
+%    initializes \tcode{value} with \tcode{v};
+%    \end{addedblock}
+%    \item
+%    otherwise, if \tcode{TD} is a signed integer type \iref{basic.fundamental}
+%    and \tcode{sizeof(TD) <= sizeof(int)},
+%    initializes \tcode{value} with \tcode{static_cast<int>(v)};
+%    \item
+%    otherwise, if \tcode{TD} is an unsigned integer type and
+%    \tcode{sizeof(TD) <= sizeof(unsigned int)}, initializes
+%    \tcode{value} with \tcode{static_cast<unsigned int>(v)};
+%    \item
+%    otherwise, if \tcode{TD} is a signed integer type and
+%    \tcode{sizeof(TD) <= sizeof(long long int)}, initializes
+%    \tcode{value} with \tcode{static_cast<long long int>(v)};
+%    \item
+%    otherwise, if \tcode{TD} is an unsigned integer type and
+%    \tcode{sizeof(TD) <= sizeof(unsigned long long int)}, initializes
+%    \tcode{value} with
+%    \tcode{static_cast<unsigned long long int>(v)};
+%    \item
+%    otherwise, if \tcode{TD} is a standard floating-point type,
+%    initializes \tcode{value} with \tcode{v};
+%    \item
+%    otherwise, if \tcode{TD} is
+%    a specialization of \tcode{basic_string_view} or \tcode{basic_string} and
+%    \tcode{TD::value_type} is \tcode{char_type} \added{or a Unicode character type},
+%    initializes \tcode{value} with
+%    \tcode{basic_string_view<\changed{char_type}{TD}>(v.data(), v.size())};
+%    \item
+%    otherwise, if \tcode{decay_t<TD>} is
+%    \tcode{char_type*}\changed{ or}{,} \tcode{const char_type*}, \added{or a pointer to a possibly const-qualified Unicode character type}
+%    initializes \tcode{value} with \tcode{static_cast<const \changed{char_type}{decay_t<TD>}*>(v)};
+%    \item
+%    otherwise, if \tcode{is_void_v<remove_pointer_t<TD>>} is \tcode{true} or
+%    \tcode{is_null_pointer_v<TD>} is \tcode{true},
+%    initializes \tcode{value} with \tcode{static_cast<const void*>(v)};
+%    \item
+%    otherwise, initializes \tcode{value} with \tcode{handle(v)}.
+%\end{itemize}
+%\begin{note}
+%    Constructing \tcode{basic_format_arg} from a pointer to a member is ill-formed
+%    unless the user provides an enabled specialization of \tcode{formatter}
+%    for that pointer to member type.
+%\end{note}
+%\end{itemdescr}
+
+
+\section{Feature test macros}
+
+\ednote{ In <format>, bump \tcode{__cpp_lib_format_uchar} to the date of adoption}.
+
+
+\section{Acknowledgments}
+
+I'd like to thank Victor Zverovich for the incredible work on \tcode{std::format},
+and SG-16 for motivating me to write this paper.
+Thanks to Mark de Wever and Jonathan Wakely to help me understand the use cases and extensibility limitations
+of \tcode{basic_format_arg}
+
+\bibliographystyle{plain}
+\bibliography{wg21}
+
+
+\renewcommand{\section}[2]{}%
+
+\begin{thebibliography}{9}
+
+\bibitem[N4958]{N4958}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4958}
+
+
+\end{thebibliography}
+\end{document}

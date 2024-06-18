@@ -1,0 +1,563 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{Pack Slicing}
+\docnumber{D3277R0}
+\audience{EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\usepackage{color, colortbl}
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+This paper expands on the pack slicing feature described in \paper{P1858R2} and provides wording.
+
+
+\section{Motivation}
+
+The motivation for pack slicing is covered in \paper{P1858R2} and \paper{P2632R0}.
+Slicing a pack produces an unexpaded pack, potentally excluding some of the element of the original pack.
+
+
+\section{Syntax and Design}
+
+The syntax of pack slicing extend that of pack indexing.
+Mirroring languages that offer an array slicing feature (such as python) the 2 bounds required for slicing
+are separated by \tcode{:}
+
+\begin{colorblock}
+Pack...[lower_bound:upper_bound]
+\end{colorblock}
+
+The lower bound is inclusive and the upper bound is exclusive.
+The upper bound can be omitted (in which case it is equivalent to \tcode{sizeof...(Pack)}).
+
+\begin{colorblock}
+Pack...[0:sizeof...(Pack)] // the whole pack
+Pack...[1:sizeof...(Pack)] // excludes the first element
+Pack...[1:]                // excludes the first element
+\end{colorblock}
+
+\section{Wording}
+
+\rSec2[expr.prim.id]{Names}
+
+\rSec3[expr.prim.id.general]{General}
+
+\begin{bnf}
+	\nontermdef{id-expression}\br
+	unqualified-id\br
+	qualified-id\br
+    pack-index-expression\br
+\begin{addedblock}
+    pack-slicing-expression
+\end{addedblock}
+\end{bnf}
+
+
+\begin{addedblock}
+\ednote{Add a new section after [expr.prim.pack.index]}
+
+\rSec3[expr.prim.pack.slice]{Pack slicing expression}
+
+\begin{bnf}
+    \nontermdef{pack-slicing-expression}\br
+    id-expression \terminal{...} \terminal{[} constant-expression \terminal{:} constant-expression\opt \terminal{]}  \br
+\end{bnf}
+
+The \grammarterm{id-expression} $P$  in a \grammarterm{pack-slicing-expression} shall be an \grammarterm{identifier} that denotes a pack.
+
+Both \grammarterm{constant-expression}{s}, wehen present, shall be converted constant expressions [expr.const]\\
+of type \tcode{std::size_t}.
+
+Let $LowerBound$ (termed the lower bound) be the value of the first \grammarterm{constant-expression}.\\
+Let $UpperBound$ (termed the upper bound) be the value of the second \grammarterm{constant-expression} if it is present and \tcode{sizeof...(P)} otherwise.
+
+$LowerBound \leq UpperBound \leq \tcode{sizeof...(P)}$ shall be true.
+
+A \grammarterm{pack-slicing-expression} is a pack expansion ([temp.variadic]).
+
+\begin{note}
+A \grammarterm{pack-slicing-expression} denotes an unexpanded pack comprising of the elements $LowerBound^\text{th} ... UpperBound-1^\text{th}$ of the pack ([temp.variadic]).
+\end{note}
+
+\end{addedblock}
+
+\ednote{[...]}
+
+\rSec3[dcl.type.simple]{Simple type specifiers}%
+\indextext{type specifier!simple}
+
+\pnum
+The simple type specifiers are
+
+\begin{bnf}
+\nontermdef{simple-type-specifier}\br
+\opt{nested-name-specifier} type-name\br
+nested-name-specifier \keyword{template} simple-template-id\br\textbf{}
+computed-type-specifier\br
+placeholder-type-specifier\br
+\opt{nested-name-specifier} template-name\br
+\end{bnf}
+
+\begin{bnf}
+\nontermdef{computed-type-specifier}\br
+decltype-specifier\br
+pack-index-specifier\br
+\begin{addedblock}
+pack-slicing-specifier\br
+\end{addedblock}
+\end{bnf}
+
+\textcolor{noteclr}{[...]}
+
+\begin{simpletypetable}
+    {\grammarterm{simple-type-specifier}{s} and the types they specify}
+    {dcl.type.simple}
+    {ll}
+    \topline
+    \hdstyle{Specifier(s)}            &   \hdstyle{Type}                  \\ \capsep
+    \grammarterm{type-name}           & the type named                    \\
+    \grammarterm{simple-template-id}  & the type as defined in [temp.names]\\
+    \grammarterm{decltype-specifier}  & the type as defined in [dcl.type.decltype]\\
+    \grammarterm{pack-index-specifier} & the type as defined in [dcl.type.pack.indexing] \\
+    \added{\grammarterm{pack-slicing-specifier}} & \added{the type as defined in [dcl.type.pack.slicing]} \\
+    \grammarterm{placeholder-type-specifier}
+    & the type as defined in [dcl.spec.auto]\\
+    \grammarterm{template-name}       & the type as defined in [dcl.type.class.deduct]\\
+    \tcode{char}                      & ``\tcode{char}''                  \\
+    \tcode{unsigned char}             & ``\tcode{unsigned char}''         \\
+    \tcode{signed char}               & ``\tcode{signed char}''           \\
+    \keyword{char8_t}                   & ``\tcode{char8_t}''               \\
+    \keyword{char16_t}                  & ``\tcode{char16_t}''              \\
+    ... & \\
+\end{simpletypetable}
+
+
+\pnum
+When multiple \grammarterm{simple-type-specifier}{s} are allowed, they can be
+freely intermixed with other \grammarterm{decl-specifier}{s} in any order.
+\begin{note}
+    It is \impldef{signedness of \tcode{char}} whether objects of \tcode{char} type are
+    represented as signed or unsigned quantities. The \tcode{signed} specifier
+    forces \tcode{char} objects to be signed; it is redundant in other contexts.
+\end{note}
+
+
+\ednote{Add a new section after [dcl.type.pack.indexing]}
+
+
+\begin{addedblock}
+
+\rSec3[dcl.type.pack.slicing]{Pack slicing specifier}
+
+\begin{bnf}
+    \nontermdef{pack-index-specifier}\br
+    typedef-name \terminal{...} \terminal{[} constant-expression \terminal{:} constant-expression\opt \terminal{]}  \br
+\end{bnf}
+
+The \grammarterm{typedef-name} $P$ in a \grammarterm{pack-index-specifier} shall denote a pack.
+
+Both \grammarterm{constant-expression}{s}, wehen present, shall be converted constant expressions [expr.const]\\
+of type \tcode{std::size_t}.
+
+Let $LowerBound$ (termed the lower bound) be the value of the first \grammarterm{constant-expression}.\\
+Let $UpperBound$ (termed the upper bound) be the value of the second \grammarterm{constant-expression} if it is present and \tcode{sizeof...(P)} otherwise.
+
+$LowerBound \leq UpperBound \leq \tcode{sizeof...(P)}$ shall be true.
+
+A \grammarterm{pack-slicing-specifier} is a pack expansion ([temp.variadic]).
+
+\begin{note}
+The \grammarterm{pack-slicing-specifier} denotes an unexpanded pack comprising of the elements $LowerBound^\text{th} ... UpperBound-1^\text{th}$ of the pack ([temp.variadic]).
+\end{note}
+
+\end{addedblock}
+
+
+%\rSec1[temp.type]{Type equivalence}
+%
+%\pnum
+%If an expression $e$ is type-dependent \iref{temp.dep.expr},
+%\tcode{decltype($e$)}
+%denotes a unique dependent type. Two such \grammarterm{decltype-specifier}{s}
+%refer to the same type only if their \grammarterm{expression}{s} are
+%equivalent \iref{temp.over.link}.
+%\begin{note} % lah: Thios note in the Standard draft is label "Note 1", not just "Note".
+%    However, such a type might be aliased,
+%    e.g., by a \grammarterm{typedef-name}.
+%\end{note}
+%
+%For a type template parameter pack \tcode{T}, \tcode{T...[\grammarterm{constant-expression}{}]} denotes a unique dependent type.
+%
+%If the \grammarterm{constant-expression} of a \grammarterm{pack-index-specifier} is value-dependent, two such \grammarterm{pack-index-specifier}{s} refer to the same type only if their \grammarterm{constant-expression}{s} are equivalent \iref{temp.over.link}.
+%
+%Otherwise, two such \grammarterm{pack-index-specifier}{s} refer to the same type only if their indexes have the same value.
+%
+%\begin{addedblock}
+%
+%\end{addedblock}
+
+\rSec2[temp.variadic]{Variadic templates}
+
+\textcolor{noteclr}{[...]}
+
+\pnum
+\indextext{pattern|see{pack expansion, pattern}}%
+A \defn{pack expansion}
+consists of a \defnx{pattern}{pack expansion!pattern} and an ellipsis, the instantiation of which
+produces zero or more instantiations of the pattern in a list (described below).
+The form of the pattern
+depends on the context in which the expansion occurs. Pack
+expansions can occur in the following contexts:
+
+\begin{itemize}
+    \item In a function parameter pack \iref{dcl.fct}; the pattern is the
+    \grammarterm{parameter-declaration} without the ellipsis.
+
+    \item In a \grammarterm{using-declaration} \iref{namespace.udecl};
+    the pattern is a \grammarterm{using-declarator}.
+
+    \item In a template parameter pack that is a pack expansion \iref{temp.param}:
+    \begin{itemize}
+        \item
+        if the template parameter pack is a \grammarterm{parameter-declaration};
+        the pattern is the \grammarterm{parameter-declaration} without the ellipsis;
+
+        \item
+        if the template parameter pack is a \grammarterm{type-parameter};
+        the pattern is the corresponding \grammarterm{type-parameter}
+        without the ellipsis.
+    \end{itemize}
+
+    \item In an \grammarterm{initializer-list} \iref{dcl.init};
+    the pattern is an \grammarterm{initializer-clause}.
+
+    \item In a \grammarterm{base-specifier-list} \iref{class.derived};
+    the pattern is a \grammarterm{base-specifier}.
+
+    \item In a \grammarterm{mem-initializer-list} \iref{class.base.init} for a
+    \grammarterm{mem-initializer} whose \grammarterm{mem-initializer-id} denotes a
+    base class; the pattern is the \grammarterm{mem-initializer}.
+
+    \item In a \grammarterm{template-argument-list} \iref{temp.arg};
+    the pattern is a \grammarterm{template-argument}.
+
+    \item In an \grammarterm{attribute-list} \iref{dcl.attr.grammar}; the pattern is
+    an \grammarterm{attribute}.
+
+    \item In an \grammarterm{alignment-specifier} \iref{dcl.align}; the pattern is
+    the \grammarterm{alignment-specifier} without the ellipsis.
+
+    \item In a \grammarterm{capture-list} \iref{expr.prim.lambda.capture}; the pattern is
+    the \grammarterm{capture} without the ellipsis.
+
+    \item In a \tcode{sizeof...} expression \iref{expr.sizeof}; the pattern is an
+    \grammarterm{identifier}.
+
+    \item In a \grammarterm{pack-index-expression}; the pattern is an
+    \grammarterm{identifier}.
+    \item In a \grammarterm{pack-index-specifier}; the pattern is a
+    \grammarterm{typedef-name}.
+
+    \begin{addedblock}
+    \item In a \grammarterm{pack-slicing-expression}; the pattern is an
+    \grammarterm{identifier}.
+    \item In a \grammarterm{pack-slicing-specifier}; the pattern is a
+    \grammarterm{typedef-name}.
+    \end{addedblock}
+
+    \item In a \grammarterm{fold-expression} \iref{expr.prim.fold};
+    the pattern is the \grammarterm{cast-expression}
+    that contains an unexpanded pack.
+\end{itemize}
+
+\begin{example} % lah: this is labeled Example 4 in the Standard's draft.
+    \begin{codeblock}
+        template<class ... Types> void f(Types ... rest);
+        template<class ... Types> void g(Types ... rest) {
+            f(&rest ...);     // ``\tcode{\&rest ...}'' is a pack expansion; ``\tcode{\&rest}'' is its pattern
+        }
+    \end{codeblock}
+\end{example}
+
+\pnum
+For the purpose of determining whether a pack satisfies a rule
+regarding entities other than packs, the pack is
+considered to be the entity that would result from an instantiation of
+the pattern in which it appears.
+
+\pnum
+A pack whose name appears within the pattern of a pack
+expansion is expanded by that pack expansion. An appearance of the name of
+a pack is only expanded by the innermost enclosing pack expansion.
+The pattern of a pack expansion shall name one or more packs that
+are not expanded by a nested pack expansion; such packs are called
+\defnx{unexpanded packs}{pack!unexpanded} in the pattern. All of the packs expanded
+by a pack expansion shall have the same number of arguments specified. An
+appearance of a name of a pack that is not expanded is
+ill-formed.
+\begin{example} % lah: this is labeled Example 5 in the Standard's draft.
+    \begin{codeblock}
+        template<typename...> struct Tuple {};
+        template<typename T1, typename T2> struct Pair {};
+
+        template<class ... Args1> struct zip {
+            template<class ... Args2> struct with {
+                typedef Tuple<Pair<Args1, Args2> ... > type;
+            };
+        };
+
+        typedef zip<short, int>::with<unsigned short, unsigned>::type T1;
+        // \tcode{T1} is \tcode{Tuple<Pair<short, unsigned short>, Pair<int, unsigned>>}
+        typedef zip<short>::with<unsigned short, unsigned>::type T2;
+        // error: different number of arguments specified for \tcode{Args1} and \tcode{Args2}
+
+        template<class ... Args>
+        void g(Args ... args) {                   // OK, \tcode{Args} is expanded by the function parameter pack \tcode{args}
+            f(const_cast<const Args*>(&args)...);   // OK, ``\tcode{Args}'' and ``\tcode{args}'' are expanded
+            f(5 ...);                               // error: pattern does not contain any packs
+            f(args);                                // error: pack ``\tcode{args}'' is not expanded
+            f(h(args ...) + args ...);              // OK, first ``\tcode{args}'' expanded within \tcode{h},
+            // second ``\tcode{args}'' expanded within \tcode{f}
+        }
+    \end{codeblock}
+\end{example}
+
+\pnum
+The instantiation of a pack expansion considers
+items $\tcode{E}_1, \tcode{E}_2, \dotsc, \tcode{E}_N$,
+where
+$N$ is the number of elements in the pack expansion parameters.
+Each $\tcode{E}_i$ is generated by instantiating the pattern and
+replacing each pack expansion parameter with its $i^\text{th}$ element.
+Such an element, in the context of the instantiation, is interpreted as
+follows:
+\begin{itemize}
+    \item
+    if the pack is a template parameter pack, the element is
+    an \grammarterm{id-expression}
+    (for a non-type template parameter pack),
+    a \grammarterm{typedef-name}
+    (for a type template parameter pack declared without \tcode{template}), or
+    a \grammarterm{template-name}
+    (for a type template parameter pack declared with \tcode{template}),
+    designating the $i^\text{th}$ corresponding type or value template argument;
+
+    \item
+    if the pack is a function parameter pack, the element is an
+    \grammarterm{id-expression}
+    designating the $i^\text{th}$ function parameter
+    that resulted from instantiation of
+    the function parameter pack declaration;
+    otherwise
+
+    \item
+    if the pack is an \grammarterm{init-capture} pack,
+    the element is an \grammarterm{id-expression}
+    designating the variable introduced by
+    the $i^\text{th}$ \grammarterm{init-capture}
+    that resulted from instantiation of
+    the \grammarterm{init-capture} pack.
+
+    \begin{addedblock}
+     \item
+    if the pack is a \grammarterm{pack-slicing-expression}
+    the element is an \grammarterm{id-expression}
+    designating the $i^\text{th}$ element
+    that resulted from instantiation of
+    the \grammarterm{pack-slicing-expression} pack.
+
+    \item
+    if the pack is a \grammarterm{pack-slicing-specifier}
+    the element is a \grammarterm{typedef-name}
+    designating the $i^\text{th}$ element
+    that resulted from instantiation of
+    the \grammarterm{pack-slicing-specifier} pack.
+    \end{addedblock}
+
+\end{itemize}
+When $N$ is zero, the instantiation of a pack expansion
+does not alter the syntactic interpretation of the enclosing construct,
+even in cases where omitting the pack expansion entirely would
+otherwise be ill-formed or would result in an ambiguity in the grammar.
+
+\pnum
+The instantiation of a \tcode{sizeof...} expression \iref{expr.sizeof} produces
+an integral constant with value $N$.
+
+\pnum
+
+When instantiating a \grammarterm{pack-index-expression} $P$,
+let $K$ be the index of $P$.
+The instantiation of $P$ is the \grammarterm{id-expression} \tcode{$\mathtt{E}_K$}.
+
+
+When instantiating a \grammarterm{pack-index-specifier} $P$,
+let $K$ be the index of $P$.
+The instantiation of $P$ is the \grammarterm{typedef-name} \tcode{$\mathtt{E}_K$}.
+
+\begin{addedblock}
+
+When instantiating a \grammarterm{pack-slicing-expression} $P$,
+let $L$ be the lower bound of $P$ and let $U$ be the upper bound of $P$.\\
+The instantiation of $P$ is a pack comprised of the \grammarterm{id-expression}{s} \tcode{$\mathtt{E}_L$ ... $\mathtt{E}_U$}.
+
+When instantiating a \grammarterm{pack-slicing-specifier} $P$,
+let $L$ be the lower bound of $P$ and let $U$ be the upper bound of $P$.\\
+The instantiation of $P$ is a pack comprised of the \grammarterm{typedef-name}{s} \tcode{$\mathtt{E}_L$ ... $\mathtt{E}_U$}.
+
+\end{addedblock}
+
+
+\rSec3[temp.dep.type]{Dependent types}
+
+\ednote{Add a bullet in paragraph 7}
+
+\pnum
+A type is dependent if it is
+\begin{itemize}
+	\item
+	a template parameter,
+	\item
+	denoted by a dependent (qualified) name,
+	\item
+	a nested class or enumeration that is a direct member of
+	a class that is the current instantiation,
+	\item
+	a cv-qualified type where the cv-unqualified type is dependent,
+	\item
+	a compound type constructed from any dependent type,
+	\item
+	an array type whose element type is dependent or whose
+	bound (if any) is value-dependent,
+	\item
+	a function type whose parameters include one or more function parameter packs,
+	\item
+	a function type whose exception specification is value-dependent,
+	\item
+	denoted by a \grammarterm{simple-template-id}
+	in which either the template name is a template parameter or any of the
+	template arguments is a dependent type or an expression that is type-dependent
+	or value-dependent or is a pack expansion,
+    \item a \grammarterm{pack-index-specifier},
+\begin{addedblock}
+    \item a \grammarterm{pack-slicing-specifier},
+\end{addedblock}
+	or
+	\item denoted by \tcode{decltype(}\grammarterm{expression}{}\tcode{)},
+	where \grammarterm{expression} is type-dependent\iref{temp.dep.expr}.
+\end{itemize}
+
+\rSec3[temp.dep.expr]{Type-dependent expressions}
+
+\ednote{Add a paragraph at the end of temp.dep.expr}
+
+\pnum
+A \grammarterm{braced-init-list} is type-dependent if any element is
+type-dependent or is a pack expansion.
+
+\pnum
+A \grammarterm{fold-expression} is type-dependent.
+
+	\pnum
+A \grammarterm{pack-index-expression} is type-dependent if its \grammarterm{id-expression} is type-dependent.
+
+\begin{addedblock}
+A \grammarterm{pack-slicing-expression} is type-dependent
+\end{addedblock}
+
+\textcolor{noteclr}{[...]}
+
+\rSec3[temp.deduct.type]{Deducing template arguments from a type}
+
+% An id-expression is type-dependent if it is a template-id that is not a concept-id and is dependent; OR it it a pack expression whose constant expression is a constant expression OR or if its terminal name is
+
+% modify class.base.init.
+
+\pnum
+The non-deduced contexts are:
+
+\indextext{context!non-deduced}%
+\begin{itemize}
+    \item
+    The
+    \grammarterm{nested-name-specifier}
+    of a type that was specified using a
+    \grammarterm{qualified-id}.
+    \item A \grammarterm{pack-index-specifier} or a \grammarterm{pack-index-expression}.
+    \begin{addedblock}
+    \item A \grammarterm{pack-slicing-specifier} or a \grammarterm{pack-slicing-expression}.
+    \end{addedblock}
+    \item
+    The \grammarterm{expression} of a \grammarterm{decltype-specifier}.
+    \item
+    A non-type template argument or an array bound in which a subexpression
+    references a template parameter.
+    \item
+    A template parameter used in the parameter type of a function parameter that
+    has a default argument that is being used in the call for which argument
+    deduction is being done.
+    \item
+    A function parameter for which the associated argument is an
+    overload set \iref{over.over}, and one or more of the following apply:
+    \begin{itemize}
+        \item
+        more than one function matches the function parameter type (resulting in
+        an ambiguous deduction), or
+        \item
+        no function matches the function parameter type, or
+        \item
+        the overload set supplied as an argument contains one or more function templates.
+    \end{itemize}
+    \item A function parameter for which the associated argument is an initializer
+    list \iref{dcl.init.list} but the parameter does not have
+    a type for which deduction from an initializer list is specified \iref{temp.deduct.call}.
+    \begin{example}
+        \begin{codeblock}
+            template<class T> void g(T);
+            g({1,2,3});                 // error: no argument deduced for \tcode{T}
+        \end{codeblock}
+    \end{example}
+    \item A function parameter pack that does not occur at the end of the
+    \grammarterm{parameter-declaration-list}.
+\end{itemize}
+
+
+\section{Feature test macros}
+
+\ednote{Add a new macro in \tcode{[tab:cpp.predefined.ft]} : \tcode{__cpp_pack_slicing} set to the date of adoption}.
+
+
+\section{Acknowledgments}
+
+We extend our appreciation to Sean Baxter for his work on Circle and to Barry Revzin for his work on \paper{P1858R2}, both works being the foundation of the design presented here.
+
+\section{References} % lah: Correct your citation style. Books, proceedings, conference names, and Standards use italics. Articles, presentations, and talks use quotes. Harvard style is the general UK convention. https://intranet.birmingham.ac.uk/as/libraryservices/library/referencing/icite/harvard/referencelist.aspx
+
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21, extra}
+
+\begin{thebibliography}{9}
+
+\bibitem[P2632R0]{P2632R0}
+Corentin Jabot, Pablo Halpern, John Lakos, Alisdair Meredith, Joshua Berne, and Gašper Ažman\newline
+\emph{A plan for better template meta programming facilities in C++26}\newline
+\url{https://wg21.link/P2632R0}\newline
+October 2022
+
+\bibitem[N4885]{N4885}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N4885}
+
+
+\end{thebibliography}
+
+\end{document}
