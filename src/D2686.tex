@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{\tcode{constexpr} structured bindings\\{\small and}\\\ references to \tcode{constexpr} variables}
-\docnumber{P2686R3}
+\docnumber{D2686R4}
 \audience{EWG, CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Brian Bi}{bbi10@bloomberg.net}
@@ -22,6 +22,13 @@ This paper reports implementation experience on this proposal and provides updat
 
 
 \section{Revisions}
+
+\subsection{Revision 4}
+
+The definitions of "constituent values" and "constituent references" have been
+tweaked slightly with no change in meaning.  The imprecise "at a point [...]
+namespace scope" wording has been changed to refer to the nearest following
+point at namespace scope.
 
 \subsection{Revision 3}
 
@@ -526,11 +533,19 @@ are called
 \ednote{Insert a paragraph after p1:}
 
 \begin{addedblock}
-The \defn{constituent values} of an object $o$ are the value of $o$ if it has scalar type and the values of
-any of $o$’s subobjects of scalar type, other than inactive union members and subobjects
-thereof. The \defn{constituent references} of an object $o$ are the non-static data members of
-reference type of $o$ and of any of $o$’s subobjects that are neither inactive union members nor
-subobjects thereof.
+The \defn{constituent values} of an object $o$ are:
+\begin{itemize}
+\item if $o$ has scalar type, the value of $o$;
+\item otherwise, the constituent values of any direct subobjects of $o$, other
+than inactive union members.
+\end{itemize}
+
+The \defn{constituent references} of an object $o$ are:
+\begin{itemize}
+\item any direct members of $o$ that have reference type, and
+\item the constituent references of any direct subobjects of $o$ other than
+inactive union members.
+\end{itemize}
 \end{addedblock}
 
 \ednote{Insert a paragraph after p1:}
@@ -614,7 +629,7 @@ even if those objects are of non-literal class types.}
     returns \keyword{true}.
 \end{note}\added{, and}
 \begin{addedblock}
-\item immediately after the initializing declaration of \tcode{v}, the object or reference declared by \tcode{v} is constexpr-representable, and if \tcode{v} has static or thread storage duration, the object or reference declared by \tcode{v} is constexpr-representable at a point that follows the initializing declaration of \tcode{v} and whose immediate scope is a namespace scope.
+\item immediately after the initializing declaration of \tcode{v}, the object or reference declared by \tcode{v} is constexpr-representable, and if \tcode{v} has static or thread storage duration, the object or reference declared by \tcode{v} is constexpr-representable at the nearest point following the initializing declaration of \tcode{v} whose immediate scope is a namespace scope.
 \end{addedblock}
 \end{itemize}
 \begin{addedblock}
@@ -915,7 +930,7 @@ Let $x$ denote the object or reference declared by the declaration of a
 Immediately after the initializing declaration of \tcode{v},
 $x$ shall be constexpr-representable.
 If $x$ has static or thread storage duration, $x$ shall be
-constexpr-representable at a point following the initializing declaration of
+constexpr-representable at the nearest point following the initializing declaration of
 \tcode{v} whose immediate scope is a namespace scope.
 }
 
