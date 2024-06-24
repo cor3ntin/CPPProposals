@@ -28,7 +28,16 @@ This paper reports implementation experience on this proposal and provides updat
 The definitions of "constituent values" and "constituent references" have been
 tweaked slightly with no change in meaning.  The imprecise "at a point [...]
 namespace scope" wording has been changed to refer to the nearest following
-point at namespace scope.
+point at namespace scope.  The example in the wording that states which
+variables are constexpr-referenceable has been updated to clarify which
+variables are not constexpr-referenceable.  A new term has been introduced in
+order to clarify the presentation of the definition of "usable in constant
+expressions".  A new term has been introduced in order to reduce duplicative
+specification between "constant-initialized" and the requirements for
+\tcode{constexpr} variable declarations.  Function parameter scopes introduced
+by \tcode{requires} expressions are now ignored.  Additional examples have been
+added to [expr.const] demonstrating the semantics of structured bindings during
+constant evaluation.
 
 \subsection{Revision 3}
 
@@ -533,14 +542,14 @@ are called
 \ednote{Insert a paragraph after p1:}
 
 \begin{addedblock}
-The \defn{constituent values} of an object $o$ are:
+The \defn{constituent values} of an object $o$ are
 \begin{itemize}
 \item if $o$ has scalar type, the value of $o$;
-\item otherwise, the constituent values of any direct subobjects of $o$, other
+\item otherwise, the constituent values of any direct subobjects of $o$ other
 than inactive union members.
 \end{itemize}
 
-The \defn{constituent references} of an object $o$ are:
+The \defn{constituent references} of an object $o$ are
 \begin{itemize}
 \item any direct members of $o$ that have reference type, and
 \item the constituent references of any direct subobjects of $o$ other than
@@ -559,8 +568,8 @@ constituent values and references of \tcode{x}.
 \end{itemize}
 For any constituent reference \tcode{r} of a variable \tcode{x}, if \tcode{r} is bound to a temporary object or
 subobject thereof whose lifetime is extended to that of \tcode{r}, the constituent values and
-references of that temporary object are also constituent values and references of \tcode{x}. This rule
-applies recursively.
+references of that temporary object are also constituent values and references of \tcode{x},
+recursively.
 \end{addedblock}
 
 \ednote{Insert a paragraph after p1:}
@@ -569,9 +578,19 @@ applies recursively.
 An object $o$ is \defn{constexpr-referenceable} from a point $P$ if
 \begin{itemize}
 \item $o$ has static storage duration, or
-\item $o$ has automatic storage duration, and, letting \tcode{v} denote the variable corresponding to
-$o$’s complete object, or the variable to whose lifetime that of $o$ is extended, \tcode{v}’s smallest
-enclosing non-block scope and $P$’s smallest enclosing non-block scope are the same function parameter scope.
+\item $o$ has automatic storage duration, and, letting \tcode{v} denote
+\begin{itemize}
+    \item the variable corresponding to $o$’s complete object or
+    \item the variable to whose lifetime that of $o$ is extended,
+\end{itemize}
+the smallest scope enclosing \tcode{v} and the smallest scope enclosing $P$ that
+are neither
+\begin{itemize}
+    \item block scopes, nor
+    \item function parameter scopes associated with a
+    \grammarterm{requirement-parameter-list}
+\end{itemize}
+are the same function parameter scope.
 \end{itemize}
 \begin{example}
 \begin{codeblock}
@@ -581,7 +600,7 @@ struct A {
 };
 void f() {
     static int sx;
-    thread_local int tx;
+    thread_local int tx;  // \tcode{tx} is never constexpr-referenceable
     int ax;
     A aa = {1, 2};
     static A sa = {3, 4};
@@ -590,7 +609,7 @@ void f() {
     // constexpr-referenceable.
     auto lambda = [] {
         int ay;
-        // The objects \tcode{sx}, \tcode{sa.m}, and \tcode{ay}, and the
+        // The objects \tcode{sx}, \tcode{sa.m}, and \tcode{ay} (but not \tcode{ax} or \tcode{aa}), and the
         // temporary to which \tcode{sa.r} is bound, are constexpr-referenceable.
     };
 }
@@ -609,36 +628,52 @@ object $o$, $o$ is constexpr-referenceable from $P$.
 \ednote{Modify p2 as follows:}
 
 \pnum
-A variable \removed{or temporary object} \changed{\tcode{o}}\tcode{v}} is \defn{constant-initialized} if
+A variable \removed{or temporary object} \changed{\tcode{o}}\tcode{v}} is \changed{\defn{constant-initialized}}{\defn{constant-initializable}} if
 \begin{itemize}
 \item
-either it has an initializer or
-its default-initialization results in some initialization being performed, \removed{and}
-\item
-the full-expression of its initialization is a constant expression
-when interpreted as a \grammarterm{constant-expression}\removed{,
-except that if \tcode{o} is an object,
-that full-expression
-may also invoke constexpr constructors
-for \tcode{o} and its subobjects
-even if those objects are of non-literal class types.}
+\begin{removedblock}
+either it has an initializer or its default-initialization results in some
+initialization being performed, and
+\end{removedblock}
+\item the full-expression of its initialization is a constant expression when
+interpreted as a \grammarterm{constant-expression}, \removed{except that if
+\tcode{o} is an object, that full-expression may also invoke constexpr
+constructors for \tcode{o} and its subobjects even if those objects are of
+non-literal class types.}\\
 \begin{note}
     \removed{Such a class can have a non-trivial destructor.}
     Within this evaluation
     \tcode{std::is_constant_evaluated()} \iref{meta.const.eval}
     returns \keyword{true}.
-\end{note}\added{, and}
+\end{note}
+\\
+\added{and}
+\item
 \begin{addedblock}
-\item immediately after the initializing declaration of \tcode{v}, the object or reference declared by \tcode{v} is constexpr-representable, and if \tcode{v} has static or thread storage duration, the object or reference declared by \tcode{v} is constexpr-representable at the nearest point following the initializing declaration of \tcode{v} whose immediate scope is a namespace scope.
+immediately after the initializing declaration of \tcode{v}, the object or
+reference \tcode{x} declared by \tcode{v} is constexpr-representable, and
+\end{addedblock}
+\item
+\begin{addedblock}
+if \tcode{x} has static or thread storage duration, \tcode{x} is
+constexpr-representable at the nearest point whose immediate scope is a
+namespace scope that follows the initializing declaration of \tcode{v}.
 \end{addedblock}
 \end{itemize}
+
+\ednote{Insert a paragraph after p2:}
+
 \begin{addedblock}
+A constant-initializable variable is \defn{constant-initialized} if either it
+has an initializer or its default-initialization results in some initialization
+being performed.
+
 \begin{example}
 \begin{codeblock}
 void f() {
-    int ax;                      // \tcode{ax} is not constant-initialized
-    thread_local int tx;         // \tcode{tx} is constant-initialized
-    static int sx;               // \tcode{sx} is constant-initialized
+    int ax = 0;                  // \tcode{ax} is constant-initialized
+    thread_local int tx = 0;     // \tcode{tx} is constant-initialized
+    static int sx;               // \tcode{sx} is not constant-initialized
     static int& rss = sx;        // \tcode{rss} is constant-initialized
     static int& rst = tx;        // \tcode{rst} is not constant-initialized
     static int& rsa = ax;        // \tcode{rsa} is not constant-initialized
@@ -669,32 +704,34 @@ $V$'s initializing declaration $D$ is reachable from $P$ and
     \item $V$ is not initialized to a TU-local value, or
     \item $P$ is in the same translation unit as $D$.
 \end{itemize}
-An object or reference \added{$x$} is \defn{usable in constant expressions} \added{at point $P$} if it is
+\begin{addedblock}
+An object or reference $x$ is \defn{potentially usable in constant expressions}
+at point $P$ if it is
 \begin{itemize}
-    \begin{removedblock}
-    \item a variable that is usable in constant expressions, or
-    \end{removedblock}
-    \item a template parameter object \iref{temp.param}\added{ or subobject thereof}, or
-    \item a string literal object \iref{lex.string}\added{ or subobject thereof}, or
-    \begin{removedblock}
-    \item a temporary object of non-volatile const-qualified literal type
-    whose lifetime is extended \iref{class.temporary}
-    to that of a variable that is usable in constant expressions, or
-    \item a non-mutable subobject or reference member of any of the above.
-    \end{removedblock}
-    \begin{addedblock}
-    \item one of the following:
-    \begin{itemize}
-        \item a variable that is usable in constant expressions at $P$,
+        \item the object or reference declared by a variable that is usable in constant expressions at $P$,
         \item a temporary object of non-volatile const-qualified literal type
         whose lifetime is extended (\iref{class.temporary})
         to that of a variable that is usable in constant expressions at $P$,
+        \item a template parameter object \iref{temp.param},
+        \item a string literal object \iref{lex.string},
         \item a non-mutable subobject of any of the above, or
-        \item a reference member of any of the above
-    \end{itemize}
-    that is constexpr-representable at $P$.
-    \end{addedblock}
+        \item a reference member of any of the above.
 \end{itemize}
+\end{addedblock}
+An object or reference \added{$x$} is \defn{usable in constant expressions} \added{at point $P$} if it is
+\added{an object or reference that is potentially usable in constant expressions
+at $P$ and is constexpr-representable at $P$}.
+\begin{removedblock}
+\begin{itemize}
+    \item a variable that is usable in constant expressions, or
+    \item a template parameter object \iref{temp.param}, or
+    \item a string literal object \iref{lex.string}, or
+    \item a temporary object of non-volatile const-qualified literal type
+    whose lifetime is extended (\iref{class.temporary})
+    to that of a variable that is usable in constant expressions at $P$, or
+    \item a non-mutable subobject or reference member of any of the above.
+\end{itemize}
+\end{removedblock}
 \begin{addedblock}
 \begin{example}
 \begin{codeblock}
@@ -722,20 +759,32 @@ following semantics:
 \begin{itemize}
 \item If \tcode{v} is an lvalue referring to the object bound to an invented reference \tcode{r}, the
 behavior is as if \tcode{r} were nominated.
-\item Otherwise, if \tcode{v} names an array member or class member, the behavior is that of
+\item Otherwise, if \tcode{v} names an array element or class member, the behavior is that of
 evaluating \tcode{$e$[$i$]} or \tcode{$e$.$m$}, respectively, where \tcode{$e$} is the name of the variable initialized
 from the initializer of the structured binding declaration, and \tcode{$i$} is the index of the
-element referred to or \tcode{$m$} is the name of the member referred to by \tcode{v}, respectively.
+element referred to by \tcode{v} or \tcode{$m$} is the name of the member referred to by \tcode{v}, respectively.
 \end{itemize}
 \begin{example}
 \begin{codeblock}
 #include <tuple>
-struct A {
+struct S {
+    mutable int m;
+    constexpr S(int m): m(m) {}
     virtual int g() const;
 };
-void f(std::tuple<A&> a) {
-    auto [r] = a;
+void f(std::tuple<S&> t) {
+    auto [r] = t;
     static_assert(r.g() >= 0);  // error: dynamic type is constexpr-unknown
+
+    constexpr auto [m] = S(1);
+    static_assert(m == 1);  // error: lvalue-to-rvalue conversion on mutable
+                            // subobject \tcode{e.m}, where \tcode{e} is a
+                            // \tcode{constexpr} object of type \tcode{S}
+
+    using A = int[2];
+    constexpr auto [v0, v1] = A{2, 3};
+    static_assert(v0 + v1 == 5);  // OK, equivalent to \tcode{e[0] + e[1]} where
+                                  // \tcode{e} is a \tcode{constexpr} array
 }
 \end{codeblock}
 \end{example}
@@ -918,21 +967,14 @@ declares the object as const.
 Such an object
 shall have literal type and
 shall be initialized.
-In any \keyword{constexpr} variable declaration,
+\changed{In any \keyword{constexpr} variable declaration,
 the full-expression of the initialization
-shall be a constant expression \iref{expr.const}.
+shall be a constant expression \iref{expr.const}.}%
+{A \keyword{constexpr} variable shall be constant-initializable
+\iref{expr.const}.}
 A \keyword{constexpr} variable that is an object,
 as well as any temporary to which a \keyword{constexpr} reference is bound,
 shall have constant destruction.
-\added{
-Let $x$ denote the object or reference declared by the declaration of a
-\tcode{constexpr} variable \tcode{v}.
-Immediately after the initializing declaration of \tcode{v},
-$x$ shall be constexpr-representable.
-If $x$ has static or thread storage duration, $x$ shall be
-constexpr-representable at the nearest point following the initializing declaration of
-\tcode{v} whose immediate scope is a namespace scope.
-}
 
 \begin{example}
 \begin{codeblock}
@@ -1024,8 +1066,9 @@ void f(int p) {
 
 \section{Feature test macros}
 
-\ednote{ In \tcode{[tab:cpp.predefined.ft]}, bump \tcode{__cpp_structured_bindings} to the date of adoption}.
+\ednote{Modify \tcode{[tab:cpp.predefined.ft]} as follows.}
 
+\tcode{__cpp_structured_bindings} \changed{\tcode{202403L}}{\tcode{2024xxL}}
 
 \section{Acknowledgments}
 
