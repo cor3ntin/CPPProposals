@@ -979,11 +979,11 @@ This gives us:
     \hline
     \grammarterm{parameter-declaration}&  constant template parameter \\
     \hline
-    \grammarterm{type-template-parameter}& type template template parameter  \\
+    \grammarterm{type-tt-parameter}& type template template parameter  \\
     \hline
-    \grammarterm{variable-template-parameter}& variable template template parameter\\
+    \grammarterm{variable-tt-parameter}& variable template template parameter\\
     \hline
-    \grammarterm{concept-parameter}& concept template parameter\\
+    \grammarterm{concept-tt-parameter}& concept template parameter\\
     \hline
 \end{tabular}
 
@@ -1091,9 +1091,9 @@ Every name is introduced by a \defn{declaration}, which is a
     \item
     \grammarterm{type-parameter} \iref{temp.param},
     \begin{addedblock}
-    \item \grammarterm{type-template-parameter} \iref{temp.param},
-    \item \grammarterm{variable-template-parameter} \iref{temp.param},
-    \item \grammarterm{concept-parameter} \iref{temp.param},
+    \item \grammarterm{type-tt-parameter} \iref{temp.param},
+    \item \grammarterm{variable-tt-parameter} \iref{temp.param},
+    \item \grammarterm{concept-tt-parameter} \iref{temp.param},
     \end{addedblock}
     \item
     \grammarterm{elaborated-type-specifier}
@@ -1402,9 +1402,9 @@ is:
     type-parameter\br
     parameter-declaration\br
 \begin{addedblock}
-    type-template-parameter \br
-    variable-template-parameter \br
-    concept-parameter
+    type-tt-parameter \br
+    variable-tt-parameter \br
+    concept-tt-parameter
 \end{addedblock}
 \end{bnf}
 
@@ -1433,26 +1433,26 @@ is:
 \begin{addedblock}
 
 \begin{bnf}
-\nontermdef{type-template-parameter}\br
+\nontermdef{type-tt-parameter}\br
 template-head type-parameter-key \opt{\terminal{...}} \opt{identifier}\br
 template-head type-parameter-key \opt{identifier} \terminal{=} id-expression
 \end{bnf}
 
 \begin{bnf}
-    \nontermdef{variable-template-parameter}\br
+    \nontermdef{variable-tt-parameter}\br
     template-head \terminal{auto} \opt{\terminal{...}} \opt{identifier}\br
     template-head \terminal{auto} \opt{identifier} \terminal{=} id-expression
 \end{bnf}
 
 \begin{bnf}
-    \nontermdef{concept-parameter}\br
+    \nontermdef{concept-tt-parameter}\br
     template < template-parameter-list > \terminal{concept} \opt{\terminal{...}} \opt{identifier}\br
     template < template-parameter-list > \terminal{concept} \opt{identifier} \terminal{=} qualified-concept-name
 \end{bnf}
 
 % change font to non italizied.
 % introduce a parameter or a pack
-A \defn{template template parameter} is a \grammarterm{type-template-parameter}, a \grammarterm{variable-template-parameter},  or a \grammarterm{concept-parameter}.
+A \defn{template template parameter} is a \grammarterm{type-tt-parameter}, a \grammarterm{variable-tt-parameter},  or a \grammarterm{concept-tt-parameter}.
 
 
 A \defn{constant template parameter} is a template parameter introduced by a \grammarterm{parameter-declaration}.
@@ -1548,7 +1548,7 @@ in the scope of the template declaration.
 \begin{addedblock}
 The \grammarterm{identifier} in a template template parameter is not looked up.
 \tcode{P} whose \grammarterm{identifier} does not follow an ellipsis defines its
-\grammarterm{identifier} to be a \grammarterm{concept-name} \tcode{T} if \tcode{P} is a \grammarterm{concept-parameter}
+\grammarterm{identifier} to be a \grammarterm{concept-name} \tcode{T} if \tcode{P} is a \grammarterm{concept-tt-parameter}
 or a \grammarterm{template-name} \tcode{T} otherwise.
 \tcode{T} is declared in the scope of the template declaration.
 \end{addedblock}
@@ -2007,7 +2007,7 @@ shall be the name of a \removed{class} template \removed{or an alias template,} 
 \grammarterm{id-expression}.
 
 \begin{addedblock}
-For a \grammarterm{type-template-parameter}, the name shall denote a class template or alias template. For a \grammarterm{variable-template-parameter}, the name shall denote a variable template. For a \grammarterm{concept-parameter}, the name shall denote a concept.
+For a \grammarterm{type-tt-parameter}, the name shall denote a class template or alias template. For a \grammarterm{variable-tt-parameter}, the name shall denote a variable template. For a \grammarterm{concept-tt-parameter}, the name shall denote a concept.
 \end{addedblock}
 
 Only primary templates are considered when matching the template template
@@ -2046,16 +2046,16 @@ Two template parameters are of the same kind if:
 \begin{itemize}
 \item they are both \grammarterm{type-parameter}{s},
 \item they are both constant template parameters,
-\item they are both \grammarterm{type-template-parameter}{s},
-\item they are both \grammarterm{variable-template-parameter}{s}, or
-\item they are both \grammarterm{concept-parameter}{s}.
+\item they are both \grammarterm{type-tt-parameter}{s},
+\item they are both \grammarterm{variable-tt-parameter}{s}, or
+\item they are both \grammarterm{concept-tt-parameter}{s}.
 \end{itemize}
 
 A template template parameter \placeholder{P} and a template argument \placeholder{A} are compatible if
 \begin{itemize}
-\item \placeholder{A} denotes a class template or alias template and \placeholder{P} is a \grammarterm{type-template-parameter},
-\item \placeholder{A} denotes a variable template and \placeholder{P} is a \grammarterm{variable-template-parameter}, or
-\item \placeholder{A} denotes a \grammarterm{qualified-concept-name} and \placeholder{P} is a \grammarterm{concept-parameter}.
+\item \placeholder{A} denotes a class template or alias template and \placeholder{P} is a \grammarterm{type-tt-parameter},
+\item \placeholder{A} denotes a variable template and \placeholder{P} is a \grammarterm{variable-tt-parameter}, or
+\item \placeholder{A} denotes a \grammarterm{qualified-concept-name} and \placeholder{P} is a \grammarterm{concept-tt-parameter}.
 \end{itemize}
 \end{addedblock}
 
@@ -2187,8 +2187,10 @@ This partial ordering is used to determine
 
 \begin{addedblock}
 
-The associated constraints \tcode{C} of a declaration \tcode{D} are \emph{subsumption eligible}
-unless \tcode{D} is a template declaration and \tcode{C} is dependent on a \grammarterm{concept-parameter} of \tcode{D}.
+The associated constraints \tcode{C} of a declaration \tcode{D} are \emph{eligible for subsumption}
+unless \tcode{D} is a templated declaration and \tcode{C} names a \grammarterm{concept-tt-parameter}.
+
+% TODO: dependent does not mean anything
 
 \end{addedblock}
 
@@ -2200,7 +2202,7 @@ a declaration \tcode{D2} if
 \begin{itemize}
     \item \tcode{D1} and \tcode{D2} are both constrained declarations and
     \tcode{D1}'s associated constraints
-    \added{are subsumption eligible and} subsume those of \tcode{D2}; or
+    \added{are eligible for subsumption and} subsume those of \tcode{D2}; or
 
     \item \tcode{D2} has no associated constraints.
 \end{itemize}
@@ -2240,15 +2242,18 @@ template <typename T>
 concept C = true && B<T>;
 
 template <template <typename T>  concept X, typename T>
-int answer(S<X, T>) requires B<T> { return 42; } // \#1
+int f(S<X, T>) requires B<T> { return 42; } // \#1
 template <template <typename T> concept X, typename T>
-int answer(S<X, T>) requires X<T> { return 43; } // \#2
+int f(S<X, T>) requires X<T> { return 43; } // \#2
 
 // error: the 3 following calls are ambiguous because \#1 and \#2 are not subsumption eligible
 // (their associated constraints depend on a concept template parameter X)
-answer(S<A, int>{});
-answer(S<C, int>{});
-answer(S<B, int>{});
+f(S<A, int>{});
+f(S<C, int>{});
+f(S<B, int>{});
+
+% TODO: fix 1 ??
+
 \end{codeblock}
 \end{example}
 \end{addedblock}
@@ -2675,7 +2680,7 @@ injected-class-name can be used
 as a \grammarterm{template-name} or a \grammarterm{type-name}.
 When it is used with a
 \grammarterm{template-argument-list},
-as a \grammarterm{template-argument} for a template \changed{\grammarterm{template-parameter}}{\grammarterm{type-template-parameter}}),
+as a \grammarterm{template-argument} for a template \changed{\grammarterm{template-parameter}}{\grammarterm{type-tt-parameter}}),
 or as the final identifier in the \grammarterm{elaborated-type-specifier} of
 a friend class template declaration,
 it is a \grammarterm{template-name} that refers to the
