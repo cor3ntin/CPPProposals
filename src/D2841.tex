@@ -2,6 +2,11 @@
 % !TEX encoding = UTF-8
 
 
+%TODO:
+%variable-tt-parameter
+%concept-tt-parameter
+%concept-tt-declaration??
+
 \documentclass{wg21}
 
 \title{Concept and variable-template template-parameters}
@@ -21,7 +26,7 @@
 
 C++ allows passing templates as template parameters.
 However, they are forced to be typenames (either type alias templates or class templates).
-Variable templates or concepts are not supported.
+Variable templates or concepts are  supported.
 This is a hole in the template facilities and is the topic of this paper.
 
 We introduce a way to pass concepts and variable templates as template parameters.
@@ -31,7 +36,7 @@ Example:
 \begin{colorblock}
 template<
    template <typename T> concept C,
-   template <typename T> auto C
+   template <typename T> auto V
 >
 struct S{};
 
@@ -978,7 +983,7 @@ This gives us:
     \hline
     \grammarterm{variable-template-parameter}& variable template template parameter\\
     \hline
-    \grammarterm{concept-template-parameter}& concept template parameter\\
+    \grammarterm{concept-parameter}& concept template parameter\\
     \hline
 \end{tabular}
 
@@ -1082,7 +1087,7 @@ Every name is introduced by a \defn{declaration}, which is a
     \item
     \grammarterm{using-declarator} \iref{namespace.udecl},
     \item
-    \grammarterm{parameter-declaration} \iref{dcl.fct},
+    \grammarterm{parameter-declaration} \iref{dcl.fct} \added{, [temp.param]},
     \item
     \grammarterm{type-parameter} \iref{temp.param},
     \begin{addedblock}
@@ -1134,7 +1139,7 @@ there is a set of zero or more \defnx{associated entities}{entity!associated}
 to be considered.
 The set of entities is determined entirely by
 the types of the function arguments
-(and any \changed{template}{\grammarterm{type template}
+(and any \changed{template}{type template
 } template arguments).
 Any \grammarterm{typedef-name}s and \grammarterm{using-declaration}{s}
 used to specify the types
@@ -1159,7 +1164,7 @@ is determined in the following way:
     the classes of which any member templates used as  \added{type} template template
     arguments are members.
     \begin{note}
-        \changed{Non-type}{constant} template arguments\added{, variable template template arguments and concept template arguments} do not
+        \changed{Non-type}{Constant} template arguments\added{, variable template template arguments, and concept template arguments} do not
         contribute to the set of associated entities.
     \end{note}
 
@@ -1190,36 +1195,8 @@ members of the set, i.e., the entities associated with its
 parameter types and return type.
 Additionally, if the aforementioned overload set is named with
 a \grammarterm{template-id}, its associated entities also include
-its \added{type} template \grammarterm{template-argument}{s} and
-those associated with its type \grammarterm{template-argument}s.
-
-\pnum
-The \term{associated namespaces} for a call are
-the innermost enclosing non-inline namespaces for its associated entities
-as well as every element of the inline namespace set \iref{namespace.def}
-of those namespaces.
-Argument-dependent lookup finds
-all declarations of functions and function templates that
-\begin{itemize}
-    \item
-    are found by a search of any associated namespace, or
-    \item
-    are declared as a friend \iref{class.friend} of any class
-    with a reachable definition in the set of associated entities, or
-    \item
-    are exported,
-    are attached to a named module \tcode{M} \iref{module.interface},
-    do not appear in the translation unit containing the point of the lookup, and
-    have the same innermost enclosing non-inline namespace scope as
-    a declaration of an associated entity attached to \tcode{M} \iref{basic.link}.
-\end{itemize}
-If the lookup is for a dependent name \iref{temp.dep,temp.dep.candidate},
-the above lookup is also performed
-from each point in the instantiation context \iref{module.context} of the lookup,
-additionally ignoring any declaration that
-appears in another translation unit,
-is attached to the global module, and
-is either discarded \iref{module.global.frag} or has internal linkage.
+its \added{type} template \changed{\grammarterm{template-argument}{s}}{template arguments} and
+those associated with its type \changed{\grammarterm{template-argument}{s}}{template arguments}.
 
 \rSec2[lex.ext]{User-defined literals}
 
@@ -1271,7 +1248,7 @@ and where the reference binding (if any) binds directly.
 \indextext{class name!\idxcode{typedef}}%
 A \grammarterm{simple-template-id} is only a \grammarterm{typedef-name}
 if its \grammarterm{template-name} names
-an alias template or \changed{a template \grammarterm{template-parameter}}{a \grammarterm{type-template-parameter}}.
+an alias template or \changed{a template \grammarterm{template-parameter}}{a type template template parameter}.
 \begin{note}
     A \grammarterm{simple-template-id} that names a class template specialization
     is a \grammarterm{class-name} \iref{class.name}.
@@ -1473,7 +1450,12 @@ template-head type-parameter-key \opt{identifier} \terminal{=} id-expression
     template < template-parameter-list > \terminal{concept} \opt{identifier} \terminal{=} qualified-concept-name
 \end{bnf}
 
-A \defn{template template parameter} ia a \grammarterm{type-template-parameter}, a \grammarterm{variable-template-parameter},  or a \grammarterm{concept-parameter}. A \defn{constant template parameter} is a template parameter introduced by a \grammarterm{parameter-declaration}.
+% change font to non italizied.
+% introduce a parameter or a pack
+A \defn{template template parameter} is a \grammarterm{type-template-parameter}, a \grammarterm{variable-template-parameter},  or a \grammarterm{concept-parameter}.
+
+
+A \defn{constant template parameter} is a template parameter introduced by a \grammarterm{parameter-declaration}.
 
 \end{addedblock}
 
@@ -1481,6 +1463,8 @@ A \defn{template template parameter} ia a \grammarterm{type-template-parameter},
 The component names of a \grammarterm{type-constraint} are
 its \grammarterm{concept-name} and
 those of its \grammarterm{nested-name-specifier} (if any).
+
+%list grammar terms
 \begin{note}
     The \tcode{>} token following the
     \grammarterm{template-parameter-list} of a
@@ -1504,7 +1488,7 @@ names a template type parameter.
 \keyword{typename}
 followed by a
 \grammarterm{qualified-id}
-denotes the type in a \removed{non-type \grammarterm{parameter-declaration}}\added{constant template parameter}.
+denotes the type in a \removed{non-type} \grammarterm{parameter-declaration}.
 
 \ednote{Remove the footnote}
 
@@ -1535,8 +1519,8 @@ A \grammarterm{template-parameter} of the form
         }
     \end{codeblock}
     Here, the template \tcode{f} has a \grammarterm{type-parameter}
-    called \tcode{T}, rather than an unnamed \changed{non-type}{constant}
-    \grammarterm{template-parameter} of class \tcode{T}.
+    called \tcode{T}, rather than \changed{an unnamed non-type}
+    \grammarterm{template-parameter} of class \tcode{T}}{a parameter-declaration with no name}.
 \end{example}
 A storage class shall not be specified in a
 \grammarterm{template-parameter}
@@ -1560,6 +1544,7 @@ or
 \keyword{template})}
 in the scope of the template declaration.
 
+%TODO
 \begin{addedblock}
 The \grammarterm{identifier} in a template template parameter is not looked up.
 \tcode{P} whose \grammarterm{identifier} does not follow an ellipsis defines its
@@ -1697,7 +1682,7 @@ A \defnadj{default}{template argument} is
 a template argument \iref{temp.arg} specified after \tcode{=}
 in a \grammarterm{template-parameter}.
 A default template argument may be specified for
-any kind of \grammarterm{template-parameter} (type, \changed{non-type}{constant}, template)
+any kind of \grammarterm{template-parameter} \removed{(type, non-type, template)}
 that is not a template parameter pack\iref{temp.variadic}.
 A default template argument may be specified in a template declaration.
 A default template argument shall not be specified in
@@ -1731,16 +1716,26 @@ rather than a greater-than operator.
     \end{codeblock}
 \end{example}
 
+% Introduce pack earlier where we introduce the grammar.
+
 \pnum
-If a \grammarterm{template-parameter} is a
-\grammarterm{type-parameter} with an ellipsis prior to its
-optional \grammarterm{identifier} or is a
-\grammarterm{parameter-declaration} that declares a
-pack\iref{dcl.fct}, then the \grammarterm{template-parameter}
-is a template parameter pack\iref{temp.variadic}.
+If a \grammarterm{template-parameter} is \removed{a
+	\grammarterm{type-parameter} with an ellipsis prior to its
+	optional \grammarterm{identifier} or is a
+	\grammarterm{parameter-declaration} that declares a
+	pack \iref{dcl.fct}}
+\begin{addedblock}
+	\begin{itemize}
+		\item a \grammarterm{type-parameter} with an ellipsis prior to its optional \grammarterm{identifier},
+		\item a \grammarterm{parameter-declaration} that declares a pack \iref{dcl.fct}, or
+		\item a template template parameter with an ellipsis prior to its optional \grammarterm{identifier},
+	\end{itemize}
+\end{addedblock}
+then the \grammarterm{template-parameter}
+is a template parameter pack \iref{temp.variadic}.
 A template parameter pack that is a \grammarterm{parameter-declaration} whose type
 contains one or more unexpanded packs is a pack expansion. Similarly,
-a template parameter pack that is a \grammarterm{type-parameter} with a
+a template parameter pack that is a \changed{\grammarterm{type-parameter}}{template template parameter} with a
 \grammarterm{template-parameter-list} containing one or more unexpanded
 packs is a pack expansion.
 A type parameter pack with a \grammarterm{type-constraint} that
@@ -1766,35 +1761,9 @@ expansion shall not expand a template parameter pack declared in the same
 \end{codeblock}
 \end{example}
 
-\textcolor{noteclr}{[...]}
-
 %\ednote{Modify [temp.param]/p16 As follow}
 
-\pnum
-If a \grammarterm{template-parameter} is \removed{a
-\grammarterm{type-parameter} with an ellipsis prior to its
-optional \grammarterm{identifier} or is a
-\grammarterm{parameter-declaration} that declares a
-pack \iref{dcl.fct}}
-\begin{addedblock}
-\begin{itemize}
-\item a \grammarterm{type-parameter} with an ellipsis prior to its optional \grammarterm{identifier},
-\item a \grammarterm{parameter-declaration} that declares a pack \iref{dcl.fct}, or
-\item a template template parameter with an ellipsis prior to its optional \grammarterm{identifier},
-\end{itemize}
-\end{addedblock}
-then the \grammarterm{template-parameter}
-is a template parameter pack \iref{temp.variadic}.
-A template parameter pack that is a \grammarterm{parameter-declaration} whose type
-contains one or more unexpanded packs is a pack expansion. Similarly,
-a template parameter pack that is a \changed{\grammarterm{type-parameter}}{template template parameter} with a
-\grammarterm{template-parameter-list} containing one or more unexpanded
-packs is a pack expansion.
-A type parameter pack with a \grammarterm{type-constraint} that
-contains an unexpanded parameter pack is a pack expansion.
-A template parameter pack that is a pack
-expansion shall not expand a template parameter pack declared in the same
-\grammarterm{template-parameter-list}.
+
 
 \textcolor{noteclr}{[...]}
 
@@ -1835,6 +1804,10 @@ A template specialization \iref{temp.spec} can be referred to by a
     \added{qualified-concept-name}
 \end{bnf}
 
+
+% Talk about template names instead?
+% remove qualified concept name
+
 \textcolor{noteclr}{[...]}
 
 \pnum
@@ -1867,16 +1840,16 @@ is satisfied \iref{temp.constr.constr} by the specified template arguments and
 
 \rSec2[temp.arg.general]{General}
 
+
+\begin{removedblock}
 \pnum
 \indextext{argument!template}%
 There are three forms of
 \grammarterm{template-argument},
 corresponding to the three forms of
 \grammarterm{template-parameter}:
-type, \changed{non-type}{constant} and template.
-\begin{addedblock}
-A template \grammarterm{template-argument} can name a type or alias template, a variable template, or a concept.
-\end{addedblock}
+type, non-type and template.
+\end{removedblock}
 
 The type and form of each
 \grammarterm{template-argument}
@@ -1916,7 +1889,7 @@ parameter pack \iref{temp.variadic}, it will correspond to zero or more
 \rSec2[temp.arg.type]{Template type arguments}
 
 \pnum
-A \grammarterm{template-argument} for a \changed{\grammarterm{template-parameter} which is a type}{\grammarterm{type-parameter}} shall be a \grammarterm{type-id}.
+A \grammarterm{template-argument} for a \changed{\grammarterm{template-parameter} which is a type}{type template parameter} shall be a \grammarterm{type-id}.
 
 \pnum
 \begin{example}

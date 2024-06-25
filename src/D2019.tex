@@ -702,7 +702,7 @@ public:
     template <typename T>
     name_hint(const T*) -> name_hint<T>;
     template <typename T>
-    name_hint(const std::basic_string<T>&) -> name_hint<T>;
+    name_hint(std::basic_string<T>) -> name_hint<T>;
 
     class stack_size_hint;
 
@@ -741,11 +741,12 @@ public:
 
 Thread attributes can be used to define additional implementation-defined behaviors on a \tcode{thread} or \tcode{jthread} object.
 
-The set of thread attributes types contains \tcode{thread::name_hint}, \tcode{thread::stack_size_hint} and an implementation-defined
-set of additional thread-attributes.
+The set of thread attributes types contains \tcode{thread::name_hint}, \tcode{thread::stack_size_hint} and an implementation-defined set of additional thread-attributes.
 
-\recommended
-Implementations may provide additional platform-specific thread attributes.
+When an object of a thread attribute type is passed to a thread or jthread constructor, it may
+affect the new thread behavior.
+
+\begin{note}Implementations can provide additional platform-specific thread attributes.\end{note}
 
 \rSec4[thread.thread.name.hint]{Class \tcode{thread::name_hint}}
 
@@ -762,11 +763,14 @@ private:
 };
 \end{codeblock}
 
-\recommended
 
-The \tcode{name_hint} thread attribute, can be used
+% Error conditions ?
+
+\recommanded
+%//% reword in term of should
+The \tcode{name_hint} thread attribute can be used
 to set the name of a thread such that the name could be used for debugging or platform-specific display mechanisms.
-The name should not be stored in the \tcode{std::thread} or \tcode{std::jthread} object.
+Implementations should not store the value of the \tcode{name_hint} attribute in the \tcode{std::thread} or \tcode{std::jthread} object.
 
 \begin{itemdecl}
 explicit constexpr name_hint(std::basic_string_view<T> name);
@@ -792,8 +796,12 @@ class thread::stack_size_hint {
 }
 \end{codeblock}
 
-\recommended
-Configure a desired stack size as if by POSIX \mbox{\tcode{pthread_attr_setstacksize()}}.\\
+% \recommanded
+
+% specify it's in bytes
+
+
+Configure a desired stack size in bytes as if by POSIX \mbox{\tcode{pthread_attr_setstacksize}}.\\
 The stack size set by the implementation may be adjusted up or down to meet platform-specific requirements
 
 If \tcode{__size == 0} is \tcode{true} the thread attribute should be ignored.
@@ -824,7 +832,7 @@ explicit thread(@\removed{F\&\& f,}@ Args&&... args);
 \begin{addedblock}
 \item \tcode{sizeof...(Args) > 0} is \tcode{true}, and
 \end{addedblock}
-\item \tcode{remove_cvref_t<\changed{F}{Args[0]}>} is not the same type as \tcode{thread}.
+\item \tcode{remove_cvref_t<\changed{F}{Args...[0]}>} is not the same type as \tcode{thread}.
 \end{itemize}
 
 \begin{addedblock}
@@ -837,10 +845,13 @@ If no such $i$ exists, the program is ill-formed.
 \item Let \tcode{f} be \tcode{args...[$i$]}.
 \item Let \tcode{Attrs} be a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
 \item Let \tcode{attrs} be a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
-\item Let \tcode{FArgs} be a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
-\item Let \tcode{fargs} be a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
+\item Let \tcode{FArgs} be a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ i < j < \tcode{sizeof...(args)}$.
+\item Let \tcode{fargs} be a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ i <  j < \tcode{sizeof...(args)}$.
 \end{itemize}
 \end{addedblock}
+
+
+%
 
 \pnum
 \mandates
@@ -849,7 +860,7 @@ The following are all \tcode{true}:
     \item \tcode{is_constructible_v<decay_t<F>, F>},
     \item \tcode{(is_constructible_v<decay_t<\added{F}Args>, Args> \&\& ...)},
 \begin{addedblock}
-    \item \tcode{(!is_lvalue_reference_v<Attrs> \&\& ...)},
+  %  \item \tcode{(!is_lvalue_reference_v<Attrs> \&\& ...)},
 \end{addedblock}
     \item \tcode{is_move_constructible_v<decay_t<F>>},
     \item \tcode{(is_move_constructible_v<decay_t<\added{F}Args>> \&\& ...)}\removed{, and}
@@ -881,7 +892,7 @@ If the invocation of \tcode{invoke} terminates with an uncaught exception,
 \tcode{terminate} is called.
 
 \begin{addedblock}
-\tcode{attrs} can be used to tailor the thread with additional implementation-defined behaviors. (see [thread.attributes]).
+The parameter \tcode{attrs...} may affect the behavior of the new thread. (see [thread.attributes]).
 \end{addedblock}
 
 \pnum
@@ -1011,8 +1022,8 @@ If no such $i$ exists, the program is ill-formed.
 \item Let \tcode{f} be \tcode{args...[$i$]}.
 \item Let \tcode{Attrs} a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
 \item Let \tcode{attrs} a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
-\item Let \tcode{FArgs} a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
-\item Let \tcode{fargs} a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ i \le j \le \tcode{sizeof...(args)}$.
+\item Let \tcode{FArgs} a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ i < j <  \tcode{sizeof...(args)}$.
+\item Let \tcode{fargs} a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ i < j < \tcode{sizeof...(args)}$.
 \end{itemize}
 \end{addedblock}
 
