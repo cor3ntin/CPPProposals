@@ -2216,21 +2216,24 @@ template <typename T>
 concept A = true;
 template <typename T>
 concept B = true && A<T>;
-template <typename T>
-concept C = true && B<T>;
 
 template <template <typename T>  concept X, typename T>
-int f(S<X, T>) requires B<T> { return 42; } // \#1
+int f(S<X, T>) requires A<T> { return 42; } // \#1
 template <template <typename T> concept X, typename T>
 int f(S<X, T>) requires X<T> { return 43; } // \#2
 
-// error: the 3 following calls are ambiguous because \#1 and \#2 are not eligible for subsumption
+// the 2 following calls select \#1 because \#2 is not eligible for subsumption
 // (their associated constraints depend on a concept template parameter X)
 f(S<A, int>{});
-f(S<C, int>{});
 f(S<B, int>{});
 
-% TODO: fix 1 ??
+template <typename T>
+int g(S<A, T>) requires A<T> { return 42; } // \#3
+template <typename T>
+int g(S<A, T>) requires B<T> { return 43; } // \#4
+
+g(S<A, T>{}); // selects \#4 because \#3 and \#4 are both eligible for subsumption
+                       // and B<T> subsumes A<T>
 
 \end{codeblock}
 \end{example}
