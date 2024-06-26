@@ -53,6 +53,11 @@ Note: this paper is a subset of the larger \paper{P1985R3} (Universal Template P
 
 \section{Revisions}
 
+\subsection{R4}
+
+\begin{itemize}
+	\item Wording improvements
+\end{itemize}
 
 \subsection{R3}
 
@@ -2163,9 +2168,7 @@ This partial ordering is used to determine
 \begin{addedblock}
 
 The associated constraints \tcode{C} of a declaration \tcode{D} are \emph{eligible for subsumption}
-unless \tcode{D} is a templated declaration and \tcode{C} names a \grammarterm{concept-tt-parameter}.
-
-% TODO: dependent does not mean anything
+unless \tcode{C} contains an atomic constraint that names a  \grammarterm{concept-tt-parameter}.
 
 \end{addedblock}
 
@@ -2221,7 +2224,7 @@ int f(S<X, T>) requires B<T> { return 42; } // \#1
 template <template <typename T> concept X, typename T>
 int f(S<X, T>) requires X<T> { return 43; } // \#2
 
-// error: the 3 following calls are ambiguous because \#1 and \#2 are not subsumption eligible
+// error: the 3 following calls are ambiguous because \#1 and \#2 are not eligible for subsumption
 // (their associated constraints depend on a concept template parameter X)
 f(S<A, int>{});
 f(S<C, int>{});
@@ -2261,20 +2264,17 @@ the normal forms of \tcode{E1} and \tcode{E2}.
 \item
 The normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>}
 is the normal form of the \grammarterm{constraint-expression} of \tcode{C},
-after \removed{substituting \tcode{A$_1$, A$_2$, ..., A$_n$}}
+after substituting \tcode{A$_1$, A$_2$, ..., A$_n$} for
 \begin{itemize}
 \begin{addedblock}
-\item substituting each use of A$_i$'s corresponding template parameter in the \grammarterm{constraint-expression} of \tcode{C} if A$_i$ denotes a \grammarterm{concept-name}
+\item if A$_i$  names a \grammarterm{concept-name} \tcode{C2} and neither \tcode{C} nor \tcode{C2} names a concept template parameter, the \grammarterm{constraint-expression} of \tcode{C2} in \tcode{C};
 \end{addedblock}
 \item
-\added{substituting each A$_i$ that is not a \grammarterm{concept-name}} for \tcode{C}{'s} respective template parameters in the
+\added{otherwise, } \tcode{C}{'s} respective template parameters in the
 parameter mappings in each atomic constraint.
+\end{itemize}
 If any such substitution results in an invalid type or expression,
 the program is ill-formed; no diagnostic is required.
-
-\end{itemize}
-
-\ednote{We need wording to substitute C when C names a concept template parameter}
 
 \begin{example}
     \begin{codeblock}
@@ -2295,118 +2295,142 @@ the program is ill-formed; no diagnostic is required.
     in the parameter mapping.
 \end{example}
 
-\ednote{The wording in blue is added by P2963}
-\begin{addedblockTwo}
-\item For a \grammarterm{fold-operator}  [expr.prim.fold] that is either \tcode{\&\&} or \tcode{||}
-\end{addedblockTwo}
-\begin{itemize}
-\begin{addedblockTwo}
-\item The normal form of an expression \tcode{( ... \grammarterm{fold-operator} E )} is the normal form of \tcode{( E \grammarterm{fold-operator}...)}.
-\item The normal form of an expression \tcode{( E1 \grammarterm{fold-operator}  ... \grammarterm{fold-operator}  E2 )} is the the normal form of
-\begin{itemize}
-    \item \tcode{(E1 \grammarterm{fold-operator}...) \grammarterm{fold-operator}  E2} if \tcode{E1} contains an unexpanded pack, or
-    \item \tcode{E1 \grammarterm{fold-operator} (E2 \grammarterm{fold-operator}...)} otherwise.
-\end{itemize}
-\end{addedblockTwo}
-\ednote{The wording in pink is added by P2963 and removed by this paper}
-\begin{removedblockTwo}
-\item The normal form of \tcode{(E \&\& ...)} is a fold expanded conjunction constraint \mbox{[temp.constr.fold]} whose constraint is the normal form of \tcode{E}.
-\item The normal form of \tcode{(E || ...)} is a fold expanded disjunction constraint whose constraint is the normal form of \tcode{E}.
-\end{removedblockTwo}
-
-\ednote{Add the following two bullets}
 \begin{addedblock}
-\item If \tcode{E} contains an unexpanded pack \tcode{P} naming a concept-name, the normal form of \tcode{(E \grammarterm{fold-operator} ...)}
-is the normal form of \tcode{(} \tcode{((}$\mathtt{E'}_0$ \placeholder{op} $\mathtt{E'}_1$\tcode{)} \placeholder{op} $\cdots$\tcode{)} \placeholder{op} $\mathtt{E'}_{N-1}$ \tcode{)} where $\mathtt{E'}_i$ is formed by substituting the $ith$ element of the corresponding template parameter of \tcode{P} in \tcode{E}.
-\item Otherwise, the normal form of \tcode{(E \&\& ...)} is a fold expanded conjunction constraint \mbox{[temp.constr.fold]} whose constraint is the normal form of \tcode{E}
-      and the normal form of \tcode{(E || ...)} is a fold expanded disjunction constraint whose constraint is the normal form of \tcode{E}.
+\begin{example}
+\begin{codeblock}
+template <typename T>
+concept C = true;
 
+template <template <typename T, template<typename...> concept> concept CT>
+concept CC= CT<T>;
+
+template <template <typename U, template<typename...> concept> concept CT>
+void f() requires CT<U*, C>;
+
+template <typename U>
+void g() requires CC<U*, C>;
+\end{codeblock}
+
+The normal form of the associated constraints of \tcode{f} is the
+atomic constraint \tcode{CT<T, C>} (with mapping $\tcode{T} \mapsto \tcode{U*}, ????$)
+
+The normal form of the associated constraints of \tcode{g} is the
+atomic constraint \tcode{true} (with mapping $\tcode{T} \mapsto \tcode{U*}$)
+\end{example}
 \end{addedblock}
-\end{itemize}
-%\begin{removedblockTwo}
-%\item For a \grammarterm{fold-operator} [expr.prim.fold] that is either \tcode{\&\&} or \tcode{||},
 %
-%
-%
-%, the normal form of an expression \tcode{( ... \grammarterm{fold-operator} E )} is the normal form of \tcode{( E \grammarterm{fold-operator}...)}.
+%\ednote{The wording in blue is added by P2963}
+%\begin{addedblockTwo}
+%\item For a \grammarterm{fold-operator}  [expr.prim.fold] that is either \tcode{\&\&} or \tcode{||}
+%\end{addedblockTwo}
+%\begin{itemize}
+%\begin{addedblockTwo}
+%\item The normal form of an expression \tcode{( ... \grammarterm{fold-operator} E )} is the normal form of \tcode{( E \grammarterm{fold-operator}...)}.
 %\item The normal form of an expression \tcode{( E1 \grammarterm{fold-operator}  ... \grammarterm{fold-operator}  E2 )} is the the normal form of
 %\begin{itemize}
 %    \item \tcode{(E1 \grammarterm{fold-operator}...) \grammarterm{fold-operator}  E2} if \tcode{E1} contains an unexpanded pack, or
 %    \item \tcode{E1 \grammarterm{fold-operator} (E2 \grammarterm{fold-operator}...)} otherwise.
 %\end{itemize}
+%\end{addedblockTwo}
+%\ednote{The wording in pink is added by P2963 and removed by this paper}
+%\begin{removedblockTwo}
 %\item The normal form of \tcode{(E \&\& ...)} is a fold expanded conjunction constraint \mbox{[temp.constr.fold]} whose constraint is the normal form of \tcode{E}.
 %\item The normal form of \tcode{(E || ...)} is a fold expanded disjunction constraint whose constraint is the normal form of \tcode{E}.
 %\end{removedblockTwo}
 %
+%\ednote{Add the following two bullets}
+%\begin{addedblock}
+%\item If \tcode{E} contains an unexpanded pack \tcode{P} naming a concept-name, the normal form of \tcode{(E \grammarterm{fold-operator} ...)}
+%is the normal form of \tcode{(} \tcode{((}$\mathtt{E'}_0$ \placeholder{op} $\mathtt{E'}_1$\tcode{)} \placeholder{op} $\cdots$\tcode{)} \placeholder{op} $\mathtt{E'}_{N-1}$ \tcode{)} where $\mathtt{E'}_i$ is formed by substituting the $ith$ element of the corresponding template parameter of \tcode{P} in \tcode{E}.
+%\item Otherwise, the normal form of \tcode{(E \&\& ...)} is a fold expanded conjunction constraint \mbox{[temp.constr.fold]} whose constraint is the normal form of \tcode{E}
+%      and the normal form of \tcode{(E || ...)} is a fold expanded disjunction constraint whose constraint is the normal form of \tcode{E}.
 %
-%\item The normal form of a \grammarterm{fold-expression} \iref{expr.prim.fold} \tcode{F}
-%whose \grammarterm{fold-operator} \tcode{op} is either \tcode{\&\&} or \tcode{||}
-%and whose pattern is a \tcode{concept-name} \tcode{C} is the normal form of the expanded expression F'
-%produced by the expansion of \tcode{C}:
+%\end{addedblock}
+%\end{itemize}
+%%\begin{removedblockTwo}
+%%\item For a \grammarterm{fold-operator} [expr.prim.fold] that is either \tcode{\&\&} or \tcode{||},
+%%
+%%
+%%
+%%, the normal form of an expression \tcode{( ... \grammarterm{fold-operator} E )} is the normal form of \tcode{( E \grammarterm{fold-operator}...)}.
+%%\item The normal form of an expression \tcode{( E1 \grammarterm{fold-operator}  ... \grammarterm{fold-operator}  E2 )} is the the normal form of
+%%\begin{itemize}
+%%    \item \tcode{(E1 \grammarterm{fold-operator}...) \grammarterm{fold-operator}  E2} if \tcode{E1} contains an unexpanded pack, or
+%%    \item \tcode{E1 \grammarterm{fold-operator} (E2 \grammarterm{fold-operator}...)} otherwise.
+%%\end{itemize}
+%%\item The normal form of \tcode{(E \&\& ...)} is a fold expanded conjunction constraint \mbox{[temp.constr.fold]} whose constraint is the normal form of \tcode{E}.
+%%\item The normal form of \tcode{(E || ...)} is a fold expanded disjunction constraint whose constraint is the normal form of \tcode{E}.
+%%\end{removedblockTwo}
+%%
+%%
+%%\item The normal form of a \grammarterm{fold-expression} \iref{expr.prim.fold} \tcode{F}
+%%whose \grammarterm{fold-operator} \tcode{op} is either \tcode{\&\&} or \tcode{||}
+%%and whose pattern is a \tcode{concept-name} \tcode{C} is the normal form of the expanded expression F'
+%%produced by the expansion of \tcode{C}:
+%%
+%%\pnum
+%%\begin{itemize}
+%%    \item
+%%    % Note: "\space" used below because " " inside tcode adds too much whitespace;
+%%    % one could optionally use mathfont inside tcode, e.g., "\tcode{($ $}".
+%%    \tcode{(}\space
+%%    \tcode{((}$\mathtt{E}_1$
+%%    \placeholder{op} $\mathtt{E}_2$\tcode{)}
+%%    \placeholder{op} $\cdots$\tcode{)}
+%%    \placeholder{op} $\mathtt{E}_N$
+%%    \space\tcode{)}
+%%    for a unary left fold,
+%%    \item
+%%    \tcode{(}\space
+%%    $\mathtt{E}_1$     \placeholder{op}
+%%    \tcode{(}$\cdots$           \placeholder{op}
+%%    \tcode{(}$\mathtt{E}_{N-1}$ \placeholder{op}
+%%    $\mathtt{E}_N$\tcode{))}
+%%    \space\tcode{)}
+%%    for a unary right fold,
+%%    \item
+%%    \tcode{(}\space
+%%    \tcode{(((}$\mathtt{E}$
+%%    \placeholder{op} $\mathtt{E}_1$\tcode{)}
+%%    \placeholder{op} $\mathtt{E}_2$\tcode{)}
+%%    \placeholder{op} $\cdots$\tcode{)}
+%%    \placeholder{op} $\mathtt{E}_N$
+%%    \space\tcode{)}
+%%    for a binary left fold, and
+%%    \item
+%%    \tcode{(}\space
+%%    $\mathtt{E}_1$     \placeholder{op}
+%%    \tcode{(}$\cdots$           \placeholder{op}
+%%    \tcode{(}$\mathtt{E}_{N-1}$ \placeholder{op}
+%%    \tcode{(}$\mathtt{E}_{N}$   \placeholder{op}
+%%    $\mathtt{E}$\tcode{)))}
+%%    \space\tcode{)}
+%%    for a binary right fold.
+%%\end{itemize}
+%%\end{addedblock}
+%
+%
+%\item
+%The normal form of any other expression \tcode{E} is
+%the atomic constraint
+%whose expression is \tcode{E} and
+%whose parameter mapping is the identity mapping.
+\end{itemize}
 %
 %\pnum
-%\begin{itemize}
-%    \item
-%    % Note: "\space" used below because " " inside tcode adds too much whitespace;
-%    % one could optionally use mathfont inside tcode, e.g., "\tcode{($ $}".
-%    \tcode{(}\space
-%    \tcode{((}$\mathtt{E}_1$
-%    \placeholder{op} $\mathtt{E}_2$\tcode{)}
-%    \placeholder{op} $\cdots$\tcode{)}
-%    \placeholder{op} $\mathtt{E}_N$
-%    \space\tcode{)}
-%    for a unary left fold,
-%    \item
-%    \tcode{(}\space
-%    $\mathtt{E}_1$     \placeholder{op}
-%    \tcode{(}$\cdots$           \placeholder{op}
-%    \tcode{(}$\mathtt{E}_{N-1}$ \placeholder{op}
-%    $\mathtt{E}_N$\tcode{))}
-%    \space\tcode{)}
-%    for a unary right fold,
-%    \item
-%    \tcode{(}\space
-%    \tcode{(((}$\mathtt{E}$
-%    \placeholder{op} $\mathtt{E}_1$\tcode{)}
-%    \placeholder{op} $\mathtt{E}_2$\tcode{)}
-%    \placeholder{op} $\cdots$\tcode{)}
-%    \placeholder{op} $\mathtt{E}_N$
-%    \space\tcode{)}
-%    for a binary left fold, and
-%    \item
-%    \tcode{(}\space
-%    $\mathtt{E}_1$     \placeholder{op}
-%    \tcode{(}$\cdots$           \placeholder{op}
-%    \tcode{(}$\mathtt{E}_{N-1}$ \placeholder{op}
-%    \tcode{(}$\mathtt{E}_{N}$   \placeholder{op}
-%    $\mathtt{E}$\tcode{)))}
-%    \space\tcode{)}
-%    for a binary right fold.
-%\end{itemize}
-%\end{addedblock}
-
-
-\item
-The normal form of any other expression \tcode{E} is
-the atomic constraint
-whose expression is \tcode{E} and
-whose parameter mapping is the identity mapping.
-\end{itemize}
-
-\pnum
-The process of obtaining the normal form of a
-\grammarterm{constraint-expression}
-is called
-\defnx{normalization}{normalization!constraint|see{constraint, normalization}}.
-\begin{note}
-    Normalization of \grammarterm{constraint-expression}{s}
-    is performed
-    when determining the associated constraints \iref{temp.constr.constr}
-    of a declaration
-    and
-    when evaluating the value of an \grammarterm{id-expression}
-    that names a concept specialization \iref{expr.prim.id}.
-\end{note}
+%The process of obtaining the normal form of a
+%\grammarterm{constraint-expression}
+%is called
+%\defnx{normalization}{normalization!constraint|see{constraint, normalization}}.
+%\begin{note}
+%    Normalization of \grammarterm{constraint-expression}{s}
+%    is performed
+%    when determining the associated constraints \iref{temp.constr.constr}
+%    of a declaration
+%    and
+%    when evaluating the value of an \grammarterm{id-expression}
+%    that names a concept specialization \iref{expr.prim.id}.
+%\end{note}
 
 \rSec2[temp.variadic]{Variadic templates}
 
