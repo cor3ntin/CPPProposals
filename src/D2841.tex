@@ -1583,47 +1583,41 @@ A \grammarterm{template-parameter} of the form
         int i;
 
         template<class T, T i> void f(T t) {
-            T t1 = i;         // template-parameters \tcode{T} and \tcode{i}
+            T t1 = i;         // \changed{template-parameters}{template parameters} \tcode{T} and \tcode{i}
             ::T t2 = ::i;     // global namespace members \tcode{T} and \tcode{i}
         }
     \end{codeblock}
-    Here, the template \tcode{f} has a \grammarterm{type-parameter}
-    called \tcode{T}, rather than \changed{an unnamed non-type}
-    \grammarterm{template-parameter} of class \tcode{T}}{a parameter-declaration with no name}.
+    Here, the template \tcode{f} has a \changed{\grammarterm{type-parameter}}{type template parameter}
+    called \tcode{T}, rather than an unnamed \changed{non-type
+    \grammarterm{template-parameter}}{constant template parameter} of class \tcode{T}.
 \end{example}
 A storage class shall not be specified in a
-\grammarterm{template-parameter}
+\changed{\grammarterm{template-parameter}}{template parameter}
 declaration.
-Types shall not be defined in a \grammarterm{template-parameter}
+Types shall not be defined in a \changed{\grammarterm{template-parameter}}{template parameter}
 declaration.
 
 \pnum
-The \grammarterm{identifier} in a \grammarterm{type-parameter} is not looked up.
-A \grammarterm{type-parameter}
-whose \grammarterm{identifier} does not follow an ellipsis
-defines its
-\grammarterm{identifier}
+The \grammarterm{identifier} in a \changed{\grammarterm{type-parameter}}
+{\grammarterm{template-parameter} denoting a type or template} is not looked up.
+\changed{A \grammarterm{type-parameter}
+whose}{An} \grammarterm{identifier} \added{that} does not follow an ellipsis
+\changed{defines its
+\grammarterm{identifier}}{is defined}
 to be a
 \grammarterm{typedef-name}
-\removed{(if declared without
-\keyword{template})
-or
+(\changed{if declared without
+\keyword{template}}{for a \grammarterm{type-parameter}})\added{,}
+\changed{or}{a}
 \grammarterm{template-name}
-(if declared with
-\keyword{template})}
+(\changed{if declared with
+\keyword{template}}{for a \grammarterm{type-tt-parameter} or \grammarterm{variable-tt-parameter}})\added{,
+or a \grammarterm{concept-name} (for a \grammarterm{concept-tt-parameter})}
 in the scope of the template declaration.
 
-%TODO
-\begin{addedblock}
-The \grammarterm{identifier} in a template template parameter is not looked up.
-\tcode{P} whose \grammarterm{identifier} does not follow an ellipsis defines its
-\grammarterm{identifier} to be a \grammarterm{concept-name} \tcode{T} if \tcode{P} is a \grammarterm{concept-tt-parameter}
-or a \grammarterm{template-name} \tcode{T} otherwise.
-\tcode{T} is declared in the scope of the template declaration.
-\end{addedblock}
-
 \begin{note}
-A template argument can be a class template or alias template.
+A template argument \added{for a type template template parameter}
+can be a class template or alias template.
 For example,
 
 \begin{codeblock}
@@ -1637,11 +1631,10 @@ For example,
 \end{codeblock}
 \end{note}
 
-
 \textcolor{noteclr}{[...]}
 
 \pnum
-A \changed{non-type}{constant} \grammarterm{template-parameter}
+A \changed{non-type \grammarterm{template-parameter}}{constant template parameter}
 shall have one of the following (possibly cv-qualified) types:
 \begin{itemize}
     \item a structural type (see below),
@@ -1654,35 +1647,22 @@ on the
 \grammarterm{template-parameter}
 are ignored when determining its type.
 
-\pnum
-\label{term.structural.type}%
-A \defnadj{structural}{type} is one of the following:
-\begin{itemize}
-\item a scalar type, or
-\item an lvalue reference type, or
-\item a literal class type with the following properties:
-\begin{itemize}
-    \item
-    all base classes and non-static data members are public and non-mutable and
-    \item
-    the types of all bases classes and non-static data members are
-    structural types or (possibly multidimensional) array thereof.
-\end{itemize}
-\end{itemize}
+\textcolor{noteclr}{[...]}
 
 \pnum
 An \grammarterm{id-expression} naming
-a \changed{non-type}{constant} \grammarterm{template-parameter} of class type \tcode{T}
+a \changed{non-type \grammarterm{template-parameter}}{constant template parameter}
+of class type \tcode{T}
 denotes a static storage duration object of type \tcode{const T},
 known as a \defn{template parameter object},
 which is template-argument-equivalent\iref{temp.type} to
 the corresponding template argument
 after it has been converted
-to the type of the \grammarterm{template-parameter}\iref{temp.arg.nontype}.
+to the type of the \changed{\grammarterm{template-parameter}}{template parameter} \iref{temp.arg.nontype}.
 No two template parameter objects are template-argument-equivalent.
 \begin{note}
     If an \grammarterm{id-expression} names
-    a \removed{non-type} non-reference \added{constant} \grammarterm{template-parameter},
+    a \removed{non-type} non-reference \added{constant} \changed{\grammarterm{template-parameter}}{template parameter},
     then it is a prvalue if it has non-class type.
     Otherwise, if it is of class type \tcode{T},
     it is an lvalue and has type \tcode{const T} \iref{expr.prim.id.unqual}.
@@ -1693,10 +1673,10 @@ No two template parameter objects are template-argument-equivalent.
         using X = int;
         struct A {};
         template<const X& x, int i, A a> void f() {
-            i++;                          // error: change of \grammarterm{template-parameter} value
+            i++;                          // error: change of \changed{\grammarterm{template-parameter}}{template parameter} value
 
             &x;                           // OK
-            &i;                           // error: address of non-reference template-parameter
+            &i;                           // error: address of non-reference \changed{template-parameter}{template parameter}
             &a;                           // OK
             int& ri = i;                  // error: attempt to bind non-const reference to temporary
             const int& cri = i;           // OK, const reference binds to temporary
@@ -1707,37 +1687,19 @@ No two template parameter objects are template-argument-equivalent.
 
 \pnum
 \begin{note}
-    A \changed{non-type}{constant}
-    \grammarterm{template-parameter}
+    A \changed{non-type \grammarterm{template-parameter}}{constant template parameter}
     cannot be declared to have type \cv{} \keyword{void}.
-    \begin{example}
-        \begin{codeblock}
-            template<void v> class X;       // error
-            template<void* pv> class Y;     // OK
-        \end{codeblock}
-    \end{example}
+    \begin{example} \textcolor{noteclr}{[...]} \end{example}
 \end{note}
 
 \pnum
-A \changed{non-type}{constant}
-\grammarterm{template-parameter}
+A \changed{non-type \grammarterm{template-parameter}}{constant template parameter}
 \indextext{array!template parameter of type}%
 of type ``array of \tcode{T}'' or
 \indextext{function!template parameter of type}%
 of function type \tcode{T}
 is adjusted to be of type ``pointer to \tcode{T}''.
-\begin{example}
-    \begin{codeblock}
-        template<int* a>   struct R {  };
-        template<int b[5]> struct S {  };
-        int p;
-        R<&p> w;                        // OK
-        S<&p> x;                        // OK due to parameter adjustment
-        int v[5];
-        R<v> y;                         // OK due to implicit argument conversion
-        S<v> z;                         // OK due to both adjustment and conversion
-    \end{codeblock}
-\end{example}
+\begin{example} \textcolor{noteclr}{[...]} \end{example}
 
 \pnum
 A \changed{non-type}{constant} template parameter declared with a type that
@@ -1753,25 +1715,14 @@ in a \grammarterm{template-parameter}.
 A default template argument may be specified for
 any kind of \grammarterm{template-parameter} \removed{(type, non-type, template)}
 that is not a template parameter pack\iref{temp.variadic}.
-A default template argument may be specified in a template declaration.
-A default template argument shall not be specified in
-the \grammarterm{template-parameter-list}{s}
-of the definition of a member of a class template
-that appears outside of the member's class.
-A default template argument
-shall not be specified in a friend class template declaration.
-If a friend function template declaration $D$
-specifies a default template argument,
-that declaration shall be a definition and
-there shall be no other declaration of the function template
-which is reachable from $D$ or from which $D$ is reachable.
+\textcolor{noteclr}{[...]}
 
 \textcolor{noteclr}{[...]}
 
 \indextext{\idxcode{<}!template and}%
 \pnum
 When parsing a default template argument
-for a \changed{non-type}{constant} \grammarterm{template-parameter},
+for a \changed{non-type \grammarterm{template-parameter}}{constant template parameter},
 the first non-nested \tcode{>} is taken as
 the end of the \grammarterm{template-parameter-list}
 rather than a greater-than operator.
