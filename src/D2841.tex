@@ -1465,13 +1465,13 @@ is:
 \begin{bnf}
 \nontermdef{type-tt-parameter}\br
 template-head type-parameter-key \opt{\terminal{...}} \opt{identifier}\br
-template-head type-parameter-key \opt{identifier} \terminal{=} id-expression
+template-head type-parameter-key \opt{identifier} \terminal{=} \opt{nested-name-specifier} template-name
 \end{bnf}
 
 \begin{bnf}
     \nontermdef{variable-tt-parameter}\br
     template-head \terminal{auto} \opt{\terminal{...}} \opt{identifier}\br
-    template-head \terminal{auto} \opt{identifier} \terminal{=} id-expression
+    template-head \terminal{auto} \opt{identifier} \terminal{=} \opt{nested-name-specifier} template-name
 \end{bnf}
 
 \begin{bnf}
@@ -1775,8 +1775,8 @@ A template specialization \iref{temp.spec} can be referred to by a
     \nontermdef{template-argument}\br
     constant-expression\br
     type-id\br
-    id-expression\br
-    \added{qualified-concept-name}
+    \removed{id-expression}\br
+    \added{\opt{nested-name-specifier} template-name\br}
 \end{bnf}
 
 
@@ -1977,9 +1977,9 @@ or be the address of (respectively):
 \pnum A
 \grammarterm{template-argument}
 for a template
-\grammarterm{template-parameter}
-shall be the name of a \removed{class} template \removed{or an alias template,} expressed as
-\grammarterm{id-expression}.
+\changed{\grammarterm{template-parameter}}{template parameter}
+shall be the name of a \removed{class} template \removed{or an alias template, expressed as
+\grammarterm{id-expression}}.
 
 \begin{addedblock}
 For a \grammarterm{type-tt-parameter}, the name shall denote a class template or alias template. For a \grammarterm{variable-tt-parameter}, the name shall denote a variable template. For a \grammarterm{concept-tt-parameter}, the name shall denote a concept.
@@ -2596,16 +2596,17 @@ more specialized template is the one chosen by the partial ordering
 process.
 If both deductions succeed, the partial ordering selects
 the more constrained template (if one exists) as determined below.
+%
+%\pnum
 
-\pnum
-To produce the transformed template, for each type, \changed{non-type}{constant}, or template
-template parameter (including template parameter packs \iref{temp.variadic}
-thereof) synthesize a unique type, value, or class template
+To produce the transformed template, for each type, \changed{non-type}{constant}\changed{, or template
+template parameter}{type template, variable template, or concept} (including template parameter packs \iref{temp.variadic}
+thereof) synthesize a unique type, value, \removed{or} class template \added{, variable template, or concept}
 respectively and substitute it for each occurrence of that parameter
 in the function type of the template.
 
-
-\ednote{Do we need to change anything here?} % lah: it doesn't seem you want this to be in your final paper.
+\added{A synthesized class template or variable template shall not have associated constraints. }
+\added{The constraint-expression of a synthesized concept shall be the expression \tcode{true}.}
 
 \begin{note}
     The type replacing the placeholder
