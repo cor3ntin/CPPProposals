@@ -1087,7 +1087,7 @@ Every name is introduced by a \defn{declaration}, which is a
     \item
     \grammarterm{using-declarator} \iref{namespace.udecl},
     \item
-    \grammarterm{parameter-declaration} \iref{dcl.fct} \added{, [temp.param]},
+    \grammarterm{parameter-declaration} \iref{dcl.fct}\added{, \iref{temp.param}},
     \item
     \grammarterm{type-parameter} \iref{temp.param},
     \begin{addedblock}
@@ -1108,6 +1108,17 @@ Every name is introduced by a \defn{declaration}, which is a
     \item
     implicit declaration of an injected-class-name \iref{class.pre}.
 \end{itemize}
+
+
+\rSec2[basic.scope.temp]{Template parameter scope}%
+
+\pnum
+Each \changed{template \grammarterm{template-parameter}}
+{\grammarterm{type-tt-parameter}, \grammarterm{variable-tt-parameter}, and\linebreak
+\grammarterm{concept-parameter}} introduces
+a \defnadj{template parameter}{scope}
+that includes the \grammarterm{template-head} of
+the \grammarterm{template-parameter}.
 
 
 \rSec2[basic.lookup.argdep]{Argument-dependent name lookup}
@@ -1248,15 +1259,9 @@ and where the reference binding (if any) binds directly.
 \indextext{class name!\idxcode{typedef}}%
 A \grammarterm{simple-template-id} is only a \grammarterm{typedef-name}
 if its \grammarterm{template-name} names
-an alias template or \changed{a template \grammarterm{template-parameter}}{a type template template parameter}.
+an alias template or a \changed{template \grammarterm{template-parameter}}{type template template parameter}.
 \begin{note}
-    A \grammarterm{simple-template-id} that names a class template specialization
-    is a \grammarterm{class-name} \iref{class.name}.
-    If a \grammarterm{typedef-name} is used to identify the subject of an
-    \grammarterm{elaborated-type-specifier} \iref{dcl.type.elab}, a class
-    definition \iref{class}, a constructor
-    declaration \iref{class.ctor}, or a destructor
-    declaration \iref{class.dtor}, the program is ill-formed.
+    \textcolor{noteclr}{[...]}
 \end{note}
 
 \rSec3[dcl.type.decltype]{Decltype specifiers}%
@@ -1265,33 +1270,59 @@ an alias template or \changed{a template \grammarterm{template-parameter}}{a typ
 \indextext{type specifier!\idxcode{decltype}}%
 For an expression $E$, the type denoted by \tcode{decltype($E$)} is defined as follows:
 \begin{itemize}
-\item if $E$ is an unparenthesized \grammarterm{id-expression}
-naming a structured binding\iref{dcl.struct.bind},
-\tcode{decltype($E$)} is the referenced type as given in
-the specification of the structured binding declaration;
+\item \textcolor{noteclr}{[...]}
 
 \item otherwise, if $E$ is an unparenthesized \grammarterm{id-expression}
-naming a \changed{non-type}{constant} \grammarterm{template-parameter}\iref{temp.param},
-\tcode{decltype($E$)} is the type of the \grammarterm{template-parameter}
+naming a \changed{non-type \grammarterm{template-parameter}}{constant template parameter} \iref{temp.param},
+\tcode{decltype($E$)} is the type of the\linebreak
+\changed{\grammarterm{template-parameter}}{template parameter}
 after performing any necessary
-type deduction\iref{dcl.spec.auto,dcl.type.class.deduct};
+type deduction \iref{dcl.spec.auto,dcl.type.class.deduct};
 
-\item otherwise, if $E$ is an unparenthesized \grammarterm{id-expression} or
-an unparenthesized
-class
-member access\iref{expr.ref}, \tcode{decltype($E$)} is the
-type of the entity named by $E$.
-If there is no such entity, the program is ill-formed;
-
-\item otherwise, if $E$ is
-an xvalue, \tcode{decltype($E$)} is \tcode{T\&\&}, where \tcode{T} is the type
-of $E$;
-
-\item otherwise, if $E$ is an lvalue, \tcode{decltype($E$)}
-is \tcode{T\&}, where \tcode{T} is the type of $E$;
-
-\item otherwise, \tcode{decltype($E$)} is the type of $E$.
+\item \textcolor{noteclr}{[...]}
 \end{itemize}
+
+\rSec3[dcl.fct]{Functions}%
+
+\pnum
+An \defnx{abbreviated function template}{template!function!abbreviated}
+is a function declaration that has
+one or more generic parameter type placeholders \iref{dcl.spec.auto}.
+An abbreviated function template is equivalent to
+a function template \iref{temp.fct}
+whose \grammarterm{template-parameter-list} includes
+one invented \changed{type \grammarterm{template-parameter}}{\grammarterm{type-parameter}}
+for each generic parameter type placeholder
+of the function declaration, in order of appearance.
+For a \grammarterm{placeholder-type-specifier} of the form \keyword{auto},
+the invented parameter is
+an unconstrained \grammarterm{type-parameter}.
+For a \grammarterm{placeholder-type-specifier} of the form
+\grammarterm{type-constraint} \keyword{auto},
+the invented parameter is a \grammarterm{type-parameter} with
+that \grammarterm{type-constraint}.
+The invented \changed{type \grammarterm{template-parameter} is}{\grammarterm{type-parameter} declares}
+a template parameter pack
+if the corresponding \grammarterm{parameter-declaration}
+declares a function parameter pack.
+If the placeholder contains \tcode{decltype(auto)},
+the program is ill-formed.
+The adjusted function parameters of an abbreviated function template
+are derived from the \grammarterm{parameter-declaration-clause} by
+replacing each occurrence of a placeholder with
+the name of the corresponding invented \changed{\grammarterm{template-parameter}}{\grammarterm{type-parameter}}.
+\begin{example}
+    \textcolor{noteclr}{[...]}
+\end{example}
+
+\pnum
+An abbreviated function template can have a \grammarterm{template-head}.
+The invented \changed{\grammarterm{template-parameter}{s}}{\grammarterm{type-parameter}{s}} are
+appended to the \grammarterm{template-parameter-list} after
+the explicitly declared \grammarterm{template-parameter}{s}.
+\begin{example}
+    \textcolor{noteclr}{[...]}
+\end{example}
 
 \rSec3[dcl.type.auto.deduct]{Placeholder type deduction}
 \indextext{deduction!placeholder type}%
@@ -1362,12 +1393,9 @@ determined based on the target type required in the context (if any),
 as described below.
 The target can be
 \begin{itemize}
-    \item
-    an object or reference being initialized \iref{dcl.init,dcl.init.ref,dcl.init.list},
     \item \textcolor{noteclr}{[...]}
     \item
-    a \changed{non-type}{constant}
-    \grammarterm{template-parameter} \iref{temp.arg.nontype}.
+    a \changed{non-type \grammarterm{template-parameter}}{constant template parameter} \iref{temp.arg.nontype}.
 \end{itemize}
 The \grammarterm{id-expression} can be preceded by the \tcode{\&} operator.
 
@@ -1382,7 +1410,9 @@ with element type \tcode{char}.
 A \defnx{string literal operator template}{literal!operator!template string}
 is a literal operator template whose \grammarterm{template-parameter-list}
 comprises
-a single \changed{non-type}{constant} \grammarterm{template-parameter} of class type.
+a single \removed{non-type \grammarterm{template-parameter}}\linebreak
+\added{\grammarterm{parameter-declaration}
+that declares a constant template parameter} of class type.
 The declaration of a literal operator template
 shall have an empty \grammarterm{parameter-declaration-clause}
 and shall declare either a numeric literal operator template
@@ -1450,14 +1480,53 @@ template-head type-parameter-key \opt{identifier} \terminal{=} id-expression
     template < template-parameter-list > \terminal{concept} \opt{identifier} \terminal{=} qualified-concept-name
 \end{bnf}
 
-% change font to non italizied.
-% introduce a parameter or a pack
-A \defn{template template parameter} is a \grammarterm{type-tt-parameter}, a \grammarterm{variable-tt-parameter},  or a \grammarterm{concept-tt-parameter}.
-
-
+A \defn{type template parameter} is a template parameter introduced by a \grammarterm{type-parameter}.
 A \defn{constant template parameter} is a template parameter introduced by a \grammarterm{parameter-declaration}.
+A \defn{type template template parameter} is a template parameter introduced by a \grammarterm{type-tt-parameter}.
+A \defn{variable template template parameter} is a template parameter introduced by a \grammarterm{variable-tt-parameter}.
+A \defn{concept template parameter} is a template parameter introduced by a \grammarterm{concept-tt-parameter}.
+Type template template parameters, variable template template parameters, and concept template parameters are collectively referred to as \defn{template template parameters}.
 
 \end{addedblock}
+
+\ednote{Paragraph 17 is modified and transplanted here to appear immediately after the above paragraph.}
+
+\pnum
+If a \grammarterm{template-parameter} is a
+\removed{\grammarterm{type-parameter} with an ellipsis prior to its
+optional \grammarterm{identifier} or is a}
+\grammarterm{parameter-declaration} that declares a
+pack \iref{dcl.fct}\added{, or otherwise
+has an ellipsis prior to its optional \grammarterm{identifier},}
+then the \grammarterm{template-parameter}
+\changed{is}{declares} a template parameter pack \iref{temp.variadic}.
+A template parameter pack that is a \grammarterm{parameter-declaration} whose type
+contains one or more unexpanded packs is a pack expansion. Similarly,
+a template parameter pack that is a \changed{\grammarterm{type-parameter}}{template template parameter} with a
+\grammarterm{template-parameter-list} containing one or more unexpanded
+packs is a pack expansion.
+A type parameter pack with a \grammarterm{type-constraint} that
+contains an unexpanded parameter pack is a pack expansion.
+A template parameter pack that is a pack
+expansion shall not expand a template parameter pack declared in the same
+\grammarterm{template-parameter-list}.
+\begin{example}
+\begin{codeblock}
+    template <class... Types>                       // \tcode{Types} is a template type parameter pack
+    class Tuple;                                 // but not a pack expansion
+
+    template <class T, int... Dims>                 // \tcode{Dims} is a \changed{non-type}{constant} template parameter pack
+    struct multi_array;                          // but not a pack expansion
+
+    template <class... T>
+    struct value_holder {
+        template <T... Values> struct apply { };    // \tcode{Values} is a \changed{non-type}{constant} template parameter pack
+    };                                            // and a pack expansion
+
+    template <class... T, T... Values>              // error: \tcode{Values} expands template type parameter
+    struct static_array;                          // pack \tcode{T} within the same template parameter list
+\end{codeblock}
+\end{example}
 
 \indextext{component name}%
 The component names of a \grammarterm{type-constraint} are
@@ -1714,51 +1783,6 @@ rather than a greater-than operator.
         template<int i = (3 > 4) >      // OK
         class Y {  };
     \end{codeblock}
-\end{example}
-
-% Introduce pack earlier where we introduce the grammar.
-
-\pnum
-If a \grammarterm{template-parameter} is \removed{a
-	\grammarterm{type-parameter} with an ellipsis prior to its
-	optional \grammarterm{identifier} or is a
-	\grammarterm{parameter-declaration} that declares a
-	pack \iref{dcl.fct}}
-\begin{addedblock}
-	\begin{itemize}
-		\item a \grammarterm{type-parameter} with an ellipsis prior to its optional \grammarterm{identifier},
-		\item a \grammarterm{parameter-declaration} that declares a pack \iref{dcl.fct}, or
-		\item a template template parameter with an ellipsis prior to its optional \grammarterm{identifier},
-	\end{itemize}
-\end{addedblock}
-then the \grammarterm{template-parameter}
-is a template parameter pack \iref{temp.variadic}.
-A template parameter pack that is a \grammarterm{parameter-declaration} whose type
-contains one or more unexpanded packs is a pack expansion. Similarly,
-a template parameter pack that is a \changed{\grammarterm{type-parameter}}{template template parameter} with a
-\grammarterm{template-parameter-list} containing one or more unexpanded
-packs is a pack expansion.
-A type parameter pack with a \grammarterm{type-constraint} that
-contains an unexpanded parameter pack is a pack expansion.
-A template parameter pack that is a pack
-expansion shall not expand a template parameter pack declared in the same
-\grammarterm{template-parameter-list}.
-\begin{example}
-\begin{codeblock}
-    template <class... Types>                       // \tcode{Types} is a template type parameter pack
-    class Tuple;                                 // but not a pack expansion
-
-    template <class T, int... Dims>                 // \tcode{Dims} is a \changed{non-type}{constant} template parameter pack
-    struct multi_array;                          // but not a pack expansion
-
-    template <class... T>
-    struct value_holder {
-        template <T... Values> struct apply { };    // \tcode{Values} is a \changed{non-type}{constant} template parameter pack
-    };                                            // and a pack expansion
-
-    template <class... T, T... Values>              // error: \tcode{Values} expands template type parameter
-    struct static_array;                          // pack \tcode{T} within the same template parameter list
-\end{codeblock}
 \end{example}
 
 %\ednote{Modify [temp.param]/p16 As follow}
