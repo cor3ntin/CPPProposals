@@ -39,6 +39,9 @@ by \tcode{requires} expressions are now ignored.  Additional examples have been
 added to [expr.const] demonstrating the semantics of structured bindings during
 constant evaluation.
 
+Remove the feature test macro, as core did not find a use case for you and recent papers
+bump both \tcode{__cpp_constexpr} and \tcode{__cpp_structured_bindings}.
+
 \subsection{Revision 3}
 
 CWG pointed out that the restrictions on volatile variables and mutable subobjects in the definition of ``usable in constant expressions'' have undesirable consequences. Those restrictions have therefore been moved to [basic.def.odr]. An unintentional omission in R2 has also been fixed: a local static constexpr reference shall not refer to a variable with automatic storage duration. Examples have also been added to the wording section.
@@ -393,14 +396,11 @@ if the expression is an \grammarterm{id-expression} that denotes it.
 A variable \tcode{x} that is named by a
 potentially-evaluated expression \changed{$E$}{$N$}\added{ that appears at a point $P$}
 is \defnx{odr-used}{odr-use} by \changed{$E$}{$N$} unless
-\added{$N$ is an
-element of the set of potential results of an expression $E$, where
-}
-\begin{removedblock}
 \begin{itemize}
-    \item
-    \tcode{x} is a reference that is
-    usable in constant expressions \iref{expr.const}, or
+\item
+\tcode{x} is a reference that is
+usable in constant expressions \added{at $P$} \iref{expr.const} \added{or}
+\begin{removedblock}
     \item
     \tcode{x} is a variable of non-reference type that is
     usable in constant expressions and has no mutable subobjects, and
@@ -412,7 +412,6 @@ element of the set of potential results of an expression $E$, where
     $E$ is an element of the set of potential results
     of a discarded-value expression \iref{expr.context}
     to which the lvalue-to-rvalue conversion is not applied.
-\end{itemize}
 \end{removedblock}
 
 \draftnote{Ideally, \tcode{x} should be allowed to have mutable subobjects as
@@ -421,18 +420,21 @@ require slightly more complex wording, but isn't in scope for this paper because
 the status quo also doesn't allow it.}
 
 \begin{addedblock}
+\item N is an element of the set of potential results of an expression E, where
 \begin{itemize}
 \item
-\tcode{x} is a reference that is usable in constant expressions at $P$,
-\item
-\tcode{x} is a non-volatile object that is usable in constant expressions at $P$and has no mutable subobjects, and $E$ is a class member access expression ([expr.ref]) naming a non-static data member of reference type,
-\item
-\tcode{x} is a non-volatile object that is usable in constant expressions at $P$and has no mutable subobjects, and the lvalue-to-rvalue
-conversion (\iref{conv.lval}) is applied to $E$, or
-\item
 $E$ is a discarded-value expression (\iref{expr.context}) to which the lvalue-to-rvalue
-conversion is not applied.
+conversion is not applied or
+\item \tcode{x} is a non-volatile object that is usable in constant expressions at $P$ and has no mutable subobjects and
+\begin{itemize}
+\item $E$ is a class member access expression ([expr.ref]) naming a non-static data member of reference type and whose object expression has non-volatile-qualified type or
+\item the lvalue-to-rvalue conversion (\iref{conv.lval}) is applied to $E$ and $E$ has non-volatile-qualified non-class type.
 \end{itemize}
+\end{itemize}
+\end{addedblock}
+\end{itemize}
+
+\begin{addedblock}
 \begin{example}
 \begin{codeblock}
 int f(int);
@@ -586,7 +588,7 @@ An object $o$ is \defn{constexpr-referenceable} from a point $P$ if
 the smallest scope enclosing \tcode{v} and the smallest scope enclosing $P$ that
 are neither
 \begin{itemize}
-    \item block scopes, nor
+    \item block scopes nor
     \item function parameter scopes associated with a
     \grammarterm{requirement-parameter-list}
 \end{itemize}
@@ -1000,7 +1002,7 @@ void f() {
 \end{addedblock}
 \end{example}
 
-\rSec2[dcl.constexpr]{The \keyword{constinit} specifier}
+\rSec2[dcl.constinit]{The \keyword{constinit} specifier}
 
 \emph{Drafting note:} Unlike in [dcl.constexpr], we don't need an explicit rule
 about the object or reference being constexpr-representable in this section,
@@ -1011,8 +1013,12 @@ constexpr-representable.
 \ednote{Modify p1 as follows:}
 
 The \keyword{constinit} specifier shall be applied only to a declaration of a
-variable with static or thread storage duration \added{or to a structured
-binding declaration (\iref{dcl.struct.bind})}. If the specifier is applied to
+variable with static or thread storage duration
+\begin{addedblock}
+or to a structured binding declaration (\iref{dcl.struct.bind}).
+\begin{note}A structured binding declaration introduces a uniquely named variable, to which the \tcode{constinit} specifier applies. \end{note}
+\end{addedblock}
+If the specifier is applied to
 any declaration of a variable, it shall be applied to the initializing
 declaration. No diagnostic is required if no \keyword{constinit} declaration is
 reachable at the point of the initializing declaration.
@@ -1063,12 +1069,6 @@ void f(int p) {
 \end{codeblock}
 \end{example}
 \end{addedblock}
-
-\section{Feature test macros}
-
-\ednote{Modify \tcode{[tab:cpp.predefined.ft]} as follows.}
-
-\tcode{__cpp_structured_bindings} \changed{\tcode{202403L}}{\tcode{2024xxL}}
 
 \section{Acknowledgments}
 
