@@ -2,11 +2,6 @@
 % !TEX encoding = UTF-8
 
 
-%TODO:
-%variable-tt-parameter
-%concept-tt-parameter
-%concept-tt-declaration??
-
 \documentclass{wg21}
 
 \title{Concept and variable-template template-parameters}
@@ -2079,158 +2074,44 @@ refer to the same class, function, \added{concept, }or variable.
 
 \textcolor{noteclr}{[...]}
 
+\rSec2[temp.constr.constr]{Constraints}
 
-\rSec2[temp.constr.order]{Partial ordering by constraints}
-\indextext{subsume|see{constraint, subsumption}}
-
-\pnum
-A constraint $P$ \defnx{subsumes}{constraint!subsumption} a constraint $Q$
-if and only if,
-for every disjunctive clause $P_i$
-in the disjunctive normal form
-\begin{wfootnote}
-    A constraint is in disjunctive normal form when it is a disjunction of
-    clauses where each clause is a conjunction of atomic constraints.
-    For atomic constraints $A$, $B$, and $C$, the disjunctive normal form
-    of the constraint
-    $A \land (B \lor C)$
-    is
-    $(A \land B) \lor (A \land C)$.
-    %
-    Its disjunctive clauses are $(A \land B)$ and $(A \land C)$.
-\end{wfootnote}
-of $P$, $P_i$ subsumes every conjunctive clause $Q_j$
-in the conjunctive normal form
-\begin{wfootnote}
-    A constraint is in conjunctive normal form when it is a conjunction
-    of clauses where each clause is a disjunction of atomic constraints.
-    For atomic constraints $A$, $B$, and $C$, the constraint
-    $A \land (B \lor C)$ is in conjunctive normal form.
-    %
-    Its conjunctive clauses are $A$ and $(B \lor C)$.
-\end{wfootnote}
-of $Q$, where
-\begin{itemize}
-    \item
-    a disjunctive clause $P_i$ subsumes a conjunctive clause $Q_j$ if and only
-    if there exists an atomic constraint $P_{ia}$ in $P_i$ for which there exists
-    an atomic constraint $Q_{jb}$ in $Q_j$ such that $P_{ia}$ subsumes $Q_{jb}$, and
-
-    \item an atomic constraint $A$ subsumes another atomic constraint
-    $B$ if and only if $A$ and $B$ are identical using the
-    rules described in \ref{temp.constr.atomic}.
-
-
-    %\ednote{Add wording for fold expressions}
-
-\end{itemize}
-%
-\begin{example}
-    Let $A$ and $B$ be atomic constraints \iref{temp.constr.atomic}.
-    %
-    The constraint $A \land B$ subsumes $A$, but $A$ does not subsume $A \land B$.
-    %
-    The constraint $A$ subsumes $A \lor B$, but $A \lor B$ does not subsume $A$.
-    %
-    Also note that every constraint subsumes itself.
-\end{example}
-
-\pnum
-\begin{note}
-The subsumption relation defines a partial ordering on constraints.
-This partial ordering is used to determine
-\begin{itemize}
-    \item the best viable candidate of non-template functions \iref{over.match.best},
-    \item the address of a non-template function \iref{over.over},
-    \item the matching of template template arguments \iref{temp.arg.template},
-    \item the partial ordering of class template specializations \iref{temp.spec.partial.order}, and
-    \item the partial ordering of function templates \iref{temp.func.order}.
-\end{itemize}
-\end{note}
+\ednote{Add a new section after [temp.constr.atomic]}
 
 \begin{addedblock}
 
-The associated constraints \tcode{C} of a declaration \tcode{D} are \emph{eligible for subsumption}
-unless \tcode{C} contains an atomic constraint that names a  \grammarterm{concept-tt-parameter}.
+
+\rSec3[temp.constr.concept]{Concept-dependent constraint}
+
+A \defn{concept-dependent constraint} is formed from a concept-id \tcode{C<A1, ..., A>}
+where \tcode{C} names a concept template parameter.
+
+Two concept-dependent constraints are equivalent if their concept-id are equivalent.
+
+
+To determine if a concept-dependent constraint is satisfied, template arguments are first substituted into its
+\tcode{concept-id} \tcode{C}. If substitution results in an invalid type or expression in the immediate context of the constraint ([temp.deduct.general]), the constraint is not satisfied.
+Otherwise, let \tcode{E} be the normal form of \tcode{C}.
+The constraint is satisfied if \tcode{E} is satisfied.
+
+
+%During the instantiation of a specialization or member function [temp.inst],
+%if the argument \tcode{A} corresonding
+%to the concept template parameter named by \tcode{C} is not dependent, \tcode{C<Args..>} is substituted by
+%the normal form of \tcode{A<Args..>}.
+The substituted normal form of \tcode{C<A1, ..., An>} is the normal form of \tcode{A<A1, ..., An>} where \tcode{A} is the argument
+corresponding to the concept template parameter named by \tcode{C}.
 
 \end{addedblock}
-
-
-\pnum
-A declaration \tcode{D1} is
-\defn{at least as constrained} as
-a declaration \tcode{D2} if
-\begin{itemize}
-    \item \tcode{D1} and \tcode{D2} are both constrained declarations and
-    \tcode{D1}'s associated constraints
-    \added{are eligible for subsumption and} subsume those of \tcode{D2}; or
-
-    \item \tcode{D2} has no associated constraints.
-\end{itemize}
-
-\pnum
-A declaration \tcode{D1} is \defn{more constrained}
-than another declaration \tcode{D2} when \tcode{D1} is at least as
-constrained as \tcode{D2}, and \tcode{D2} is not at least as
-constrained as \tcode{D1}.
-\begin{example}
-\begin{codeblock}
-    template<typename T> concept C1 = requires(T t) { --t; };
-    template<typename T> concept C2 = C1<T> && requires(T t) { *t; };
-
-    template<C1 T> void f(T);       // \#1
-    template<C2 T> void f(T);       // \#2
-    template<typename T> void g(T); // \#3
-    template<C1 T> void g(T);       // \#4
-
-    f(0);                           // selects \#1
-    f((int*)0);                     // selects \#2
-    g(true);                        // selects \#3 because \tcode{C1<bool>} is not satisfied
-    g(0);                           // selects \#4
-\end{codeblock}
-\end{example}
-
-\begin{addedblock}
-\begin{example}
-\begin{codeblock}
-template <template <typename T> concept X, typename T>
-struct S {};
-template <typename T>
-concept A = true;
-template <typename T>
-concept B = true && A<T>;
-
-template <template <typename T>  concept X, typename T>
-int f(S<X, T>) requires A<T> { return 42; } // \#1
-template <template <typename T> concept X, typename T>
-int f(S<X, T>) requires X<T> { return 43; } // \#2
-
-// the 2 following calls select \#1 because \#2 is not eligible for subsumption
-// (their associated constraints depend on a concept template parameter X)
-f(S<A, int>{});
-f(S<B, int>{});
-
-template <typename T>
-int g(S<A, T>) requires A<T> { return 42; } // \#3
-template <typename T>
-int g(S<A, T>) requires B<T> { return 43; } // \#4
-
-g(S<A, T>{}); // selects \#4 because \#3 and \#4 are both eligible for subsumption
-                       // and B<T> subsumes A<T>
-
-\end{codeblock}
-\end{example}
-\end{addedblock}
-
-
-
 
 \rSec2[temp.constr.normal]{Constraint normalization}
 \indextext{constraint!normalization|(}%
 
+\indextext{constraint!normalization|(}%
+
 \pnum
 The \defnx{normal form}{normal form!constraint} of an \grammarterm{expression} \tcode{E} is
-a constraint \iref{temp.constr.constr} that is defined as follows:
+a constraint\iref{temp.constr.constr} that is defined as follows:
 %
 \begin{itemize}
 \item
@@ -2239,7 +2120,7 @@ the normal form of \tcode{E}.
 
 \item
 The normal form of an expression \tcode{E1 || E2} is
-the disjunction \iref{temp.constr.op} of
+the disjunction\iref{temp.constr.op} of
 the normal forms of \tcode{E1} and \tcode{E2}.
 
 \item
@@ -2247,21 +2128,20 @@ The normal form of an expression \tcode{E1 \&\& E2}
 is the conjunction of
 the normal forms of \tcode{E1} and \tcode{E2}.
 
+\begin{addedblock}
+\item When \tcode{C} names a concept template parameter,
+the normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>} is
+a concept-dependent constraint whose \grammarterm{concept-id} is  \tcode{C<A$_1$, A$_2$, ..., A$_n$>}.
+\end{addedblock}
+
 \item
-The normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>}
+\added{Otherwise}, The normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>}
 is the normal form of the \grammarterm{constraint-expression} of \tcode{C},
 after substituting \tcode{A$_1$, A$_2$, ..., A$_n$} for
-\begin{itemize}
-\begin{addedblock}
-\item if A$_i$  names a \grammarterm{concept-name} \tcode{C2} and neither \tcode{C} nor \tcode{C2} names a concept template parameter, the \grammarterm{constraint-expression} of \tcode{C2} in \tcode{C};
-\end{addedblock}
-\item
-\added{otherwise, } \tcode{C}{'s} respective template parameters in the
+\tcode{C}{'s} respective template parameters in the
 parameter mappings in each atomic constraint.
-\end{itemize}
 If any such substitution results in an invalid type or expression,
 the program is ill-formed; no diagnostic is required.
-
 \begin{example}
     \begin{codeblock}
         template<typename T> concept A = T::value || true;
@@ -2280,6 +2160,83 @@ the program is ill-formed; no diagnostic is required.
     because it would form the invalid type \tcode{V\&*}
     in the parameter mapping.
 \end{example}
+
+\item
+For a \grammarterm{fold-operator}\iref{expr.prim.fold}
+that is either \tcode{\&\&} or \tcode{||},
+the normal form of an expression
+\tcode{( ... \grammarterm{fold-operator} E )} is the normal form of
+\tcode{( E \grammarterm{fold-operator} ... )}.
+
+\item
+For a \grammarterm{fold-operator}
+that is either \tcode{\&\&} or \tcode{||},
+the normal form of an expression
+\tcode{( E1 \grammarterm{fold-operator} ... \grammarterm{fold-operator} E2 )}
+is the normal form of
+\begin{itemize}
+    \item
+    \tcode{( E1 \grammarterm{fold-operator} ... ) \grammarterm{fold-operator} E2}
+    if \tcode{E1} contains an unexpanded pack, or
+    \item
+    \tcode{E1 \grammarterm{fold-operator} ( E2 \grammarterm{fold-operator} ... )}
+    otherwise.
+\end{itemize}
+
+\item
+The normal form of \tcode{( E \&\& ... )} is
+a fold expanded constraint\iref{temp.constr.fold}
+whose constraint is the normal form of \tcode{E} and
+whose \grammarterm{fold-operator} is \tcode{\&\&}.
+
+\item
+The normal form of \tcode{( E || ... )} is
+a fold expanded constraint
+whose constraint is the normal form of \tcode{E} and
+whose \grammarterm{fold-operator} is \tcode{||}.
+
+\item
+The normal form of any other expression \tcode{E} is
+the atomic constraint
+whose expression is \tcode{E} and
+whose parameter mapping is the identity mapping.
+\end{itemize}
+
+\pnum
+The process of obtaining the normal form of a
+\grammarterm{constraint-expression}
+is called
+\defnx{normalization}{normalization!constraint|see{constraint, normalization}}.
+\begin{note}
+    Normalization of \grammarterm{constraint-expression}{s}
+    is performed
+    when determining the associated constraints\iref{temp.constr.constr}
+    of a declaration
+    and
+    when evaluating the value of an \grammarterm{id-expression}
+    that names a concept specialization\iref{expr.prim.id}.
+\end{note}
+
+\pnum
+\begin{example}
+    \begin{codeblock}
+        template<typename T> concept C1 = sizeof(T) == 1;
+        template<typename T> concept C2 = C1<T> && 1 == 2;
+        template<typename T> concept C3 = requires { typename T::type; };
+        template<typename T> concept C4 = requires (T x) { ++x; };
+
+        template<C2 U> void f1(U);      // \#1
+        template<C3 U> void f2(U);      // \#2
+        template<C4 U> void f3(U);      // \#3
+    \end{codeblock}
+    The associated constraints of \#1 are
+    \tcode{sizeof(T) == 1} (with mapping $\tcode{T} \mapsto \tcode{U}$) $\land$ \tcode{1 == 2}.\\
+    The associated constraints of \#2 are
+    \tcode{requires \{ typename T::type; \}} (with mapping $\tcode{T} \mapsto \tcode{U}$).\\
+    The associated constraints of \#3 are
+    \tcode{requires (T x) \{ ++x; \}} (with mapping $\tcode{T} \mapsto \tcode{U}$).
+\end{example}
+\indextext{constraint!normalization|)}
 
 \begin{addedblock}
 \begin{example}
@@ -2404,7 +2361,7 @@ atomic constraint \tcode{true}.
 %the atomic constraint
 %whose expression is \tcode{E} and
 %whose parameter mapping is the identity mapping.
-\end{itemize}
+%\end{itemize}
 %
 %\pnum
 %The process of obtaining the normal form of a
@@ -2420,6 +2377,140 @@ atomic constraint \tcode{true}.
 %    when evaluating the value of an \grammarterm{id-expression}
 %    that names a concept specialization \iref{expr.prim.id}.
 %\end{note}
+
+
+\rSec2[temp.constr.order]{Partial ordering by constraints}
+\indextext{subsume|see{constraint, subsumption}}
+
+\rSec2[temp.constr.order]{Partial ordering by constraints}
+
+\pnum
+\indextext{subsume|see{constraint, subsumption}}
+A constraint $P$ \defnx{subsumes}{constraint!subsumption} a constraint $Q$
+if and only if,
+for every disjunctive clause $P_i$
+in the disjunctive normal form of $P$, $P_i$ subsumes every conjunctive clause $Q_j$
+in the conjunctive normal form of $Q$, where
+\begin{itemize}
+    \item
+    a disjunctive clause $P_i$ subsumes a conjunctive clause $Q_j$ if and only
+    if there exists an atomic constraint $P_{ia}$ in $P_i$ for which there exists
+    an atomic constraint $Q_{jb}$ in $Q_j$ such that $P_{ia}$ subsumes $Q_{jb}$,
+
+    \item an atomic constraint $A$ subsumes another atomic constraint
+    $B$ if and only if $A$ and $B$ are identical using the
+    rules described in \ref{temp.constr.atomic}, and
+
+    \item a fold expanded constraint $A$ subsumes
+    another fold expanded constraint $B$
+    if they are compatible for subsumption,
+    have the same \grammarterm{fold-operator}, and
+    the constraint of $A$ subsumes that of $B$.
+
+\begin{addedblock}
+\item a concept-dependent constraint $A$ subsumes
+another concept-dependent expanded constraint $B$
+if their concept-id are equivalent.
+\end{addedblock}
+
+\end{itemize}
+%
+\begin{example}
+    Let $A$ and $B$ be atomic constraints\iref{temp.constr.atomic}.
+    %
+    The constraint $A \land B$ subsumes $A$, but $A$ does not subsume $A \land B$.
+    %
+    The constraint $A$ subsumes $A \lor B$, but $A \lor B$ does not subsume $A$.
+    %
+    Also note that every constraint subsumes itself.
+\end{example}
+
+\pnum
+\begin{note}
+    The subsumption relation defines a partial ordering on constraints.
+    This partial ordering is used to determine
+    \begin{itemize}
+        \item the best viable candidate of non-template functions\iref{over.match.best},
+        \item the address of a non-template function\iref{over.over},
+        \item the matching of template template arguments\iref{temp.arg.template},
+        \item the partial ordering of class template specializations\iref{temp.spec.partial.order}, and
+        \item the partial ordering of function templates\iref{temp.func.order}.
+    \end{itemize}
+\end{note}
+
+\begin{addedblock}
+
+    The associated constraints \tcode{C} of a declaration \tcode{D} are \emph{eligible for subsumption}
+    unless \tcode{C} contains an atomic constraint that names a  \grammarterm{concept-tt-parameter}.
+
+\end{addedblock}
+
+
+\pnum
+A declaration \tcode{D1} is
+\defn{at least as constrained} as
+a declaration \tcode{D2} if
+\begin{itemize}
+    \item \tcode{D1} and \tcode{D2} are both constrained declarations and
+    \tcode{D1}'s associated constraints
+    \added{are eligible for subsumption and} subsume those of \tcode{D2}; or
+
+    \item \tcode{D2} has no associated constraints.
+\end{itemize}
+
+\pnum
+A declaration \tcode{D1} is \defn{more constrained}
+than another declaration \tcode{D2} when \tcode{D1} is at least as
+constrained as \tcode{D2}, and \tcode{D2} is not at least as
+constrained as \tcode{D1}.
+\begin{example}
+\begin{codeblock}
+    template<typename T> concept C1 = requires(T t) { --t; };
+    template<typename T> concept C2 = C1<T> && requires(T t) { *t; };
+
+    template<C1 T> void f(T);       // \#1
+    template<C2 T> void f(T);       // \#2
+    template<typename T> void g(T); // \#3
+    template<C1 T> void g(T);       // \#4
+
+    f(0);                           // selects \#1
+    f((int*)0);                     // selects \#2
+    g(true);                        // selects \#3 because \tcode{C1<bool>} is not satisfied
+    g(0);                           // selects \#4
+\end{codeblock}
+\end{example}
+
+\begin{addedblock}
+\begin{example}
+    \begin{codeblock}
+        template <template <typename T> concept X, typename T>
+        struct S {};
+        template <typename T>
+        concept A = true;
+        template <typename T>
+        concept B = true && A<T>;
+
+        template <template <typename T>  concept X, typename T>
+        int f(S<X, T>) requires A<T> { return 42; } // \#1
+        template <template <typename T> concept X, typename T>
+        int f(S<X, T>) requires X<T> { return 43; } // \#2
+
+        // the 2 following calls select \#1 because \#2 is not eligible for subsumption
+        // (their associated constraints depend on a concept template parameter X)
+        f(S<A, int>{});
+        f(S<B, int>{});
+
+        template <typename T>
+        int g(S<A, T>) requires A<T> { return 42; } // \#3
+        template <typename T>
+        int g(S<A, T>) requires B<T> { return 43; } // \#4
+
+        g(S<A, T>{}); // selects \#4 because \#3 and \#4 are both eligible for subsumption
+        // and B<T> subsumes A<T>
+
+    \end{codeblock}
+\end{example}
+\end{addedblock}
 
 \rSec2[temp.variadic]{Variadic templates}
 
@@ -2509,6 +2600,86 @@ the following restrictions apply:
     shall not be dependent on a parameter of the partial specialization.
 \end{itemize}
 
+\textcolor{noteclr}{[...]}
+
+\rSec2[temp.inst]{Implicit instantiation}
+
+\pnum
+\removed{The \grammarterm{type-constraint}{s} and \grammarterm{requires-clause}
+of a template specialization or member function
+are not instantiated along with the specialization or function itself,
+even for a member function of a local class;}
+\begin{addedblock}
+When instantiating a template specialization or member function, each concept-dependent constraint
+in its \grammarterm{type-constraint}{s} and \grammarterm{requires-clause}
+is replaced by its substited normal form [temp.constr.concept].
+No further instantiation of the constraints are performed,  even for a member function of a local class;
+\end{addedblock}
+substitution into the atomic constraints formed from them is instead performed
+as specified in [temp.constr.decl] and [temp.constr.atomic]
+when determining whether the constraints are satisfied
+or as specified in [temp.constr.dec] when comparing declarations.
+\begin{note}
+    The satisfaction of constraints is determined during
+    template argument deduction \iref{temp.deduct} and
+    overload resolution \iref{over.match}.
+\end{note}
+\begin{example}
+\begin{codeblock}
+    template<typename T> concept C = sizeof(T) > 2;
+    template<typename T> concept D = C<T> && sizeof(T) > 4;
+
+    template<typename T> struct S {
+        S() requires C<T> { }         // \#1
+        S() requires D<T> { }         // \#2
+    };
+
+    S<char> s1;                     // error: no matching constructor
+    S<char[8]> s2;                  // OK, calls \#2
+\end{codeblock}
+When \tcode{S<char>} is instantiated, both constructors are part of the
+specialization. Their constraints are not satisfied, and
+they suppress the implicit declaration of a default constructor for
+\tcode{S<char>} \iref{class.default.ctor}, so there is no viable constructor
+for \tcode{s1}.
+\end{example}
+\begin{example}
+\begin{codeblock}
+    template<typename T> struct S1 {
+        template<typename U>
+        requires false
+        struct Inner1;                // ill-formed, no diagnostic required
+    };
+
+    template<typename T> struct S2 {
+        template<typename U>
+        requires (sizeof(T[-(int)sizeof(T)]) > 1)
+        struct Inner2;                // ill-formed, no diagnostic required
+    };
+\end{codeblock}
+The class \tcode{S1<T>::Inner1} is ill-formed, no diagnostic required, because
+it has no valid specializations.
+\tcode{S2} is ill-formed, no diagnostic required, since no substitution into
+the constraints of its \tcode{Inner2} template would result in a valid
+expression.
+\end{example}
+
+\begin{addedblock}
+\begin{example}
+\begin{codeblock}
+template<typename T> concept C = true;
+template<typename T> concept D = true && true;
+template <template <typename> concept TT>
+struct S {
+    template <typename T>
+    void f(T) requires C<T>; // \#1
+    template <typename T>
+    void f(T) requires TT<T> // \#2
+};
+S<D>{}.f(42); // calls \#2: D<int> subsumes C<int>
+\end{codeblock}
+\end{example}
+\end{addedblock}
 \textcolor{noteclr}{[...]}
 
 \rSec3[temp.over.link]{Function template overloading}

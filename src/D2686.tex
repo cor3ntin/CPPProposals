@@ -5,8 +5,8 @@
 \documentclass{wg21}
 
 \title{\tcode{constexpr} structured bindings\\{\small and}\\\ references to \tcode{constexpr} variables}
-\docnumber{D2686R4}
-\audience{EWG, CWG}
+\docnumber{D2686R5}
+\audience{CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Brian Bi}{bbi10@bloomberg.net}
 
@@ -22,6 +22,13 @@ This paper reports implementation experience on this proposal and provides updat
 
 
 \section{Revisions}
+
+
+\subsection{Revision 5}
+
+\begin{itemize}
+\item Fix examples in the core wording.
+\end{itemize}
 
 \subsection{Revision 4}
 
@@ -41,6 +48,8 @@ constant evaluation.
 
 Remove the feature test macro, as core did not find a use case for you and recent papers
 bump both \tcode{__cpp_constexpr} and \tcode{__cpp_structured_bindings}.
+
+\textbf{This revision was approved by CWG in St Louis and is waiting an implementation to be forwarded to plenary.}
 
 \subsection{Revision 3}
 
@@ -447,17 +456,17 @@ struct B {
 };
 int h(bool cond) {
     constexpr A a = {1};
-    constexpr volatile A& r = a;  // odr-uses \tcode{a}
+    constexpr const volatile A& r = a;  // odr-uses \tcode{a}
     int _ = f(cond ? a.x : r.x);  // does not odr-use \tcode{a} or \tcode{r}
     int x, y;
     constexpr B b1 = {x}, b2 = {y};  // odr-uses \tcode{x} and \tcode{y}
     int _ = g(cond ? b1.r : b2.r);  // does not odr-use \tcode{b1} or \tcode{b2}
-    int _ = (cond ? x : y), 0;  // does not odr-use \tcode{x} or \tcode{y}
+    int _ = ((cond ? x : y), 0);  // does not odr-use \tcode{x} or \tcode{y}
     return [] {
         return b1.r;  // error: \tcode{b1} is odr-used here because the object
                       // referred to by \tcode{b1.r} is not constexpr-referenceable
                       // here
-    };
+    }();
 }
 \end{codeblock}
 \end{example}
@@ -1058,7 +1067,7 @@ the program is ill-formed.
 \begin{addedblock}
 \begin{example}
 \begin{codeblock}
-template <int& r> class A;
+template <int& r> class A{};
 extern int x;
 A<x> a;  // OK
 void f(int p) {
