@@ -200,7 +200,7 @@ Similarly, if you have a concept in your codebase, you shouldn't have to wrap it
 
 Wrapping variables in class templates also adds complexity for users: The main reason we expose both a variable template and a class template for every boolean trait is that the language does not support variable-template template-parameters. (Note that we are aware of some codebases using traits as tags for dispatch but this is far from the common case.)
 
-For instance, counting elements that satisfy a specific predicate could be done as
+For instance, counting elements \tcode{Ts} that satisfy a specific predicate \tcode{p} could be done as
 
 \begin{colorblock}
 template <template <typename> auto p, typename... Ts>
@@ -261,39 +261,50 @@ The authors have use cases that don't fit in the paper (typical for the most \em
 \subsection{Terse syntax, overloading, and reusing existing concepts}
 
 The following example, simplified from production code shows multiple interesting properties of concept template parameters.
-\tcode{with_values_t} takes a function and a predicate, and calls the function with all the arguments satisfying this predicate.
 
-Here we demonstrate the function with \tcode{either} and \tcode{maybe}, but in reality, this is used with receiver types - which are also monadic.
-The call operator applies \tcode{f} to all engaged arguments. But all the arguments must be of the same shape (all optionals, all expected), etc.
+Here we demonstrate the algorithm \tcode{with_values_t} with \tcode{optional} and \tcode{expected}.
+Its call operator applies \tcode{f} to all engaged arguments; however, all the arguments must be of the same shape (all \tcode{optional}s, all \tcode{expected}), etc.
 
 To do that, we here use the abbreviated function template syntax with \tcode{type-constraints}, which is only possible with concept template parameters.
 
 \begin{colorblock}
-template <typename T>
-struct maybe;
-template <typename L, typename R>
-struct either;
+template <typename T>             struct optional;
+template <typename V, typename E> struct expected;
+
+template <typename> constexpr bool _some_maybe_v = false;
+template <typename T> constexpr bool _some_maybe_v<optional<T>&>       = true;
+template <typename T> constexpr bool _some_maybe_v<optional<T> const&> = true;
+template <typename> constexpr bool _some_expected_v = false;
+template <typename T, typename E> constexpr bool _some_expected_v<expected<T, E>&>       = true;
+template <typename T, typename E> constexpr bool _some_expected_v<expected<T, E> const&> = true;
 
 template <typename T>
-concept a_maybe = /*...*/;
+concept some_maybe = _some_maybe_v<T&>;
 template <typename T>
-concept an_either = /*...*/;
+concept some_expected = _some_expected_v<T&>;
 
 template <template <typename> concept C>
 struct _with_values_t {
   static constexpr auto operator()(auto&& f, C auto&& v, C auto&& ... vs) -> decltype(auto) {
-    if (is_active<C>(e)) {       // does the active type in the variant satisfy C
-        return _with_values_t{}(bind_front(f, *v), FWD(vs)...);
+    if constexpr (sizeof...(vs) == 0) {
+      if (v) {
+        return f(*FWD(v));
+      } else {
+        return f();
+      }
     } else {
+      if (v) {
+        return _with_values_t{}(bind_front(f, *FWD(v)), FWD(vs)...);
+      } else {
         return _with_values_t{}(f, FWD(vs)...);
-    }
+      }
   }
 };
 
-// have to enforce it's the same monad or it doesn't make any sense
-inline constexpr struct with_values_t : _with_values_t<a_maybe>, _with_values_t<an_either> {
-  using _with_values_t<a_maybe>::operator();
-  using _with_values_t<an_either>::operator();
+// Enforce it's the same monad
+inline constexpr struct with_values_t : _with_values_t<some_maybe>, _with_values_t<some_either> {
+  using _with_values_t<some_maybe>::operator();
+  using _with_values_t<some_either>::operator();
 } with_values {};
 \end{colorblock}
 
@@ -302,14 +313,14 @@ It would be technically possible to use a type instead here
 
 \begin{colorblock}
 template <typename T>
-struct an_either_t {
-    static constexpr bool value = an_either<T>;
+struct some_expected_t {
+    static constexpr bool value = some_expected<T>;
 };
 
 struct _with_values_t {
-    template <typename First, typename... Tail>
-    requires (an_either_t<First>::value && (an_either_t<Tail>::value && ...))
-    static constexpr auto operator()(auto&& f, C auto&& e, C auto&& ... es) -> decltype(auto);
+  template <typename First, typename... Tail>
+      requires (some_expected_t<First>::value && (some_expected_t<Tail>::value && ...))
+  static constexpr auto operator()(auto&& f, C auto&& e, C auto&& ... es) -> decltype(auto);
 };
 \end{colorblock}
 
@@ -322,6 +333,8 @@ But again:
 \item Diagnostic messages are slightly worse than they could be because of the added layers of wrapping and because compilers will decompose concepts in diagnostic messages.
 \end{itemize}
 
+A variant of this function is used in an implementation of the \tcode{upon_all_done(handle_successes, handle_failures, senders...)} sender transformer in one internal codebase,
+where \tcode{handle_successes} is invoked with all the successful completions, and \tcode{handle_failures} with all errors.
 
 % when_all_nmap(handle_successes, handle_failures, senders...); // we're *actually* doing this on result<> types, not optionals. result = variant<set_value(...)..., set_error(...)..., set_stopped()>
 
@@ -585,7 +598,7 @@ Let us introduce three concepts that refine eachother \tcode{A}, \tcode{B}, and 
 as well as a class template \tcode{S} that carries a concept \tcode{X} and a type \tcode{T}.
 
 If we then define an overload set of two functions where one deduces the concept,
-we get into an interesting situation where if concept parameters are allowed participate in partial ordering, the choice of template arguments of \tcode{S} could change the subsumption order.
+we get into an interesting situation where, if concept parameters were allowed participate in partial ordering, the choice of template arguments of \tcode{S} could change the subsumption order.
 
 \begin{colorblock}
 template <template <typename T> concept X, typename T>
