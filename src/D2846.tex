@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{\tcode{reserve\_hint}: Eagerly reserving memory for not-quite-sized lazy ranges}
-\docnumber{P2846R2}
+\docnumber{D2846R4}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -18,6 +18,19 @@ This proposals adds a \tcode{ranges::reserve_hint} customization point object wh
 reserve memory for non-sized ranges whose size can be approximated.
 
 \section{Revisions}
+
+\subsection{R4}
+
+\begin{itemize}
+\item Apply some wording feedback
+\end{itemize}
+
+
+\subsection{R3}
+
+\begin{itemize}
+\item Add wording to mandate \tcode{reserve_int} is used by std::vector
+\end{itemize}
 
 \subsection{R2}
 
@@ -150,7 +163,7 @@ compute a \tcode{reserve_hint} the same way they compute their size.
 
 During review of R1 of this paper, LEWG observed that \tcode{range | take(N)} is likely to produce N elements,
 even if \tcode{range} provides no \tcode{reserve_hint}.
-This revision returns N when the range has no \tcode{reserve_hint}.
+This revision returns N when the range has no \tcode{reserve_hint} and \tcode{min(N, reserve_hint(range))} otherwise.
 
 \subsubsection{Views with predicate}
 
@@ -183,32 +196,44 @@ An implementation can also use \tcode{reserve_hint} in the various range constru
 User code could use that feature for similar purposes.
 
 
-\subsection{\tcode{vector} and \tcode{string} constructors}
+\subsection{\tcode{vector} constructors}
 
 \tcode{std::vector} performs a single allocation on construction by calling \tcode{distance} first.
 It could only use \tcode{reserve_hint} on types that are \tcode{Cpp17MoveInsertable} (which is the case for Unicode algorithms), as reallocation would force items to be moved around.
 It may affect the performance of vector construction negatively when it is constructed from a forward range that is not sized, but for which calling \tcode{distance} is cheap, and \tcode{reserve_hint} is off enough that the reallocations are noticeable.
 
-The proposed wording is currently silent on what happens to vector but we have 3 options:
-
 \begin{itemize}
-  \item Require implementation to rely on \tcode{reserve_hint} when constructing a vector from a non-sized range of \tcode{Cpp17MoveInsertable} elements.
+\item Require implementation to rely on \tcode{reserve_hint} when constructing a vector from a non-sized range of \tcode{Cpp17MoveInsertable} elements.
 
-        A concern here is that custom allocators can't tell whether elements are move insertable because they are not required to be SFINAE-friendly.
-        So, we could either only require calling \tcode{reserve_hint} for \tcode{std::allocator} only, or it would break \tcode{vector}s of non-movable types using a custom \tcode{allocator}.
+A concern here is that custom allocators can't tell whether elements are move insertable because they are not required to be SFINAE-friendly.
+So, we could either only require calling \tcode{reserve_hint} for \tcode{std::allocator} only, or it would break \tcode{vector}s of non-movable types using a custom \tcode{allocator}.
 
-        Another solution is to check for \tcode{MoveConstructible} - which would still break the fringe case of types that are \tcode{MoveConstructible} and not \tcode{Cpp17MoveInsertable}.
-        But there is consensus in SG-9 that those are fringe edge cases.
+Another solution is to check for \tcode{MoveConstructible} - which would still break the fringe case of types that are \tcode{MoveConstructible} and not \tcode{Cpp17MoveInsertable}.
+But there is consensus in SG-9 that those are fringe edge cases that are probably not worth being concerned about.
 
-  \item Allowing implementations to do so without requiring it.
+\textbf{This is the option implemented in R3, following LEWG guidance}
 
-        Note that whether allocations are performed would be observable through whether the move constructor of each element is called or not (unless the elements are of trivial types (or are otherwise trivially relocatable \paper{P2786R0})). Any effect resulting from a call to \tcode{std::distance} would not be performed.
+Tomasz also realized that types that may throw on move might also change the behavior of existing code.
+To avoid that we restrict the optimization guarantee in vector to types that are nothrow move-constructible.
 
-        SG-9 had a preference for this option.
+\item Allowing implementations to do so without requiring it.
 
-  \item In the presence of a \tcode{approximately_sized_range}, \tcode{ranges::to} could construct the container using reserve and insertions, instead of forwarding to the container constructor.
-        The downside of this approach is that \tcode{ranges::to} would have different performance characteristics than container construction, which seems undesirable, and the optimization could not be applied to other operations such as \tcode{assign_range}/\tcode{insert_range}.
+    Note that whether allocations are performed would be observable through whether the move constructor of each element is called or not (unless the elements are of trivial types (or are otherwise trivially relocatable \paper{P2786R0})). Any effect resulting from a call to \tcode{std::distance} would not be performed.
+
+    SG-9 had a preference for this option.
+
+\item In the presence of a \tcode{approximately_sized_range}, \tcode{ranges::to} could construct the container using reserve and insertions, instead of forwarding to the container constructor.
+    The downside of this approach is that \tcode{ranges::to} would have different performance characteristics than container construction, which seems undesirable, and the optimization could not be applied to other operations such as \tcode{assign_range}/\tcode{insert_range}.
 \end{itemize}
+
+\subsection{\tcode{std::vector} \tcode{insert} and \tcode{append} methods}
+
+Similarly, we changed the complexity of these methods to encourage the use of \tcode{reserve_hint}.
+
+\subsection{\tcode{string}}
+
+\tcode{string} doesn't currently mandate complexity guarantees so we have ekected not to modify the specification,
+and instead preferring a blanket recommended practice that \tcode{reserve_hint} should be used to reduce reallocations.
 
 \section{Benchmarks}
 
@@ -273,6 +298,108 @@ This version of the paper therefore use the name \tcode{reserve_hint} that descr
     #define __cpp_lib_ranges_zip 2026XX (**placeholder**)
 \end{codeblock}
 \end{addedblock}
+
+\rSec1[containers]{Containers library}
+
+\rSec2[vector]{Class template \tcode{vector}}
+
+\rSec3[vector.cons]{Constructors}
+
+\indexlibraryctor{vector}%
+\begin{itemdecl}
+    template<@\exposconcept{container-compatible-range}@<T> R>
+    constexpr vector(from_range_t, R&& rg, const Allocator& = Allocator());
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \effects
+    Constructs a \tcode{vector} object with the elements of the range \tcode{rg},
+    using the specified allocator.
+
+    \pnum
+    \complexity
+    Initializes exactly $N$ elements
+    from the results of dereferencing successive iterators of \tcode{rg},
+    where $N$ is \tcode{ranges::distance(rg)}.
+
+\begin{addedblock}
+    Performs no reallocations if:
+    \begin{itemize}
+    \item \tcode{R} models \tcode{ranges::\libconcept{sized_range}},
+    \item \tcode{R} models \tcode{ranges::\libconcept{approximately_sized_range}}, \tcode{is_nothrow_move_constructible_v<T>} is \tcode{true}, and \tcode{ranges::distance(rg) <= ranges::reserve_hint(rg)} is \tcode{true}, or
+    \item \tcode{R} models \tcode{ranges::\libconcept{forward_range}}.
+    \end{itemize}
+\end{addedblock}
+    \removed{Performs no reallocations if \tcode{R} models
+    \tcode{ranges::\libconcept{forward_range}} or \tcode{ranges::\libconcept{sized_range}};
+    otherwise} \added{Otherwise}, performs order $\log N$ reallocations and
+    order $N$ calls to the copy or move constructor of \tcode{T}.
+\end{itemdescr}
+
+\rSec3[vector.modifiers]{Modifiers}
+
+\indexlibrarymember{insert}{vector}%
+\begin{itemdecl}
+constexpr iterator insert(const_iterator position, const T& x);
+constexpr iterator insert(const_iterator position, T&& x);
+constexpr iterator insert(const_iterator position, size_type n, const T& x);
+template<class InputIterator>
+constexpr iterator insert(const_iterator position, InputIterator first, InputIterator last);
+template<@\exposconcept{container-compatible-range}@<T> R>
+constexpr iterator insert_range(const_iterator position, R&& rg);
+constexpr iterator insert(const_iterator position, initializer_list<T>);
+
+template<class... Args> constexpr reference emplace_back(Args&&... args);
+template<class... Args> constexpr iterator emplace(const_iterator position, Args&&... args);
+constexpr void push_back(const T& x);
+constexpr void push_back(T&& x);
+template<@\exposconcept{container-compatible-range}@<T> R>
+constexpr void append_range(R&& rg);
+\end{itemdecl}
+
+\begin{itemdescr}
+    \pnum
+    \complexity
+    If reallocation happens,
+    linear in the number of elements of the resulting vector;
+    otherwise,
+    linear in the number of elements inserted plus the distance
+    to the end of the vector.
+
+    \pnum
+    \remarks
+    Causes reallocation if the new size is greater than the old capacity.
+    Reallocation invalidates all the references, pointers, and iterators
+    referring to the elements in the sequence, as well as the past-the-end iterator.
+    If no reallocation happens, then
+    references, pointers, and iterators
+    before the insertion point remain valid
+    but those at or after the insertion point,
+    including the past-the-end iterator,
+    are invalidated.
+    If an exception is thrown other than by
+    the copy constructor, move constructor,
+    assignment operator, or move assignment operator of
+    \tcode{T} or by any \tcode{InputIterator} operation,
+    there are no effects.
+    If an exception is thrown while inserting a single element at the end and
+    \tcode{T} is \oldconcept{CopyInsertable} or \tcode{is_nothrow_move_constructible_v<T>}
+    is \tcode{true}, there are no effects.
+    Otherwise, if an exception is thrown by the move constructor of a non-\oldconcept{CopyInsertable}
+    \tcode{T}, the effects are unspecified.
+
+    \begin{addedblock}
+    For the declarations taking a range \tcode{R}, performs at most one reallocation if:
+    \begin{itemize}
+        \item \tcode{R} models \tcode{ranges::\libconcept{sized_range}},
+        \item \tcode{R} models \tcode{ranges::\libconcept{approximately_sized_range}} and \tcode{ranges::distance(rg) <= ranges::reserve_hint(rg)} is \tcode{true}, or
+        \item \tcode{R} models \tcode{ranges::\libconcept{forward_range}}.
+    \end{itemize}
+     For the declarations taking a pair of \tcode{InputIterator}, performs at most one reallocation if \tcode{InputIterator} models \tcode{Cpp17ForwardIterator}.
+    \end{addedblock}
+
+\end{itemdescr}
 
 \rSec1[ranges.syn]{Header \tcode{<ranges>} synopsis}
 
@@ -357,9 +484,9 @@ Then:
 
 \pnum
 \begin{note}
-    Diagnosable ill-formed cases above
-    result in substitution failure when \tcode{ranges::reserve_hint(E)}
-    appears in the immediate context of a template instantiation.
+Diagnosable ill-formed cases above
+result in substitution failure when \tcode{ranges::reserve_hint(E)}
+appears in the immediate context of a template instantiation.
 \end{note}
 
 \pnum
@@ -367,6 +494,11 @@ Then:
     Whenever \tcode{ranges::reserve_hint(E)} is a valid expression, its
     type is integer-like.
 \end{note}
+
+\recommended
+
+\tcode{reserve_hint} can be used by an implementation to reduce the number of reallocations performed
+when inserting ranges in sequences containers.
 
 \end{addedblock}
 
@@ -490,7 +622,7 @@ is \tcode{true}:
     \begin{codeblock}
         C c(std::forward<Args>(args)...);
         if constexpr (@\libconcept{\added{approximately_}sized_range}@<R> && @\exposid{reservable-container}@<C>)
-            c.reserve(static_cast<range_size_t<C>>(ranges::size@\added{_hint}@(r)));
+            c.reserve(static_cast<range_size_t<C>>(ranges::@\changed{size}{reserve_hint}@(r)));
         ranges::copy(r, @\exposid{container-inserter}@<range_reference_t<R>>(c));
     \end{codeblock}
 \end{itemize}
@@ -657,7 +789,7 @@ constexpr auto size() const requires @\libconcept{sized_range}@<const V> {
 \begin{addedblock}
 \begin{codeblock}
 constexpr auto reserve_hint() {
-    if constexpr (requires @\libconcept{approximately_sized_range}@<V>) {
+    if constexpr (@\libconcept{approximately_sized_range}@<V>) {
         auto n = ranges::reserve_hint(@\exposid{base_}@);
         return ranges::min(n, static_cast<decltype(n)>(@\exposid{count_}@));
     }
@@ -665,7 +797,7 @@ constexpr auto reserve_hint() {
 }
 
 constexpr auto reserve_hint() const {
-    if constexpr (requires @\libconcept{approximately_sized_range}@<const V>) {
+    if constexpr (@\libconcept{approximately_sized_range}@<const V>) {
         auto n = ranges::reserve_hint(@\exposid{base_}@);
         return ranges::min(n, static_cast<decltype(n)>(@\exposid{count_}@));
     }
@@ -1000,11 +1132,11 @@ class adjacent_transform_view : public view_interface<adjacent_transform_view<V,
         return @\exposid{inner_}@.size();
     }
 
-    @\added{constexpr auto reserve_hint() requires \libconcept{approximately_sized_range}<InnerView>}@
+    @\added{constexpr auto reserve_hint() requires \libconcept{approximately_sized_range}<\exposid{InnerView}>}@
     @\added{\{ return \exposid{inner_}.reserve_hint(); \}}@
 
-    @\added{constexpr auto reserve_hint() const requires \libconcept{approximately_sized_range}<const InnerView>}@
-    @\added{\{ \exposid{inner_}.reserve_hint(); \}}@
+    @\added{constexpr auto reserve_hint() const requires \libconcept{approximately_sized_range}<const \exposid{InnerView}>}@
+    @\added{\{ return \exposid{inner_}.reserve_hint(); \}}@
 };
 }
 \end{codeblock}
@@ -1207,7 +1339,9 @@ Equivalent to:
 
 \section{Acknowledgments}
 
-Thanks to Zach Laine and Barry Revzin for providing valuable feedback on an early draft of this paper.
+Thanks to Zach Laine and Barry Revzin for providing valuable feedback on an early draft of this paper,
+and to Tomasz Kamiński and Jonhattan Wakely for helping me with the wording.
+
 
 
 \bibliographystyle{plain}

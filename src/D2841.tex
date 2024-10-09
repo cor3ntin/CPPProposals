@@ -5,8 +5,8 @@
 \documentclass{wg21}
 
 \title{Concept and variable-template template-parameters}
-\docnumber{D2841R4}
-\audience{EWG}
+\docnumber{D2841R5}
+\audience{CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Gašper Ažman}{gasper.azman@gmail.com}
 \authorthree{James Touton}{bekenn@gmail.com}
@@ -48,6 +48,12 @@ Note: this paper is a subset of the larger \paper{P1985R3} (Universal Template P
 
 \section{Revisions}
 
+\subsection{R5}
+
+\begin{itemize}
+\item Wording fixes.
+\end{itemize}
+
 \subsection{R4}
 
 \begin{itemize}
@@ -61,7 +67,8 @@ longer eligible for subsumption.
 \item Use the prose terminology and typography in more places
 \item Improve the sections introducing template parameters and pack thereof
 \item Change the grammar of template arguments not to use id-expression
-\item Address typos and other CWG feedback.
+\item Introduce "concept dependent constraints"
+\item Address CWG feedback.
 \end{itemize}
 
 \subsection{R3}
@@ -2083,15 +2090,15 @@ refer to the same class, function, \added{concept, }or variable.
 
 \rSec3[temp.constr.concept]{Concept-dependent constraint}
 
-A \defn{concept-dependent constraint} is formed from a concept-id \tcode{C<A1, ..., A>}
+A \defn{concept-dependent constraint} is formed from a concept-id \tcode{C<A1, ..., An>}
 where \tcode{C} names a concept template parameter.
 
-Two concept-dependent constraints are equivalent if their concept-id are equivalent.
+Two concept-dependent constraints are equivalent if their concept-ids are equivalent.
 
 
 To determine if a concept-dependent constraint is satisfied, template arguments are first substituted into its
-\tcode{concept-id} \tcode{C}. If substitution results in an invalid type or expression in the immediate context of the constraint ([temp.deduct.general]), the constraint is not satisfied.
-Otherwise, let \tcode{E} be the normal form of \tcode{C}.
+concept-id \tcode{C<A1, ..., An>}. If substitution results in an invalid concept-id in the immediate context of the constraint ([temp.deduct.general]), the constraint is not satisfied.
+Otherwise, let \tcode{E} be the normal form of \tcode{C<A1, ..., An>} after substitution.
 The constraint is satisfied if \tcode{E} is satisfied.
 
 
@@ -2131,11 +2138,11 @@ the normal forms of \tcode{E1} and \tcode{E2}.
 \begin{addedblock}
 \item When \tcode{C} names a concept template parameter,
 the normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>} is
-a concept-dependent constraint whose \grammarterm{concept-id} is  \tcode{C<A$_1$, A$_2$, ..., A$_n$>}.
+a concept-dependent constraint whose concept-id is  \tcode{C<A$_1$, A$_2$, ..., A$_n$>}.
 \end{addedblock}
 
 \item
-\added{Otherwise}, The normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>}
+\added{Otherwise}, \changed{The}{the} normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>}
 is the normal form of the \grammarterm{constraint-expression} of \tcode{C},
 after substituting \tcode{A$_1$, A$_2$, ..., A$_n$} for
 \tcode{C}{'s} respective template parameters in the
@@ -2244,10 +2251,10 @@ is called
 template <typename T>
 concept C = true;
 
-template <template <typename T, template<typename...> concept> concept CT>
-concept CC= CT<T>;
+template <typename T, template<typename, template <typename> concept> concept CT>
+concept CC = CT<T>;
 
-template <template <typename U, template<typename...> concept> concept CT>
+template <typename U, template<typename, template <typename> concept> concept CT>
 void f() requires CT<U*, C>;
 
 template <typename U>
@@ -2255,7 +2262,7 @@ void g() requires CC<U*, C>;
 \end{codeblock}
 
 The normal form of the associated constraints of \tcode{f} is the
-atomic constraint \tcode{CT<T, C>}.
+concept-dependent constraint \tcode{CT<T, C>}.
 %%(with mapping $\tcode{T} \mapsto \tcode{U*}, ????$)
 
 The normal form of the associated constraints of \tcode{g} is the
@@ -2361,7 +2368,7 @@ atomic constraint \tcode{true}.
 %the atomic constraint
 %whose expression is \tcode{E} and
 %whose parameter mapping is the identity mapping.
-%\end{itemize}
+%\end{end}
 %
 %\pnum
 %The process of obtaining the normal form of a
@@ -2381,8 +2388,6 @@ atomic constraint \tcode{true}.
 
 \rSec2[temp.constr.order]{Partial ordering by constraints}
 \indextext{subsume|see{constraint, subsumption}}
-
-\rSec2[temp.constr.order]{Partial ordering by constraints}
 
 \pnum
 \indextext{subsume|see{constraint, subsumption}}
@@ -2409,8 +2414,8 @@ in the conjunctive normal form of $Q$, where
 
 \begin{addedblock}
 \item a concept-dependent constraint $A$ subsumes
-another concept-dependent expanded constraint $B$
-if their concept-id are equivalent.
+another concept-dependent constraint $B$
+if their concept-ids are equivalent.
 \end{addedblock}
 
 \end{itemize}
@@ -2441,7 +2446,7 @@ if their concept-id are equivalent.
 \begin{addedblock}
 
     The associated constraints \tcode{C} of a declaration \tcode{D} are \emph{eligible for subsumption}
-    unless \tcode{C} contains an atomic constraint that names a  \grammarterm{concept-tt-parameter}.
+    unless \tcode{C} contains a concept-dependent constraint.
 
 \end{addedblock}
 
@@ -2602,85 +2607,85 @@ the following restrictions apply:
 
 \textcolor{noteclr}{[...]}
 
-\rSec2[temp.inst]{Implicit instantiation}
-
-\pnum
-\removed{The \grammarterm{type-constraint}{s} and \grammarterm{requires-clause}
-of a template specialization or member function
-are not instantiated along with the specialization or function itself,
-even for a member function of a local class;}
-\begin{addedblock}
-When instantiating a template specialization or member function, each concept-dependent constraint
-in its \grammarterm{type-constraint}{s} and \grammarterm{requires-clause}
-is replaced by its substited normal form [temp.constr.concept].
-No further instantiation of the constraints are performed,  even for a member function of a local class;
-\end{addedblock}
-substitution into the atomic constraints formed from them is instead performed
-as specified in [temp.constr.decl] and [temp.constr.atomic]
-when determining whether the constraints are satisfied
-or as specified in [temp.constr.dec] when comparing declarations.
-\begin{note}
-    The satisfaction of constraints is determined during
-    template argument deduction \iref{temp.deduct} and
-    overload resolution \iref{over.match}.
-\end{note}
-\begin{example}
-\begin{codeblock}
-    template<typename T> concept C = sizeof(T) > 2;
-    template<typename T> concept D = C<T> && sizeof(T) > 4;
-
-    template<typename T> struct S {
-        S() requires C<T> { }         // \#1
-        S() requires D<T> { }         // \#2
-    };
-
-    S<char> s1;                     // error: no matching constructor
-    S<char[8]> s2;                  // OK, calls \#2
-\end{codeblock}
-When \tcode{S<char>} is instantiated, both constructors are part of the
-specialization. Their constraints are not satisfied, and
-they suppress the implicit declaration of a default constructor for
-\tcode{S<char>} \iref{class.default.ctor}, so there is no viable constructor
-for \tcode{s1}.
-\end{example}
-\begin{example}
-\begin{codeblock}
-    template<typename T> struct S1 {
-        template<typename U>
-        requires false
-        struct Inner1;                // ill-formed, no diagnostic required
-    };
-
-    template<typename T> struct S2 {
-        template<typename U>
-        requires (sizeof(T[-(int)sizeof(T)]) > 1)
-        struct Inner2;                // ill-formed, no diagnostic required
-    };
-\end{codeblock}
-The class \tcode{S1<T>::Inner1} is ill-formed, no diagnostic required, because
-it has no valid specializations.
-\tcode{S2} is ill-formed, no diagnostic required, since no substitution into
-the constraints of its \tcode{Inner2} template would result in a valid
-expression.
-\end{example}
-
-\begin{addedblock}
-\begin{example}
-\begin{codeblock}
-template<typename T> concept C = true;
-template<typename T> concept D = true && true;
-template <template <typename> concept TT>
-struct S {
-    template <typename T>
-    void f(T) requires C<T>; // \#1
-    template <typename T>
-    void f(T) requires TT<T> // \#2
-};
-S<D>{}.f(42); // calls \#2: D<int> subsumes C<int>
-\end{codeblock}
-\end{example}
-\end{addedblock}
-\textcolor{noteclr}{[...]}
+%\rSec2[temp.inst]{Implicit instantiation}
+%
+%\pnum
+%\removed{The \grammarterm{type-constraint}{s} and \grammarterm{requires-clause}
+%of a template specialization or member function
+%are not instantiated along with the specialization or function itself,
+%even for a member function of a local class;}
+%\begin{addedblock}
+%When instantiating a template specialization or member function, each concept-dependent constraint
+%in its \grammarterm{type-constraint}{s} and \grammarterm{requires-clause}
+%is replaced by its substited normal form [temp.constr.concept].
+%No further instantiation of the constraints are performed,  even for a member function of a local class;
+%\end{addedblock}
+%substitution into the atomic constraints formed from them is instead performed
+%as specified in [temp.constr.decl] and [temp.constr.atomic]
+%when determining whether the constraints are satisfied
+%or as specified in [temp.constr.dec] when comparing declarations.
+%\begin{note}
+%    The satisfaction of constraints is determined during
+%    template argument deduction \iref{temp.deduct} and
+%    overload resolution \iref{over.match}.
+%\end{note}
+%\begin{example}
+%\begin{codeblock}
+%    template<typename T> concept C = sizeof(T) > 2;
+%    template<typename T> concept D = C<T> && sizeof(T) > 4;
+%
+%    template<typename T> struct S {
+%        S() requires C<T> { }         // \#1
+%        S() requires D<T> { }         // \#2
+%    };
+%
+%    S<char> s1;                     // error: no matching constructor
+%    S<char[8]> s2;                  // OK, calls \#2
+%\end{codeblock}
+%When \tcode{S<char>} is instantiated, both constructors are part of the
+%specialization. Their constraints are not satisfied, and
+%they suppress the implicit declaration of a default constructor for
+%\tcode{S<char>} \iref{class.default.ctor}, so there is no viable constructor
+%for \tcode{s1}.
+%\end{example}
+%\begin{example}
+%\begin{codeblock}
+%    template<typename T> struct S1 {
+%        template<typename U>
+%        requires false
+%        struct Inner1;                // ill-formed, no diagnostic required
+%    };
+%
+%    template<typename T> struct S2 {
+%        template<typename U>
+%        requires (sizeof(T[-(int)sizeof(T)]) > 1)
+%        struct Inner2;                // ill-formed, no diagnostic required
+%    };
+%\end{codeblock}
+%The class \tcode{S1<T>::Inner1} is ill-formed, no diagnostic required, because
+%it has no valid specializations.
+%\tcode{S2} is ill-formed, no diagnostic required, since no substitution into
+%the constraints of its \tcode{Inner2} template would result in a valid
+%expression.
+%\end{example}
+%
+%\begin{addedblock}
+%\begin{example}
+%\begin{codeblock}
+%template<typename T> concept C = true;
+%template<typename T> concept D = true && true;
+%template <template <typename> concept TT>
+%struct S {
+%    template <typename T>
+%    void f(T) requires C<T>; // \#1
+%    template <typename T>
+%    void f(T) requires TT<T> // \#2
+%};
+%S<D>{}.f(42); // calls \#2: D<int> subsumes C<int>
+%\end{codeblock}
+%\end{example}
+%\end{addedblock}
+%\textcolor{noteclr}{[...]}
 
 \rSec3[temp.over.link]{Function template overloading}
 \textcolor{noteclr}{[...]}
