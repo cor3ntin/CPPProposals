@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{\tcode{constexpr} structured bindings\\{\small and}\\\ references to \tcode{constexpr} variables}
-\docnumber{D2686R5}
+\docnumber{P2686R5}
 \audience{CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Brian Bi}{bbi10@bloomberg.net}
@@ -28,6 +28,7 @@ This paper reports implementation experience on this proposal and provides updat
 
 \begin{itemize}
 \item Fix examples in the core wording.
+\item Add notes on implementation
 \end{itemize}
 
 \subsection{Revision 4}
@@ -392,6 +393,29 @@ function, the compiler transforms that access into something like
 \tcode{x}. The expression \tcode{(*this).__x} is not a constant expression
 because it isn't known at compile time what object \tcode{this} points to.
 \end{quote}
+
+\section{Implenentation}
+
+This paper was implemented in EDG (Thanks Daveed). The implementation is available on
+\href{https://compiler-explorer.com/z/sezf7rd6c}{Compiler explorer}.
+
+Note that EDG (and MSVC) is not capable of handling some valid C++23 code, where a temporary is persisted
+via lifetime extension in aggregate initialization.
+\begin{colorblock}
+struct A {
+    int* const& r;
+};
+static int x;
+static constexpr A a = {&x};
+static_assert(a.r == &x);
+\end{colorblock}
+
+\href{https://compiler-explorer.com/z/3fbKqGzbr}{[Compiler Explorer]}.
+
+And this proposal make this problem somewhat more visible.
+
+After discussion with EDG, we agree that this is an orthogonal issue that might require
+a core issue in the future if the implementation challenges prove too great.
 
 \section{Wording for Option 3a (symbolic addressing with the same-function restriction)}
 
@@ -1081,7 +1105,8 @@ void f(int p) {
 
 \section{Acknowledgments}
 
-We would like to thank Bloomberg for sponsoring this work.
+We would like to thanks EDG and Daveed Vandevoorde for providing an implementation.
+
 Thanks to Nina Dinka Ranns, Pablo Halpern, and Joshua Berne for their feedback.
 
 Thanks to Richard Smith for the original discussion of possible solutions on the Core reflector, for helping us understand the interaction of this feature with lambda expressions, and for feedback on the wording.

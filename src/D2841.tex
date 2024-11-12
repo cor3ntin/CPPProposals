@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Concept and variable-template template-parameters}
-\docnumber{D2841R5}
+\docnumber{P2841R5}
 \audience{CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Gašper Ažman}{gasper.azman@gmail.com}
@@ -21,7 +21,7 @@
 
 C++ allows passing templates as template parameters.
 However, they are forced to be typenames (either type alias templates or class templates).
-Variable templates or concepts are  supported.
+Variable templates or concepts are not supported.
 This is a hole in the template facilities and is the topic of this paper.
 
 We introduce a way to pass concepts and variable templates as template parameters.
@@ -51,6 +51,8 @@ Note: this paper is a subset of the larger \paper{P1985R3} (Universal Template P
 \subsection{R5}
 
 \begin{itemize}
+\item Following CWG review and concertation on the EWG reflector,
+concept template parameters appearing in an enclosing template are not eligible for subsumption.
 \item Wording fixes.
 \end{itemize}
 
@@ -740,7 +742,26 @@ In the previous revision of this paper, EWG was asked to choose between these op
 (Option 1 and 1B can be evolved into option 2 later, the opposite would be a breaking change.)
 \end{itemize}
 
-\textbf{EWG choose the first option.}
+\textbf{EWG chose the first option.}
+
+After CWG review in St Louis and \href{https://lists.isocpp.org/ext/2024/10/23412.php}{concertation on the EWG reflector}, the same logic is applied to
+concept template parameters of enclosing templates, with the same motivation.
+
+\begin{colorblock}
+template <typename T>
+concept A = true;
+
+template <typename T>
+concept B = A<T> && true;
+
+template <template <typename> concept Class1,
+          template <typename> concept Class2>
+struct S {
+     static constexpr int g(Class1 auto) {return 1;} // # 5
+     static constexpr int g(Class2 auto) {return 2;} // # 6
+};
+static_assert(S<A, B>::g(1) == 2); // ambiguous?
+\end{colorblock}
 
 
 \subsection{Deduction of template parameters from the argument list of a variable template argument}
@@ -2096,6 +2117,24 @@ refer to the same class, function, \added{concept, }or variable.
 
 \rSec2[temp.constr.constr]{Constraints}
 
+\pnum
+A \defn{constraint} is a sequence of logical operations and
+operands that specifies requirements on template arguments.
+The operands of a logical operation are constraints.
+There are \changed{four}{five} different kinds of constraints:
+\begin{itemize}
+    \item conjunctions\iref{temp.constr.op},
+    \item disjunctions\iref{temp.constr.op},
+    \item atomic constraints\iref{temp.constr.atomic}, and
+    \item fold expanded constraints\iref{temp.constr.fold}.
+\begin{addedblock}
+    \item concept-dependent constraints\iref{temp.constr.concept}.
+\end{addedblock}
+\end{itemize}
+
+\textcolor{noteclr}{[...]}
+
+
 \ednote{Add a new section after [temp.constr.atomic]}
 
 \begin{addedblock}
@@ -2119,8 +2158,8 @@ The constraint is satisfied if \tcode{E} is satisfied.
 %if the argument \tcode{A} corresonding
 %to the concept template parameter named by \tcode{C} is not dependent, \tcode{C<Args..>} is substituted by
 %the normal form of \tcode{A<Args..>}.
-The substituted normal form of \tcode{C<A1, ..., An>} is the normal form of \tcode{A<A1, ..., An>} where \tcode{A} is the argument
-corresponding to the concept template parameter named by \tcode{C}.
+%The substituted normal form of \tcode{C<A1, ..., An>} is the normal form of \tcode{A<A1, ..., An>} where \tcode{A} is the argument
+%corresponding to the concept template parameter named by \tcode{C}.
 
 \end{addedblock}
 
@@ -2129,9 +2168,21 @@ corresponding to the concept template parameter named by \tcode{C}.
 
 \indextext{constraint!normalization|(}%
 
+\begin{addedblock}
+%For an expression \tcode{E} that is a subexpression of an associated constraint of a declaration \tcode{D},
+%the \defn{substitutable concept parameter}{s} of \tcode{E} are the set of concept template parameters named by \tcode{E}
+%that are declared in in the enclosing template of \tcode{D} and for which there exist a corresponding set of non-dependent template arguments.
+%
+For an expression \tcode{E} that is a subexpression of the \grammarterm{constraint-expression} of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>},
+the \defn{substitutable concept parameters} of \tcode{E} is set of concept template parameters named by \tcode{E}
+which denotes a template parameter of \tcode{C} and for which there is a corresponding non-dependent argument in \tcode{C<A$_1$, A$_2$, ..., A$_n$>}.
+
+\end{addedblock}
+
 \pnum
 The \defnx{normal form}{normal form!constraint} of an \grammarterm{expression} \tcode{E} is
-a constraint\iref{temp.constr.constr} that is defined as follows:
+a constraint \iref{temp.constr.constr} that is defined as follows:
+
 %
 \begin{itemize}
 \item
@@ -2140,7 +2191,7 @@ the normal form of \tcode{E}.
 
 \item
 The normal form of an expression \tcode{E1 || E2} is
-the disjunction\iref{temp.constr.op} of
+the disjunction \iref{temp.constr.op} of
 the normal forms of \tcode{E1} and \tcode{E2}.
 
 \item
@@ -2148,20 +2199,42 @@ The normal form of an expression \tcode{E1 \&\& E2}
 is the conjunction of
 the normal forms of \tcode{E1} and \tcode{E2}.
 
+\added{For a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>}}
+\begin{itemize}
 \begin{addedblock}
-\item When \tcode{C} names a concept template parameter,
-the normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>} is
-a concept-dependent constraint whose concept-id is  \tcode{C<A$_1$, A$_2$, ..., A$_n$>}.
-\end{addedblock}
+%\item When \tcode{C} names a substitutable concept parameter, the normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>} is
+%the normal form of \tcode{C'<A$_1$, A$_2$, ..., A$_n$>} after substituting \tcode{C} by the corresponding template argument \tcode{C'}.
+\item When \tcode{C} names a concept template parameter, the normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>} is a concept-dependent constraint
+ whose concept-id is  \tcode{C<A$_1$, A$_2$, ..., A$_n$>}.
 
+\end{addedblock}
 \item
 \added{Otherwise}, \changed{The}{the} normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>}
 is the normal form of the \grammarterm{constraint-expression} of \tcode{C},
-after substituting \tcode{A$_1$, A$_2$, ..., A$_n$} for
+after
+
+\begin{removedblock}
+ substituting \tcode{A$_1$, A$_2$, ..., A$_n$} for
+    \tcode{C}{'s} respective template parameters in the
+    parameter mappings in each atomic constraint.
+    If any such substitution results in an invalid type or expression,
+    the program is ill-formed; no diagnostic is required.
+\end{removedblock}
+\begin{addedblock}
+\begin{itemize}
+\item Substituting each substitutable concept parameter in each concept-id \tcode{CI} of each non-atomic subexpression of the \grammarterm{constraint-expression} of \tcode{C} by the corresponding template argument of \tcode{C}. If substitution \tcode{CI} results in an invalid concept-id, the normal form of \tcode{CI} is \tcode{false}.
+% a concept-dependent constraint whose concept-id is \tcode{CI}.
+\item Substituting each argument \tcode{A$_k$} of \tcode{C<A$_1$, A$_2$, ..., A$_n$>} that is not a \grammarterm{concept-name} for
 \tcode{C}{'s} respective template parameters in the
 parameter mappings in each atomic constraint.
 If any such substitution results in an invalid type or expression,
 the program is ill-formed; no diagnostic is required.
+\end{itemize}
+\end{addedblock}
+
+\end{itemize}
+
+
 \begin{example}
     \begin{codeblock}
         template<typename T> concept A = T::value || true;
@@ -2203,9 +2276,34 @@ is the normal form of
     otherwise.
 \end{itemize}
 
+\begin{addedblock}
+\item
+For a \grammarterm{fold-operator} that is either \tcode{\&\&} or \tcode{||},
+\begin{itemize}
+\item If \tcode{E} contains one or more unexpanded parameter packs $P_k$ that denotes a substitutable concept parameter,
+let $N_k$ be the number of arguments specified for each pack $P_k$.
+If the value of each $N_k$ differs, the normal form of \tcode{( E \grammarterm{fold-operator} ... )} is a fold expanded constraint \iref{temp.constr.fold}
+whose constraint is the normal form of \tcode{E}.
+
+Otherwise the normal form of \tcode{( E \grammarterm{fold-operator} ... )} is the conjunction (for a \grammarterm{fold-operator} that is \tcode{\&\&}),
+or the disjunction (for a \grammarterm{fold-operator} that is \tcode{||}), of the normal form of each $E_i$ for $0 < i < N_0$.
+If producing the normal form of a subexpression of $E_i$ requires to subsitute a concept-name refering to a $P_k$, it is substituted by the $i^\text{th}$ corresponding template argument.
+
+%
+%after substituting in $E_k$ every concept-name naming a $P$ and appearing in a concept-id \tcode{CI} (that is a subexpression of $E_k$) by the $i^\text{th}$ corresponding template arguments. If substitution in \tcode{CI} results in an invalid concept-id, the normal form of \tcode{CI} is a concept-dependent constraint whose concept-id is \tcode{CI}.
+
+%\ednote{This is wrong, we should not do substitution there but when normalizing each $E_k$}
+
+
+\item Otherwise (if \tcode{E} does not contain an unexpanded parameter pack that denote a substitutable concept template parameter pack), the normal form of \tcode{( E \grammarterm{fold-operator} ... )} is a fold expanded constraint\iref{temp.constr.fold}
+whose constraint is the normal form of \tcode{E} and
+whose \grammarterm{fold-operator} is \grammarterm{fold-operator}.
+\end{itemize}
+\end{addedblock}
+\begin{removedblock}
 \item
 The normal form of \tcode{( E \&\& ... )} is
-a fold expanded constraint\iref{temp.constr.fold}
+a fold expanded constraint \iref{temp.constr.fold}
 whose constraint is the normal form of \tcode{E} and
 whose \grammarterm{fold-operator} is \tcode{\&\&}.
 
@@ -2214,6 +2312,8 @@ The normal form of \tcode{( E || ... )} is
 a fold expanded constraint
 whose constraint is the normal form of \tcode{E} and
 whose \grammarterm{fold-operator} is \tcode{||}.
+
+\end{removedblock}
 
 \item
 The normal form of any other expression \tcode{E} is
@@ -2282,6 +2382,28 @@ The normal form of the associated constraints of \tcode{g} is the
 atomic constraint \tcode{true}.
 %%(with mapping $\tcode{T} \mapsto \tcode{U*}$)
 
+\end{example}
+\begin{example}
+\begin{codeblock}
+template <typename T>
+concept A = true;
+template <typename T>
+concept B = A<T> && true; // A subsumes B
+template <typename T>
+concept C = true;
+template <typename T>
+concept D = C<T> && true; // D subsumes C
+
+template <typename T, template <typename> concept... CTs>
+concept all_of = (CTs<T> && ...);
+constexpr int f(all_of<A, C> auto) {return 1;} // \#1
+constexpr int f(all_of<B, D> auto) {return 2;} // \#2
+static_assert(f(1));
+\end{codeblock}
+
+The normal form of \tcode{all_of<T, A, C>} is the conjunction of the normal forms of \tcode{A<T>} and \tcode{C<T>}.
+Similarly, the normal form of \tcode{all_of<T, B, D>} is the conjunction of the normal forms of \tcode{B<T>} and \tcode{D<T>}.
+\#2 therefore is more constrained than \#1.
 \end{example}
 \end{addedblock}
 %
@@ -2425,11 +2547,11 @@ in the conjunctive normal form of $Q$, where
     have the same \grammarterm{fold-operator}, and
     the constraint of $A$ subsumes that of $B$.
 
-\begin{addedblock}
-\item a concept-dependent constraint $A$ subsumes
-another concept-dependent constraint $B$
-if their concept-ids are equivalent.
-\end{addedblock}
+%\begin{addedblock}
+%\item a concept-dependent constraint $A$ subsumes
+%another concept-dependent constraint $B$
+%if their concept-ids are equivalent.
+%\end{addedblock}
 
 \end{itemize}
 %
@@ -2501,7 +2623,7 @@ constrained as \tcode{D1}.
 \begin{addedblock}
 \begin{example}
     \begin{codeblock}
-        template <template <typename T> concept X, typename T>
+        template <template <typename T> concept CT, typename T>
         struct S {};
         template <typename T>
         concept A = true;
@@ -3450,7 +3572,7 @@ For example:
 \section{Acknowledgments}
 Many people contributed valuable discussions and feedbacks to this paper, notably
 Brian Bi, Nina Dinka Ranns, Alisdair Meredith, Joshua Berne, Pablo Halpern, Lewis Baker, Bengt Gustafsson,
-Hannеs Hauswedell and Barry Revzin.
+Hannеs Hauswedell, Richard Smith and Barry Revzin.
 
 We would like to thanks Daveed Vandevoorde for convince us to find a design that does not affect partial ordering.
 

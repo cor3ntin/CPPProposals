@@ -712,11 +712,11 @@ public:
 \end{codeblock}
 \begin{addedblock}
 \begin{codeblock}
-    template <typename T>
+    template <class T>
     class name_hint;
-    template <typename T>
+    template <class T>
     name_hint(const T*) -> name_hint<T>;
-    template <typename T>
+    template <class T>
     name_hint(basic_string<T>) -> name_hint<T>;
 
     class stack_size_hint;
@@ -756,7 +756,7 @@ public:
 
 Thread attributes can be used to define additional implementation-defined behaviors on a \tcode{thread} or \tcode{jthread} object.
 
-The set of thread attributes types contains \tcode{thread::name_hint}, \tcode{thread::stack_size_hint} and an implementation-defined set of additional thread-attributes.
+The set of thread attribute types contains \tcode{thread::name_hint}, \tcode{thread::stack_size_hint} and an implementation-defined set of additional thread-attributes.
 
 When an object of a thread attribute type is passed to a thread or jthread constructor, it may
 affect the new thread behavior.
@@ -766,7 +766,7 @@ affect the new thread behavior.
 \rSec4[thread.thread.name.hint]{Class \tcode{thread::name_hint}}
 
 \begin{codeblock}
-template <typename T>
+template <class T>
 class thread::name_hint {
 public:
     explicit constexpr
@@ -774,7 +774,7 @@ public:
     name_hint(name_hint&&) = delete;
     name_hint(const name_hint&) = delete;
 private:
-    basic_string_view<T> __name; // exposition-only
+    basic_string_view<T> name; // exposition-only
 };
 \end{codeblock}
 
@@ -788,7 +788,7 @@ to set the name of a thread such that the name could be used for debugging or pl
 Implementations should not store the value of the \tcode{name_hint} attribute in the \tcode{thread} or \tcode{jthread} object.
 
 \begin{itemdecl}
-explicit constexpr name_hint(basic_string_view<T> name);
+explicit constexpr name_hint(basic_string_view<T> n);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -797,7 +797,7 @@ explicit constexpr name_hint(basic_string_view<T> name);
 
 \tcode{name} is treated as a NTBS in the execution encoding.
 
-\effects Initializes \tcode{__name} with \tcode{name}.
+\effects Initializes \tcode{name} with \tcode{n}.
 \end{itemdescr}
 
 \rSec4[thread.thread.stack.hint]{Class \tcode{thread::stack_size_hint}}
@@ -805,10 +805,10 @@ explicit constexpr name_hint(basic_string_view<T> name);
 \begin{codeblock}
 namespace std {
 class thread::stack_size_hint {
-	public:
-		constexpr explicit stack_size_hint(size_t size) noexcept;
-	private:
-		constexpr size_t __size; // \expos
+public:
+    constexpr explicit stack_size_hint(size_t s) noexcept;
+private:
+    constexpr size_t size; // \expos
 };
 }
 \end{codeblock}
@@ -821,14 +821,14 @@ class thread::stack_size_hint {
 Configure a desired stack size in bytes. %as if by POSIX \mbox{\tcode{pthread_attr_setstacksize}}.\\
 The stack size set by the implementation may be adjusted up or down to meet platform-specific requirements.
 
-If \tcode{__size == 0} is \tcode{true} the thread attribute should be ignored.
+If \tcode{size == 0} is \tcode{true} the thread attribute should be ignored.
 
 \begin{itemdecl}
 constexpr explicit stack_size_hint(size_t size) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
-\effects Initializes \tcode{__size} with \tcode{size}.
+\effects Initializes \tcode{size} with \tcode{s}.
 \end{itemdescr}
 
 \end{addedblock}
@@ -909,7 +909,7 @@ If the invocation of \tcode{invoke} terminates with an uncaught exception,
 \tcode{terminate} is called.
 
 \begin{addedblock}
-The parameter \tcode{attrs...} may affect the behavior of the new thread. (see [thread.attributes]).
+The parameters \tcode{attrs...} may affect the behavior of the new thread. (see [thread.attributes]).
 \end{addedblock}
 
 \pnum
@@ -959,7 +959,7 @@ namespace std {
 \end{codeblock}
 \begin{addedblock}
 \begin{codeblock}
-    template <typename T>
+    template <class T>
     using name_hint = thread::name_hint<T>;
     using stack_size_hint = thread::stack_size_hint;
 \end{codeblock}
@@ -1026,7 +1026,7 @@ template<@\removed{class F,}@ class... Args>
 explicit jthread(@\removed{F\&\& f,}@ Args&&... args);\end{itemdecl}\begin{itemdescr}\begin{itemize}\begin{addedblock}
 \item \tcode{sizeof...(Args) > 0} is \tcode{true}, and
 \end{addedblock}
-\item \tcode{remove_cvref_t<\changed{F}{Args[0]}>} is not the same type as \tcode{jthread}.
+\item \tcode{remove_cvref_t<\changed{F}{Args...[0]}>} is not the same type as \tcode{jthread}.
 \end{itemize}
 
 \begin{addedblock}
@@ -1037,10 +1037,10 @@ If no such $i$ exists, the program is ill-formed.
 
 \item Let \tcode{F} be \tcode{Args...[$i$]}.
 \item Let \tcode{f} be \tcode{args...[$i$]}.
-\item Let \tcode{Attrs} a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
-\item Let \tcode{attrs} a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
-\item Let \tcode{FArgs} a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ i < j <  \tcode{sizeof...(args)}$.
-\item Let \tcode{fargs} a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ i < j < \tcode{sizeof...(args)}$.
+\item Let \tcode{Attrs} be a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
+\item Let \tcode{attrs} be a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ 0 \leq j < i $.
+\item Let \tcode{FArgs} be a pack of the types \tcode{Args...[$j$]} for each $j$ such that $ i < j <  \tcode{sizeof...(args)}$.
+\item Let \tcode{fargs} be a pack of the expressions \tcode{args...[$j$]} for each $j$ such that $ i < j < \tcode{sizeof...(args)}$.
 \end{itemize}
 \end{addedblock}
 
@@ -1090,7 +1090,7 @@ If the \tcode{invoke} expression exits via an exception,
 \tcode{terminate} is called.
 
 \begin{addedblock}
-\tcode{attrs} can be used to tailor the thread with additional implementation-defined behaviors. (see [thread.attributes]).
+The parameters \tcode{attrs...} may affect the behavior of the new thread.
 \end{addedblock}
 
 \pnum
