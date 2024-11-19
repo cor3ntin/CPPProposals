@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Concept and variable-template template-parameters}
-\docnumber{P2841R5}
+\docnumber{D2841R6}
 \audience{CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Gašper Ažman}{gasper.azman@gmail.com}
@@ -2145,12 +2145,10 @@ There are \changed{four}{five} different kinds of constraints:
 A \defn{concept-dependent constraint} is formed from a concept-id \tcode{C<A1, ..., An>}
 where \tcode{C} names a concept template parameter.
 
-Two concept-dependent constraints are equivalent if their concept-ids are equivalent.
+\ednote{replace formed from?}
 
-
-To determine if a concept-dependent constraint is satisfied, template arguments are first substituted into its
-concept-id \tcode{C<A1, ..., An>}. If substitution results in an invalid concept-id in the immediate context of the constraint ([temp.deduct.general]), the constraint is not satisfied.
-Otherwise, let \tcode{E} be the normal form of \tcode{C<A1, ..., An>} after substitution.
+To determine if a concept-dependent constraint is satisfied, template arguments are first substituted into \tcode{C}. If substitution results in an invalid concept-id in the immediate context of the constraint ([temp.deduct.general]), the constraint is not satisfied.
+Otherwise, let \tcode{E} be the normal form of the concept-id after substitution of \tcode{C}.
 The constraint is satisfied if \tcode{E} is satisfied.
 
 
@@ -2173,9 +2171,16 @@ The constraint is satisfied if \tcode{E} is satisfied.
 %the \defn{substitutable concept parameter}{s} of \tcode{E} are the set of concept template parameters named by \tcode{E}
 %that are declared in in the enclosing template of \tcode{D} and for which there exist a corresponding set of non-dependent template arguments.
 %
-For an expression \tcode{E} that is a subexpression of the \grammarterm{constraint-expression} of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>},
-the \defn{substitutable concept parameters} of \tcode{E} is set of concept template parameters named by \tcode{E}
-which denotes a template parameter of \tcode{C} and for which there is a corresponding non-dependent argument in \tcode{C<A$_1$, A$_2$, ..., A$_n$>}.
+Given a concept-id  \tcode{C<A$_1$, A$_2$, ..., A$_n$>},
+the \defn{substitutable concept parameters} of an expression \tcode{E} that is a subexpression of the \grammarterm{constraint-expression} of \tcode{C} is the set of concept template parameters of \tcode{C} for which there is a corresponding argument in \tcode{C<A$_1$, A$_2$, ..., A$_n$>}.
+%
+%The \defn{substitutable concept parameters} of \tcode{E}
+%is the set of non-dependent associated concept parameters of \tcode{E}.
+
+The normal form of a concept-dependent constraint \tcode{CD} whose concept-id \tcode{CI} is \tcode{C<A$_1$, A$_2$, ..., A$_n$>} is the normal form of \tcode{CI} after substituting each \tcode{C} and \tcode{A$_1$} that names a substitutable concept parameter by the corresponding template argument
+%of \tcode{C<A$_1$, A$_2$, ..., A$_n$>}.
+If substitution results in an invalid concept-id, the normal form of \tcode{CD} is \tcode{false}.
+If no concept template parameter is substituted, the normal form of \tcode{CD} is \tcode{CD}.
 
 \end{addedblock}
 
@@ -2199,38 +2204,33 @@ The normal form of an expression \tcode{E1 \&\& E2}
 is the conjunction of
 the normal forms of \tcode{E1} and \tcode{E2}.
 
-\added{For a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>}}
+\added{For a concept-id \tcode{CI} of the form \tcode{C<A$_1$, A$_2$, ..., A$_n$>}}
 \begin{itemize}
 \begin{addedblock}
 %\item When \tcode{C} names a substitutable concept parameter, the normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>} is
 %the normal form of \tcode{C'<A$_1$, A$_2$, ..., A$_n$>} after substituting \tcode{C} by the corresponding template argument \tcode{C'}.
-\item When \tcode{C} names a concept template parameter, the normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>} is a concept-dependent constraint
- whose concept-id is  \tcode{C<A$_1$, A$_2$, ..., A$_n$>}.
+\item When \tcode{C} or any \tcode{A$_{0 \le i < n}$} name a concept template parameter, the normal form of \tcode{CI} is the normal form of a concept-dependent constraint whose concept-id is  \tcode{CI}.
 
 \end{addedblock}
 \item
-\added{Otherwise}, \changed{The}{the} normal form of a concept-id \tcode{C<A$_1$, A$_2$, ..., A$_n$>}
+\added{Otherwise}, \changed{The}{the} normal form of \tcode{CI}
 is the normal form of the \grammarterm{constraint-expression} of \tcode{C},
-after
-
-\begin{removedblock}
- substituting \tcode{A$_1$, A$_2$, ..., A$_n$} for
+after substituting \tcode{A$_1$, A$_2$, ..., A$_n$} for
     \tcode{C}{'s} respective template parameters in the
     parameter mappings in each atomic constraint.
     If any such substitution results in an invalid type or expression,
     the program is ill-formed; no diagnostic is required.
-\end{removedblock}
-\begin{addedblock}
-\begin{itemize}
-\item Substituting each substitutable concept parameter in each concept-id \tcode{CI} of each non-atomic subexpression of the \grammarterm{constraint-expression} of \tcode{C} by the corresponding template argument of \tcode{C}. If substitution \tcode{CI} results in an invalid concept-id, the normal form of \tcode{CI} is \tcode{false}.
-% a concept-dependent constraint whose concept-id is \tcode{CI}.
-\item Substituting each argument \tcode{A$_k$} of \tcode{C<A$_1$, A$_2$, ..., A$_n$>} that is not a \grammarterm{concept-name} for
-\tcode{C}{'s} respective template parameters in the
-parameter mappings in each atomic constraint.
-If any such substitution results in an invalid type or expression,
-the program is ill-formed; no diagnostic is required.
-\end{itemize}
-\end{addedblock}
+%\begin{addedblock}
+%\begin{itemize}
+%\item Substituting each substitutable concept parameter in each concept-id \tcode{CI} of each non-atomic subexpression of the \grammarterm{constraint-expression} of \tcode{C} by the corresponding template argument of \tcode{C}. If substitution \tcode{CI} results in an invalid concept-id, the normal form of \tcode{CI} is \tcode{false}.
+%% a concept-dependent constraint whose concept-id is \tcode{CI}.
+%\item Substituting each argument \tcode{A$_k$} of \tcode{C<A$_1$, A$_2$, ..., A$_n$>} that is not a \grammarterm{concept-name} for
+%\tcode{C}{'s} respective template parameters in the
+%parameter mappings in each atomic constraint.
+%If any such substitution results in an invalid type or expression,
+%the program is ill-formed; no diagnostic is required.
+%\end{itemize}
+%\end{addedblock}
 
 \end{itemize}
 
@@ -2255,39 +2255,57 @@ the program is ill-formed; no diagnostic is required.
 \end{example}
 
 \item
-For a \grammarterm{fold-operator}\iref{expr.prim.fold}
+For a \grammarterm{fold-operator} \added{\tcode{Op}} \iref{expr.prim.fold}
 that is either \tcode{\&\&} or \tcode{||},
+
+\begin{itemize}
+\item
 the normal form of an expression
-\tcode{( ... \grammarterm{fold-operator} E )} is the normal form of
-\tcode{( E \grammarterm{fold-operator} ... )}.
+\tcode{( ... \changed{\grammarterm{fold-operator}}{Op} E )} is the normal form of
+\tcode{( E \changed{\grammarterm{fold-operator}}{Op} ... )}.
 
 \item
-For a \grammarterm{fold-operator}
-that is either \tcode{\&\&} or \tcode{||},
+\removed{For a \grammarterm{fold-operator}
+that is either \tcode{\&\&} or \tcode{||},}
 the normal form of an expression
-\tcode{( E1 \grammarterm{fold-operator} ... \grammarterm{fold-operator} E2 )}
+\tcode{( E1 \changed{\grammarterm{fold-operator}}{Op} ... \changed{\grammarterm{fold-operator}}{Op} E2 )}
 is the normal form of
 \begin{itemize}
     \item
-    \tcode{( E1 \grammarterm{fold-operator} ... ) \grammarterm{fold-operator} E2}
+    \tcode{( E1 \changed{\grammarterm{fold-operator}}{Op} ... ) \changed{\grammarterm{fold-operator}}{Op} E2}
     if \tcode{E1} contains an unexpanded pack, or
     \item
-    \tcode{E1 \grammarterm{fold-operator} ( E2 \grammarterm{fold-operator} ... )}
+    \tcode{E1 \changed{\grammarterm{fold-operator}}{Op} ( E2 \changed{\grammarterm{fold-operator}}{Op} ... )}
     otherwise.
 \end{itemize}
 
 \begin{addedblock}
 \item
-For a \grammarterm{fold-operator} that is either \tcode{\&\&} or \tcode{||},
+For an expression \tcode{F} of the form \tcode{( E \grammarterm{Op} ... )}
 \begin{itemize}
-\item If \tcode{E} contains one or more unexpanded parameter packs $P_k$ that denotes a substitutable concept parameter,
-let $N_k$ be the number of arguments specified for each pack $P_k$.
-If the value of each $N_k$ differs, the normal form of \tcode{( E \grammarterm{fold-operator} ... )} is a fold expanded constraint \iref{temp.constr.fold}
-whose constraint is the normal form of \tcode{E}.
+\item
 
-Otherwise the normal form of \tcode{( E \grammarterm{fold-operator} ... )} is the conjunction (for a \grammarterm{fold-operator} that is \tcode{\&\&}),
-or the disjunction (for a \grammarterm{fold-operator} that is \tcode{||}), of the normal form of each $E_i$ for $0 < i < N_0$.
-If producing the normal form of a subexpression of $E_i$ requires to subsitute a concept-name refering to a $P_k$, it is substituted by the $i^\text{th}$ corresponding template argument.
+If \tcode{E} names one or more unexpanded substitutable concept template parameter pack $P_k$ which do not denote a pack, let $N_k$ be the number of arguments specified for each pack $P_k$.
+If the value of each $N_k$ differs, the program is ill-formed.
+
+Otherwise, the normal form of \tcode{F} is
+the normal form of $E_0$ \tcode{Op} $E_1$  \tcode{Op} ...  \tcode{Op} $E_{N_0}$.
+Within $E_{0  \le i < {N_0}}$,  $P_k$ designates the $i^\text{th}$ pack element of $P_k$.
+
+
+
+%The corresponding template argument of a template parameter pack $P_k$ named in $E_i$ is the
+%$i^\text{th}$ corresponding template argument.
+
+%When producing the normal form of $E_{0  \le i < {N_0}}$, the corresponding template argument
+%of $P_k$ is the $i^\text{th}$ corresponding template argument.
+% referring to a $P_k$, it is substituted by the $i^\text{th}$ corresponding template argument.
+
+% If producing the normal form of $E_{0  \le i < {N_0}}$ requires to substitute a concept-name referring to a $P_k$, it is substituted by the $i^\text{th}$ corresponding template argument.
+%after substituting each $P_k$ by the $i^\text{th}$ corresponding template argument in each $E_i$
+
+
+% \ednote{This doesn't work as we cannot substitute eagerly}
 
 %
 %after substituting in $E_k$ every concept-name naming a $P$ and appearing in a concept-id \tcode{CI} (that is a subexpression of $E_k$) by the $i^\text{th}$ corresponding template arguments. If substitution in \tcode{CI} results in an invalid concept-id, the normal form of \tcode{CI} is a concept-dependent constraint whose concept-id is \tcode{CI}.
@@ -2295,9 +2313,11 @@ If producing the normal form of a subexpression of $E_i$ requires to subsitute a
 %\ednote{This is wrong, we should not do substitution there but when normalizing each $E_k$}
 
 
-\item Otherwise (if \tcode{E} does not contain an unexpanded parameter pack that denote a substitutable concept template parameter pack), the normal form of \tcode{( E \grammarterm{fold-operator} ... )} is a fold expanded constraint\iref{temp.constr.fold}
+\item Otherwise
+%(if \tcode{E} does not contain an unexpanded parameter pack that denotes a substitutable concept template parameter pack),
+the normal form of \tcode{( E Op ... )} is a fold expanded constraint \iref{temp.constr.fold}
 whose constraint is the normal form of \tcode{E} and
-whose \grammarterm{fold-operator} is \grammarterm{fold-operator}.
+whose \grammarterm{fold-operator} is \tcode{Op}.
 \end{itemize}
 \end{addedblock}
 \begin{removedblock}
@@ -2314,6 +2334,9 @@ whose constraint is the normal form of \tcode{E} and
 whose \grammarterm{fold-operator} is \tcode{||}.
 
 \end{removedblock}
+
+\end{itemize}
+
 
 \item
 The normal form of any other expression \tcode{E} is
@@ -2388,7 +2411,7 @@ atomic constraint \tcode{true}.
 template <typename T>
 concept A = true;
 template <typename T>
-concept B = A<T> && true; // A subsumes B
+concept B = A<T> && true; // B subsumes A
 template <typename T>
 concept C = true;
 template <typename T>
@@ -2396,14 +2419,31 @@ concept D = C<T> && true; // D subsumes C
 
 template <typename T, template <typename> concept... CTs>
 concept all_of = (CTs<T> && ...);
-constexpr int f(all_of<A, C> auto) {return 1;} // \#1
-constexpr int f(all_of<B, D> auto) {return 2;} // \#2
-static_assert(f(1));
+template <typename T>
+requires all_of<T, A, C>
+constexpr int f(T) {return 1;} // \#1
+template <typename T>
+requires all_of<T, B, D>
+constexpr int f(T) {return 2;} // \#2
+static_assert(f(1) == 2);
+
 \end{codeblock}
 
 The normal form of \tcode{all_of<T, A, C>} is the conjunction of the normal forms of \tcode{A<T>} and \tcode{C<T>}.
 Similarly, the normal form of \tcode{all_of<T, B, D>} is the conjunction of the normal forms of \tcode{B<T>} and \tcode{D<T>}.
 \#2 therefore is more constrained than \#1.
+
+\begin{codeblock}
+template <typename T>
+requires bool(all_of<T, A, C>)
+constexpr int g(T) {return 1;} // \#3
+template <typename T>
+requires bool(all_of<T, B, D>)
+constexpr int g(T) {return 2;} // \#4
+
+g(0); // ambiguous (bool(all_of<T, B, D>) is an atomic constraint)
+\end{codeblock}
+
 \end{example}
 \end{addedblock}
 %
