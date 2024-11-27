@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{\tcode{reserve\_hint}: Eagerly reserving memory for not-quite-sized lazy ranges}
-\docnumber{P2846R4}
+\docnumber{D2846R5}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -18,6 +18,12 @@ This proposals adds a \tcode{ranges::reserve_hint} customization point object wh
 reserve memory for non-sized ranges whose size can be approximated.
 
 \section{Revisions}
+
+\subsection{R5}
+
+\begin{itemize}
+\item Apply some wording feedback following LEWG review, remove the nothrow_move_constructible requirement from vector's constructor complexity requirements, fix feature test macro.
+\end{itemize}
 
 \subsection{R4}
 
@@ -214,7 +220,7 @@ But there is consensus in SG-9 that those are fringe edge cases that are probabl
 \textbf{This is the option implemented in R3, following LEWG guidance}
 
 Tomasz also realized that types that may throw on move might also change the behavior of existing code.
-To avoid that we restrict the optimization guarantee in vector to types that are nothrow move-constructible.
+To avoid that we restrict the optimization guarantee in vector to types that are nothrow move-constructible. however, LEWG voted not to add this requirement (Wroclaw).
 
 \item Allowing implementations to do so without requiring it.
 
@@ -232,7 +238,7 @@ Similarly, we changed the complexity of these methods to encourage the use of \t
 
 \subsection{\tcode{string}}
 
-\tcode{string} doesn't currently mandate complexity guarantees so we have ekected not to modify the specification,
+\tcode{string} doesn't currently mandate complexity guarantees so we have elected not to modify the specification,
 and instead preferring a blanket recommended practice that \tcode{reserve_hint} should be used to reduce reallocations.
 
 \section{Benchmarks}
@@ -247,11 +253,11 @@ Each such Transformation is performed twice:
 
 The graph shows that, for a forward range, reserving is consistently about twice as fast. This is consistent with the fact the range is traversed twice.
 
-\includegraphics[width=\textwidth]{D2846_bench1.png}
+% \includegraphics[width=\textwidth]{D2846_bench1.png}
 
 If the input range is non-forward, there is less difference on small datasets:
 
-\includegraphics[width=\textwidth]{D2846_bench2.png}
+% \includegraphics[width=\textwidth]{D2846_bench2.png}
 
 But as the data gets bigger and the number of allocations increases being able to reserve memory gets more noticeably impactful (performance delta of 5-10\%).
 
@@ -292,10 +298,10 @@ This version of the paper therefore use the name \tcode{reserve_hint} that descr
 
 \section{Wording}
 
-\ednote{Add the macro \tcode{__cpp_lib_ranges_zip} to \tcode{<version>} and \tcode{<ranges>}}
+\ednote{Add the macro \tcode{__cpp_lib_ranges_reserve_hint} to \tcode{<version>} and \tcode{<ranges>}}
 \begin{addedblock}
 \begin{codeblock}
-    #define __cpp_lib_ranges_zip 2026XX (**placeholder**)
+    #define __cpp_lib_ranges_reserve_hint 2024XX (**placeholder**)
 \end{codeblock}
 \end{addedblock}
 
@@ -326,8 +332,9 @@ This version of the paper therefore use the name \tcode{reserve_hint} that descr
 \begin{addedblock}
     Performs no reallocations if:
     \begin{itemize}
-    \item \tcode{R} models \tcode{ranges::\libconcept{sized_range}},
-    \item \tcode{R} models \tcode{ranges::\libconcept{approximately_sized_range}}, \tcode{is_nothrow_move_constructible_v<T>} is \tcode{true}, and \tcode{ranges::distance(rg) <= ranges::reserve_hint(rg)} is \tcode{true}, or
+    \item \tcode{R} models \tcode{ranges::\libconcept{sized_range}}, or
+    \item \tcode{R} models \tcode{ranges::\libconcept{approximately_sized_range}}, %\tcode{is_nothrow_move_constructible_v<T>} is \tcode{true},
+    and \tcode{ranges::distance(rg) <= ranges::reserve_hint(rg)} is \tcode{true}, or
     \item \tcode{R} models \tcode{ranges::\libconcept{forward_range}}.
     \end{itemize}
 \end{addedblock}
@@ -392,7 +399,7 @@ constexpr void append_range(R&& rg);
     \begin{addedblock}
     For the declarations taking a range \tcode{R}, performs at most one reallocation if:
     \begin{itemize}
-        \item \tcode{R} models \tcode{ranges::\libconcept{sized_range}},
+        \item \tcode{R} models \tcode{ranges::\libconcept{sized_range}}, or
         \item \tcode{R} models \tcode{ranges::\libconcept{approximately_sized_range}} and \tcode{ranges::distance(rg) <= ranges::reserve_hint(rg)} is \tcode{true}, or
         \item \tcode{R} models \tcode{ranges::\libconcept{forward_range}}.
     \end{itemize}
