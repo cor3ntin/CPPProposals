@@ -5,8 +5,8 @@
 \documentclass{wg21}
 
 \title{\tcode{reserve\_hint}: Eagerly reserving memory for not-quite-sized lazy ranges}
-\docnumber{P2846R5}
-\audience{LEWG}
+\docnumber{P2846R6}
+\audience{LWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 \begin{document}
@@ -18,6 +18,19 @@ This proposals adds a \tcode{ranges::reserve_hint} customization point object wh
 reserve memory for non-sized ranges whose size can be approximated.
 
 \section{Revisions}
+
+\subsection{R6}
+
+\begin{itemize}
+\item Fix date in feature test macro
+\item use \grammarterm{to-unsigned-like} where needed
+\item \tcode{approximately_sized_range} specifies that calling begin on a non-forward range
+may not be well-defined
+\item Add wording for container requirements
+\item Specify that reserve_hint is greater or equal to 0 and representable in range_difference_t
+\item Fix the "performs no reallocation" wording
+\item Typos
+\end{itemize}
 
 \subsection{R5}
 
@@ -302,11 +315,86 @@ This version of the paper therefore use the name \tcode{reserve_hint} that descr
 \ednote{Add the macro \tcode{__cpp_lib_ranges_reserve_hint} to \tcode{<version>} and \tcode{<ranges>}}
 \begin{addedblock}
 \begin{codeblock}
-    #define __cpp_lib_ranges_reserve_hint 2024XX (**placeholder**)
+    #define __cpp_lib_ranges_reserve_hint 2025XX (**placeholder**)
 \end{codeblock}
 \end{addedblock}
 
 \rSec1[containers]{Containers library}
+
+\begin{itemdecl}
+X(from_range, rg)
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\expects
+\tcode{T} is \oldconcept{EmplaceConstructible} into \tcode{X}
+from \tcode{*ranges::begin(rg)}.
+For \tcode{vector},
+\begin{removedblock}
+if \tcode{R} models neither \tcode{ranges::\libconcept{sized_range}} nor \tcode{ranges::\libconcept{forward_range}},
+\end{removedblock}
+
+\begin{addedblock}
+if \tcode{R} models \tcode{ranges::\libconcept{approximately_sized_range}} but not \tcode{ranges::\libconcept{sized_range}} or models  \tcode{ranges::\libconcept{input_range}} but not \tcode{ranges::\libconcept{forward_range}},
+\end{addedblock}
+\tcode{T} is also \oldconcept{MoveInsertable} into \tcode{X}.
+
+\pnum
+\effects
+Constructs a sequence container equal to the range \tcode{rg}.
+Each iterator in the range \tcode{rg} is dereferenced exactly once.
+
+\begin{addedblock}
+\recommended If \tcode{R} models \tcode{ranges::\libconcept{approximately_sized_range}}
+and \tcode{ranges::distance(rg) <= ranges::reserve_hint(rg)} is \tcode{true}, an implementation
+should not perform any reallocation.
+\end{addedblock}
+\end{itemdescr}
+
+\begin{itemdecl}
+	a.assign_range(rg)
+\end{itemdecl}
+
+\begin{itemdescr}
+
+\pnum
+\mandates
+\tcode{\libconcept{assignable_from}<T\&, ranges::range_reference_t<R>>}
+is modeled.
+
+\pnum
+\expects
+\tcode{T} is \oldconcept{EmplaceConstructible} into \tcode{X}
+from \tcode{*ranges::begin(rg)}.
+For \tcode{vector},
+\begin{removedblock}
+if \tcode{R} models neither \tcode{ranges::\libconcept{sized_range}} nor \tcode{ranges::\libconcept{forward_range}},
+\end{removedblock}
+
+\begin{addedblock}
+if \tcode{R} models \tcode{ranges::\libconcept{approximately_sized_range}} but not \tcode{ranges::\libconcept{sized_range}} or models  \tcode{ranges::\libconcept{input_range}} but not \tcode{ranges::\libconcept{forward_range}},
+\end{addedblock}
+\tcode{T} is also \oldconcept{MoveInsertable} into \tcode{X}.
+\tcode{rg} and \tcode{a} do not overlap.
+
+\pnum
+\effects
+Replaces elements in \tcode{a} with a copy of each element in \tcode{rg}.
+Invalidates all references, pointers, and iterators
+referring to the elements of \tcode{a}.
+For \tcode{vector} and \tcode{deque},
+also invalidates the past-the-end iterator.
+Each iterator in the range \tcode{rg} is dereferenced exactly once.
+
+\begin{addedblock}
+\recommended If \tcode{R} models \tcode{ranges::\libconcept{approximately_sized_range}}
+and \tcode{ranges::distance(rg) <= ranges::reserve_hint(rg)} is \tcode{true}, an implementation
+should not perform more than a single reallocation.
+\end{addedblock}
+
+\end{itemdescr}
+
 
 \rSec2[vector]{Class template \tcode{vector}}
 
@@ -333,10 +421,10 @@ This version of the paper therefore use the name \tcode{reserve_hint} that descr
 \begin{addedblock}
     Performs no reallocations if:
     \begin{itemize}
-    \item \tcode{R} models \tcode{ranges::\libconcept{sized_range}}, or
     \item \tcode{R} models \tcode{ranges::\libconcept{approximately_sized_range}}, %\tcode{is_nothrow_move_constructible_v<T>} is \tcode{true},
     and \tcode{ranges::distance(rg) <= ranges::reserve_hint(rg)} is \tcode{true}, or
-    \item \tcode{R} models \tcode{ranges::\libconcept{forward_range}}.
+    \item \tcode{R} models \tcode{ranges::\libconcept{forward_range}} and
+    \tcode{R} does not model \tcode{ranges::\libconcept{approximately_sized_range}}.
     \end{itemize}
 \end{addedblock}
     \removed{Performs no reallocations if \tcode{R} models
@@ -400,14 +488,16 @@ constexpr void append_range(R&& rg);
     \begin{addedblock}
     For the declarations taking a range \tcode{R}, performs at most one reallocation if:
     \begin{itemize}
-        \item \tcode{R} models \tcode{ranges::\libconcept{sized_range}}, or
         \item \tcode{R} models \tcode{ranges::\libconcept{approximately_sized_range}} and \tcode{ranges::distance(rg) <= ranges::reserve_hint(rg)} is \tcode{true}, or
-        \item \tcode{R} models \tcode{ranges::\libconcept{forward_range}}.
+        \item \tcode{R} models \tcode{ranges::\libconcept{forward_range}}  and
+        	      \tcode{R} does not model \tcode{ranges::\libconcept{approximately_sized_range}}.
     \end{itemize}
      For the declarations taking a pair of \tcode{InputIterator}, performs at most one reallocation if \tcode{InputIterator} models \tcode{Cpp17ForwardIterator}.
     \end{addedblock}
 
 \end{itemdescr}
+
+%https://eel.is/c++draft/sequence.reqmts#11
 
 \rSec1[ranges.syn]{Header \tcode{<ranges>} synopsis}
 
@@ -503,14 +593,13 @@ appears in the immediate context of a template instantiation.
     type is integer-like.
 \end{note}
 
-\recommended
-
-\tcode{reserve_hint} can be used by an implementation to reduce the number of reallocations performed
-when inserting ranges in sequences containers.
+%\recommended
+%
+%\tcode{reserve_hint} can be used by an implementation to reduce the number of reallocations performed
+%when inserting ranges in sequences containers.
 
 \end{addedblock}
 
-\rSec2[range.sized]{Sized ranges}
 
 \begin{addedblock}
 \rSec2[range.approximately.sized]{Approximately sized ranges}
@@ -527,11 +616,28 @@ concept @\deflibconcept{approximately_sized_range}@ =
 \end{itemdecl}
 
 \begin{itemdescr}
-    \pnum
-    Given an lvalue \tcode{t} of type \tcode{remove_reference_t<T>}, \tcode{T}
-    models \libconcept{approximately_sized_range} only if \tcode{ranges::reserve_hint(t)} is amortized \bigoh{1}, and does not modify \tcode{t}.
+\pnum
+Given an lvalue \tcode{t} of type \tcode{remove_reference_t<T>}, \tcode{T}
+models \libconcept{approximately_sized_range} only if
+\begin{itemize}
+\item \tcode{ranges::reserve_hint(t)} is amortized \bigoh{1}, does not modify \tcode{t}, and has a value that is not negative and is representable in \tcode{range_difference_t<T>}, and
+\item if \tcode{iterator_t<T>} models \libconcept{forward_iterator},
+\tcode{ranges::reserve_hint(t)} is well-defined regardless of the evaluation of
+\tcode{ranges::begin(t)}.
+\begin{note}
+\tcode{ranges::reserve_hint(t)} is otherwise not required to be
+well-defined after evaluating \tcode{ranges::begin(t)}.
+For example, it is possible for \tcode{ranges::reserve_hint(t)} to be well-defined
+for a \libconcept{approximately_sized_range} whose iterator type
+does not model \libconcept{forward_iterator}
+only if evaluated before the first call to \tcode{ranges::begin(t)}.
+\end{note}
+\end{itemize}
 \end{itemdescr}
 \end{addedblock}
+
+\rSec2[range.sized]{Sized ranges}
+
 
 \pnum
 The \libconcept{sized_range} concept refines \libconcept{\changed{range}{approximately_sized_range}} with
@@ -798,18 +904,18 @@ constexpr auto size() const requires @\libconcept{sized_range}@<const V> {
 \begin{codeblock}
 constexpr auto reserve_hint() {
     if constexpr (@\libconcept{approximately_sized_range}@<V>) {
-        auto n = ranges::reserve_hint(@\exposid{base_}@);
-        return ranges::min(n, static_cast<decltype(n)>(@\exposid{count_}@));
+        auto n = static_cast<range_difference_t<V>>(ranges::reserve_hint(@\exposid{base_}@));
+        return @\exposid{to-unsigned-like}@(ranges::min(n, count_));
     }
-    else return @\exposid{count_}@;
+    return @\exposid{to-unsigned-like}@(count_);
 }
 
 constexpr auto reserve_hint() const {
     if constexpr (@\libconcept{approximately_sized_range}@<const V>) {
-        auto n = ranges::reserve_hint(@\exposid{base_}@);
-        return ranges::min(n, static_cast<decltype(n)>(@\exposid{count_}@));
+        auto n = static_cast<range_difference_t<const V>>(ranges::reserve_hint(@\exposid{base_}@));
+        return @\exposid{to-unsigned-like}@(ranges::min(n, count_));
     }
-    else return @\exposid{count_}@;
+    return @\exposid{to-unsigned-like}@(count_);
 }
 \end{codeblock}
 \end{addedblock}
@@ -847,15 +953,13 @@ constexpr auto size() const requires @\libconcept{sized_range}@<const V> {
 \begin{addedblock}
 \begin{codeblock}
 constexpr auto reserve_hint() requires @\libconcept{approximately_sized_range}@<V> {
-    const auto s = ranges::reserve_hint(@\exposid{base_}@);
-    const auto c = static_cast<decltype(s)>(@\exposid{count_}@);
-    return s < c ? 0 : s - c;
+    const auto s = static_cast<range_difference_t<V>>(ranges::reserve_hint(@\exposid{base_}@));
+    return @\exposid{to-unsigned-like}@(s < count_ ? 0 : s - count_);
 }
 
 constexpr auto reserve_hint() const requires @\libconcept{approximately_sized_range}@<const V> {
-    const auto s = ranges::reserve_hint(@\exposid{base_}@);
-    const auto c = static_cast<decltype(s)>(@\exposid{count_}@);
-    return s < c ? 0 : s - c;
+    const auto s = static_cast<range_difference_t<const V>>(ranges::reserve_hint(@\exposid{base_}@));
+    return @\exposid{to-unsigned-like}@(s < count_ ? 0 : s - count_);
 }
 \end{codeblock}
 \end{addedblock}
@@ -1110,11 +1214,11 @@ class adjacent_view : public view_interface<adjacent_view<V, N>> {
 \effects
 Equivalent to:
 \begin{codeblock}
-    using ST = decltype(ranges::reserve_hint(@\exposid{base_}@));
-    using CT = common_type_t<ST, size_t>;
+    using DT = range_difference_t<decltype((@\exposid{base_}@))>;
+    using CT = common_type_t<DT, size_t>;
     auto sz = static_cast<CT>(ranges::reserve_hint(@\exposid{base_}@));
     sz -= std::min<CT>(sz, N - 1);
-    return static_cast<ST>(sz);
+    return @\exposid{to-unsigned-like}@(sz);
 \end{codeblock}
 \end{itemdescr}
 \end{addedblock}
@@ -1189,7 +1293,8 @@ class chunk_view : public view_interface<chunk_view<V>> {
     \effects
     Equivalent to:
     \begin{codeblock}
-        return @\exposid{to-unsigned-like}@(@\exposid{div-ceil}@(ranges::reserve_hint(@\exposid{base_}@), @\exposid{n_}@));
+    	auto s = static_cast<range_difference_t<decltype((@\exposid{base_}@))>>(ranges::reserve_hint(@\exposid{base_}@));
+        return @\exposid{to-unsigned-like}@(@\exposid{div-ceil}@(s, @\exposid{n_}@));
     \end{codeblock}
 \end{itemdescr}
 \end{addedblock}
@@ -1238,7 +1343,8 @@ class chunk_view<V> : public view_interface<chunk_view<V>> {
     \effects
     Equivalent to:
     \begin{codeblock}
-        return @\exposid{to-unsigned-like}@(@\exposid{div-ceil}@(ranges::reserve_hint(@\exposid{base_}@), @\exposid{n_}@));
+    	auto s = static_cast<range_difference_t<decltype((@\exposid{base_}@))>>(ranges::reserve_hint(@\exposid{base_}@));
+    	return @\exposid{to-unsigned-like}@(@\exposid{div-ceil}@(s, @\exposid{n_}@));
     \end{codeblock}
 \end{itemdescr}
 \end{addedblock}
@@ -1290,7 +1396,7 @@ class slide_view : public view_interface<slide_view<V>> {
     \effects
     Equivalent to:
     \begin{codeblock}
-        auto sz = static_cast<range_difference_t<R>>(ranges::reserve_hint(r)) - @\exposid{n_}@ + 1;
+        auto sz = static_cast<range_difference_t<decltype((@\exposid{base_}@))>>(ranges::reserve_hint(base_)) - @\exposid{n_}@ + 1;
         if (sz < 0) sz = 0;
         return @\exposid{to-unsigned-like}@(sz);
     \end{codeblock}
@@ -1339,7 +1445,8 @@ class stride_view : public view_interface<stride_view<V>> {
 \effects
 Equivalent to:
 \begin{codeblock}
-    return @\exposid{to-unsigned-like}@(@\exposid{div-ceil}@(ranges::reserve_hint(@\exposid{base_}@), @\exposid{stride_}@));
+auto s = static_cast<range_difference_t<decltype((@\exposid{base_}@))>>(ranges::reserve_hint(@\exposid{base_}@));
+return @\exposid{to-unsigned-like}@(@\exposid{div-ceil}@(s, @\exposid{stride_}@));
 \end{codeblock}
 \end{itemdescr}
 \end{addedblock}
