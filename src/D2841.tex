@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Concept and variable-template template-parameters}
-\docnumber{D2841R7}
+\docnumber{P2841R7}
 \audience{CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Gašper Ažman}{gasper.azman@gmail.com}
@@ -53,6 +53,22 @@ Note: this paper is a subset of the larger \paper{P1985R3} (Universal Template P
 \begin{itemize}
 \item The consistent usage of \grammarterm{template-parameter} and template parameter has been \href{https://github.com/cplusplus/draft/pull/7460}{addressed editorially}, and the wording rebased.
 \item The renaming from non-type template parameter to constant template parameter has been \href{https://github.com/cplusplus/draft/pull/7587}{addressed editorially}, and the wording rebased.
+
+\item Core review in Hagenberg.
+
+Made fold expressions containing both concepts template parameters
+and non-concept template parameters ill-formed:
+
+\begin{colorblock}
+template <typename T, template <typename> concept>
+struct wrapper{};
+
+template <typename... T, template <typename> concept... CTs>
+int f(wrapper<T, CTs>...) requires (CTs<T> && ...); // \#3
+
+int err = f(wrapper<int, A>{}, wrapper<int, B>{}); // error: the fold expression in \#3 expands mixed kind template parameters.
+\end{colorblock}
+
 \end{itemize}
 
 \subsection{R6}
@@ -1270,7 +1286,7 @@ template-head type-parameter-key \opt{identifier} \opt{type-tt-parameter-default
     \nontermdef{concept-tt-parameter}\br
     template < template-parameter-list > \terminal{concept} \opt{\terminal{...}} \opt{identifier}\br
     template < template-parameter-list > \terminal{concept} \opt{identifier} \terminal{=}
-    \opt{nested-name-specifier} template-name
+    \opt{nested-name-specifier}  template-name
 \end{bnf}
 
 \end{addedblock}
@@ -1630,8 +1646,8 @@ There are \changed{four}{five} different kinds of constraints:
 \begin{itemize}
     \item conjunctions\iref{temp.constr.op},
     \item disjunctions\iref{temp.constr.op},
-    \item atomic constraints\iref{temp.constr.atomic}, and
-    \item fold expanded constraints\iref{temp.constr.fold}.
+    \item atomic constraints\iref{temp.constr.atomic}, \removed{and}
+    \item fold expanded constraints\iref{temp.constr.fold}\changed{.}{, and}
 \begin{addedblock}
     \item concept-dependent constraints\iref{temp.constr.concept}.
 \end{addedblock}
@@ -1768,7 +1784,7 @@ the program is ill-formed; no diagnostic is required.
 
 \item Otherwise,
 to form \tcode{CE}, any non-dependent concept template argument A$_i$
-is substituted into the constraint-expression of \tcode{C}.
+is substituted into the \grammarterm{constraint-expression} of \tcode{C}.
 If any such substitution results in an invalid concept-id, the program is ill-formed; no diagnostic is required.
 
 The normal form of \tcode{CI} is the result of substituting, in the normal form \tcode{N} of \tcode{CE}, appearances of \tcode{C}'s template parameters in the parameter mappings of the atomic constraints in N with their respective arguments from \tcode{C}.  If any such substitution results in an invalid type or expression, the program is ill-formed; no diagnostic is required.
@@ -1821,14 +1837,15 @@ is the normal form of
 
 \begin{addedblock}
 \item
-The normal form of an expression F of the form \tcode{( E \grammarterm{Op} ... )} is as follows:
+The normal form of an expression F of the form \tcode{( E \tcode{Op} ... )} is as follows:
+
+If \tcode{E} names any unexpanded concept template parameter pack, it shall not name any unexpanded template
+parameter pack of another kind.
 
 Let \tcode{E'} be the normal form of \tcode{E}.
 \begin{itemize}
 \item
-If \tcode{E} names any unexpanded concept template parameter pack it shall not name any unexpanded template
-parameter pack of another kind.
-If \tcode{E} names any unexpanded concept template parameter pack $P_k$ which has corresponding template arguments in the parameter mapping of any atomic constraint (including concept-dependent constraint) of \tcode{E'},
+If \tcode{E} names any unexpanded concept template parameter pack $P_k$ that has corresponding template arguments in the parameter mapping of any atomic constraint (including concept-dependent constraints) of \tcode{E'},
 the number of arguments specified for all such $P_k$ shall be the same number \tcode{N}.
 
 The normal form of \tcode{F} is
@@ -1857,7 +1874,7 @@ If any such substitution results in an invalid type or expression, the program i
 %\ednote{This is wrong, we should not do substitution there but when normalizing each $E_k$}
 
 
-\item Otherwise
+\item Otherwise,
 %(if \tcode{E} does not contain an unexpanded parameter pack that denotes a substitutable concept template parameter pack),
 the normal form of \tcode{F} is a fold expanded constraint \iref{temp.constr.fold}
 whose constraint is  \tcode{E'} and
@@ -1978,14 +1995,16 @@ The normal form of \tcode{all_of<T, A, C>} is the conjunction of the normal form
 Similarly, the normal form of \tcode{all_of<T, B, D>} is the conjunction of the normal forms of \tcode{B<T>} and \tcode{D<T>}.
 \#2 therefore is more constrained than \#1.
 
+\end{example}
+\begin{example}
+
 \begin{codeblock}
 template <typename T, template <typename> concept>
 struct wrapper{};
 
 template <typename... T, template <typename> concept... CTs>
-int f(wrapper<T, CTs>...) requires (CTs<T> && ...); // \#3
+int f(wrapper<T, CTs>...) requires (CTs<T> && ...); // error: the fold expression expands mixed kind template parameters.
 
-int err = f(wrapper<int, A>{}, wrapper<int, B>{}); // error: the fold expression in \#3 expands mixed kind template parameters.
 \end{codeblock}
 
 %\begin{codeblock}
@@ -2019,9 +2038,7 @@ in the conjunctive normal form of $Q$, where
     if there exists an atomic constraint $P_{ia}$ in $P_i$ for which there exists
     an atomic constraint $Q_{jb}$ in $Q_j$ such that $P_{ia}$ subsumes $Q_{jb}$,
 
-    \item an atomic constraint $A$ \added{\note{including concepts}}
-
-    subsumes another atomic constraint
+    \item an atomic constraint $A$ subsumes another atomic constraint
     $B$ if and only if $A$ and $B$ are identical using the
     rules described in \ref{temp.constr.atomic}, and
 
@@ -2277,7 +2294,7 @@ thereof) synthesize a unique type, value, \removed{or} class template \added{, v
 respectively\added{,} and substitute it for each occurrence of that parameter
 in the function type of the template.
 
-\added{A synthesized template has the same \grammarterm{template-head} as its corresponding template
+\added{A synthesized template has the same \grammarterm{template-head} as its corresponding template template
 parameter.}
 
 \textcolor{noteclr}{[...]}
@@ -2357,7 +2374,7 @@ An
 is value-dependent if:
 \begin{itemize}
     \item
-    it is a concept-id and  \added{its \grammarterm{concept-name} is dependent or} any of its arguments are dependent,
+    it is a concept-id and  \added{its \grammarterm{concept-name} is dependent or} any of its arguments are dependent \added{[temp.dep.temp]},
     \item
     it is type-dependent,
     \item
@@ -2527,7 +2544,10 @@ context. If $\texttt{P}_i$ is a pack expansion, then the pattern
 of $\texttt{P}_i$ is compared with each remaining argument in the
 template argument list of \tcode{A}.
 
-%TODO WORDING MISSING
+\subsection{Feature test macro}
+
+\ednote{Add a new macro in [tab:cpp.predefined.ft] : __cpp_template_parameters set to the
+date of adoption} .
 
 \section{Acknowledgments}
 Many people contributed valuable discussions and feedbacks to this paper, notably
