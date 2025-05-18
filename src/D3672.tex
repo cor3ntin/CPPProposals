@@ -1,0 +1,241 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{On Windows, Systems APIs, Text Encodings, and Pragmatism}
+\docnumber{P3670R0}
+\audience{SG-16}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+\usepackage{color, colortbl}
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+This paper proposes no change. Instead, it hopes to guide the design of future papers dealing with Unicode in system interfaces.
+This is very much an opinion piece, I hope you enjoy the read.
+
+\section{Characterizing the ecosystem}
+
+\subsection{Windows deals in UTF-16}
+
+Most Windows APIs, including its filesystem APIs, are natively UTF-16 (specifically UTF-16LE).
+This has been the case since the release of Windows 2000, i.e., for the past 25 years.
+
+Yet we keep seeing on the Internet and in committee discussions that Windows deals with UCS-2. This is incorrect, and
+has been incorrect for a very, very long time.
+
+Windows can understand surrogate pairs and represent codepoints outside of the BMP. UCS-2 is dead.
+
+What is correct to say is that not all Windows APIs accepting sequences of Unicode codepoints sanitize their inputs.
+This is most notably the case for paths:
+
+The \href{https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry}{Documentation} states:
+\begin{quoteblock}
+There is no need to perform any Unicode normalization on path and file name strings for use by the Windows file I/O API functions because the file system treats path and file names as an opaque sequence of WCHARs. Any normalization that your application requires should be performed with this in mind, external of any calls to related Windows file I/O API functions.
+\end{quoteblock}
+
+It should be noted that this quote non-withstanding, Microsoft does not do a particularly good job documenting which APIs accept arbitrary \tcode{wchar_t}
+sequences and which do not. For example, \tcode{CreateFileW} seems to sometimes, but not always, reject invalid UTF-16.
+
+There is no validation in low-level APIs, such that creating Paths with embedded nulls with \tcode{NtCreateFile} is possible.
+
+Learning these cool factoids should be the end of the story.
+
+Alas, the prevailing wisdom in WG21, SG16, and most other language communities seems to be that because Windows can technically do all of these
+things, it behooves the standard library to support them.
+
+\subsection{Linux deals in UTF-8}
+
+The usual observation is that paths on Linux are just a bag of bytes.
+This observation is mostly accurate, albeit, for example, ZFS can be configured to do UTF normalization, and some filesystems can be configured to be case-insensitive.
+
+But beyond the kernel, there is an expectation that paths appear in user-facing places such as graphical file explorers, the output of \tcode{ls},
+the arguments to \tcode{find}, logs, source code etc.
+
+Because not being able to render paths as text would be inconvenient, paths are UTF-8 encoded by convention.
+Files not created by end users are further likely to be restricted to the ASCII subset of UTF-8.
+
+\subsection{Non-Unicode platforms}
+
+Some platforms use non-Unicode and even non-ASCII encodings.
+But even on these platforms, it is fair to assume that the intent is for most paths to be human-readable text.
+
+\subsection{Most paths are text}
+
+The conclusion of all of that is that most paths are representable in Unicode.
+How much is most? It is hard to say, but probably more than 99.9%.
+Most users will never interact with ill-formed path names on any platform.
+There are none on my (Linux) system (some paths did contain emojis and CJK characters for some reason!).
+
+\section{What does that mean for C++?}
+
+Regardless of encodings, we have to admit the existence of invalid code unit sequences in paths.
+Malformed data, whether constructed by the user or by the filesystem, is a fact of life we can't ignore.
+
+\subsection{We should actively not support embedded nulls}
+
+Embedded nulls are routinely a source of Bugs and CVEs, and there is no user-facing way to create a path with embedded nulls,
+so this is something we should actively not care about or, when practical, error on.
+Given the potential safety implication of letting these embedded nulls propagate in a program, I think the question is less whether they are worth supporting but whether they might be worth diagnosing early.
+
+\subsection{Provide limited support for non-well-formed Unicode paths on Windows}
+
+In general, there is no difficulty in supporting non-well-formed paths in places where we accept or return sequences of \tcode{wchar_t}
+and the internal storage is also a sequence of \tcode{wchar_t}, which is the case for \tcode{std::path} on windows.
+
+But there are scenarios that we should actively not support:
+\begin{itemize}
+\item Converting a non-well-formed path to Unicode and back and expecting that to be a valid path still
+\item Transforming (for example, upper casing) a non-well-formed path to Unicode and expect that to work
+\item Printing out a non-well-formed path on a terminal and expecting that printed path to still be usable to address the file.
+\end{itemize}
+
+In general, trying to have byte-preserving round-tripping transformations on non-well-formed Unicode sequences adds orders of complexity.
+
+Similarly, for a well-formed string in a non-Unicode encoding, we cannot guarantee round-tripping to be byte preserving (as conversion tables are not specified and could contain slight variations such that they would preserve semantics but not byte representation).
+
+In fact, the only guarantee we can offer is that for a string that is valid Unicode, round-tripping conversions are codepoint-preserving.
+
+
+\section{The Rust approach}
+
+Because the question was asked in a previous SG-16 meeting, I figured it would be interesting to look at how Rust handles string.
+Rust strings are (valid) UTF-8 sequences on all platforms - and, unrelatedly, are not null-terminated.
+
+But the \href{https://doc.rust-lang.org/std/path/struct.Path.html}{\tcode{Path}} type deals in \href{https://doc.rust-lang.org/std/ffi/struct.OsString.html}{\tcode{OSString}}, where  \tcode{OSString} stores a sequence of \tcode{u8} that is
+\begin{itemize}
+\item UTF-8 on Linux
+\item \href{https://simonsapin.github.io/wtf-8/}{WTF-8} on Windows
+\end{itemize}
+
+This design allows Rust to use the same types with the same layouts and function across platforms while supporting arbitrary Windows paths that
+may not be valid Unicode.
+
+This is arguably a more cohesive solution than \tcode{wchar_t} (which requires duplications of APIs).
+Note that Rust had the luxury of hindsight, and WTF-8 was only specified around 2014.
+
+But in that scenario, \tcode{OSString}'s goal is more to be a portable alternative to \tcode{wchar_t}
+than to support round-tripping everywhere.
+
+To use \tcode{OSString} with native Windows API, it is first converted to \tcode{OsStr} (to add a null terminator),
+and then to a sequence of \tcode{u16}.
+
+On all platforms, \tcode{OSString} offers APIs to convert to UTF-8, either injecting replacement characters or returning an error
+on conversion failure.
+
+\section{\tcode{std::arguments}}
+
+This paper is a direct response to \paper{P3474R0} (\tcode{std::arguments}), or rather the ensuing discussions, although it is something I have been
+itching to ink for a while.
+
+The premise is simple: Let's expose \tcode{argv} to some globally accessible list of string-ish objects.
+But quid of the internal representation, encodings, conversions, and related APIs?
+
+One observation made by the paper is that, on Windows, program arguments are UTF-16 encoded and \tcode{argv}
+is merely a lossy conversion provided either for conformance or convenience.
+
+But maybe we want to support for \tcode{__wargv} too. And maybe we want to expose arguments as Unicode-encoded strings.
+And maybe support opening arbitrary paths that are not representable in Unicode.
+
+It's a lot of conflicting requirements.
+
+The current interface contains
+
+\begin{colorblock}
+string_view_type native() const;
+const value_type* c_str() const;
+std::string string() const;
+std::wstring wstring() const;
+std::u8string u8string() const;
+std::u16string u16string() const;
+std::u32string u32string() const;
+// maybe
+filesystem::path path() const;
+\end{colorblock}
+
+Which is... a lot. This is by no means a criticism of the -otherwise excellent - paper; an interface with conflicting requirements is invariably going to lead to an increase in complexity.
+Nevertheless, adding so many ways to represent an argument does not do users or implementers any favors. It should be simple.
+Not that there are multiple problems that this interface is trying to address:
+\begin{itemize}
+\item The desire to be zero-copy while being able to produce null-terminated strings, despite the absence of a standard null-terminated \tcode{string_view} type (\paper{P3655R0})
+\item The desire to support both \tcode{char} and \tcode{wchar} in the same type.
+\item The desire to offer support of all Unicode encodings on the premises of "someone might need it" or "why not?", even as the standard does not expose any
+generic conversion facilities.
+\item The desire to treat any argument as a valid path, even in the presence of lone surrogates on Windows.
+\end{itemize}
+
+\subsection{Rust, again}
+
+In comparison, Rust has exactly two functions, one that returns a range of \tcode{String} (\tcode{std::u8string}) - and fails in the presence of not valid Unicode, and one that returns a range of OsString (either unvalidated UTF-8 or WTF-8). It's a much cleaner interface.
+
+\subsection{What are our options?}
+
+We could go the Rust route and embrace WTF-8. But it would be extremely inconsistent and uncompatible with existing code.
+It also incurs extra copies, which, while probably acceptable, is something C++ tries to avoid.
+
+We should observe that wide arguments are specific to Windows. Indeed, the standard mandates that the "argv" argument to \tcode{main}, when it exists, is a \tcode{char**}.
+So one solution would be to provide \tcode{std::arguments} that only deal with \tcode{char} and, on Windows, \tcode{std::warguments}.
+In particular, we should not burden non-windows users and implementers with the thought of \tcode{wchar_t}.
+
+\begin{colorblock}
+struct argument {
+    zstring_view str() const;
+    u8string to_utf8() const;
+};
+struct wargument { // Windows specific
+    zwstring_view str() const;
+    u8string to_utf8()  const;
+};
+\end{colorblock}
+
+Which seems much simpler to use correctly. And removing the requirements that unpair surrogated and embedded nulls,
+we have more flexibility in terms of validation, preconditions, internal representation, etc.
+
+\section{Use the platform APIs, Luke}
+
+At the end of the day, the time of SG16, paper authors, and implementers is limited.
+Unicode support in the standard library is lackluster in that we do not have the most basic support of UTF-8.
+
+In that context, worrying about the 0.01\% use cases of lone surrogates in path names does seem like a counter-productive use of time. It's not serving users very well, and we should recognize that there is no obligation
+for the standard library to support every idiosyncrasy of every platform at the cost of additional efforts, more complex or less safe APIs,
+less portable code, etc.
+
+\pagebreak
+It is also going against the flow. Quoting the \href{https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page}{Microsoft documentation}:
+\begin{quoteblock}
+Use UTF-8 character encoding for optimal compatibility between web apps and other *nix-based platforms (Unix, Linux, and variants), minimize localization bugs, and reduce testing overhead.
+
+UTF-8 is the universal code page for internationalization and is able to encode the entire Unicode character set. It is used pervasively on the web, and is the default for *nix-based platforms.
+\end{quoteblock}
+
+
+We should not pretend that lone surrogates in paths are not a reality of life for some users somewhere.
+However, these users can use native APIs to handle these cases in ways that fit their needs.
+They are doing it today and can continue to do it tomorrow.
+
+With luck, by restricting the set of conflicting requirements we try to contend with, we can simplify the
+design of \tcode{std::arguments} (\paper{P3474R0}), \tcode{std::path_view} (\paper{P1030R8}, \paper{P2645R1}),
+\tcode{std::environment} (\paper{P1750R1}) and other papers dealing with system APIs.
+
+\bibliographystyle{plain}
+\bibliography{wg21, extra}
+
+\renewcommand{\section}[2]{}%
+
+\begin{thebibliography}{9}
+
+
+
+\bibitem[N5008]{N5008}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N5008}
+
+
+\end{thebibliography}
+
+\end{document}

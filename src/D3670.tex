@@ -1,0 +1,408 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{Pack Indexing for Template Names}
+\docnumber{P3670R1}
+\audience{EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+
+\usepackage{color, colortbl}
+\begin{document}
+\maketitle
+
+\section{Revisions}
+
+\subsection{R1}
+
+\begin{itemize}
+\item Fix example.
+\end{itemize}
+
+\section{Motivation}
+
+We added the ability to index packs of types and expressions in C++26 through \paper{P2662R3}.
+(\paper{P2662R3} is now implemented in Clang and GCC, and we got very positive feedback).
+
+However, \paper{P2662R3} does not allow the indexing of a pack of templates.
+There is no good reason for that. The intent was always to be able to index all packs.
+
+Both \paper{P2841R7} and \paper{P2989R2} were in flight, and it was not clear to me if either
+these papers would impact the indexing of packs of \grammarterm{template-name}{s}.
+So, I punt that question to the present paper.
+It turns out that \paper{P2841R7} has no impact on the design of this paper - except that indexing a pack of
+concept template parameter just works - and \paper{P2989R2} was not approved for C++26.
+
+In short, we are proposing to complete the design of pack indexing.
+
+\section{Design}
+
+The syntax for indexing a pack of template-name is similar to the syntax
+to the syntax used to index a pack of types or expressions.
+
+\begin{colorblock}
+
+template < template <typename> typename... TT>
+struct S {
+    template <typename T>
+    using First = TT...[0]<T>;
+};
+\end{colorblock}
+
+The indexed pack is a \grammarterm{template-name} and can be used anywhere any \grammarterm{template-name}
+would be usable.
+All packs of template template parameters can be indexed (type, variable, concepts).
+
+\section{Implementation}
+
+This paper has not been implemented, but I am confident this can be implemented in Clang without trouble.
+I can't comment on other implementations.
+
+\section{Wording}
+
+\rSec1[temp.names]{Names of template specializations}
+
+\pnum
+A template specialization\iref{temp.spec} can be referred to by a
+\grammarterm{template-id}:
+
+\begin{bnf}
+    \nontermdef{simple-template-id}\br
+    template-name \terminal{<} \opt{template-argument-list} \terminal{>}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{template-id}\br
+    simple-template-id\br
+    operator-function-id \terminal{<} \opt{template-argument-list} \terminal{>}\br
+    literal-operator-id \terminal{<} \opt{template-argument-list} \terminal{>}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{template-name}\br
+    \removed{identifier} \br
+    \added{simple-template-name}\br
+    \added{pack-index-template-name}
+\end{bnf}
+
+\begin{addedblock}
+\begin{bnf}
+    \nontermdef{pack-index-template-name}\br
+    simple-template-name \terminal{...} \terminal{[} constant-expression \terminal{]}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{simple-template-name}\br
+    identifier
+\end{bnf}
+\end{addedblock}
+
+\begin{bnf}
+    \nontermdef{template-argument-list}\br
+    template-argument \opt{\terminal{...}}\br
+    template-argument-list \terminal{,} template-argument \opt{\terminal{...}}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{template-argument}\br
+    constant-expression\br
+    type-id\br
+    \opt{nested-name-specifier} template-name\br
+    nested-name-specifier \terminal{template} template-name
+\end{bnf}
+
+\pnum
+\indextext{component name}%
+The component name of a
+\grammarterm{simple-template-id},
+\grammarterm{template-id}, or
+\grammarterm{template-name}
+is the first name in it.
+
+\begin{addedblock}
+
+\pnum
+The \grammarterm{simple-template-name} $P$ in a \grammarterm{pack-index-template-name}
+shall denote a pack.
+
+\pnum
+The \grammarterm{constant-expression} shall be
+a converted constant expression \iref{expr.const} of type \tcode{std::size_t}
+whose value $V$, termed the index,
+is such that $0 \le V < \tcode{sizeof...($P$)}$.
+
+\pnum
+A \grammarterm{pack-index-template-name} is a pack expansion \iref{temp.variadic}.
+
+\pnum
+\begin{note}
+    The \grammarterm{pack-index-template-name} denotes
+    the type of the $V^\text{th}$ element of the pack.
+\end{note}
+
+\end{addedblock}
+
+
+\pnum
+A \tcode{<} is interpreted as the delimiter of
+a \grammarterm{template-argument-list}
+if it follows a name that is not a \grammarterm{conversion-function-id} and
+\begin{itemize}
+    \item
+    that follows the keyword \keyword{template} or a \tcode{\~}
+    after a \grammarterm{nested-name-specifier} or
+    in a class member access expression, or
+    \item
+    for which name lookup finds the injected-class-name of a class template or
+    finds any declaration of a template, or
+    \item
+    that is an unqualified name
+    for which name lookup either finds one or more functions or finds nothing, or
+    \item
+    that is a terminal name
+    in a \grammarterm{using-declarator}\iref{namespace.udecl},
+    in a \grammarterm{declarator-id}\iref{dcl.meaning}, or
+    in a type-only context
+    other than a \grammarterm{nested-name-specifier}\iref{temp.res}.
+\end{itemize}
+
+
+\rSec2[temp.variadic]{Variadic templates}
+
+In a template parameter pack that is a pack expansion \iref{temp.param}:
+\begin{itemize}
+\item In a \tcode{sizeof...} expression\iref{expr.sizeof}; the pattern is an
+\grammarterm{identifier}.
+
+\item In a \grammarterm{pack-index-expression};
+the pattern is an \grammarterm{identifier}.
+
+\item In a \grammarterm{pack-index-specifier};
+the pattern is a \grammarterm{typedef-name}.
+
+\begin{addedblock}
+\item In a \grammarterm{pack-index-template-name};
+the pattern is a \grammarterm{simple-template-name}.
+
+\end{addedblock}
+
+\item In a \grammarterm{fold-expression}\iref{expr.prim.fold};
+the pattern is the \grammarterm{cast-expression}
+that contains an unexpanded pack.
+
+\item In a fold expanded constraint\iref{temp.constr.fold};
+the pattern is the constraint of that fold expanded constraint.
+\end{itemize}
+
+\ednote{[...]}
+
+
+\pnum
+The instantiation of a pack expansion considers
+items $\tcode{E}_1, \tcode{E}_2, \dotsc, \tcode{E}_N$,
+where
+$N$ is the number of elements in the pack expansion parameters.
+Each $\tcode{E}_i$ is generated by instantiating the pattern and
+replacing each pack expansion parameter with its $i^\text{th}$ element.
+Such an element, in the context of the instantiation, is interpreted as
+follows:
+
+\begin{itemize}
+\item
+if the pack is a template parameter pack, the element is
+\begin{itemize}
+    \item
+    a \grammarterm{typedef-name} for a type template parameter pack,
+    \item
+    an \grammarterm{id-expression} for a constant template parameter pack, or
+    \item
+    a \grammarterm{template-name} for a template template parameter pack
+\end{itemize}
+designating the $i^\text{th}$ corresponding
+type, constant, or template template argument;
+
+\item
+if the pack is a function parameter pack, the element is an
+\grammarterm{id-expression}
+designating the $i^\text{th}$ function parameter
+that resulted from instantiation of
+the function parameter pack declaration;
+
+\item
+if the pack is an \grammarterm{init-capture} pack,
+the element is an \grammarterm{id-expression}
+designating the variable introduced by
+the $i^\text{th}$ \grammarterm{init-capture}
+that resulted from instantiation of
+the \grammarterm{init-capture} pack declaration;
+otherwise
+
+\item
+if the pack is a structured binding pack,
+the element is an \grammarterm{id-expression}
+designating the $i^\textrm{th}$ structured binding in the pack
+that resulted from the structured binding declaration.
+\end{itemize}
+When $N$ is zero, the instantiation of a pack expansion
+does not alter the syntactic interpretation of the enclosing construct,
+even in cases where omitting the pack expansion entirely would
+otherwise be ill-formed or would result in an ambiguity in the grammar.
+
+\pnum
+The instantiation of a \tcode{sizeof...} expression\iref{expr.sizeof} produces
+an integral constant with value $N$.
+
+\pnum
+When instantiating a \grammarterm{pack-index-expression} $P$,
+let $K$ be the index of $P$.
+The instantiation of $P$ is the \grammarterm{id-expression} $\tcode{E}_K$.
+
+\pnum
+When instantiating a \grammarterm{pack-index-specifier} $P$,
+let $K$ be the index of $P$.
+The instantiation of $P$ is the \grammarterm{typedef-name} $\tcode{E}_K$.
+
+\begin{addedblock}
+When instantiating a \grammarterm{pack-index-template-name} $P$,
+let $K$ be the index of $P$.
+The instantiation of $P$ is the \grammarterm{simple-template-name} $\tcode{E}_K$.
+\end{addedblock}
+
+
+\ednote{[...]}
+
+\rSec1[temp.type]{Type equivalence}
+
+\pnum
+\indextext{equivalence!template type}%
+Two \grammarterm{template-id}{s} are the same if
+\begin{itemize}
+\item
+their \grammarterm{template-name}{s},
+\grammarterm{operator-function-id}{s}, or
+\grammarterm{literal-operator-id}{s}
+refer to the same template, and
+
+\item
+their corresponding type \grammarterm{template-argument}{s}
+are the same type, and
+
+\item
+the template parameter values determined by
+their corresponding constant template arguments\iref{temp.arg.nontype}
+are template-argument-equivalent (see below), and
+
+\item
+their corresponding template \grammarterm{template-argument}{s}
+refer to the same template.
+\end{itemize}
+Two \grammarterm{template-id}{s} that are the same
+refer to the same class, function, or variable.
+
+\ednote{[...]}
+
+\pnum
+If an expression $e$ is type-dependent \iref{temp.dep.expr},
+\tcode{decltype($e$)}
+denotes a unique dependent type. Two such \grammarterm{decltype-specifier}{s}
+refer to the same type only if their \grammarterm{expression}{s} are
+equivalent\iref{temp.over.link}.
+\begin{note}
+    However, such a type might be aliased,
+    e.g., by a \grammarterm{typedef-name}.
+\end{note}
+
+\pnum
+For a type template parameter pack \tcode{T},
+\tcode{T...[}\grammarterm{constant-expression}\tcode{]} denotes
+a unique dependent type.
+
+\pnum
+If the \grammarterm{constant-expression} of a \grammarterm{pack-index-specifier}
+is value-dependent,
+two such \grammarterm{pack-index-specifier}s refer to the same type
+only if their \grammarterm{constant-expression}s are equivalent \iref{temp.over.link}.
+Otherwise, two such \grammarterm{pack-index-specifier}s refer to the same type
+only if their indexes have the same value.
+
+\begin{addedblock}
+If the \grammarterm{constant-expression} of a \grammarterm{pack-index-template-name}
+is value-dependent,
+two such \grammarterm{pack-index-template-name}{s} refer to the same template
+only if their \grammarterm{constant-expression}{s} are equivalent \iref{temp.over.link}.
+Otherwise, two such \grammarterm{pack-index-template-name}{s} refer to the same template
+only if their indexes have the same value.
+\end{addedblock}
+
+
+
+\rSec1[gram.key]{Keywords}
+
+\pnum
+\indextext{keyword}%
+New context-dependent keywords are introduced into a program by
+\tcode{typedef}\iref{dcl.typedef},
+\tcode{namespace}\iref{namespace.def},
+class\iref{class}, enumeration\iref{dcl.enum}, and
+\keyword{template}\iref{temp}
+declarations.
+
+\begin{ncbnf}
+    typedef-name:\br
+    identifier\br
+    simple-template-id
+\end{ncbnf}
+
+\begin{ncbnf}
+    namespace-name:\br
+    identifier\br
+    namespace-alias
+\end{ncbnf}
+
+\begin{ncbnf}
+    namespace-alias:\br
+    identifier
+\end{ncbnf}
+
+\begin{ncbnf}
+    class-name:\br
+    identifier\br
+    simple-template-id
+\end{ncbnf}
+
+\begin{ncbnf}
+    enum-name:\br
+    identifier
+\end{ncbnf}
+
+\begin{ncbnf}
+    template-name:\br
+    \removed{identifier} \br
+    \added{simple-template-name}\br
+    \added{pack-index-template-name}
+\end{ncbnf}
+
+
+\section{Feature test macros}
+
+\ednote{Bump \tcode{__cpp_pack_indexing} to the date of adoption}.
+
+
+\renewcommand{\section}[2]{}%
+\bibliographystyle{plain}
+\bibliography{wg21, extra}
+
+\begin{thebibliography}{9}
+
+\bibitem[N5008]{N5008}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N5008}
+
+
+\end{thebibliography}
+
+\end{document}

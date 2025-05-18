@@ -1,0 +1,148 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{\tcode{char\_traits}: Stop the bleeding}
+\docnumber{P3681R0}
+\audience{SG-16}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+
+\usepackage{color, colortbl}
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+We propose to deprecate the use of user-defined types for the Traits template parameter of \tcode{std::basic_string},  \tcode{std::basic_string_view}
+and iostream-related types. More importantly, we argue that \tcode{std::zstring_view} should not be encumbered by char traits.
+
+
+\section{Motivation}
+
+Classes such as \tcode{basic_string}, \tcode{basic_string_view}, and the stream types can be customized with a user-provided \grammarterm{CharTraits} type.
+This customization has limited use cases, a non-negligible impact on compile times, symbol sizes, and diagnostics messages.
+
+It is also not designed to properly handle Unicode and Unicode character types.
+
+While getting rid of \tcode{char\_traits} or the \tcode{Traits} template parameters is unrealistic, we should consider that this customization
+is not worth its cost, and unburden in-flight and future proposals such as \tcode{zstring_view} \paper{P3655R0}.
+
+\section{Problems}
+
+\subsection{\tcode{CharTraits} does not handle multi-bytes encodings}
+
+Every \grammarterm{CharTraits} \tcode{requirement} is specified to \href{https://eel.is/c++draft/strings#tab:char.traits.req}{operate on single values}, \emph{even} for member functions operating on
+sequences such as \tcode{compare} and \tcode{copy}.
+Consequently, using it to transform multibyte strings will lead to incorrect results.
+Comparisons might also be incorrect for shift-state encodings and other non-UTF multibyte encodings.
+
+\subsection{\grammarterm{CharTraits} provides functionalities unrelated to code units}
+
+It is hard to imagine use cases for a non-default implementation of \tcode{assign}, \tcode{length}, \tcode{move}, \tcode{copy}.
+\tcode{not_eof}, \tcode{eof} and other functions are only useful for \tcode{iostream}-related facilities and conflate byte reading and encoding concerns.
+It is also hard to see how they would be implemented differently from \tcode{std::char_traits}.
+Presumably, a user-provided \tcode{Traits} type could circumvent \paper{LWG2959}. However, that this issue has not been fixed (which would be an ABI break),
+illustrates the lack of interest in specializing the stream types for \tcode{charN_t}.
+
+
+\subsection{\tcode{CharTraits} encourages bloat}
+Consider:
+\begin{colorblock}
+void f(std::unordered_map<std::zstring_view, std::zstring_view>);
+\end{colorblock}
+
+The presence of \tcode{char_traits} would make the mangled
+name 25\% larger using the MSVC mangling scheme. Which, for widely used types, adds up.
+This would be justifiable if \tcode{char_traits} provided any value whatsoever... but it does not.
+
+Note that this is less of a problem for the Itanium ABI, which compresses repeated type names.
+
+\subsection{\grammarterm{CharTraits} worsen teachability of text-related notions}
+
+By being incompatible with modern encodings and with its design conflating text encoding, \grammarterm{CharTraits}
+\grammarterm{CharTraits} is too often used to encourage incorrect text handling. This is also inconsistent with
+the rest of \tcode{std::string} and \tcode{string}-like types, which expose an interface that is otherwise only designed to manipulate sequences of values, without text semantics or encoding considerations.
+
+\section{A plan of action}
+
+\subsection{1. No \tcode{Traits} parameters in new types}
+
+\tcode{zstring_view} and any other such future types or interface should forgo the \tcode{Traits} customization.
+The consistency argument is not a very strong one. Never acknowledging mistakes is not useful for the teachability of the language.
+We have an opportunity for \tcode{zstring_view} to produce diagnostics and be faster to compile.
+
+There is, however, the question of the conversion from \tcode{std::basic_string} to \tcode{std::basic_zstring_view} (for example).
+For which, we have two adequate solutions:
+\begin{itemize}
+\item Silently drop the user-defined trait type, recognizing that case-insensitivity is a property of a transformation and not an intrinsic property of the string (and any other use of user-provided \tcode{Traits} would be equally assumed to not affect the invariant of the string).
+\item Make such conversion ill-formed (forcing users to manually construct the string_view with, for example, \tcode{zstring_view(str.data(), str.size() + 1)}.
+\end{itemize}
+
+\subsection{2. \tcode{char\_traits} should not be necessary}
+
+The one intrinsic value of \tcode{char\_traits} is to provide the size of a null-terminated sequence.
+\tcode{char_traits<T>::length(str)} is not the most intuitive way to spell \tcode{std::strlen}, so we should add \tcode{constexpr}
+overloads of \tcode{strlen} for all character types.
+Note that the abandoned \paper{P1944R0} proposed to make \tcode{strlen} constexpr, but that paper was abandoned, and it does not solve
+the lack of \tcode{strlen} overloads for \tcode{char8_t}, \tcode{char16_t}, \tcode{char32_t}.
+To be clear, we are not proposing to deprecate \tcode{std::char_traits} in this paper, but we also want to ensure its use is unnecessary.
+
+\subsection{3. Replacing off-label \grammarterm{CharTraits} use cases (Casing)}
+
+The one use case we often see purported for user-defined CharTraits types is to let string classes do case-insensitive comparisons.
+Which, of course, only works for non-multibyte encoding.
+This is partly because there is no easy way to do that in C++.
+Because case-insensitive comparisons are a very reasonable thing to want to do, we should facilitate them. \paper{P3688R0} proposes facilities
+to compare ranges of ASCII characters. We could also add function objects to ease use with associative containers.
+Independently, we should pursue casing and \href{https://www.w3.org/TR/charmod-norm/#definitionCaseFolding}{folding} Unicode views in the C++29 time frame (upper casing or lower casing are not correct ways to compare Unicode sequences).
+
+\subsection{4. Deprecating user-provided \tcode{Traits}}
+
+We should deprecate specialization of any standard type that has a template parameter defaulted to a specialization of \tcode{char_traits},
+when the corresponding template argument differs from the default value.
+
+In other words, \tcode{basic_string<char, MyTrait<char>>} should be deprecated.
+This is something that implementation can diagnose with depreciation warnings (at least as long as the specialization of \tcode{basic_string} is complete).
+
+\subsection{5. Longer-term prospects}
+
+We could, in a future version of C++, make \tcode{basic_string<char, MyTrait<char>>} ill-formed.
+This would allow an implementation not to use Traits in its implementations.
+
+Because the \tcode{Traits} parameter is often not the last parameter in standard types that use it, it would be a serious breaking change to remove it.
+And because of ABI concerns, it's unlikely to ever be removed from implementations.
+
+However, if it is neither used nor user-provided, we solve most problems created by char traits, except that:
+\begin{itemize}
+\item Providing an allocator to string will remain a bit cumbersome (which we could solve by adding an alias template)
+\item Symbol size will not improve.
+\end{itemize}
+
+However, if an implementation decided to change its ABI one day, or provide a way to opt-out of ABI stability, knowing the \tcode{Trait} parameter need not be mangled
+could lead to improvements.
+
+
+\bibliographystyle{plain}
+\bibliography{wg21, extra}
+
+\renewcommand{\section}[2]{}%
+
+\begin{thebibliography}{9}
+
+ \bibitem[P3688R0]{P3688R0}
+Jan Schultke, Corentin Jabot
+\emph{ASCII character utilities}\newline
+\url{https://wg21.link/P3688R0}
+
+\bibitem[N5008]{N5008}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N5008}
+
+
+\end{thebibliography}
+
+\end{document}
