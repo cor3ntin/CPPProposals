@@ -17,9 +17,11 @@
 
 \section{Abstract}
 
-Concept template parameters were introduced in \paper{P2841R7}. We propose to extend this feature with partially applied concepts.
+Concept template parameters were introduced in C++26 by \paper{P2841R7}. We propose to extend this feature with partially applied concepts.
+This feature was introduced in \paper{P2841R0} and removed in R1 to reduce the scope of the initial paper,
+and because \href{https://github.com/cplusplus/papers/issues/1546#issuecomment-1587401642}{EWG initially found this part of the feature less compelling}.
 
-This feature was introduced in \paper{P2841R0}, and is re-presented here, adding wording and notes on implementation experience.
+It is presented again here, with added wording and notes on implementation experience.
 
 \section{Motivation}
 
@@ -30,8 +32,8 @@ Concepts can take additional arguments parameterizing the concept.
 For example, \tcode{invocable<T, int>} checks whether an object of type \tcode{T} can be called
 with an \tcode{int} argument.
 
-In specific contexts, a \tcode{type-constraint} can appear in a template head, or before \tcode{auto} to constrain --- or assert ---
-a type. In that case, the compiler injects the type to which the concept is applied, rather than this type being specified by the user.
+In specific contexts, a \tcode{type-constraint} can appear in a template head or before \tcode{auto} to constrain --- or assert ---
+a type. In that case, the compiler injects the type to which the concept is applied, rather than the user specifying this type.
 
 For example, the following two declarations are equivalent:
 
@@ -43,7 +45,7 @@ template<typename T>
 void f() requires invocable<T, int>;
 \end{colorblock}
 
-Such short-hand is helpful because a great many concepts are binary or n-ary. In the \tcode{concepts} header, half of the concepts are not unary.
+Such shorthand is helpful because many concepts are binary or n-ary. In the \tcode{concepts} header, half of the concepts are not unary.
 
 
 When passing concepts as template arguments, this becomes quickly apparent.
@@ -61,10 +63,9 @@ auto median(range_of<std::integral> auto&&);
 \end{colorblock}
 
 
-We may want to be more specific. Can we accept only a range of \tcode{int}{s}?
+We may want to be more specific. Can we accept a range of only \tcode{int}{s}?
 Given that our \tcode{range_of} expects a concept (it should really accept a universal template parameter as described in \paper{P2989R2}!),
-maybe we could use \tcode{same_as}.
-But \tcode{same_as} requires arguments. Can we make something like that work?
+perhaps we could use \tcode{same_as}, but \tcode{same_as} requires arguments. Can we make something like that work?
 
 \begin{colorblock}
 auto f(range_of<same_as<int>> auto&&);
@@ -80,7 +81,7 @@ void f(range_of<std::same_as, int> auto &&);
 \end{colorblock}
 
 
-This is not the clearest interface. And crucially, it doesn't compose. For example, a range of \tcode{regular} types also convertible to \tcode{int} is not expressible.
+This interface is not especially clear and, crucially, doesn't compose. For example, a range of \tcode{regular} types also convertible to \tcode{int} is not expressible.
 
 One workaround would be to lift the concept and its argument into a type:
 
@@ -98,9 +99,8 @@ void f(range_of<packed_concept<std::convertible_to, int>,
                 packed_concept<std::regular>> auto &&);
 \end{colorblock}
 
-This works.
-It is also not particularly usable or readable, and all hope of subsumption is lost.
-Concepts cannot be class members for a very good reason: It would fundamentally break subsumption. So \tcode{apply} is a \tcode{bool} variable, an atomic constraint.
+This solution works, though it is not particularly usable or readable and loses all hope of subsumption.
+Concepts cannot be class members for a very good reason: Doing so would fundamentally break subsumption. So \tcode{apply} is a \tcode{bool} variable, an atomic constraint.
 
 Can we still support making something similar in the language? Could we make something like this work?
 
@@ -108,11 +108,11 @@ Can we still support making something similar in the language? Could we make som
 void f(range_of<@\textbf{concept convertible_to<int>}@> auto)
 \end{colorblock}
 
-This is what we are proposing.
+This is the kind of solution we are proposing.
 
 % [\href{https://compiler-explorer.com/z/36sqoGsr7}{Run this example on Compiler Explorer}]
 
-We can indeed create a new kind of template argument that carries additional arguments that are injected when the corresponding concept template-parameter is specialized.
+We can indeed create a new kind of template argument that carries additional arguments that are injected when the corresponding concept template-parameter is specialized:
 \begin{colorblock}
 // Given this declaration,
 template <typename @\textbf{\textcolor{OliveGreen}{T}}@, template <typename> concept @\textbf{\textcolor{WildStrawberry}{C}}@>
@@ -130,32 +130,33 @@ Notice that in this example, \tcode{C} is a concept template-parameter that acce
 even though \tcode{convertible_to} needs two.
 The other arguments will be filled in automatically.
 
-In effect, it's like we created a new concept:
+In effect, it's as if we created a new concept
 
 \begin{colorblock}
 template <typename T>
 concept convertible_to_int = convertible_to<T, int>;
 \end{colorblock}
 
-but we did it inline, directly in the template argument.
-This feature (which we call partial application) expresses intent very clearly and works with subsumption.
+but did so inline, directly in the template argument.
+This feature, which we call \emph{partial application}, expresses intent very clearly and works with subsumption.
 
 \subsection{Syntax of partially applied concepts}
 
 Partially applied concepts can appear as template arguments matching a concept template-parameter (and nowhere else).
 You might have noticed the \tcode{concept} keyword prefixing template arguments in previous examples and wonder why \tcode{range_of<concept convertible_to<int>>} rather than simply \tcode{range_of<convertible_to<int>>}?
 
-Of course, there is an undeniable parallel with the syntax of concept declaration, which is nice, but the keyword is there to avoid ambiguity.
+Of course, an undeniable parallel exists with the syntax of concept declaration, which is nice, but the keyword avoids ambiguity.
 
 If the concept accepts a variable number of arguments (because it has defaulted or variadic parameters),
 whether \tcode{ConceptName<Args>} is a partial application or a complete specialization
 (which is then a boolean expression) can be ambiguous.
 
-This has not been an issue with \grammarterm{type-constraint}{s} because they only ever appear in a context where the first parameter is always injected.
+This situation has not been an issue with \grammarterm{type-constraint}{s} because they appear only in a context where the first parameter is always injected.
 
 However, the ambiguity between a partial concept application and a boolean expression can appear in a couple of cases.
 \begin{enumerate}
-    \item In the presence of universal template parameters: Should a given argument matching a UTP be considered a \tcode{bool} or a concept template-parameter?
+    \item In the presence of universal template parameters: Should a given argument matching a universal template parameter
+    be considered a \tcode{bool} or a concept template-parameter?
     \item In an overload set, the concept could be matched to both a \tcode{bool} and a concept, as in this example courtesy of Barry Revzin:
 \begin{colorblock}
 template <bool B> void f();
@@ -168,10 +169,9 @@ We explored various solutions to this ambiguity, including always treating somet
 and forcing an explicit cast to bool to force a boolean expression or making the concept keyword optional when the concept has a fixed number of arguments.
 
 Both approaches suffer the same issue: They could change the meaning of code when the concept is modified by adding defaulted or variadic
-parameters. It could also break pre-C++26 code.
-So they do not appear to be robust solutions.
+parameters and could also break pre-C++26 code, so they appear to be nonideal solutions.
 
-We also refrained from any solution that would make the nature of template arguments somehow deduced from the corresponding parameter during overload resolution, for this would be madness (and it would not really solve the question for universal template parameters).
+We also refrained from any solution that would make the nature of template arguments somehow deduced from the corresponding parameter during overload resolution, for this would be madness and would not really solve the question for universal template parameters.
 
 Ultimately, the \tcode{concept} keyword is a great way to show intent and mirrors concept declaration. The following syntax would be valid:
 
@@ -179,28 +179,28 @@ Ultimately, the \tcode{concept} keyword is a great way to show intent and mirror
 some_template_name <
     std::regular,  /// can pass the name directly
     concept regular<>, // no reason this should not work
-    invocable<int>, // that is a bool - it will get diagnosed
-                    // if no overload or specialization expect a bool
+    invocable<int>, // That is a bool; it will get diagnosed.
+                    // If no overload or specialization, expect a bool.
     concept invocable<int> // ok
 >;
 \end{colorblock}
 
-\subsubsection{Generalized partially applied template template-parameters?}
+\subsubsection{Can this feature be generalized to other kind of template template-parameters?}
 
-A question that arises when considering this partial application of concepts is whether it generalizes to other kinds of template-parameters.
+A question that arises when considering this partial application of concepts is whether it generalizes to other kinds of template parameters.
 
-Concepts are unique in that the first parameter has a special meaning, and as such, that you could pass the first parameter at a different time than all other parameters does make a lot of sense for other kinds of template names.
-After all, this is why \tcode{type-constraint}{s} exist.
+Concepts are unique in that the first parameter has a special meaning. That we could pass the first parameter at a different time than all other parameters does make a lot of sense for other kinds of template names.
+After all, \tcode{type-constraint}{s} exist for this purpose.
 
 To generalize partial application
-to other template template-parameters, we would need to be able to provide --- or not --- arbitrary parameters;
-We could imagine, for example, being able to write some kind of code where some but not all template arguments are provided.
+to other template template-parameters, we would need the ability to provide --- or not --- arbitrary parameters;
+we could imagine, for example, being able to write some kind of code in which some but not all template arguments are provided.
 
 \begin{colorblock}
 Foo<std::map<?, ? , my_comparator>>;
 \end{colorblock}
 
-However, this is more complicated than what we need for concepts, and whether it would be useful is debatable.
+However, this solution is more complicated than what we need for concepts, and its usefulness is debatable.
 How arguments and parameters would be matched is less clear.
 Besides, unlike concepts, aliases and variable templates can be created at class scope.
 
@@ -209,9 +209,9 @@ We did consider whether this sort of placeholder syntax would be a good fit for 
 we think \tcode{concept \grammarterm{type-constraint}} is more consistent, less novel, and
 therefore more teachable than a placeholder syntax.
 
-\subsection{Packs of partial concepts?}
+\subsection{Should we support packs of partial concepts}
 
-Arguably, one could imagine a scenario in which a pack of partial concepts could be constructed:
+Arguably, one could imagine a scenario in which a pack of partial concepts could be\linebreak[4] \mbox{constructed}:
 
 \begin{colorblock}
 template <typename T, template <typename> concept... Concepts>
@@ -221,14 +221,13 @@ template <typename T, template <typename...> concept... Concepts>
 concept Foo = AllOf<T, concept Concepts<double>...>;
 \end{colorblock}
 
-But it seems difficult to imagine a scenario where this would be useful; i.e., when do different concepts accept the same arguments (besides the first one)?
-Supporting that does not seem like a good time investment.
+But imagining a scenario in which this construction would be useful is difficult; i.e., when do different concepts accept the same arguments (besides the first one)?
+Supporting that solution seems like an unwise investment of time.
 
 
 \subsection{Implementation}
 
-A prototype has been implemented in a \href{https://github.com/cor3ntin/llvm-project/commit/7fb869e9b6571629258081674de03279ad60ffd3}{branch of Clang}.
-Given that this was done last year, the branch is not actively maintained or available on compiler-explorer, while we focus on both improving the implementation of Clang and upstreaming an implementation of \paper{P2841R7}.
+A prototype was implemented last year in a \href{https://github.com/cor3ntin/llvm-project/commit/7fb869e9b6571629258081674de03279ad60ffd3}{branch of Clang}. The branch is not actively maintained or available on compiler-explorer while we focus on both improving the implementation of Clang and upstreaming an implementation of \paper{P2841R7}.
 Note that this implementation effort did not cover some aspects, particularly mangling.
 
 \section{Wording}
@@ -252,7 +251,7 @@ partially-applied-concept-argument
 
 \rSec2[temp.arg.template]{Template template arguments}
 
-\ednote{Add a subsection at the end of [temp.arg.template]} .
+\ednote{Add a subsection at the end of [temp.arg.template].}
 
 \begin{addedblock}
 
@@ -279,9 +278,9 @@ template <@\tcode{Parameter}@ Injected>
 concept X = @\grammarterm{concept-name}@<Injected, @\grammarterm{template-argument-list}@>;
 \end{codeblock}
 
-Where \tcode{Parameter} is the first \grammarterm{template-parameter} in the \grammarterm{template-head} \tcode{H} of the concept designated by \grammarterm{concept-name}, without the ellipsis (if any).
+where \tcode{Parameter} is the first \grammarterm{template-parameter} in the \grammarterm{template-head} \tcode{H} of the concept designated by \grammarterm{concept-name}, without the ellipsis (if any).
 
-If \tcode{H} declares a single non-pack template parameter, or if the \grammarterm{constraint-expression} of \tcode{X} is not valid, the program is ill-formed.
+If \tcode{H} declares a single non-pack template parameter or if the \grammarterm{constraint-expression} of \tcode{X} is not valid, the program is ill-formed.
 
 \begin{example}
 \begin{colorblock}
@@ -327,7 +326,7 @@ are the same type, and
 
 \item
 the template parameter values determined by
-their corresponding constant template arguments\iref{temp.arg.nontype}
+their corresponding constant template arguments \iref{temp.arg.nontype}
 are template-argument-equivalent (see below), and
 
 \item
@@ -335,14 +334,14 @@ their corresponding template \grammarterm{template-argument}{s}
 refer to the same template\added{ or are partial-concept-argument-equivalent}.
 \end{itemize}
 
-\ednote{Add a subsection at the end of [temp.type]}
+\ednote{Add a subsection at the end of [temp.type].}
 
 \begin{addedblock}
-Two template \grammarterm{template-argument}{s} are \defn{partial-concept-argument-equivalent} if:
+Two template \grammarterm{template-argument}{s} are \defn{partial-concept-argument-equivalent} if
 \begin{itemize}
-\item They are both \grammarterm{partially-applied-concept-argument},
-\item They have equivalent \grammarterm{template-argument-list}
-\item Their \grammarterm{concept-name} refer to the same concept.
+\item they are both \grammarterm{partially-applied-concept-argument},
+\item they have equivalent \grammarterm{template-argument-list}, and
+\item their \grammarterm{concept-name} refer to the same concept.
 \end{itemize}
 \end{addedblock}
 
@@ -351,11 +350,13 @@ Two template \grammarterm{template-argument}{s} are \defn{partial-concept-argume
 \subsection{Feature test macro}
 
 \ednote{In [tab:cpp.predefined.ft], bump the value of \tcode{__cpp_template_parameters} to the
-    date of adoption} .
+    date of adoption.}
 
 
 
 \section{Acknowledgments}
+
+Thanks to Lori Hughes for reviewing this paper and providing editorial feedback.
 
 \bibliographystyle{plain}
 \bibliography{wg21, extra}
