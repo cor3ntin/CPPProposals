@@ -1,0 +1,271 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{Pragmatic approach to standard structural types}
+\docnumber{P3861R0}
+\audience{EWG, LEWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+
+\usepackage{color, colortbl}
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+We propose to make \tcode{string_view}, \tcode{span}, and \tcode{tuple} structural types through compiler magic.
+This partially addresses \href{https://github.com/cplusplus/nbballot/issues/740}{FR-014-160}.
+
+\section{Motivation}
+
+For objects to be used as template parameters, they need to:
+\begin{itemize}
+\item be structural
+\item be constant expressions and therefore not perform transient allocations.
+\end{itemize}
+
+For a type to be structural, we would like to ensure that the structural representation is always canonical.
+There is also a desire for that canonicalization to be enforced by the compiler.
+
+These are not trivial problems to solve, and while it seems we might converge on a solution in the next few years, the reflection facilities added in C++26 would benefit from more standard types being structural.
+(Mateusz Pusz's \href{https://www.youtube.com/watch?v=TJg37Sh9j78}{The 10 Essential Features for the Future of C++ Libraries} talk gives a great overview of use cases).
+
+For now, structural class types are limited to types whose data members are public.
+Of course, there have been attempts to fix it in the library. For example \paper{P3094R6}
+proposes to add a new string type that would satisfy the current requirements for structural types.
+
+A previous effort to make standard types structural was \paper{P2484R0}.
+This proposes to add a defaulted operator to some standard types, which would make some types
+(that would be structural if not for having private members) structural, and therefore usable as a constant template parameter.
+
+The flaw in that proposal is that it assumes that the proposed operator would be necessary and sufficient to be generalized
+to arbitrary user types in a way where canonicalization can be enforced. Which is an arguably risky bet.
+
+There is a simpler first step: designate some standard types as structural.
+We know they can be structural because we specify them, we know what we want the structural equivalence to be, and we know they are canonical
+because we trust implementers.
+As the changes proposed here only works private members, they will be replaceable by a more general solution in the future without having to keep special cases around forever (of course, in implementations, their structural representation will have to remain identical for abi compatibility).
+
+
+\subsection{\tcode{string} and \tcode{vector}}
+
+For \tcode{string} and \tcode{vector} to be usable as constant template parameters, they first need to support non-transient allocation.
+This is also a hard problem to solve in the general case (as illustrated by \paper{P2670R1} and \paper{P1974R0}). However, we can narrow the problem to \tcode{basic_string} and \tcode{vector}s
+whose elements themselves are structural.
+In the same way that we can easily allow some standard types to be structural, we can allow some containers to have non-transient allocations.
+This is covered by \paper{P3554R0}, so it is not explored further here. Adopting \paper{P3554R0} would be a prerequisite to making \tcode{vector} and \tcode{string} structural - this feature is fairly critical to bridge the gap between reflection, packs, and structured binding (enabling better index sequence features, easily allowing range algorithms to manipulate types, etc).
+
+\subsection{\tcode{string_view} and \tcode{span} representation}
+
+As alluded to in \paper{P2484R0}, while \tcode{string_view} has an equality operator that compares the underlying sequence of bytes (\href{https://abseil.io/blog/20180531-regular-types}{which may or may not be sensible}),
+both \tcode{string_view} and \tcode{span} represent a range over a specific container.
+
+Therefore, the equivalence of these types is based on the value of the pointers rather than the range, which is self-consistent.
+
+\begin{colorblock}
+const char a[] = "Hello";
+const char b[] = "Hello";
+template <const char* S> struct Char   {};
+template <string_view S> struct String {};
+
+static_assert(std::same_as<Char<a>, Char<b>>); // error
+static_assert(same_as<String<a>, String<b>>);  // error
+\end{colorblock}
+
+\subsection{String Literals}
+
+String literals are not usable as constant template parameters. This proposal does not make \tcode{T<string_view("")>} well-formed, but it would not prevent making that work in the future, as proposed in \paper{P3380R1}.
+
+
+\subsection{\tcode{optional} and \tcode{variant}}
+
+Unlike \paper{P2484R0}, we are not proposing to make \tcode{optional} and \tcode{variant} structural types.
+Doing so is possible, but we would have to bake in compiler optional/variant specific logic to check that their values are equivalent,
+which felt like going a bit too far in the direction of compiler magic.
+We would also need to invent ad-hoc ABIs for the representation of these types, whereas \tcode{tuple}, \tcode{string_view}, and \tcode{span}
+can, in effect, behave like aggregates for this purpose.
+Going in that direction seems valuable for \tcode{string} and \tcode{vector} - whose representation can be an array - but not necessarily for other types.
+
+\subsection{What about non-standard types?}
+
+This paper only affects standard types, in effect giving them capabilities than non-standard types can't have. However, reflection already depends on these types, \tcode{std::string_view}, \tcode{span}, etc are easily intercompatible with equivalent third party types and most importantly, what is proposed here is a stop-gap solution aimed at making reflection more useful, while we find a more comprehensive, language-level design.
+
+\section{Implementation}
+
+I tested the validity of that idea in a fork of clang, sometimes in the past 2 years. It seems that this branch no longer exists.
+
+\section{Core Wording}
+
+\rSec1[temp.param]{Template parameters}
+
+\pnum
+A constant template parameter
+shall have one of the following (possibly cv-qualified) types:
+\begin{itemize}
+    \item a structural type (see below),
+    \item a type that contains a placeholder type\iref{dcl.spec.auto}, or
+    \item a placeholder for a deduced class type\iref{dcl.type.class.deduct}.
+\end{itemize}
+The top-level
+\grammarterm{cv-qualifier}{s}
+on the
+\grammarterm{template-parameter}
+are ignored when determining its type.
+
+\pnum
+\label{term.structural.type}%
+A \defnadj{structural}{type} is one of the following:
+\begin{itemize}
+\item a scalar type, or
+\item an lvalue reference type, or
+\begin{addedblock}
+\item a class type designated as being a structural type in the library clauses, or
+\end{addedblock}
+\item a literal class type with the following properties:
+\begin{itemize}
+    \item
+    all base classes and non-static data members are public and non-mutable and
+    \item
+    the types of all base classes and non-static data members are
+    structural types or (possibly multidimensional) arrays thereof.
+\end{itemize}
+\end{itemize}
+
+\pnum
+In every specialization \tcode{basic_string_view<charT, traits>}, the type \tcode{traits} shall meet the character traits requirements\iref{char.traits}.
+\begin{note}
+    The program is ill-formed if \tcode{traits::char_type} is not the same type as \tcode{charT}.
+\end{note}
+
+\section{Library Wording}
+
+\rSec2[string.view.template]{Class template \tcode{basic_string_view}}
+\rSec3[string.view.template.general]{General}
+
+\pnum
+For a \tcode{basic_string_view str},
+any operation that invalidates a pointer
+in the range
+\begin{codeblock}
+    @\range{str.data()}{str.data() + str.size()}@
+\end{codeblock}
+invalidates pointers, iterators, and references
+to elements of \tcode{str}.
+
+\pnum
+The complexity of \tcode{basic_string_view} member functions is \bigoh{1}
+unless otherwise specified.
+
+\pnum
+\tcode{basic_string_view<charT, traits>} is
+a trivially copyable type.
+
+\begin{addedblock}
+\tcode{basic_string_view<charT, traits>} is
+a structural type [temp.pre].
+
+\begin{addedblock}
+Two values \tcode{s1} and \tcode{s2} of type \tcode{basic_string_view<charT, traits>} are template-argument-equivalent ([temp.type]) if and only if
+\begin{itemize}
+    \item \tcode{s1.size()} and \tcode{s2.size()} are template-argument-equivalent, and
+    \item \tcode{s1.data()} and \tcode{s2.data()} are template-argument-equivalent.
+\end{itemize}
+\end{addedblock}
+\end{addedblock}
+
+\ednote{[...]}
+
+
+\rSec1[views]{Views}
+
+\rSec2[views.general]{General}
+\rSec2[views.contiguous]{Contiguous access}
+\rSec3[views.span]{Class template \tcode{span}}
+\rSec3[span.overview]{Overview}
+
+
+\tcode{span<ElementType, Extent>} is
+a trivially copyable type \iref{term.trivially.copyable.type}.
+
+\begin{addedblock}
+\tcode{span<ElementType, Extent>} is a structural type [temp.pre].
+Two values \tcode{s1} and \tcode{s2} of type \tcode{span<ElementType, Extent>} are template-argument-equivalent ([temp.type]) if and only if
+\begin{itemize}
+\item \tcode{s1.size()} and \tcode{s2.size()} are template-argument-equivalent, and
+\item \tcode{s1.data()} and \tcode{s2.data()} are template-argument-equivalent.
+\end{itemize}
+\end{addedblock}
+
+\pnum
+\tcode{ElementType} is required to be
+a complete object type that is not an abstract class type.
+
+\pnum
+For a \tcode{span} \tcode{s},
+any operation that invalidates a pointer in
+the range \range{s.data()}{s.data() + s.size()}
+invalidates pointers, iterators, and references to elements of \tcode{s}.
+
+\ednote{[...]}
+
+
+\rSec1[tuple]{Tuples}
+
+\rSec2[tuple.tuple]{Class template \tcode{tuple}}
+
+
+\rSec3[tuple.tuple.general]{General}
+
+If a program declares an explicit or partial specialization of \tcode{tuple},
+the program is ill-formed, no diagnostic required.
+
+\begin{addedblock}
+If every type in \tcode{Types} is a structural type [temp.pre], \tcode{tuple<Types...>} is a tructural type.
+Two values \tcode{t1} and \tcode{t2} of type \tcode{tuple<Types..> } are template-argument-equivalent ([temp.type]) if and only if each pair of corresponding elements from t1 and t2 are template-argument-equivalent.
+\end{addedblock}
+
+\rSec3[tuple.cnstr]{Construction}
+%
+%\ednote{[...]}
+%
+%
+%\rSec1[optional]{Optional objects}
+%
+%\rSec2[optional.optional]{Class template \tcode{optional}}
+%
+%\rSec3[optional.optional.general]{General}
+%
+%\begin{addedblock}
+%\tcode{optional<T>} is a structural type ([temp.param]) if \tcode{T} is a structural type.
+%Two values o1 and o2 of type optional<T> are template-argument-equivalent ([temp.type]) if and only if either neither o1 nor o2 contain a value or if both contain a value and \tcode{*o1} and \tcode{*o2} are template-argument-equivalent
+%\end{addedblock}
+%
+%
+%Any instance of \tcode{optional<T>} at any given time either contains a value or does not contain a value.
+%When an instance of \tcode{optional<T>} \defnx{contains a value}{contains a value!\idxcode{optional}},
+%it means that an object of type \tcode{T}, referred to as the optional object's \defnx{contained value}{contained value!\idxcode{optional}},
+%is nested within\iref{intro.object} the optional object.
+%When an object of type \tcode{optional<T>} is contextually converted to \tcode{bool},
+%the conversion returns \tcode{true} if the object contains a value;
+%otherwise the conversion returns \tcode{false}.
+
+
+\bibliographystyle{plain}
+\bibliography{wg21, extra}
+
+\renewcommand{\section}[2]{}%
+
+\begin{thebibliography}{9}
+
+\bibitem[N5008]{N5008}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N5008}
+
+
+\end{thebibliography}
+
+\end{document}

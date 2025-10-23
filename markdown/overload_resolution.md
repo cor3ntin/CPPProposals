@@ -1,6 +1,6 @@
 ---
 title: "On Overload Resolution, Exact Matches, and Clever Implementations"
-document: P3606R0
+document: P3606R1
 date: 2025-01-24
 audience:
  - Evolution Working Group
@@ -11,6 +11,12 @@ author:
    email: <zyn7109@gmail.com>
 toc: false
 ---
+
+# Revisions
+
+## P3606R1
+
+ - Provides wording
 
 # Introduction
 
@@ -197,12 +203,82 @@ considered and argument deduction/substitution does not happen.
 All strategies described here were implemented by at least one implementation,
 which is exactly the issue!
 
-# Wording
-
-TBD.
-
 Our main objective with this paper is to clarify intent so that we can
 facilitate the implementation of CWG2369 (and [@CWG2769]) in Clang.
+
+# Wording
+
+## [over.match]{.sref} Overload resolution {-}
+
+### [over.match.funcs.general]{.sref} Candidate functions and argument lists {-}
+
+[Replace [over.match.funcs.general]/p8 as follow]{.ednote}
+
+::: rm
+
+[8]{.pnum}In each case where a candidate is a function template, candidate function template specializations are generated using template argument deduction ([temp.over], [temp.deduct]). If a constructor template or conversion function template has an explicit-specifier whose constant-expression is value-dependent ([temp.dep]), template argument deduction is performed first and then, if the context admits only candidates that are not explicit and the generated specialization is explicit ([dcl.fct.spec]), it will be removed from the candidate set. Those candidates are then handled as candidate functions in the usual way. A given name can refer to, or a conversion can consider, one or more function templates as well as a set of non-template functions. In such a case, the candidate functions generated from each function template are combined with the set of non-template candidate functions.
+
+:::
+
+::: add
+
+[8]{.pnum} In each case where a candidate is a function template, it is added to the set of _prospective function template candidates_.
+A given name can refer to, or a conversion can consider, one or more function templates as well as a set of non-template functions.
+In such a case, if no perfect viable function is selected, candidate functions will be generated from each function template and will be added to the set of non-template candidate functions when the best function is selected [over.match.best].
+
+[Note: If a perfect viable function is selected, candidate function templates are not considered and template argument deduction for these candidates does not take place.]
+
+:::
+
+
+[Add a new section after [over.match.viable]{.sref} ]{.ednote}
+
+::: add
+
+### [over.match.perfect] Perfect Viable Function {-}
+
+A _perfect viable function_ is a function that has a perfect standard conversion
+sequence  ([over.ics.scs]) for each of its arguments, and if it is a conversion function,
+the conversion sequence to type of the object being initialized [over.match.conv]{.sref}
+is a perfect standard conversion sequence.
+
+:::
+
+### [over.match.best.general]{.sref} General {-}
+
+[Modify p3 as follow]{.ednote}
+
+::: add
+
+[3]{.pnum}  Except when performing overload resolution for copy initialization [over.match.copy], if
+
+ - there is exactly one viable function `F` that is a better function than all other viable functions,
+ - `F` is a perfect viable function, and
+ - `F` is not a conversion function or the set of prospective function templates does not contain any constructor template,
+
+then F is the one selected by overload resolution;
+
+
+Otherwise, candidate function template specializations are generated from the set of prospective function template candidates using template argument deduction ([temp.over], [temp.deduct]).
+If a constructor template or conversion function template has an explicit-specifier whose constant-expression is value-dependent ([temp.dep]), template argument deduction is performed first and then, if the context admits only candidates that are not explicit and the generated specialization is explicit ([dcl.fct.spec]), it will be removed from the candidate set. So generated candidate function template specializations are then added to the set of viable funtions if they are viable per [over.match.viable]. Those candidates are then handled as candidate functions in the usual way.
+
+:::
+
+[If]{.rm} [After the viable candidate function template specializations are added to the set of viable functions, if]{.add} there is exactly one viable function that is a better function than all other viable functions, then it is the one selected by overload resolution; otherwise the call is ill-formed.
+
+### [over.ics.scs]{.sref} Standard conversion sequences {-}
+
+[Add the following paragraph at the end of [over.ics.scs], after the table]{.ednote}
+
+::: add
+
+[4]{.pnum} A standard conversion sequence is a _perfect standard conversion sequence_ if
+
+ - the argument expression is not the element of a single-element _braced-init-list_,
+ - each conversion in the sequence, ignoring any initial lvalue transformation, is the identity conversion, and
+ - if the conversion is a direct reference binding, the type of the argument expression and the type of the parameter are the same.
+
+:::
 
 # Acknowledgments
 

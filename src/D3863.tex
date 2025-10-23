@@ -1,0 +1,246 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{Minimal fix for CWG3003 (CTAD from template template parameters)}
+\docnumber{P3683R0}
+\audience{EWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+
+
+\usepackage{color, colortbl}
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+The standard library depends on CTAD from template template parameters. However, this feature does not exist despite being universally
+implemented.
+
+\section{History}
+
+C++23 added a facility to build a container out of a range, including conversions:
+
+\begin{colorblock}
+std::views::iota(0, 42) | std::ranges::to<std::vector<int>>();
+std::views::iota(0, 42) | std::ranges::to<std::vector<double>>()
+\end{colorblock}
+
+In addition, we allow deducing the element type from the element type of the view.
+
+\begin{colorblock}
+std::views::iota(0, 42) | std::ranges::to<std::vector>();
+\end{colorblock}
+
+It's not magic, it's CTAD!
+
+Ignoring a lot of details, it boils down to
+
+\begin{colorblock}
+template <template <typename...> typename TT, typename R>
+auto to(R&& r) {
+    return std::ranges::to<decltype(TT(std::from_range, std::declval<R&&>()))>(r);
+}
+\end{colorblock}
+
+This is a neat trick that I think was first implemented in ranges-v3. It is widely used by users of the C++ standard library
+and other ranges libraries, and supported by all implementations.
+
+There is just one problem: Nowhere does the standard allow performing CTAD for template template parameters. We standardized a
+library feature that is simply not C++. And by we, I mean me (\paper{P1206R7}).
+
+\href{https://cplusplus.github.io/LWG/issue4381}{LWG4381} proposes to remove the offending \tcode{ranges::to} overload to
+fix the fact that the library relies on imaginary features. However, this is not really possible. Regardless of whether the feature is conforming
+or useful, it is widely used and universally implemented.
+
+The solution is for the standard to reflect existing practice.
+
+\section{Aliases}
+
+When aliases template are involved, not all scenarios are supported.
+It seems important to support the pmr use case, which all implementations do
+
+\begin{colorblock}
+template <template <typename...> typename TT, typename... Args>
+auto f(Args&&... args) {
+    return TT(args...);
+}
+template <typename T>
+struct alloc;
+
+template <typename T>
+struct pmr_alloc;
+\textbf{}
+template <typename T, typename Alloc = alloc<T>>
+struct vector {
+    vector(T);
+};
+
+template <typename T>
+using pmr_vector = vector<T, pmr_alloc<T>>;
+
+auto b = f<vector>(0);
+auto a = f<pmr_vector>(0);
+\end{colorblock}
+
+However, no implementations support multiple layers of aliases, as described in CWG3003:
+
+\begin{colorblock}
+template <typename T> struct A { A(T); };
+
+template <typename T, template <typename> class TT = A>
+using Alias = TT<T>;
+
+template <typename T>
+using Alias2 = Alias<T>;
+
+void h() { Alias2 a(42); } // all reject
+void h2() { Alias a(42); } // all reject
+\end{colorblock}
+
+
+No implementation supports this example ([\href{https://godbolt.org/z/s9jsPTnhG}{Compiler explorer}]).
+In fact, Clang and GCC used to crash on that scenario, which is how this imbroglio came to light in the first place.
+
+Supporting that seems less useful, however, it requires additional wording mechanism (CTAD for alias template is not exactly simple), and ideally, some prototyping. We therefore propose that this remains unsupported and be left as a future evolutionary exercise for an eager reader.
+
+\section{Feature test macro}
+
+Because this specifies existing practice, there is no need to update any feature test macros. The change should be a DR to C++23.
+
+\section{Wording}
+
+\rSec3[dcl.type.simple]{Simple type specifiers}%
+
+A \grammarterm{placeholder-type-specifier}
+is a placeholder for
+a type to be deduced \iref{dcl.spec.auto}.
+\indextext{deduction!class template arguments}%
+A \grammarterm{type-specifier} is a placeholder for
+a deduced class type \iref{dcl.type.class.deduct} if either
+\begin{itemize}
+    \item
+    it is of the form
+    \opt{\keyword{typename}} \opt{\grammarterm{nested-name-specifier}} \grammarterm{template-name} or
+    \item
+    it is of the form \opt{\keyword{typename}} \grammarterm{splice-specifier} and
+    the \grammarterm{splice-specifier} designates
+    a class template or alias template.
+\end{itemize}
+The \grammarterm{nested-name-specifier} or \grammarterm{splice-specifier},
+if any, shall be non-dependent and
+the \grammarterm{template-name} or \grammarterm{splice-specifier}
+shall designate a deducible template.
+A \defnadj{deducible}{template} is either a class template\added{, a type template template parameter,} or
+is an alias template whose \grammarterm{defining-type-id} is of the form
+
+\begin{ncsimplebnf}
+    \opt{\keyword{typename}} \opt{nested-name-specifier} \opt{\keyword{template}} simple-template-id
+\end{ncsimplebnf}
+
+where the \grammarterm{nested-name-specifier} (if any) is non-dependent and
+the \grammarterm{template-name} of the \grammarterm{simple-template-id}
+names a deducible template \added{that is not a type template template parameter}.
+\begin{note}
+    An injected-class-name is never interpreted as a \grammarterm{template-name}
+    in contexts where class template argument deduction would be performed \iref{temp.local}.
+\end{note}
+
+
+\rSec3[over.match.class.deduct]{Class template argument deduction}%
+\indextext{deduction!class template arguments}%
+
+\pnum
+When resolving a placeholder for a deduced class type \iref{dcl.type.class.deduct}
+where the \grammarterm{template-name} or \grammarterm{splice-type-specifier}
+designates a primary class template \tcode{C},
+a set of functions and function templates, called the guides of \tcode{C},
+is formed comprising:
+\begin{itemize}
+\item
+If \tcode{C} is defined,
+for each constructor of \tcode{C},
+a function template with the following properties:
+\begin{itemize}
+    \item
+    The template parameters are the template parameters of \tcode{C}
+    followed
+    by the template parameters (including default template arguments) of the constructor,
+    if any.
+    \item
+    The associated constraints\iref{temp.constr.decl} are the conjunction of
+    the associated constraints of \tcode{C} and
+    the associated constraints of the constructor, if any.
+    \begin{note}
+        A \grammarterm{constraint-expression} in
+        the \grammarterm{template-head} of \tcode{C}
+        is checked for satisfaction before any constraints from
+        the \grammarterm{template-head} or trailing \grammarterm{requires-clause}
+        of the constructor.
+    \end{note}
+    \item
+    The \grammarterm{parameter-declaration-clause} is that of the constructor.
+    \item
+    The return type is the class template specialization
+    designated by \tcode{C}
+    and template arguments
+    corresponding to the template parameters of \tcode{C}.
+\end{itemize}
+\end{itemize}
+
+\begin{addedblock}
+When resolving a placeholder for a deduced class type \iref{dcl.type.class.deduct}
+where
+\begin{itemize}
+\item the \grammarterm{template-name} designates a type template template parameter \tcode{TT},
+\item the argument corresponding to \tcode{TT} designates a primary class template \tcode{C}, and
+\item \tcode{TT} and \tcode{C} are compatible [temp.arg.template],
+\end{itemize}
+
+then \tcode{C} is first substituted into \tcode{TT}.
+\end{addedblock}
+
+
+\rSec3[temp.dep.type]{Dependent types}
+
+\pnum
+A placeholder for a deduced class type \iref{dcl.type.class.deduct}
+is dependent if
+\begin{itemize}
+    \item
+    it has a dependent initializer, \removed{or}
+    \begin{addedblock}
+    \item it refers to a template template parameter, or
+    \end{addedblock}
+    \item
+    it refers to an alias template
+    that is a member of the current instantiation and
+    whose \grammarterm{defining-type-id} is dependent after
+    class template argument deduction\iref{over.match.class.deduct}
+    and substitution\iref{temp.alias}.
+\end{itemize}
+
+
+\section{Acknowledgnments}
+
+Thanks to Jan Schultke, Lénárd Szolnoki, Tomasz Kamiński, and Matheus Izvekov for their feedback on this paper.
+
+\bibliographystyle{plain}
+\bibliography{wg21, extra}
+
+\renewcommand{\section}[2]{}%
+
+\begin{thebibliography}{9}
+
+
+\bibitem[N5008]{N5008}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N5008}
+
+
+\end{thebibliography}
+
+\end{document}
