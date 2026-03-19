@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{A Simple Approach to Universal Template Parameters}
-\docnumber{P2989R2}
+\docnumber{D2989R3}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Gašper Ažman}{gasper.azman@gmail.com}
@@ -27,6 +27,12 @@ for limited benefits. In this paper, we propose a much simpler subset of the fea
 
 
 \section{Revisions}
+
+\subsection{R3}
+
+\begin{itemize}
+    \item Add wording
+\end{itemize}
 
 \subsection{R2}
 
@@ -712,7 +718,698 @@ There is a better order of operation, especially for ease of specification.
 
 \section{Wording}
 
-TBD!
+\rSec1[temp.param]{Template parameters}
+
+\pnum
+The syntax for
+\grammarterm{template-parameter}{s}
+is:
+
+\begin{bnf}
+    \nontermdef{template-parameter}\br
+    type-parameter\br
+    parameter-declaration\br
+    type-tt-parameter\br
+    variable-tt-parameter\br
+    concept-tt-parameter\br
+    \added{universal-template-parameter}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{type-parameter}\br
+    type-parameter-key \opt{\terminal{...}} \opt{identifier}\br
+    type-parameter-key \opt{identifier} \terminal{=} type-id\br
+    type-constraint \opt{\terminal{...}} \opt{identifier}\br
+    type-constraint \opt{identifier} \terminal{=} type-id
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{type-parameter-key}\br
+    \keyword{class}\br
+    \keyword{typename}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{type-constraint}\br
+    \opt{nested-name-specifier} concept-name\br
+    \opt{nested-name-specifier} concept-name \terminal{<} \opt{template-argument-list} \terminal{>}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{type-tt-parameter}\br
+    template-head type-parameter-key \opt{\terminal{...}} \opt{identifier}\br
+    template-head type-parameter-key \opt{identifier} type-tt-parameter-default
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{type-tt-parameter-default}\br
+    \terminal{=} \opt{nested-name-specifier} template-name\br
+    \terminal{=} nested-name-specifier \terminal{template} template-name
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{variable-tt-parameter}\br
+    template-head \terminal{auto} \opt{\terminal{...}} \opt{identifier}\br
+    template-head \terminal{auto} \opt{identifier} \terminal{=} \opt{nested-name-specifier} template-name
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{concept-tt-parameter}\br
+    \terminal{template} \terminal{<} template-parameter-list \terminal{>} \terminal{concept} \opt{\terminal{...}} \opt{identifier}\br
+    \terminal{template} \terminal{<} template-parameter-list \terminal{>} \terminal{concept} \opt{identifier} \terminal{=} \opt{nested-name-specifier} template-name
+\end{bnf}
+
+\begin{addedblock}
+\begin{bnf}
+    \nontermdef{universal-template-parameter}\br
+    \terminal{universal template} \opt{\terminal{...}} \opt{identifier}\br
+\end{bnf}
+\end{addedblock}
+
+\indextext{component name}%
+The component names of a \grammarterm{type-constraint} are
+its \grammarterm{concept-name} and
+those of its \grammarterm{nested-name-specifier} (if any).
+\begin{note}
+    The \tcode{>} token following the
+    \grammarterm{template-parameter-list} of a
+    \grammarterm{type-tt-parameter},
+    \grammarterm{variable-tt-parameter}, or
+    \grammarterm{concept-tt-parameter}
+    can be the product of replacing a
+    \tcode{>>} token by two consecutive \tcode{>}
+    tokens\iref{temp.names}.
+\end{note}
+
+\pnum
+%FIXME: "is" or "shall be"? i.e., what if it's not?
+%FIXME: Note: we don't appear to ever define what a "template parameter" is;
+%FIXME: is this supposed to be the definition for template parameter?
+A template parameter is of one of the following kinds:
+\begin{itemize}
+    \item
+    A \defnadj{type}{template parameter} is
+    a template parameter introduced by a \grammarterm{type-parameter}.
+    \item
+    A \defnadj{constant}{template parameter} is
+    a template parameter introduced by a \grammarterm{parameter-declaration}.
+    \item
+    A \defnadj{type template}{template parameter} is
+    a template parameter introduced by a \grammarterm{type-tt-parameter}.
+    \item
+    A \defnadj{variable template}{template parameter} is
+    a template parameter introduced by a \grammarterm{variable-tt-parameter}.
+    \item
+    A \defnadj{concept}{template parameter} is
+    a template parameter introduced by a \grammarterm{concept-tt-parameter}.
+
+\begin{addedblock}
+    \item
+    A \defnadj{universal}{template parameter} is
+    a template parameter introduced by a \grammarterm{universal-template-parameter}.
+\end{addedblock}
+\end{itemize}
+
+\pnum
+Type template template parameters,
+variable template template parameters, and
+concept template parameters
+are collectively referred to as \defnadj{template}{template parameters}.
+
+\pnum
+The \grammarterm{nested-name-specifier} of a \grammarterm{type-constraint},
+if any, shall not be dependent.
+
+\pnum
+A concept template parameter shall not have
+associated constraints\iref{temp.constr.decl}.
+
+\pnum
+If a \grammarterm{template-parameter} is
+a \grammarterm{parameter-declaration} that declares a pack\iref{dcl.fct}, or
+otherwise has an ellipsis prior to its optional \grammarterm{identifier},
+then the \grammarterm{template-parameter}
+declares a template parameter pack\iref{temp.variadic}.
+A template parameter pack that is a \grammarterm{parameter-declaration} whose type
+contains one or more unexpanded packs is a pack expansion. Similarly,
+a template parameter pack that is a template template parameter with a
+\grammarterm{template-parameter-list} containing one or more unexpanded
+packs is a pack expansion.
+A type parameter pack with a \grammarterm{type-constraint} that
+contains an unexpanded parameter pack is a pack expansion.
+A template parameter pack that is a pack
+expansion shall not expand a template parameter pack declared in the same
+\grammarterm{template-parameter-list}.
+\begin{example}
+    \begin{codeblock}
+        template <class... Types>                       // \tcode{Types} is a template type parameter pack
+        class Tuple;                                 // but not a pack expansion
+
+        template <class T, int... Dims>                 // \tcode{Dims} is a constant template parameter pack
+        struct multi_array;                          // but not a pack expansion
+
+        template <class... T>
+        struct value_holder {
+            template <T... Values> struct apply { };    // \tcode{Values} is a constant template parameter pack
+        };                                            // and a pack expansion
+
+        template <class... T, T... Values>              // error: \tcode{Values} expands template type parameter
+        struct static_array;                          // pack \tcode{T} within the same template parameter list
+    \end{codeblock}
+\end{example}
+
+\pnum
+There is no semantic difference between
+\keyword{class}
+and
+\keyword{typename}
+in a
+\grammarterm{type-parameter-key}.
+\keyword{typename}
+followed by an
+\grammarterm{unqualified-id}
+names a template type parameter.
+\keyword{typename}
+followed by a
+\grammarterm{qualified-id}
+denotes the type in a
+\grammarterm{parameter-declaration}.
+A \grammarterm{template-parameter} of the form
+\keyword{class} \grammarterm{identifier} is a \grammarterm{type-parameter}.
+\begin{example}
+    \begin{codeblock}
+        class T { /*...*/ };
+        int i;
+
+        template<class T, T i> void f(T t) {
+            T t1 = i;         // template parameters \tcode{T} and \tcode{i}
+            ::T t2 = ::i;     // global namespace members \tcode{T} and \tcode{i}
+        }
+    \end{codeblock}
+    Here, the template \tcode{f} has a type template parameter
+    called \tcode{T}, rather than an unnamed constant
+    template parameter of class \tcode{T}.
+\end{example}
+The \grammarterm{parameter-declaration} of a \grammarterm{template-parameter}
+shall not have a \grammarterm{storage-class-specifier}.
+Types shall not be defined in a template parameter
+declaration.
+
+\pnum
+The \grammarterm{identifier} in
+a \grammarterm{template-parameter} denoting a type or template
+is not looked up.
+An \grammarterm{identifier} that does not follow an ellipsis
+is defined to be
+\begin{itemize}
+    \item
+    a \grammarterm{typedef-name} for a \grammarterm{type-parameter},
+    \begin{addedblock}
+    \item
+    a \grammarterm{universal-argument-name} for a \grammarterm{universal-template-parameter},
+    \end{addedblock}
+    \item
+    a \grammarterm{template-name} for a \grammarterm{variable-tt-parameter},
+    \item
+    a \grammarterm{template-name} for a \grammarterm{type-tt-parameter}, or
+    \item
+    a \grammarterm{concept-name} for a \grammarterm{concept-tt-parameter},
+\end{itemize}
+in the scope of the template declaration.
+
+\rSec1[temp.names]{Names of template specializations}
+
+\pnum
+A template specialization\iref{temp.spec} can be referred to by a
+\grammarterm{template-id}:
+
+\begin{bnf}
+    \nontermdef{simple-template-id}\br
+    template-name \terminal{<} \opt{template-argument-list} \terminal{>}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{template-id}\br
+    simple-template-id\br
+    operator-function-id \terminal{<} \opt{template-argument-list} \terminal{>}\br
+    literal-operator-id \terminal{<} \opt{template-argument-list} \terminal{>}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{template-name}\br
+    identifier
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{template-argument-list}\br
+    template-argument \opt{\terminal{...}}\br
+    template-argument-list \terminal{,} template-argument \opt{\terminal{...}}
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{template-argument}\br
+    template-argument-name\br
+    \added{universal-argument-name}\br
+    constant-expression\br
+    type-id\br
+    braced-init-list
+\end{bnf}
+
+\begin{bnf}
+    \nontermdef{template-argument-name}\br
+    \opt{nested-name-specifier} identifier\br
+    nested-name-specifier \terminal{template} identifier\br
+\end{bnf}
+
+\begin{addedblock}
+\begin{bnf}
+    \nontermdef{universal-argument-name}\br
+    identifier\br
+\end{bnf}
+\end{addedblock}
+
+\pnum
+\indextext{component name}%
+The component name of a
+\grammarterm{simple-template-id},
+\grammarterm{template-id}, or
+\grammarterm{template-name}
+is the first name in it.
+
+
+\ednote{[...]}
+
+\pnum
+The component names of a \grammarterm{template-argument-name} are
+those of its \grammarterm{nested-name-specifier} (if any) and
+its \grammarterm{identifier}.
+
+
+\begin{addedblock}
+\pnum
+The component name of a \grammarterm{universal-argument-name}
+is its \grammarterm{identifier}.
+\end{addedblock}
+
+\ednote{[...]}
+
+\rSec1[temp.arg]{Template arguments}
+
+\rSec2[temp.arg.general]{General}
+
+\pnum
+\indextext{argument!template}%
+
+The type and form of each \grammarterm{template-argument} specified
+in a \grammarterm{template-id} or
+in a \grammarterm{splice-specialization-specifier}
+shall match the type and form specified for the corresponding
+parameter declared by the template in its
+\grammarterm{template-parameter-list}.
+
+\ednote{The pre-existing wording seems somewhat vague.}
+
+When the parameter declared by the template is a template
+parameter pack\iref{temp.variadic}, it will correspond to zero or more
+\grammarterm{template-argument}{s}.
+\begin{example}
+    \begin{codeblock}
+        template<class T> class Array {
+            T* v;
+            int sz;
+            public:
+            explicit Array(int);
+            T& operator[](int);
+            T& elem(int i) { return v[i]; }
+        };
+
+        Array<int> v1(20);
+        typedef std::complex<double> dcomplex;  // \tcode{std::complex} is a standard library template
+        Array<dcomplex> v2(30);
+        Array<dcomplex> v3(40);
+
+        void bar() {
+            v1[3] = 7;
+            v2[3] = v3.elem(4) = dcomplex(7,8);
+        }
+    \end{codeblock}
+\end{example}
+
+\pnum
+The template argument list of a \grammarterm{template-head} is
+a template argument list in which the $n^\text{th}$ template argument
+has the value of
+the $n^\text{th}$ template parameter of the \grammarterm{template-head}.
+If the $n^\text{th}$ template parameter is
+a template parameter pack\iref{temp.variadic},
+the $n^\text{th}$ template argument is a pack expansion
+whose pattern is the name of the template parameter pack.
+
+\pnum
+If a \grammarterm{template-argument} $A$
+matches the form \grammarterm{template-argument-name},
+it is interpreted as such;
+the \grammarterm{identifier} is looked up
+and its meaning is determined as follows:
+\begin{itemize}
+    \item
+    If lookup finds an injected-class-name\iref{temp.local}, then:
+    \begin{itemize}
+        \item
+        When $A$ is for a type template template parameter,
+        $A$ denotes the corresponding class template.
+        \item
+        Otherwise \added{(if $A$ is for a type template parameter or a universal template parameter)}, it denotes a \grammarterm{type-name}.
+    \end{itemize}
+    \item
+    Otherwise, if lookup finds a template,
+    $A$ denotes that template.
+    \item
+    Otherwise, if lookup finds a type alias or a type,
+    $A$ denotes the underlying type and is interpreted as a \grammarterm{type-id}.
+    \item
+    Otherwise, $A$ is interpreted as an expression.
+\end{itemize}
+
+\pnum
+In a
+\grammarterm{template-argument},
+an ambiguity between a
+\grammarterm{type-id}
+and an expression is resolved to a
+\grammarterm{type-id},
+regardless of the form of the corresponding
+\grammarterm{template-parameter}.
+\begin{footnote}
+    There is no such ambiguity in a default
+    \grammarterm{template-argument}
+    because the form of the
+    \grammarterm{template-parameter}
+    determines the allowable forms of the
+    \grammarterm{template-argument}.
+\end{footnote}
+\begin{example}
+    \begin{codeblock}
+        template<class T> void f();
+        template<int I> void f();
+
+        void g() {
+            f<int()>();       // \tcode{int()} is a \grammarterm{type-id}: call the first \tcode{f()}
+        }
+    \end{codeblock}
+\end{example}
+
+\pnum
+\begin{note}
+    Names used in a \grammarterm{template-argument}
+    are subject to access control where they appear.
+    Because a template parameter is not a class member,
+    no access control applies where the template parameter is used.
+\end{note}
+\begin{example}
+    \begin{codeblock}
+        template<class T> class X {
+            static T t;
+        };
+
+        class Y {
+            private:
+            struct S { /*...*/ };
+            X<S> x;           // OK, \tcode{S} is accessible
+            // \tcode{X<Y::S>} has a static member of type \tcode{Y::S}
+            // OK, even though \tcode{Y::S} is private
+        };
+
+        X<Y::S> y;          // error: \tcode{S} not accessible
+    \end{codeblock}
+\end{example}
+For a template argument that is a class type or a class template,
+the template definition has no special access rights
+to the members of the template argument.
+\begin{example}
+    \begin{codeblock}
+        template <template <class TT> class T> class A {
+            typename T<int>::S s;
+        };
+
+        template <class U> class B {
+            private:
+            struct S { /*...*/ };
+        };
+
+        A<B> b;             // error: \tcode{A} has no access to \tcode{B::S}
+    \end{codeblock}
+\end{example}
+
+\pnum
+When template argument packs or default template arguments are used,
+a \grammarterm{template-argument} list can be empty.
+In that case the empty
+\tcode{<>}
+brackets shall still be used as the
+\grammarterm{template-argument-list}.
+\begin{example}
+    \begin{codeblock}
+        template<class T = char> class String;
+        String<>* p;                    // OK, \tcode{String<char>}
+        String* q;                      // syntax error
+        template<class ... Elements> class Tuple;
+        Tuple<>* t;                     // OK, \tcode{Elements} is empty
+        Tuple* u;                       // syntax error
+    \end{codeblock}
+\end{example}
+
+\pnum
+An explicit destructor call\iref{class.dtor} for an object that has a type
+that is a class template specialization may explicitly specify the
+\grammarterm{template-argument}{s}.
+\begin{example}
+    \begin{codeblock}
+        template<class T> struct A {
+            ~A();
+        };
+        void f(A<int>* p, A<int>* q) {
+            p->A<int>::~A();              // OK, destructor call
+            q->A<int>::~A<int>();         // OK, destructor call
+        }
+    \end{codeblock}
+\end{example}
+
+\pnum
+If the use of a template argument
+gives rise to an ill-formed construct in the instantiation of a
+template specialization, the program is ill-formed.
+
+\pnum
+When name lookup for the component name of a
+\grammarterm{template-id}
+finds an overload set, both non-template functions in the overload
+set and function templates in the overload set for
+which the
+\grammarterm{template-argument}{s}
+do not match the
+\grammarterm{template-parameter}{s}
+are ignored.
+\begin{note}
+    If none of the function templates have matching
+    \grammarterm{template-parameter}{s},
+    the program is ill-formed.
+\end{note}
+
+\pnum
+When a \grammarterm{simple-template-id} or
+\grammarterm{splice-specialization-specifier}
+does not designate a function,
+a default \grammarterm{template-argument} is
+implicitly instantiated\iref{temp.inst}
+when the value of that default argument is needed.
+\begin{example}
+    \begin{codeblock}
+        template<typename T, typename U = int> struct S { };
+        S<bool>* p;         // the type of \tcode{p} is \tcode{S<bool, int>*}
+    \end{codeblock}
+    The default argument for \tcode{U} is instantiated to form the type \tcode{S<bool, int>*}.
+\end{example}
+
+\pnum
+A \grammarterm{template-argument} followed by an ellipsis is
+a pack expansion\iref{temp.variadic}.
+
+\rSec2[temp.arg.type]{Type template arguments}
+
+\pnum
+A
+\grammarterm{template-argument}
+for a type template parameter
+shall be a
+\grammarterm{type-id}.
+
+\pnum
+\begin{example}
+\begin{codeblock}
+    template <class T> class X { };
+    template <class T> void f(T t) { }
+    struct { } unnamed_obj;
+
+    void f() {
+        struct A { };
+        enum { e1 };
+        typedef struct { } B;
+        B b;
+        X<A> x1;          // OK
+        X<A*> x2;         // OK
+        X<B> x3;          // OK
+        f(e1);            // OK
+        f(unnamed_obj);   // OK
+        f(b);             // OK
+    }
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+    template <universal template U>
+    void g() {
+        X<U> x4; // OK
+    }
+\end{codeblock}
+\end{addedblock}
+
+\end{example}
+\begin{note}
+    A template type argument can be an incomplete type\iref{term.incomplete.type}.
+\end{note}
+
+
+\begin{addedblock}
+\rSec2[temp.arg.universal]{Universal Template Arguments}
+
+A \tcode{universal-template-name}, and any argument that would be valid for a type template parameter, constant template parameter,
+or template parameter match the form of a universal template parameter.
+
+For an argument \tcode{A} corresponding to a universal-template parameter \tcode{P}, the type and form of \tcode{P} is determined as follow
+\begin{itemize}
+\item if \tcode{A} is a universal template argument, P denotes that argument,
+\item otherwise if \tcode{A} is a \tcode{type-id}, P denotes a type template parameter with the same type as \tcode{A},
+\item otherwise if \tcode{A} is an \grammarterm{id-expression}, P denotes a \defn{universal template name refering to the id-expression \tcode{A}},
+\item otherwise, if \tcode{A} is an expression, Let P' be the invented template parameter declared with \tcode{decltype(auto)}. \tcode{P} denotes a constant template parameter whose type and value are deduced from P' according  to [temp.arg.type].
+\item otherwise, if \tcode{A} denotes a \grammarterm{template-name} X, P denotes that \grammarterm{template-name}.
+\end{itemize}
+
+
+\end{addedblock}
+
+\rSec1[temp.type]{Type equivalence}
+
+\pnum
+\indextext{equivalence!template type}%
+Two \grammarterm{template-id}{s} are the same if
+\begin{itemize}
+\item
+their \grammarterm{template-name}{s},
+\grammarterm{operator-function-id}{s}, or
+\grammarterm{literal-operator-id}{s}
+refer to the same template, and
+
+\item
+their corresponding type \grammarterm{template-argument}{s}
+are the same type, and
+
+\item
+the template parameter values determined by
+their corresponding constant template arguments\iref{temp.arg.nontype}
+are template-argument-equivalent (see below), \removed{and}
+
+\item
+their corresponding template \grammarterm{template-argument}{s}
+refer to the same template\changed{.}{, and}
+
+\begin{addedblock}
+\item their corresponding universal \grammarterm{template-argument}{s}
+refer to the same template parameter.
+\end{addedblock}
+\end{itemize}
+
+\rSec2[temp.variadic]{Variadic templates}
+
+\pnum
+\indextext{pattern|see{pack expansion, pattern}}%
+A \defn{pack expansion}
+consists of a \defnx{pattern}{pack expansion!pattern} and an ellipsis, the instantiation of which
+produces zero or more instantiations of the pattern in a list (described below).
+The form of the pattern
+depends on the context in which the expansion occurs. Pack
+expansions can occur in the following contexts:
+
+\begin{itemize}
+    \item In a function parameter pack \iref{dcl.fct}; the pattern is the
+    \grammarterm{parameter-declaration} without the ellipsis.
+
+    \item In a \grammarterm{using-declaration} \iref{namespace.udecl};
+    the pattern is a \grammarterm{using-declarator}.
+
+    \item In a \grammarterm{friend-type-declaration} \iref{class.mem.general};
+    the pattern is a \grammarterm{friend-type-specifier}.
+
+    \item In a template parameter pack that is a pack expansion \iref{temp.param}:
+    \begin{itemize}
+    \item
+    if the template parameter pack is a \grammarterm{parameter-declaration};
+    the pattern is the \grammarterm{parameter-declaration} without the ellipsis;
+
+    \item
+    if the template parameter pack is a \grammarterm{type-parameter};
+    the pattern is the corresponding \grammarterm{type-parameter}
+    without the ellipsis;
+
+    \item
+    if the template parameter pack is a template template parameter;
+    the pattern is the corresponding
+    \grammarterm{type-tt-parameter},
+    \grammarterm{variable-tt-parameter}, or
+    \grammarterm{concept-tt-parameter}
+    without the ellipsis.
+    \begin{addedblock}
+    \item
+    if the template parameter pack is a \grammarterm{universal-template-parameter};
+    the pattern is the corresponding \grammarterm{universal-template-parameter}
+    without the ellipsis;
+    \end{addedblock}
+   \end{itemize}
+\end{itemize}
+
+
+\rSec3[temp.dep.temp]{Dependent template arguments}
+
+\pnum
+A type
+\grammarterm{template-argument}
+is dependent if the type it specifies is dependent.
+
+\pnum
+A constant
+\grammarterm{template-argument}
+is dependent if its type is dependent or the constant
+expression it specifies is value-dependent.
+
+\pnum
+Furthermore, a constant
+\grammarterm{template-argument}
+is dependent if the corresponding constant template parameter
+is of reference or pointer type and the \grammarterm{template-argument}
+designates or points to a member of the current instantiation or a member of
+a dependent type.
+
+\pnum
+%FIXME: "also" adds nothing here and reads like a note; remove it?
+A template argument is also dependent if it is a pack expansion.
+
+\pnum
+A template template argument is dependent if
+it names a template parameter or
+its terminal name is dependent.
+
+\begin{addedblock}
+A universal template argument is dependent.
+\end{addedblock}
 
 \section{Acknowledgments}
 
