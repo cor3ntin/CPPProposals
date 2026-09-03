@@ -208,77 +208,83 @@ facilitate the implementation of CWG2369 (and [@CWG2769]) in Clang.
 
 # Wording
 
-## [over.match]{.sref} Overload resolution {-}
+## [over.match.funcs.general]{.sref} Candidate functions and argument lists {-}
 
-### [over.match.funcs.general]{.sref} Candidate functions and argument lists {-}
+> [8]{.pnum} In each case where a candidate is a function template, candidate function template specializations are generated using template argument deduction ([temp.over]{.sref}, [temp.deduct]{.sref}). If a constructor template or conversion function template has an _explicit-specifier_ whose _constant-expression_ is value-dependent ([temp.dep]{.sref}), template argument deduction is performed first and then, if the context admits only candidates that are not explicit and the generated specialization is explicit ([dcl.fct.spec]{.sref}), it will be removed from the candidate set. Those candidates are then handled as candidate functions in the usual way.^93^ A given name can refer to, or a conversion can consider, one or more function templates as well as a set of non-template functions. In such a case, the candidate functions generated from each function template are combined with the set of non-template candidate functions.
+>
+> :::: add
+>
+> ::: note
+> If there is a perfect viable function among the candidates that are not templates, function template specializations might not be generated, because they might not be needed to determine the result of overload resolution ([over.match.best]{.sref}).
+> :::
+>
+> ::::
 
-[Replace [over.match.funcs.general]/p8 as follow]{.ednote}
+::: draftnote
 
-::: rm
-
-[8]{.pnum}In each case where a candidate is a function template, candidate function template specializations are generated using template argument deduction ([temp.over], [temp.deduct]). If a constructor template or conversion function template has an explicit-specifier whose constant-expression is value-dependent ([temp.dep]), template argument deduction is performed first and then, if the context admits only candidates that are not explicit and the generated specialization is explicit ([dcl.fct.spec]), it will be removed from the candidate set. Those candidates are then handled as candidate functions in the usual way. A given name can refer to, or a conversion can consider, one or more function templates as well as a set of non-template functions. In such a case, the candidate functions generated from each function template are combined with the set of non-template candidate functions.
-
-:::
-
-::: add
-
-[8]{.pnum} In each case where a candidate is a function template, it is added to the set of _prospective function template candidates_.
-A given name can refer to, or a conversion can consider, one or more function templates as well as a set of non-template functions.
-In such a case, if no perfect viable function is selected, candidate functions will be generated from each function template and will be added to the set of non-template candidate functions when the best function is selected [over.match.best].
-
-[Note: If a perfect viable function is selected, candidate function templates are not considered and template argument deduction for these candidates does not take place.]
+[ Drafting note: Alternatively, the note can start with "in certain contexts" to drop some "might not"s ]
 
 :::
 
+## [over.match.best.general]{.sref} Best viable function {-}
 
-[Add a new section after [over.match.viable]{.sref} ]{.ednote}
+> [1]{.pnum} Define ICS^*i*^(`F`) as the implicit conversion sequence that converts the *i*^th^ argument in the list to the type of the *i*^th^ parameter of viable function `F`. [over.best.ics]{.sref} defines the implicit conversion sequences and [over.ics.rank]{.sref} defines what it means for one implicit conversion sequence to be a better conversion sequence or worse conversion sequence than another.
+>
+> [2]{.pnum} Given these definitions, a viable function `F`~1~ is defined to be a _better_ function than another viable function `F`~2~ if for all arguments *i*, ICS^*i*^(`F`~1~) is not a worse conversion sequence than ICS^*i*^(`F`~2~), and then
+>
+>  - [. . .]
+>
+> ::: add
+>
+> [2a]{.pnum} A viable function *F* is a _perfect viable function_ if
+>
+>  - [(2a.1)]{.pnum} *F* is not a function template specialization,
+>  - [(2a.2)]{.pnum} for all arguments *i*, ICS^*i*^(*F*) is a perfect conversion sequence ([over.ics.scs]{.sref}), and
+>  - [(2a.3)]{.pnum} if *F* is a conversion function, the implicit conversion sequence from the return type of *F* to the type of the object being initialized ([over.match.conv]{.sref}) is a perfect conversion sequence.
+>
+> [2b]{.pnum} Given a set *S* that includes all viable functions that are not function template specializations, if
+>
+>  - [(2b.1)]{.pnum} there is exactly one perfect viable function *F* in *S* that is better than all other viable functions in *S*,
+>  - [(2b.2)]{.pnum} the overload resolution is not performed for a copy-initialization ([over.match.copy]{.sref}), and
+>  - [(2b.3)]{.pnum} either *F* is not a conversion function or there is no viable function that is a specialization of a constructor template,
+>
+> then *F* is the one selected by overload resolution.
+>
+> :::
+>
+> [3]{.pnum} [If]{.rm} [Otherwise, if]{.add} there is exactly one viable function that is a better function than all other viable functions, then it is the one selected by overload resolution; otherwise the call is ill-formed.^99^
+>
+> ::: example
+> [. . .]
+> :::
+>
+> [4]{.pnum}
+>
+> ::: note
+> If the best viable function was made viable by one or more default arguments, additional requirements apply ([over.match.viable]{.sref}).
+> :::
 
-::: add
+::: draftnote
 
-### [over.match.perfect] Perfect Viable Function {-}
-
-A _perfect viable function_ is a function that has a perfect standard conversion
-sequence  ([over.ics.scs]) for each of its arguments, and if it is a conversion function,
-the conversion sequence to type of the object being initialized [over.match.conv]{.sref}
-is a perfect standard conversion sequence.
-
-:::
-
-### [over.match.best.general]{.sref} General {-}
-
-[Modify p3 as follow]{.ednote}
-
-::: add
-
-[3]{.pnum}  Except when performing overload resolution for copy initialization [over.match.copy], if
-
- - there is exactly one viable function `F` that is a better function than all other viable functions,
- - `F` is a perfect viable function, and
- - `F` is not a conversion function or the set of prospective function templates does not contain any constructor template,
-
-then F is the one selected by overload resolution;
-
-
-Otherwise, candidate function template specializations are generated from the set of prospective function template candidates using template argument deduction ([temp.over], [temp.deduct]).
-If a constructor template or conversion function template has an explicit-specifier whose constant-expression is value-dependent ([temp.dep]), template argument deduction is performed first and then, if the context admits only candidates that are not explicit and the generated specialization is explicit ([dcl.fct.spec]), it will be removed from the candidate set. So generated candidate function template specializations are then added to the set of viable funtions if they are viable per [over.match.viable]. Those candidates are then handled as candidate functions in the usual way.
-
-:::
-
-[If]{.rm} [After the viable candidate function template specializations are added to the set of viable functions, if]{.add} there is exactly one viable function that is a better function than all other viable functions, then it is the one selected by overload resolution; otherwise the call is ill-formed.
-
-### [over.ics.scs]{.sref} Standard conversion sequences {-}
-
-[Add the following paragraph at the end of [over.ics.scs], after the table]{.ednote}
-
-::: add
-
-[4]{.pnum} A standard conversion sequence is a _perfect standard conversion sequence_ if
-
- - the argument expression is not the element of a single-element _braced-init-list_,
- - each conversion in the sequence, ignoring any initial lvalue transformation, is the identity conversion, and
- - if the conversion is a direct reference binding, the type of the argument expression and the type of the parameter are the same.
+[ Drafting note: If the design intent is to _prevent_ implementations from instantiating template candidates if there is a perfect viable function, as opposed to just _allow_ this implementation strategy, then more normative wording might be needed. ]
 
 :::
+
+## [over.ics.scs]{.sref} Standard conversion sequences {-}
+
+> [3]{.pnum} Each conversion in Table 19 also has an associated rank (Exact Match, Promotion, or Conversion). These are used to rank standard conversion sequences. The rank of a conversion sequence is determined by considering the rank of each conversion in the sequence and the rank of any reference binding. If any of those has Conversion rank, the sequence has Conversion rank; otherwise, if any of those has Promotion rank, the sequence has Promotion rank; otherwise, the sequence has Exact Match rank.
+>
+> [. . .]
+>
+> ::: add
+>
+> [4]{.pnum} A standard conversion sequence *S* is a _perfect conversion sequence_ if
+>
+>  - [(4.1)]{.pnum} the argument expression is not the _initializer-clause_ of a _braced-init-list_ with a single _initializer-clause_,
+>  - [(4.2)]{.pnum} *S* consists of the identity conversion or an lvalue transformation, and
+>  - [(4.3)]{.pnum} if the parameter has a reference type *T* and binds directly to the argument expression of type *U*, *T* and *U* are the same.
+>
+> :::
 
 # Acknowledgments
 
