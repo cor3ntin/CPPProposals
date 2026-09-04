@@ -1,0 +1,184 @@
+% !TeX program = luatex
+% !TEX encoding = UTF-8
+
+
+\documentclass{wg21}
+
+\title{Safer \tcode{atomic\_ref::address} (FR-030-310)}
+\docnumber{P3936R1}
+\audience{LWG}
+\author{Corentin Jabot}{corentin.jabot@gmail.com}
+\authortwo{Gonzalo Brito Gadeschi}{gonzalob@nvidia.com}
+
+\usepackage{color, colortbl}
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+This paper proposes to resolve FR-030-310 by returning a \tcode{void*} from \tcode{atomic_ref::address}
+
+
+\section{Revisions}
+
+\subsection{R1}
+
+\begin{itemize}
+    \item Wording fixes
+    \item rename \tcode{address_return_t} and make it exposition only per LEWG guidance
+\end{itemize}
+
+\section{Motivation}
+
+\tcode{atomic_ref<T>::address} currently returns a \tcode{T*}. This function was added by \paper{P2835R7},
+which cover the use cases for this function.
+In short, we might want to know the address for hashing for contention-aware data structure, indexing an array atomically, etc.
+
+However, it is generally unsafe to access the object at \tcode{address} directly, and so, the NB comment argues that \tcode{address} is maybe too convenient.
+IE, it is easy to use incorrectly, and hard to use correctly.
+A main concern is that any other \tcode{atomic_ref} over the same object would no longer guarantee atomic access.
+
+These observation were made in the original paper.
+
+\begin{quoteblock}
+The name and return type should prevent accidental misuse that could result from accessing the object through the address while there are still live \tcode{atomic_ref} that reference it.
+\end{quoteblock}
+
+However, of the options explored at the time, none seemed compelling.
+
+\begin{itemize}
+\item \tcode{uintptr\_t} is not mandated by the standard and would not work during constant evaluation.
+\item \tcode{void*} would not allow us to get a \tcode{T*} back during constant evaluation.
+\end{itemize}
+
+FR-030-310 proposes to mandate \tcode{uintptr\_t}. However, EWG had no appetite to do it in the C++26 time frame (over concernns that there
+might exist architectures in which pointers can be larger than the largest integer type). And it would not resolve the concerns
+that it would not be usable during constant evaluation.
+
+But... as it turns out, \tcode{void*} is now a suitable option. Indeed cast from \tcode{void*} to \tcode{T*} are now supported
+in constant evaluation. This feature was added by \paper{P2738R1} in C++26.
+
+The only downsize of using \tcode{void*} is then a slightly more complicated return type. However, that return type is really just copying the CV qualifiers,
+which is not exactly novel.
+
+Therefore, we think using \tcode{void*}  as the return type of \tcode{address} addresses the NB comment in a satisfactory manner.
+\begin{itemize}
+\item It addresses the concerns over missuse and safety: the \tcode{void*} pointer can be compared, hashed, etc without issue, but
+accessing the underlying object requires an explicit cast.
+\item Accessing the underlying object is still possible, even during constant evaluation.
+\end{itemize}
+
+\subsection{What about functions?}
+
+Pointers to function are objects so this also works during constant evaluation \href{https://godbolt.org/z/h3bWxvPKn}{[Compiler Explorer]}.
+
+\section{Wording}
+
+\ednote {Add the following paragraph at the start of [atomics.general]}
+
+\begin{addedblock}
+Let \tcode{\placeholdernc{COPYCV}(FROM, TO)} be an alias for type \tcode{TO}
+with the addition of \tcode{FROM}'s top-level cv-qualifiers.
+\end{addedblock}
+
+\ednote{That wording is a verbatim copy from [meta], LWG might want to factorize it out}.
+
+\rSec3[atomics.ref.generic.general]{General}
+
+\ednote{Modify in the synopsys}
+
+
+\begin{codeblock}
+using value_type = remove_cv_t<T>;
+@\added{using \placeholder{address-return-type} = \placeholder{COPYCV(T, void)*}; //expos}@
+static constexpr size_t required_alignment = implementation-defined;
+
+// ...
+
+constexpr @\changed{T*}{\placeholder{address-return-type}}@ address() const noexcept;
+\end{codeblock}
+
+\rSec3[atomics.ref.ops]{Operations}
+
+
+\indexlibrarymember{address}{atomic_ref<T>}%
+\begin{itemdecl}
+
+constexpr @\changed{T*}{\placeholder{address-return-type}}@ address() const noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{ptr}.
+\end{itemdescr}
+
+\rSec3[atomics.ref.int]{Specializations for integral types}
+\ednote{Modify in the synopsys}
+\begin{codeblock}
+using value_type = @\placeholder{integral-type}@;
+using difference_type = value_type;
+@\added{using \placeholder{address-return-type} = \placeholder{COPYCV(\placeholder{integral-type}, void)*}; //\expos}@
+static constexpr size_t required_alignment = @\impdefx{required alignment for \tcode{atomic_ref} type's operations}@;
+
+static constexpr bool is_always_lock_free = @\impdefx{whether a given \tcode{atomic} type's operations are always lock free}@;
+
+// ...
+
+constexpr @\changed{\placeholder{integral-type}*}{\placeholder{address-return-type}}@ address() const noexcept;
+\end{codeblock}
+
+
+\rSec3[atomics.ref.float]{Specializations for floating-point types}
+\ednote{Modify in the synopsys}
+
+\begin{codeblock}
+using value_type = @\placeholdernc{floating-point-type}@;
+using difference_type = value_type;
+@\added{using \placeholder{address-return-type} = \placeholder{COPYCV(\placeholder{floating-point-type}, void)*}; //\expos}@
+static constexpr size_t required_alignment = @\impdefx{required alignment for \tcode{atomic_ref} type's operations}@;
+
+
+static constexpr bool is_always_lock_free = @\impdefx{whether a given \tcode{atomic} type's operations are always lock free}@;
+
+// ...
+
+constexpr @\changed{\placeholder{floating-point-type}*}{\placeholder{address-return-type}}@ address() const noexcept;
+\end{codeblock}
+
+\rSec3[atomics.ref.pointer]{Partial specialization for pointers}
+\ednote{Modify in the synopsys}
+
+\begin{codeblock}
+using value_type = remove_cv_t<@\placeholder{pointer-type}@>;
+using difference_type = ptrdiff_t;
+@\added{using \placeholder{address-return-type} = \placeholder{COPYCV(\placeholder{pointer-type}, void)*}; //\expos}@
+
+static constexpr size_t required_alignment = @\impdefx{required alignment for \tcode{atomic_ref} type's operations}@;
+
+// ...
+
+constexpr @\changed{\placeholder{pointer-type}*}{\placeholder{address-return-type}}@ address() const noexcept;
+\end{codeblock}
+
+
+\section{Acknowledgments}
+
+We would like to thank Hana Dusíková and Michael Hava for their help and feedback on this paper.
+
+\bibliographystyle{plain}
+\bibliography{wg21, extra}
+
+\renewcommand{\section}[2]{}%
+
+\begin{thebibliography}{9}
+
+\bibitem[N5008]{N5008}
+Thomas Köppe
+\emph{Working Draft, Standard for Programming Language C++}\newline
+\url{https://wg21.link/N5008}
+
+
+\end{thebibliography}
+
+\end{document}
