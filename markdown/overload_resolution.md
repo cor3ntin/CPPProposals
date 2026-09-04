@@ -210,7 +210,7 @@ facilitate the implementation of CWG2369 (and [@CWG2769]) in Clang.
 
 ## [over.match.funcs.general] Candidate functions and argument lists {-}
 
-> [8]{.pnum} In each case where a candidate is a function template, candidate function template specializations are generated using template argument deduction ([temp.over], [temp.deduct]) [unless a perfect viable function is selected by overload resolution ([over.match.best.general])]{.add}. If a constructor template or conversion function template has an _explicit-specifier_ whose _constant-expression_ is value-dependent ([temp.dep]), template argument deduction is performed first and then, if the context admits only candidates that are not explicit and the generated specialization is explicit ([dcl.fct.spec]), it will be removed from the candidate set. Those candidates are then handled as candidate functions in the usual way.^93^ A given name can refer to, or a conversion can consider, one or more function templates as well as a set of non-template functions. In such a case, the candidate functions generated from each function template are combined with the set of non-template candidate functions.
+> [8]{.pnum} In each case where a candidate is a function template, candidate function template specializations are generated using template argument deduction ([temp.over], [temp.deduct]) [unless overload resolution selects a perfect viable function ([over.match.best.general])]{.add}. If a constructor template or conversion function template has an _explicit-specifier_ whose _constant-expression_ is value-dependent ([temp.dep]), template argument deduction is performed first and then, if the context admits only candidates that are not explicit and the generated specialization is explicit ([dcl.fct.spec]), it will be removed from the candidate set. Those candidates are then handled as candidate functions in the usual way.^93^ A given name can refer to, or a conversion can consider, one or more function templates as well as a set of non-template functions. In such a case, the candidate functions generated from each function template are combined with the set of non-template candidate functions.
 >
 > :::: add
 >
@@ -242,7 +242,9 @@ facilitate the implementation of CWG2369 (and [@CWG2769]) in Clang.
 >  - [(2b.2)]{.pnum} the overload resolution is not performed for a copy-initialization ([over.match.copy]), and
 >  - [(2b.3)]{.pnum} either *F* is not a conversion function or no candidate is a constructor template,
 >
-> then *F* is the one selected by overload resolution.
+> then *F* is the one selected by overload resolution and overload resolution is said to _select a perfect viable function_.
+>
+> Otherwise, the candidate function template specializations generated as specified in [over.match.funcs.general] are added to the set of viable functions if they are viable ([over.match.viable]).
 >
 > :::
 >
@@ -270,7 +272,7 @@ facilitate the implementation of CWG2369 (and [@CWG2769]) in Clang.
 >
 >  - [(4.1)]{.pnum} the argument expression is not the _initializer-clause_ of a _braced-init-list_ with a single _initializer-clause_,
 >  - [(4.2)]{.pnum} *S* consists of the identity conversion or an lvalue transformation, and
->  - [(4.3)]{.pnum} if the parameter has a reference type *T* and binds directly to the argument expression of type *U*, *T* and *U* are the same.
+>  - [(4.3)]{.pnum} if the parameter has type “reference to *cv* *T*” and binds directly to the argument expression, the argument expression has type *cv* *T*.
 >
 > :::
 
