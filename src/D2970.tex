@@ -278,22 +278,17 @@ The component names of a \grammarterm{partially-applied-concept-argument} are
 its \grammarterm{concept-name} and
 those of its \grammarterm{nested-name-specifier} (if any).
 
-A \grammarterm{partially-applied-concept-argument} names an invented concept \tcode{X} defined as
+Let \tcode{C} designate \grammarterm{concept-name}, and let \placeholder{Parameter} be the first \grammarterm{template-parameter} in the \grammarterm{template-head} of \tcode{C}, without the ellipsis (if any).
+A \grammarterm{partially-applied-concept-argument} names an unnamed concept \tcode{X} whose \grammarterm{concept-definition} is
 
 \begin{codeblock}
-template <Parameter>
-concept X =  @\tcode{C}@<Injected, @\grammarterm{template-argument-list}@>;
+template <@\placeholder{Parameter}@ Injected>
+concept X = @\tcode{C}@<Injected, @\grammarterm{template-argument-list}@>;
 \end{codeblock}
 
-% Let X be an unamed concept whose concept-definition is ...
-% for each argument defined as ... let x be the invented concept template parameter 
-% ...
+Two \grammarterm{partially-applied-concept-argument}{s} that are partial-concept-argument-equivalent\iref{temp.type} name the same concept.
 
-
-
-where \tcode{C} designates \grammarterm{concept-name} and where \tcode{Parameter} is the first \grammarterm{template-parameter} in the \grammarterm{template-head} of \tcode{C}, without the ellipsis (if any).
-
-If \tcode{X} declares a single non-pack template parameter or if the \grammarterm{constraint-expression} of \tcode{X} is not valid, the program is ill-formed.
+If the \grammarterm{template-head} of \tcode{C} declares a single non-pack template parameter or if the \grammarterm{constraint-expression} of \tcode{X} is not a valid \grammarterm{concept-id}, the program is ill-formed.
 
 \begin{example}
 \begin{colorblock}
@@ -314,10 +309,10 @@ concept E = true;
 
 void f(all_of<concept A<42>, concept C<int>, concept D<int>> auto); // OK
 void f(all_of<concept E<int>> auto); // error: E declares a single non-pack template parameter
-void f(all_of<concept C<int, int>> auto); // error: the constraint-expression of the invented concept would be C<injected, int, int>, which is not a valid concept-id.
+void f(all_of<concept C<int, int>> auto); // error: the constraint-expression of the invented concept would be C<Injected, int, int>, which is not a valid concept-id.
 
 template <typename T, template <typename, typename> concept... Cs>
-concept all_bound = all_of<T, concept Cs<int>...>; // ok
+concept all_bound = all_of<T, concept Cs<int>...>; // OK
 \end{colorblock}
 \end{example}
 
@@ -356,7 +351,7 @@ Two template \grammarterm{template-argument}{s} are \defn{partial-concept-argume
 \begin{itemize}
 \item they are both \grammarterm{partially-applied-concept-argument}{s},
 \item they have equivalent \grammarterm{template-argument-list}{s}, and
-\item their \grammarterm{concept-name}{s} denote the same concept.
+\item their \grammarterm{concept-name}{s} name the same concept.
 \end{itemize}
 \end{addedblock}
 
