@@ -5,7 +5,7 @@
 \documentclass{wg21}
 
 \title{Partial application of concepts in template arguments}
-\docnumber{P2970R0}
+\docnumber{D2970R1}
 \audience{EWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 \authortwo{Gašper Ažman}{gasper.azman@gmail.com}
@@ -22,6 +22,15 @@ This feature was introduced in \paper{P2841R0} and removed in R1 to reduce the s
 and because \href{https://github.com/cplusplus/papers/issues/1546#issuecomment-1587401642}{EWG initially found this part of the feature less compelling}.
 
 It is presented again here, with added wording and notes on implementation experience.
+
+
+\section{Revisions}
+
+\subsection{R1}
+
+\begin{itemize}
+\item Wording fixes.
+\end{itemize}
 
 \section{Motivation}
 
@@ -274,13 +283,19 @@ If \grammarterm{concept-name} denotes a template parameter pack, the program is 
 A \grammarterm{partially-applied-concept-argument} names an invented concept \tcode{X} defined as
 
 \begin{codeblock}
-template <@\tcode{Parameter}@ Injected>
-concept X = @\grammarterm{concept-name}@<Injected, @\grammarterm{template-argument-list}@>;
+template <Parameter>
+concept X =  @\tcode{C}@<Injected, @\grammarterm{template-argument-list}@>;
 \end{codeblock}
 
-where \tcode{Parameter} is the first \grammarterm{template-parameter} in the \grammarterm{template-head} \tcode{H} of the concept designated by \grammarterm{concept-name}, without the ellipsis (if any).
+% Let X be an unamed concept whose concept-definition is ...
+% for each argument defined as ... let x be the invented concept template parameter 
+% ...
 
-If \tcode{H} declares a single non-pack template parameter or if the \grammarterm{constraint-expression} of \tcode{X} is not valid, the program is ill-formed.
+
+
+where \tcode{C} designates \grammarterm{concept-name} and where \tcode{Parameter} is the first \grammarterm{template-parameter} in the \grammarterm{template-head} of \tcode{C}, without the ellipsis (if any).
+
+If \tcode{X} declares a single non-pack template parameter or if the \grammarterm{constraint-expression} of \tcode{X} is not valid, the program is ill-formed.
 
 \begin{example}
 \begin{colorblock}
@@ -299,9 +314,9 @@ concept D = true;
 template <typename>
 concept E = true;
 
-void f(all_of<concept C<0>, concept C<int>, concept D<int>> auto); // ok
+void f(all_of<concept A<42>, concept C<int>, concept D<int>> auto); // OK
 void f(all_of<concept E<int>> auto); // error: E declares a single non-pack template parameter
-void f(all_of<concept C<int, int>> auto); // error: the constraint-expression of the invented concept would be C<T, int, int>, which is not a valid expression.
+void f(all_of<concept C<int, int>> auto); // error: the constraint-expression of the invented concept would be C<injected, int, int>, which is not a valid concept-id.
 
 \end{colorblock}
 \end{example}
@@ -334,14 +349,14 @@ their corresponding template \grammarterm{template-argument}{s}
 refer to the same template\added{ or are partial-concept-argument-equivalent}.
 \end{itemize}
 
-\ednote{Add a subsection at the end of [temp.type].}
+\ednote{Add a paragraph at the end of [temp.type].}
 
 \begin{addedblock}
 Two template \grammarterm{template-argument}{s} are \defn{partial-concept-argument-equivalent} if
 \begin{itemize}
-\item they are both \grammarterm{partially-applied-concept-argument},
-\item they have equivalent \grammarterm{template-argument-list}, and
-\item their \grammarterm{concept-name} refer to the same concept.
+\item they are both \grammarterm{partially-applied-concept-argument}{s},
+\item they have equivalent \grammarterm{template-argument-list}{s}, and
+\item their \grammarterm{concept-name}{s} denote the same concept.
 \end{itemize}
 \end{addedblock}
 
