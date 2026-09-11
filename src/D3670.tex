@@ -5,8 +5,8 @@
 \documentclass{wg21}
 
 \title{Pack Indexing for Template Names}
-\docnumber{D3670R2}
-\audience{EWG}
+\docnumber{P3670R4}
+\audience{CWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
 
@@ -16,10 +16,25 @@
 
 \section{Revisions}
 
+
+\subsection{R4}
+
+\begin{itemize}
+\item Wording fixes following CWG review (Adjusted [temp.deduct.guide] and [dcl.type.simple]
+\end{itemize}
+
+
+\subsection{R3}
+
+\begin{itemize}
+\item Wording fixes following CWG review.
+\end{itemize}
+
 \subsection{R2}
 
 \begin{itemize}
 \item Apply the changes made by \paper{CWG3027} to the wording section.
+\item Wording fixes following CWG review.
 \end{itemize}
 
 \subsection{R1}
@@ -68,6 +83,135 @@ This paper has not been implemented, but I am confident this can be implemented 
 I can't comment on other implementations.
 
 \section{Wording}
+
+\rSec2[basic.lookup.argdep]{Argument-dependent name lookup}%
+
+\begin{note}
+For purposes of determining
+(during parsing) whether an expression is a
+\grammarterm{postfix-expression} for a function call, the usual name lookup
+rules apply.
+In some cases
+a name followed by \tcode{<} is treated as a \grammarterm{template-name}
+even though name lookup did not find \changed{a \grammarterm{template-name}}{the declaration of a template}
+(see [temp.names]).
+
+[...]\\
+\end{note}
+
+
+\rSec3[dcl.type.simple]{Simple type specifiers}%
+\indextext{type specifier!simple}
+
+\pnum
+The simple type specifiers are
+
+\begin{bnf}
+\nontermdef{simple-type-specifier}\br
+\opt{nested-name-specifier} type-name\br
+nested-name-specifier \keyword{template} simple-template-id\br
+computed-type-specifier\br
+placeholder-type-specifier\br
+\opt{nested-name-specifier} \added{simple-}template-name\br
+\added{pack-index-template-name} \br
+\keyword{char}\br
+\keyword{char8_t}\br
+\keyword{char16_t}\br
+\keyword{char32_t}\br
+\keyword{wchar_t}\br
+\keyword{bool}\br
+\keyword{short}\br
+\keyword{int}\br
+\keyword{long}\br
+\keyword{signed}\br
+\keyword{unsigned}\br
+\keyword{float}\br
+\keyword{double}\br
+\keyword{void}
+\end{bnf}
+
+\pnum
+\indextext{component name}
+The component names of a \grammarterm{simple-type-specifier} are those of its
+\grammarterm{nested-name-specifier},
+\grammarterm{type-name},
+\grammarterm{simple-template-id},
+\grammarterm{\added{simple-}template-name} and/or
+\grammarterm{type-constraint}
+(if it is a \grammarterm{placeholder-type-specifier}).
+The component name of a \grammarterm{type-name} is the first name in it.
+
+\pnum
+\indextext{type specifier!\idxcode{char}}%
+\indextext{type specifier!\idxcode{char8_t}}%
+\indextext{type specifier!\idxcode{char16_t}}%
+\indextext{type specifier!\idxcode{char32_t}}%
+\indextext{type specifier!\idxcode{wchar_t}}%
+\indextext{type specifier!\idxcode{bool}}%
+\indextext{type specifier!\idxcode{short}}%
+\indextext{type specifier!\idxcode{int}}%
+\indextext{type specifier!\idxcode{long}}%
+\indextext{type specifier!\idxcode{signed}}%
+\indextext{type specifier!\idxcode{unsigned}}%
+\indextext{type specifier!\idxcode{float}}%
+\indextext{type specifier!\idxcode{double}}%
+\indextext{type specifier!\idxcode{void}}%
+\indextext{\idxgram{type-name}}%
+\indextext{\idxgram{lambda-introducer}}%
+A \grammarterm{placeholder-type-specifier}
+is a placeholder for
+a type to be deduced\iref{dcl.spec.auto}.
+\indextext{deduction!class template arguments}%
+A \grammarterm{type-specifier} is a placeholder for
+a deduced class type\iref{dcl.type.class.deduct} if \removed{either}
+\begin{itemize}
+	\item
+	it is of the form
+	\opt{\keyword{typename}} \opt{\grammarterm{nested-name-specifier}} \grammarterm{\added{simple-}template-name}\added{,} or
+	\begin{addedblock}
+	\item it is of the form
+	\opt{\keyword{typename}} \grammarterm{pack-index-template-name}, or
+	\end{addedblock}
+	\item
+	it is of the form \opt{\keyword{typename}} \grammarterm{splice-specifier} and
+	the \grammarterm{splice-specifier} designates
+	a class template or alias template.
+\end{itemize}
+The \grammarterm{nested-name-specifier} or \grammarterm{splice-specifier},
+if any, shall be non-dependent and
+the \grammarterm{\added{simple-}template-name}, \added{\grammarterm{pack-index-template-name}}{,} or \grammarterm{splice-specifier}
+shall designate a deducible template.
+A \defnadj{deducible}{template} is
+\begin{itemize}
+	\item
+	a class template,
+	\item
+	a type template template parameter, or
+	\item
+	an alias template \tcode{A} whose \grammarterm{defining-type-id} is of the form
+	
+	\begin{ncsimplebnf}
+		\opt{\keyword{typename}} \opt{nested-name-specifier} \opt{\keyword{template}} simple-template-id
+	\end{ncsimplebnf}
+	
+	where the \grammarterm{nested-name-specifier} (if any) is non-dependent and
+	the \grammarterm{template-name} of the \grammarterm{simple-template-id}
+	names a deducible template
+	other than a type template template parameter of \tcode{A}.
+\end{itemize}
+\begin{note}
+	An injected-class-name is never interpreted as a \grammarterm{template-name}
+	in contexts where class template argument deduction would be performed\iref{temp.local}.
+\end{note}
+The other
+\grammarterm{simple-type-specifier}{s}
+specify either a previously-declared type, a type determined from an
+expression, or one of the
+fundamental types\iref{basic.fundamental}.
+\tref{dcl.type.simple}
+summarizes the valid combinations of
+\grammarterm{simple-type-specifier}{s}
+and the types they specify.
 
 \rSec1[temp.names]{Names of template specializations}
 
@@ -136,7 +280,7 @@ shall denote a pack.
 
 \pnum
 The \grammarterm{constant-expression} shall be
-a converted constant expression \iref{expr.const} of type \tcode{std::size_t}
+a converted constant expression \iref{expr.const.const} of type \tcode{std::size_t}
 whose value $V$, termed the index,
 is such that $0 \le V < \tcode{sizeof...($P$)}$.
 
@@ -146,7 +290,7 @@ A \grammarterm{pack-index-template-name} is a pack expansion \iref{temp.variadic
 \pnum
 \begin{note}
     The \grammarterm{pack-index-template-name} denotes
-    the type of the $V^\text{th}$ element of the pack.
+    the $V^\text{th}$ \grammarterm{template-name} of the pack.
 \end{note}
 
 \end{addedblock}
@@ -155,33 +299,61 @@ A \grammarterm{pack-index-template-name} is a pack expansion \iref{temp.variadic
 \pnum
 A \tcode{<} is interpreted as the delimiter of
 a \grammarterm{template-argument-list}
-if it follows a name that is not a \grammarterm{conversion-function-id} and
+if \removed{either}
 \begin{itemize}
-    \item
-    that follows the keyword \keyword{template} or a \tcode{\~}
-    after a \grammarterm{nested-name-specifier} or
-    in a class member access expression, or
-    \item
-    for which name lookup finds the injected-class-name of a class template or
-    finds any declaration of a template, or
-    \item
-    that is an unqualified name
-    for which name lookup either finds one or more functions or finds nothing, or
-    \item
-    that is a terminal name
-    in a \grammarterm{using-declarator}\iref{namespace.udecl},
-    in a \grammarterm{declarator-id}\iref{dcl.meaning}, or
-    in a type-only context
-    other than a \grammarterm{nested-name-specifier}\iref{temp.res}.
+\item
+it follows a \grammarterm{splice-specifier} that either
+\begin{itemize}
+	\item appears in a type-only context or
+	\item is preceded by \keyword{template} or \keyword{typename}, or
+\end{itemize}
+\begin{addedblock}
+\item it follows a \grammarterm{pack-index-template-name}, or
+\end{addedblock}
+\item it follows a name that is not a \grammarterm{conversion-function-id} and
+\begin{itemize}
+	\item
+	that follows the keyword \keyword{template} or a \tcode{\~}
+	after a \grammarterm{nested-name-specifier} or
+	in a class member access expression, or
+	\item
+	for which name lookup finds the injected-class-name of a class template or
+	finds any declaration of a template, or
+	\item
+	that is an unqualified name
+	for which name lookup either finds one or more functions or finds nothing, or
+	\item
+	that is a terminal name
+	in a \grammarterm{using-declarator}\iref{namespace.udecl},
+	in a \grammarterm{declarator-id}\iref{dcl.meaning}, or
+	in a type-only context
+	other than a \grammarterm{nested-name-specifier}\iref{temp.res}.
+\end{itemize}
 \end{itemize}
 
+\rSec2[temp.alias]{Alias templates}
+
+\pnum
+A \grammarterm{template-declaration} in which the \grammarterm{declaration} is an
+\grammarterm{alias-declaration}\iref{dcl.pre} declares the
+\grammarterm{identifier} to be an \defnadj{alias}{template}.
+An alias template is a name for a family of
+types. The name of the alias template is a \grammarterm{\added{simple-}template-name}.
 
 \rSec2[temp.variadic]{Variadic templates}
 
-In a template parameter pack that is a pack expansion \iref{temp.param}:
+[...]
+
+A \defn{pack expansion}
+consists of a \defnx{pattern}{pack expansion!pattern} and an ellipsis, the instantiation of which
+produces zero or more instantiations of the pattern in a list (described below).
+The form of the pattern
+depends on the context in which the expansion occurs. Pack
+expansions can occur in the following contexts:
+
+[...]
+
 \begin{itemize}
-\item In a \tcode{sizeof...} expression\iref{expr.sizeof}; the pattern is an
-\grammarterm{identifier}.
 
 \item In a \grammarterm{pack-index-expression};
 the pattern is an \grammarterm{identifier}.
@@ -192,7 +364,6 @@ the pattern is a \grammarterm{typedef-name}.
 \begin{addedblock}
 \item In a \grammarterm{pack-index-template-name};
 the pattern is a \grammarterm{simple-template-name}.
-
 \end{addedblock}
 
 \item In a \grammarterm{fold-expression}\iref{expr.prim.fold};
@@ -203,8 +374,8 @@ that contains an unexpanded pack.
 the pattern is the constraint of that fold expanded constraint.
 \end{itemize}
 
-\ednote{[...]}
 
+[...]
 
 \pnum
 The instantiation of a pack expansion considers
@@ -216,42 +387,8 @@ replacing each pack expansion parameter with its $i^\text{th}$ element.
 Such an element, in the context of the instantiation, is interpreted as
 follows:
 
-\begin{itemize}
-\item
-if the pack is a template parameter pack, the element is
-\begin{itemize}
-    \item
-    a \grammarterm{typedef-name} for a type template parameter pack,
-    \item
-    an \grammarterm{id-expression} for a constant template parameter pack, or
-    \item
-    a \grammarterm{template-name} for a template template parameter pack
-\end{itemize}
-designating the $i^\text{th}$ corresponding
-type, constant, or template template argument;
+[...]
 
-\item
-if the pack is a function parameter pack, the element is an
-\grammarterm{id-expression}
-designating the $i^\text{th}$ function parameter
-that resulted from instantiation of
-the function parameter pack declaration;
-
-\item
-if the pack is an \grammarterm{init-capture} pack,
-the element is an \grammarterm{id-expression}
-designating the variable introduced by
-the $i^\text{th}$ \grammarterm{init-capture}
-that resulted from instantiation of
-the \grammarterm{init-capture} pack declaration;
-otherwise
-
-\item
-if the pack is a structured binding pack,
-the element is an \grammarterm{id-expression}
-designating the $i^\textrm{th}$ structured binding in the pack
-that resulted from the structured binding declaration.
-\end{itemize}
 When $N$ is zero, the instantiation of a pack expansion
 does not alter the syntactic interpretation of the enclosing construct,
 even in cases where omitting the pack expansion entirely would
@@ -276,9 +413,6 @@ When instantiating a \grammarterm{pack-index-template-name} $P$,
 let $K$ be the index of $P$.
 The instantiation of $P$ is the \grammarterm{simple-template-name} $\tcode{E}_K$.
 \end{addedblock}
-
-
-\ednote{[...]}
 
 \rSec1[temp.type]{Type equivalence}
 
@@ -308,7 +442,7 @@ refer to the same template.
 Two \grammarterm{template-id}{s} that are the same
 refer to the same class, function, or variable.
 
-\ednote{[...]}
+[...]
 
 \pnum
 If an expression $e$ is type-dependent \iref{temp.dep.expr},
@@ -332,7 +466,7 @@ a unique dependent type.
 Two such \grammarterm{pack-index-specifier}{s} refer to the same type only if
 \begin{itemize}
 \item their \grammarterm{typedef-names} refer to the same template parameter pack and
-\item if neither of their \grammarterm{constant-expression}{s} is value-dependent, then they have the same value, otherwise their constant-expressions are equivalent ([temp.over.link]).
+\item if neither of their \grammarterm{constant-expression}{s} is value-dependent, then they have the same value, otherwise their \grammarterm{constant-expression}{s} are equivalent ([temp.over.link]).
 \end{itemize}
 
 \begin{addedblock}
@@ -340,12 +474,68 @@ Two such \grammarterm{pack-index-specifier}{s} refer to the same type only if
 Two \grammarterm{pack-index-template-name}{s} refer to the same template only if
 \begin{itemize}
     \item their \grammarterm{simple-template-names} refer to the same template parameter pack and
-    \item if neither of their \grammarterm{constant-expression}{s} is value-dependent, then they have the same value, otherwise their constant-expressions are equivalent ([temp.over.link]).
+    \item if neither of their \grammarterm{constant-expression}{s} is value-dependent, then they have the same value, otherwise their \grammarterm{constant-expression}{s} are equivalent ([temp.over.link]).
 \end{itemize}
 
 \end{addedblock}
 
+\rSec3[temp.deduct.guide]{Deduction guides}
+\indextext{deduction!class template argument}%
 
+\pnum
+Deduction guides are used
+when a \grammarterm{template-name} or \grammarterm{splice-type-specifier}
+appears as a type specifier
+for a deduced class type\iref{dcl.type.class.deduct}.
+Deduction guides are not found by name lookup.
+Instead, when performing class template argument deduction\iref{over.match.class.deduct},
+all reachable deduction guides declared for the class template are considered.
+
+\begin{bnf}
+	\nontermdef{deduction-guide}\br
+	\opt{explicit-specifier} \added{simple}-template-name \terminal{(} parameter-declaration-clause \terminal{)} \terminal{->} simple-template-id \opt{requires-clause} \terminal{;}
+\end{bnf}
+
+\pnum
+\begin{example}
+	\begin{codeblock}
+		template<class T, class D = int>
+		struct S {
+			T data;
+		};
+		template<class U>
+		S(U) -> S<typename U::type>;
+		
+		struct A {
+			using type = short;
+			operator type();
+		};
+		S x{A()};           // \tcode{x} is of type \tcode{S<short, int>}
+	\end{codeblock}
+\end{example}
+
+\pnum
+The same restrictions apply
+to the \grammarterm{parameter-declaration-clause}
+of a deduction guide
+as in a function declaration\iref{dcl.fct},
+except that a generic parameter type placeholder\iref{dcl.spec.auto}
+shall not appear in the \grammarterm{parameter-declaration-clause} of
+a deduction guide.
+The \grammarterm{simple-template-id}
+shall name a class template specialization.
+The \grammarterm{\added{simple}-template-name}
+shall be the same \grammarterm{identifier}
+as the \grammarterm{template-name}
+of the \grammarterm{simple-template-id}.
+A \grammarterm{deduction-guide}
+shall inhabit the scope
+to which the corresponding class template belongs
+and, for a member class template, have the same access.
+Two deduction guide declarations
+for the same class template
+shall not have equivalent \grammarterm{parameter-declaration-clause}{s}
+if either is reachable from the other.
 
 \rSec1[gram.key]{Keywords}
 
@@ -387,10 +577,8 @@ declarations.
 \end{ncbnf}
 
 \begin{ncbnf}
-    template-name:\br
-    \removed{identifier} \br
-    \added{simple-template-name}\br
-    \added{pack-index-template-name}
+    \added{simple-}template-name:\br
+    identifier \br
 \end{ncbnf}
 
 
@@ -398,6 +586,7 @@ declarations.
 
 \ednote{Bump \tcode{__cpp_pack_indexing} to the date of adoption}.
 
+\section{Bibliography}
 
 \renewcommand{\section}[2]{}%
 \bibliographystyle{plain}

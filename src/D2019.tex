@@ -9,7 +9,7 @@
 
 
 \title{Thread attributes}
-\docnumber{D2019R8}
+\docnumber{P2019R9}
 \audience{LEWG}
 \author{Corentin Jabot}{corentin.jabot@gmail.com}
 
@@ -35,6 +35,8 @@ The absence of these features make \tcode{std::thread} and \tcode{std::jthread} 
 
 \section{Revisions}
 
+\subsection{R9}
+Wording fixes.
 \subsection{R8}
 \begin{itemize}
 \item Constrain the type \tcode{name_hint} (to accept only \tcode{char}) instead of its constructor.
@@ -721,7 +723,7 @@ public:
 \end{codeblock}
 \begin{addedblock}
 \begin{codeblock}
-    template <class T>
+    template <same_as<char> T>
     class name_hint;
     template <class T>
     name_hint(const T*) -> name_hint<T>;
@@ -767,10 +769,8 @@ Thread attributes can be used to define additional implementation-defined behavi
 
 The set of thread attribute types contains \tcode{thread::name_hint}, \tcode{thread::stack_size_hint} and an implementation-defined set of additional thread-attributes.
 
-When an object of a thread attribute type is passed to a thread or jthread constructor, it may
-affect the new thread behavior.
-
-\begin{note}Implementations can provide additional platform-specific thread attributes.\end{note}
+When an object of a thread attribute type is passed to a \tcode{thread} or \tcode{jthread} constructor, it may
+affect the new thread's behavior.
 
 \rSec4[thread.thread.name.hint]{Class \tcode{thread::name_hint}}
 
@@ -778,8 +778,8 @@ affect the new thread behavior.
 template <same_as<char> T>
 class thread::name_hint {
 public:
-    explicit constexpr
-    name_hint(basic_string_view<T> name) noexcept;
+    constexpr explicit
+    name_hint(basic_string_view<T> n) noexcept;
     name_hint(name_hint&&) = delete;
     name_hint(const name_hint&) = delete;
 private:
@@ -792,19 +792,22 @@ private:
 
 % \recommended
 %//% reword in term of should
-The \tcode{name_hint} thread attribute should be used
-to set the name of a thread such that the name could be used for debugging or platform-specific display mechanisms.
-Implementations should not store the value of the \tcode{name_hint} attribute in the \tcode{thread} or \tcode{jthread} object.
+The \tcode{name_hint} thread attribute can be used
+to set the name of a thread for debugging purposes or platform-specific display mechanisms.
+
+\recommended Implementations should not store the value of the \tcode{name_hint} attribute in the \tcode{thread} or \tcode{jthread} object.
+
+\recommended \tcode{name} is interpreted as a string in the literal encoding.
 
 \begin{itemdecl}
-explicit constexpr name_hint(basic_string_view<T> n);
+constexpr explicit name_hint(basic_string_view<T> n) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
 % \constraints
 % \tcode{same_as<T, char>} is \tcode{true}.
 
-\tcode{name} is treated as a NTBS in the literal encoding.
+% \tcode{n} represents a string in the literal encoding.
 
 \effects Initializes \tcode{name} with \tcode{n}.
 \end{itemdescr}
@@ -817,23 +820,22 @@ class thread::stack_size_hint {
 public:
     constexpr explicit stack_size_hint(size_t s) noexcept;
 private:
-    constexpr size_t size; // \expos
+    size_t size; // \expos
 };
 }
 \end{codeblock}
 
-% \recommanded
+\tcode{stack_size_hint} can be used to configure a desired size in bytes for platform-specific storage required for a thread. \begin{note}
+Such storage is typically used for variables with automatic storage duration.	
+\end{note}
 
-% specify it's in bytes
-
-
-Configure a desired stack size in bytes. %as if by POSIX \mbox{\tcode{pthread_attr_setstacksize}}.\\
+%as if by POSIX \mbox{\tcode{pthread_attr_setstacksize}}.\\
 The stack size set by the implementation may be adjusted up or down to meet platform-specific requirements.
 
-If \tcode{size == 0} is \tcode{true} the thread attribute should be ignored.
+If \tcode{size} is zero the thread attribute is ignored.
 
 \begin{itemdecl}
-constexpr explicit stack_size_hint(size_t size) noexcept;
+constexpr explicit stack_size_hint(size_t s) noexcept;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -856,7 +858,7 @@ explicit thread(@\removed{F\&\& f,}@ Args&&... args);
 \constraints
 \begin{itemize}
 \begin{addedblock}
-\item \tcode{sizeof...(Args) > 0} is \tcode{true}, and
+\item \tcode{Args} is not an empty pack, and
 \end{addedblock}
 \item \tcode{remove_cvref_t<\changed{F}{Args...[0]}>} is not the same type as \tcode{thread}.
 \end{itemize}
@@ -884,32 +886,23 @@ If no such $i$ exists, the program is ill-formed.
 The following are all \tcode{true}:
 \begin{itemize}
     \item \tcode{is_constructible_v<decay_t<F>, F>},
-    \item \tcode{(is_constructible_v<decay_t<\added{F}Args>, Args> \&\& ...)},
+    \item \tcode{(is_constructible_v<decay_t<\added{F}Args>, \added{F}Args> \&\& ...)}, \removed{and}
 \begin{addedblock}
   %  \item \tcode{(!is_lvalue_reference_v<Attrs> \&\& ...)},
 \end{addedblock}
-    \item \tcode{is_move_constructible_v<decay_t<F>>},
-    \item \tcode{(is_move_constructible_v<decay_t<\added{F}Args>> \&\& ...)}\removed{, and}
     \item \tcode{is_invocable_v<decay_t<F>, decay_t<\added{F}Args>...>}\changed{.}{, and}
 \begin{addedblock}
-    \item No type is present more than once in the pack \tcode{remove_cvref_t<Attrs>}. \ednote{// is there a better way to say that ?}
+    \item No type is present more than once in the pack \tcode{remove_cvref_t<Attrs>}. %\ednote{// is there a better way to say that ?}
 \end{addedblock}
 \end{itemize}
-
-\pnum
-\expects
-\tcode{decay_t<F>} and each type in \tcode{decay_t<\added{F}Args>} meet the
-\oldconcept{MoveConstructible} requirements
 
 \pnum
 \effects
 The new thread of execution executes
 \begin{codeblock}
-    invoke(@\placeholdernc{decay-copy}@(forward<F>(f)), @\placeholdernc{decay-copy}@(forward<@\added{F}@Args>(@\added{f}@args))...)
+    invoke(auto@(std::forward<F>(f)), auto@(std::forward<@\added{F}@Args>(@\added{f}@args))...)
 \end{codeblock}
-with the calls to
-\tcode{\placeholder{decay-copy}} being evaluated in the constructing thread.
-Any return value from this invocation is ignored.
+with the [...] is ignored.
 \begin{note}
     This implies that any exceptions not thrown from the invocation of the copy
     of \tcode{f} will be thrown in the constructing thread, not the new thread.
@@ -918,7 +911,7 @@ If the invocation of \tcode{invoke} terminates with an uncaught exception,
 \tcode{terminate} is called.
 
 \begin{addedblock}
-The parameters \tcode{attrs...} may affect the behavior of the new thread. (see [thread.attributes]).
+The parameters \tcode{attrs...} can affect the behavior of the new thread ([thread.attributes]).
 \end{addedblock}
 
 \pnum
@@ -1032,8 +1025,13 @@ and \tcode{ssource.stop_possible()} is \tcode{false}.
 \indexlibraryctor{jthread}%
 \begin{itemdecl}
 template<@\removed{class F,}@ class... Args>
-explicit jthread(@\removed{F\&\& f,}@ Args&&... args);\end{itemdecl}\begin{itemdescr}\begin{itemize}\begin{addedblock}
-\item \tcode{sizeof...(Args) > 0} is \tcode{true}, and
+explicit jthread(@\removed{F\&\& f,}@ Args&&... args);
+\end{itemdecl}
+\begin{itemdescr}
+\constraints
+\begin{itemize}
+\begin{addedblock}
+\item \tcode{Args} is not an empty pack, and
 \end{addedblock}
 \item \tcode{remove_cvref_t<\changed{F}{Args...[0]}>} is not the same type as \tcode{jthread}.
 \end{itemize}
@@ -1058,22 +1056,18 @@ If no such $i$ exists, the program is ill-formed.
 The following are all \tcode{true}:
 \begin{itemize}
 \item \tcode{is_constructible_v<decay_t<F>, F>},
-\item \tcode{(is_constructible_v<decay_t<\added{F}Args>, Args> \&\& ...)},
+\item \tcode{(is_constructible_v<decay_t<\added{F}Args>, \added{F}Args> \&\& ...)}, \removed{and}
 \begin{addedblock}
-    \item \tcode{(!is_lvalue_reference_v<Attrs> \&\& ...)},
+%    \item \tcode{(!is_lvalue_reference_v<Attrs> \&\& ...)}, and
 \end{addedblock}
-\item \tcode{is_move_constructible_v<decay_t<F>>},
-\item \tcode{(is_move_constructible_v<decay_t<\added{F}Args>> \&\& ...)}\removed{, and}
-\item \tcode{is_invocable_v<decay_t<F>, decay_t<\added{F}Args>...>}\changed{.}{, and}
+\item \tcode{is_invocable_v<decay_t<F>, decay_t<\added{F}Args>...> ||
+is_invocable_v<decay_t<F>, stop_token, decay_t<\added{F}Args>...>} \changed{.}{, and}
 \begin{addedblock}
-    \item No type is present more than once in the pack \tcode{remove_cvref_t<Attrs>}. \ednote{// is there a better way to say that ?}
+    \item No type is present more than once in the pack \tcode{remove_cvref_t<Attrs>}. %\ednote{// is there a better way to say that ?}
 \end{addedblock}
 \end{itemize}
 
 \pnum
-\expects
-\tcode{decay_t<F>} and each type in \tcode{decay_t<\added{F}Args>} meet the
-\oldconcept{MoveConstructible} requirements
 
 \pnum
 \effects
@@ -1086,7 +1080,7 @@ invoke(auto(std::forward<F>(f)), get_stop_token(),
 if that expression is well-formed,
 otherwise
 \begin{codeblock}
-invoke(auto(std::forward<F>(f)), auto(std::forward<Args>(args))...)
+invoke(auto(std::forward<F>(f)), auto(std::forward<@\added{F}@Args>(@\added{f}@args))...)
 \end{codeblock}
 with the values produced by \tcode{auto}
 being materialized\iref{conv.rval} in the constructing thread.
@@ -1099,7 +1093,7 @@ If the \tcode{invoke} expression exits via an exception,
 \tcode{terminate} is called.
 
 \begin{addedblock}
-The parameters \tcode{attrs...} may affect the behavior of the new thread.
+The parameters \tcode{attrs...} can affect the behavior of the new thread.
 \end{addedblock}
 
 \pnum
