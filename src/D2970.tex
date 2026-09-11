@@ -278,8 +278,6 @@ The component names of a \grammarterm{partially-applied-concept-argument} are
 its \grammarterm{concept-name} and
 those of its \grammarterm{nested-name-specifier} (if any).
 
-If \grammarterm{concept-name} denotes a template parameter pack, the program is ill-formed.
-
 A \grammarterm{partially-applied-concept-argument} names an invented concept \tcode{X} defined as
 
 \begin{codeblock}
@@ -318,6 +316,8 @@ void f(all_of<concept A<42>, concept C<int>, concept D<int>> auto); // OK
 void f(all_of<concept E<int>> auto); // error: E declares a single non-pack template parameter
 void f(all_of<concept C<int, int>> auto); // error: the constraint-expression of the invented concept would be C<injected, int, int>, which is not a valid concept-id.
 
+template <typename T, template <typename, typename> concept... Cs>
+concept all_bound = all_of<T, concept Cs<int>...>; // ok
 \end{colorblock}
 \end{example}
 
