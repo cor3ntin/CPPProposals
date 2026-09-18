@@ -10,15 +10,10 @@
 #   make papers                   # list the document number of each paper
 #   make clean
 #
-# The framework is not vendored here; clone it separately and point WG21_DIR at
-# it if it does not live in ~/wg21:
-#
-#   git clone https://github.com/mpark/wg21.git ~/wg21
-#
 # It downloads its own pinned Pandoc and Python virtualenv into wg21/deps on
 # first use, so the system Pandoc version does not matter.
 
-WG21_DIR ?= $(HOME)/wg21
+WG21_DIR ?= ./wg21
 
 ifeq ($(wildcard $(WG21_DIR)/flat.mk),)
 $(error MPark/WG21 not found in $(WG21_DIR). Clone https://github.com/mpark/wg21 \
