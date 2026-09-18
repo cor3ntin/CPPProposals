@@ -11,6 +11,7 @@
 
 
 \usepackage{color, colortbl}
+\usepackage{tikz}
 
 % Macros used by [ptrtag] and by the de-tablified requirements which wg21.cls does not define yet.
 \providecommand{\constantwhen}{\Fundesc{Constant When}}
@@ -24,28 +25,28 @@
 
 \section{Abstract}
 
-This paper propose to support pointer-like type in \tcode{pointer_tag_pair}.
+This paper proposes support for pointer-like types in \tcode{pointer_tag_pair}.
 
 \section{Motivation}
 
-The recently added \tcode{pointer_tag_pair} require the pointer type to be an actual pointer, and does not support pointer-like user-defined types.
+The recently added \tcode{pointer_tag_pair} requires the pointer type to be an actual pointer, and does not support pointer-like user-defined types.
 We propose a customization mechanism (\tcode{taggable\_pointer\_traits}) to support such types.
 
-The motivational use cases are as follow:
+The motivational use cases are as follows:
 
 \subsection{Opaque pointer types}
 
-Opaque pointers, i.e classes that wraps a pointer in a type to block direct access to the pointer, or achieve some form of strong typing
+Opaque pointers, i.e., classes that wrap a pointer in a type to block direct access to the pointer, or to achieve some form of strong typing,
 are fairly common. And while their alignment bits are free, they are not accessible without the proposed \tcode{taggable\_pointer\_traits}.
 
-Note that, it is not generally possible to use a smart / fancy /owning pointer with non-trivial constructor or destructor with this (or similar) interface.
+Note that it is not generally possible to use a smart, fancy, or owning pointer with a non-trivial constructor or destructor with this (or similar) interface.
 
-\subsection{Nested pointer tagged pair}
+\subsection{Nested pointer-tag pair}
 
-An other use case, used a lot in LLVM, is to nest pointer_tag_pair.
+Another use case, used a lot in LLVM, is to nest \tcode{pointer_tag_pair}.
 For example, it is possible to define \tcode{pointer_tag_pair<pointer_tag_pair<int*, 1, unsigned>, 1, unsigned>}.
 LLVM has complex structures and memory comes at a premium, so having to resort to that sort of optimization is fairly common.
-This paper proposes a specialization of \tcode{taggable\_pointer\_traits} for \tcode{pointer_tag_pair} that make this possible.
+This paper proposes a specialization of \tcode{taggable\_pointer\_traits} for \tcode{pointer_tag_pair} that makes this possible.
 
 \subsection{Function pointers}
 
@@ -54,14 +55,14 @@ to allow storing a function pointer inside a \tcode{pointer_tag_pair}.
 
 \subsection{Other uses for \tcode{taggable_pointer_traits}}
 
-LLVM uses their equivalent of taggable_pointer_traits to store a discriminated union of pointer types in a single \tcode{void*}.
-pointer-sized discriminated variant are a fairly common utility (Qt and Folluy have similar tools for example).
-While we are not proposing such a type, \tcode{taggable_pointer_traits} can be reused for that use case (or anyother use case that want to query
-alignment information of pointer like type).
+LLVM uses its equivalent of \tcode{taggable_pointer_traits} to store a discriminated union of pointer types in a single \tcode{void*}.
+Pointer-sized discriminated variants are a fairly common utility (Qt and Folly have similar tools, for example).
+While we are not proposing such a type, \tcode{taggable_pointer_traits} can be reused for that use case (or any other use case that wants to query
+alignment information of pointer-like types).
 
 \section{Design}
 
-A trait, \tcode{taggable\_pointer\_traits} (for lack of a better name), offers the following interface
+A trait, \tcode{taggable\_pointer\_traits} (for lack of a better name), offers the following interface:
 
 \begin{colorblock}
 
@@ -73,20 +74,20 @@ struct std::taggable_pointer_traits<T> {
 };
 \end{colorblock}
 
-The standard provides a specialization for \tcode{pointer_int_pair} and \tcode{T*} (The primary tempolate is not defined).
+The standard provides a specialization for \tcode{pointer_tag_pair} and \tcode{T*} (the primary template is not defined).
 
-The trait is queried by \tcode{pointer_int_pair}. in LLVM, the trait is a template parameter (like, e.g \tcode{char_traits} in string),
-which offers an other layer of customization...which LLVM does not use, as far as I can tell.
-The only use case I can imagine would be to customize the behavior for \tcode{void*} - which the standard considered to have an alignment
-of \tcode{0} but it's sometimes to assume a greater alignment depending on use case and allocator.
-However, a custom opaque pointer type over \tcode{void*}, or the use of \tcode{from_overaligned} would cover this use case.
-Generally, any scenario where one would want to customize the behavior of a given pointer type can be  achieve by wrapping it in an opaque pointer type.
+The trait is queried by \tcode{pointer_tag_pair}. In LLVM, the trait is a template parameter (like, e.g., \tcode{char_traits} in string),
+which offers another layer of customization, which LLVM does not use, as far as I can tell.
+The only use case I can imagine would be to customize the behavior for \tcode{void*} --- which the standard considers to have an alignment
+of \tcode{0}, but it is sometimes useful to assume a greater alignment depending on the use case and allocator.
+However, a custom opaque pointer type over \tcode{void*}, or the use of \tcode{from_overaligned}, would cover this use case.
+Generally, any scenario where one would want to customize the behavior of a given pointer type can be achieved by wrapping it in an opaque pointer type.
 
 There are a few notable changes to the status quo:
 
 \begin{itemize}
-\item To support nested \tcode{pointer_tag_pair} work, we need to specify how the tag is stored rather than let it implementation defined.
-  Ie the tag is stored in the high-most available least significant (alignment) bits.
+\item To make nested \tcode{pointer_tag_pair} work, we need to specify how the tag is stored rather than leave it implementation-defined.
+  I.e., the tag is stored in the most significant of the available least-significant (alignment) bits.
 
 \begin{figure}[htbp]
     \centering
@@ -108,17 +109,17 @@ There are a few notable changes to the status quo:
    % \caption{Tag placement in \tcode{pointer_tag_pair<T*, 1>} where \tcode{alignof(T)} is \tcode{8}.}
 \end{figure}
 
-\item \tcode{pointer_tag_pair::element_type} is removed, as it's unclear that all opaque pointer type could or would want to expose that information.
+\item \tcode{pointer_tag_pair::element_type} is removed, as it's unclear that all opaque pointer types could or would want to expose that information.
 
-\item The \tcode{constexprness} of Hana's design remains, however user-defined specialization of the trait need not be \tcode{constexpr}.
+\item The \tcode{constexprness} of Hana's design remains; however, user-defined specializations of the trait need not be \tcode{constexpr}.
 
 \end{itemize}
 
 \subsection{Open questions}
 
 \begin{itemize}
-\item The current design mandates the pointer-type to be default constructible. We could instead make \tcode{pointer_tag_pair} conditionally
-default constructible.
+\item The current design mandates that the pointer type be default-constructible. We could instead make \tcode{pointer_tag_pair} conditionally
+default-constructible.
 
 \item I think we could provide a specialization of \tcode{taggable\_pointer\_traits} for \tcode{coroutine_handle}.
 
@@ -127,26 +128,26 @@ default constructible.
 
 \subsection{What this is not}
 
-Despite this paper extending \tcode{pointer_tag_pair} to non-pointer types, that utility still remainst very much build around
+Despite this paper extending \tcode{pointer_tag_pair} to non-pointer types, that utility still remains very much built around
 the idea of reusing pointer-alignment bits.
-Some early feedback on this paper expressed a desire for more unused-bits optimizations including
+Some early feedback on this paper expressed a desire for more unused-bits optimizations, including
 
 \begin{itemize}
-\item Tombsone values in \tcode{std::optional}.
+\item Tombstone values in \tcode{std::optional}.
 \item Recycling of padding bits.
-\item Owning pointer / tag pairs types (I'm not aware of anyone doing that?)
-\item Pointer compressions
-\item etc
+\item Owning pointer/tag pair types (I'm not aware of anyone doing that?)
+\item Pointer compression
+\item etc.
 \end{itemize}
 
-This proposal is neither of these things. Each of this feature require different designs / controlling traits that the
+This proposal is none of these things. Each of these features requires a different design or controlling trait that the
 interface of \tcode{pointer_tag_pair} or \tcode{taggable\_pointer\_traits} cannot accommodate.
 
 
 \section{Implementation}
 
-An implementation, based on Hana Dusíková's initial implementation of \paper{P3125R6} is available on
-\href{https://compiler-explorer.com/z/or19xf7jM}{Compiler Exporer}. By virtue of it being a pure-library implementation,
+An implementation, based on Hana Dusíková's initial implementation of \paper{P3125R6}, is available on
+\href{https://compiler-explorer.com/z/or19xf7jM}{Compiler Explorer}. By virtue of it being a pure-library implementation,
 it does not support using \tcode{pointer_tag_pair} as a constant expression.
 
 \section{Wording}
@@ -357,7 +358,7 @@ where \tcode{UT} is
 \begin{addedblock}
 
 \pnum
-Let \exposid{tag-shift} and \exposid{tag-mask} be as follow:
+Let \exposid{tag-shift} and \exposid{tag-mask} be as follows:
 \begin{codeblock}
 static constexpr unsigned @\exposid{tag-shift}@ =  // \expos
   traits_type::bits_available > bits_requested ? traits_type::bits_available - bits_requested : 0;
@@ -684,9 +685,9 @@ static PTP from_void_pointer(PTP::tagged_pointer_type v) noexcept;
 
 \end{addedblock}
 
-\section{Feature test Macro}
+\section{Feature-test macro}
 
-\ednote{bump \tcode{__cpp_lib_pointer_tag_pair} to the date of adoption.}
+\ednote{Bump \tcode{__cpp_lib_pointer_tag_pair} to the date of adoption.}
 
 
 \section{Acknowledgments}
