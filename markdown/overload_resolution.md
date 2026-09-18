@@ -1,9 +1,9 @@
 ---
 title: "On Overload Resolution, Exact Matches, and Clever Implementations"
 document: D3606R2
-date: 2026-09-04
+date: 2026-09-18
 audience:
- - Evolution Working Group
+ - Core Working Group
 author:
  - name: Corentin Jabot
    email: <corentin.jabot@gmail.com>
@@ -13,6 +13,10 @@ toc: false
 ---
 
 # Revisions
+
+## P3606R1
+
+ - Improve the wording following CWG guidance in Brno.
 
 ## P3606R1
 
@@ -291,3 +295,4 @@ facilitate the implementation of CWG2369 (and [@CWG2769]) in Clang.
 
 Thanks to people who contributed to the various discussions on this topic
 on the Core reflector, and the LLVM and GCC bug trackers.
+Thanks to Vlad Serebrennikov for his help writing the wording.
