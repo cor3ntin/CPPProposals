@@ -1,7 +1,7 @@
 ---
 title: "On Overload Resolution, Exact Matches, and Clever Implementations"
-document: P3606R1
-date: 2025-01-24
+document: D3606R2
+date: 2026-09-04
 audience:
  - Evolution Working Group
 author:
