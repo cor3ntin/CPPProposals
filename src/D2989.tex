@@ -17,6 +17,14 @@
 \def\changemargin#1#2{\list{}{\rightmargin#2\leftmargin#1}\item[]}
 \let\endchangemargin=\endlist
 
+
+
+\newcommand{\commentellip}{\tcode{/* ...\ */}}
+\newcommand{\defnxname}[1]{\xname{#1}}
+\newcommand{\CppXXVI}{\Cpp{} 2026}
+\newcommand{\diffref}[1]{\textbf{Affected subclause:} [#1]}
+\AtBeginDocument{\renewcommand{\ref}[1]{ [#1]}}
+%\AtBeginDocument{\renewcommand{\iref}[1]{ [#1]}}
 \begin{document}
 \maketitle
 
@@ -917,7 +925,7 @@ declaration.
 
 \pnum
 The \grammarterm{identifier} in
-a \grammarterm{template-parameter} denoting a type or template
+a \grammarterm{template-parameter} denoting a type \added{, universal parameter,} or template
 is not looked up.
 An \grammarterm{identifier} that does not follow an ellipsis
 is defined to be
@@ -1084,6 +1092,9 @@ and its meaning is determined as follows:
     \item
     Otherwise, if lookup finds a template,
     $A$ denotes that template.
+\begin{addedblock}
+   \item Otherwise, if lookup finds a universal template parameter, $A$ denotes that \grammarterm{universal-argument-name}.
+\end{addedblock}
     \item
     Otherwise, if lookup finds a type alias or a type,
     $A$ denotes the underlying type and is interpreted as a \grammarterm{type-id}.
@@ -1242,7 +1253,7 @@ A
 \grammarterm{template-argument}
 for a type template parameter
 shall be a
-\grammarterm{type-id}.
+\grammarterm{type-id} or a \tcode{universal-argument-name}.
 
 \pnum
 \begin{example}
@@ -1279,20 +1290,209 @@ shall be a
 \end{note}
 
 
+\rSec2[temp.arg.nontype]{Constant template arguments}
+
+\pnum
+A template argument $E$ for
+a constant template parameter with declared type \tcode{T}
+shall be such that the invented declaration
+\begin{codeblock}
+    T x = @$E$@ ;
+\end{codeblock}
+satisfies the semantic constraints for the definition of
+a \tcode{constexpr} variable with static storage duration\iref{dcl.constexpr}
+%\added{,unless $E$ is a \grammarterm{universal-argument-name}}
+.
+
+
+\rSec2[temp.arg.template]{Template template arguments}
+
+\pnum
+A
+\grammarterm{template-argument}
+for a template
+template parameter
+shall be the name of a template\added{, or a \grammarterm{universal-argument-name}}.
+For a \grammarterm{type-tt-parameter},
+the name shall denote a class template, alias template, or
+type template template parameter.
+For a \grammarterm{variable-tt-parameter},
+the name shall denote a variable template or
+variable template template parameter.
+For a \grammarterm{concept-tt-parameter},
+the name shall denote a concept or
+concept template parameter.
+Only primary templates are considered when matching the template template
+argument with the corresponding parameter; partial specializations are not
+considered even if their parameter lists match that of the template template
+parameter.
+
+\ednote{[...]}
+
+\pnum
+A template \grammarterm{template-argument} \tcode{A} matches a template
+template parameter \tcode{P} when
+\tcode{A} and \tcode{P} are compatible and
+\tcode{P} is at least as specialized as \tcode{A}, ignoring constraints
+on \tcode{A} if \tcode{P} is unconstrained.
+If \tcode{P} contains a template parameter pack, then \tcode{A} also matches \tcode{P}
+if each of \tcode{A}'s template parameters
+matches the corresponding template parameter declared in the
+\grammarterm{template-head} of \tcode{P}.
+Two template parameters match if they are of the same kind,
+for constant template parameters, their types are
+equivalent\iref{temp.over.link}, and for template template parameters,
+each of their corresponding template parameters matches, recursively.
+When \tcode{P}'s \grammarterm{template-head} contains a \grammarterm{template-parameter}
+that declares a template parameter
+pack\iref{temp.variadic}, the template parameter pack will match zero or more template
+parameters or template parameter packs declared in the \grammarterm{template-head} of
+\tcode{A} with the same type and form as the template parameter pack declared in \tcode{P}
+(ignoring whether those template parameters are template parameter packs).
+\added{A universal template parameter declared in the \grammarterm{template-head} of \tcode{P}
+    matches a template parameter of any kind;
+    if it is a template parameter pack,
+    it matches zero or more template parameters or template parameter packs of any kind.}
+
+
+\begin{example}
+\begin{codeblock}
+    template<class T> class A { @\commentellip@ };
+    template<class T, class U = T> class B { @\commentellip@ };
+    template<class ... Types> class C { @\commentellip@ };
+    template<auto n> class D { @\commentellip@ };
+    template<template<class> class P> class X { @\commentellip@ };
+    template<template<class ...> class Q> class Y { @\commentellip@ };
+    template<template<int> class R> class Z { @\commentellip@ };
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+    template<template<universal template ...> class S> class U { @\commentellip@ };
+    template<template<class, universal template> class T> class V { @\commentellip@ };
+\end{codeblock}
+\end{addedblock}
+\begin{codeblock}
+    X<A> xa;            // OK
+    X<B> xb;            // OK
+    X<C> xc;            // OK
+    Y<A> ya;            // OK
+    Y<B> yb;            // OK
+    Y<C> yc;            // OK
+    Z<D> zd;            // OK
+\end{codeblock}
+\begin{addedblock}
+\begin{codeblock}
+    U<A> ua;            // OK
+    U<D> ud;            // OK
+    V<B> vb;            // OK
+\end{codeblock}
+\end{addedblock}
+\end{example}
+
+
+
+\pnum
+A template template parameter \tcode{P} is
+at least as specialized as a template \grammarterm{template-argument} \tcode{A}
+if, given the following rewrite to two function templates,
+the function template corresponding to \tcode{P}
+is at least as specialized as
+the function template corresponding to \tcode{A}
+according to the partial ordering rules
+for function templates\iref{temp.func.order}.
+Given an invented class template \tcode{X}
+with the \grammarterm{template-head} of \tcode{A} (including default arguments
+and \grammarterm{requires-clause}, if any):
+
+\begin{itemize}
+\item
+Each of the two function templates has the same template parameters
+and \grammarterm{requires-clause} (if any),
+respectively, as \tcode{P} or \tcode{A}.
+\item
+Each function template has a single function parameter
+whose type is a specialization of \tcode{X}
+with template arguments corresponding to the template parameters
+from the respective function template where,
+for each \grammarterm{template-parameter} \tcode{PP}
+in the \grammarterm{template-head} of the function template,
+a corresponding \grammarterm{template-argument} \tcode{AA} is formed\removed{.}\added{ as follows:}
+\begin{itemize}
+    \item
+    If \tcode{PP} declares a template parameter pack,
+    \removed{then} \tcode{AA} is the pack expansion \tcode{PP...}\iref{temp.variadic}\removed{;}\added{.}
+    \item
+    \added{Otherwise, if \tcode{PP} declares a universal template parameter,
+        \tcode{AA} is a \grammarterm{universal-argument-name} naming \tcode{PP}.}
+    \item
+    \removed{otherwise}\added{Otherwise}, \tcode{AA} is an \grammarterm{id-expression} denoting \tcode{PP}.
+\end{itemize}
+\end{itemize}
+If the rewrite produces an invalid type,
+then \tcode{P} is not at least as specialized as \tcode{A}.
+%\added{In this determination,
+%    a template parameter of any kind can be deduced
+%    from a synthesized universal template argument\iref{temp.func.order}
+%    as if it were a universal template parameter.}
+
+
+
 \begin{addedblock}
 \rSec2[temp.arg.universal]{Universal Template Arguments}
 
-A \tcode{universal-template-name}, and any argument that would be valid for a type template parameter, constant template parameter,
-or template parameter match the form of a universal template parameter.
+%A \tcode{universal-argument-name}, and any argument that would be valid for a type template parameter, constant template parameter,
+%or template template parameter match the form of a universal template parameter.
 
-For an argument \tcode{A} corresponding to a universal-template parameter \tcode{P}, the type and form of \tcode{P} is determined as follow
+\pnum
+A \grammarterm{template-argument} $A$ for a universal template parameter $P$
+is interpreted as follows:
 \begin{itemize}
-\item if \tcode{A} is a universal template argument, P denotes that argument,
-\item otherwise if \tcode{A} is a \tcode{type-id}, P denotes a type template parameter with the same type as \tcode{A},
-\item otherwise if \tcode{A} is an \grammarterm{id-expression}, P denotes a \defn{universal template name refering to the id-expression \tcode{A}},
-\item otherwise, if \tcode{A} is an expression, Let P' be the invented template parameter declared with \tcode{decltype(auto)}. \tcode{P} denotes a constant template parameter whose type and value are deduced from P' according  to [temp.arg.type].
-\item otherwise, if \tcode{A} denotes a \grammarterm{template-name} X, P denotes that \grammarterm{template-name}.
+\item
+If $A$ is a \grammarterm{universal-argument-name},
+the template argument for $P$ is the universal template parameter named by $A$.
+\item
+Otherwise, if $A$ is a \grammarterm{type-id},
+$A$ is a type template argument and
+the template argument for $P$ is the type denoted by $A$.
+\item
+Otherwise, if $A$ denotes a template \iref{temp.arg.general} other than a function template, $A$ is a template template argument and
+the template argument for $P$ is that template.
+\item
+Otherwise, if $A$ is an unparenthesized \grammarterm{id-expression} that does not name a constant template parameter
+or an unparenthesized class member access \iref{expr.ref},
+$A$ is a \defnadj{deferred}{template argument} , and
+the template argument for $P$ is $A$.
+\item
+Otherwise, if $A$ is a constant template argument,
+$P$ is considered to be a constant template parameter
+declared with type \tcode{decltype(auto)} \iref{temp.arg.nontype}, and
+the template argument for $P$ is the value of $A$.
 \end{itemize}
+
+
+\pnum
+When template arguments are substituted for template parameters,
+a \grammarterm{universal-argument-name} naming a universal template parameter,
+or an \grammarterm{id-expression} naming a constant template parameter,
+designates the template argument for that parameter.
+A \grammarterm{universal-argument-name} that designates a template argument $X$
+is interpreted as
+\begin{itemize}
+    \item
+    a \grammarterm{universal-argument-name} naming $X$,
+    if $X$ is a universal template parameter,
+    \item
+    a \grammarterm{type-id} denoting $X$, if $X$ is a type,
+    \item
+    a \grammarterm{template-argument-name} denoting $X$, if $X$ is a template,
+    \item
+    $X$ %, with the meaning it has where it appears,
+    if $X$ is a deferred template argument, and
+    \item
+    an \grammarterm{id-expression} naming an invented constant template parameter
+    of the type of $X$ and designating $X$, if $X$ is a value.
+\end{itemize}
+
 
 
 \end{addedblock}
@@ -1323,6 +1523,9 @@ their corresponding template \grammarterm{template-argument}{s}
 refer to the same template\changed{.}{, and}
 
 \begin{addedblock}
+\item
+their corresponding deferred template arguments \iref{temp.arg.universal}
+are equivalent \iref{temp.over.link}, and
 \item their corresponding universal \grammarterm{template-argument}{s}
 refer to the same template parameter.
 \end{addedblock}
@@ -1377,6 +1580,90 @@ expansions can occur in the following contexts:
 \end{itemize}
 
 
+\ednote{[...]}
+
+
+\pnum
+The instantiation of a pack expansion
+considers
+items $\tcode{E}_1, \tcode{E}_2, \dotsc, \tcode{E}_N$,
+where
+$N$ is the number of elements in the pack expansion parameters.
+Each $\tcode{E}_i$ is generated by instantiating the pattern and
+replacing each pack expansion parameter with its $i^\text{th}$ element.
+Such an element, in the context of the instantiation, is interpreted as
+follows:
+\begin{itemize}
+    \item
+    if the pack is a template parameter pack, the element is
+    \begin{itemize}
+        \item
+        a \grammarterm{typedef-name} for a type template parameter pack,
+        \item
+        an \grammarterm{id-expression} for a constant template parameter pack, \removed{or}
+        \item
+        a \grammarterm{template-name} for a template template parameter pack\added{, or}
+        \item
+        \added{a \grammarterm{universal-argument-name} for a universal template parameter pack}
+    \end{itemize}
+    designating the $i^\text{th}$ corresponding
+    type, constant, \removed{or} template\added{, or universal} template argument;
+    \item
+    if the pack is a function parameter pack, the element is an
+    \grammarterm{id-expression}
+    designating the $i^\text{th}$ function parameter
+    that resulted from instantiation of
+    the function parameter pack declaration;
+    \item
+    if the pack is an \grammarterm{init-capture} pack,
+    the element is an \grammarterm{id-expression}
+    designating the variable introduced by
+    the $i^\text{th}$ \grammarterm{init-capture}
+    that resulted from instantiation of
+    the \grammarterm{init-capture} pack declaration;
+    otherwise
+    \item
+    if the pack is a structured binding pack,
+    the element is an \grammarterm{id-expression}
+    designating the $i^\textrm{th}$ structured binding in the pack
+    that resulted from the structured binding declaration.
+\end{itemize}
+When $N$ is zero, the instantiation of a pack expansion
+does not alter the syntactic interpretation of the enclosing construct,
+even in cases where omitting the pack expansion entirely would
+otherwise be ill-formed or would result in an ambiguity in the grammar.
+
+
+\rSec3[temp.func.order]{Partial ordering of function templates}
+\pnum
+To produce the transformed template, for each
+type, constant,
+type template, variable template, \removed{or} concept\added{, or universal}
+template parameter (including template parameter packs\iref{temp.variadic}
+thereof) synthesize a unique type, value, class template,
+variable template, \removed{or} concept\added{, or universal template argument},
+respectively, and substitute it for each occurrence of that parameter
+in the function type of the template.
+The type replacing a placeholder
+in the type of the value synthesized for a constant template parameter
+is a unique synthesized type.
+\begin{addedblock}
+\begin{note}
+    A synthesized universal template argument is a valid template argument  for a template parameter of any kind.
+\end{note}
+
+%\begin{example}
+%\begin{codeblock}
+%    template<universal template U> struct S { };
+%    template<universal template U> int f(S<U>);     // \#1
+%    template<class T> int f(S<T>);                  // \#2
+%    int i = f(S<int>());                            // calls \#2
+%    int j = f(S<0>());                              // calls \#1
+%\end{codeblock}
+%\end{example}
+\end{addedblock}
+
+
 \rSec3[temp.dep.temp]{Dependent template arguments}
 
 \pnum
@@ -1408,8 +1695,239 @@ it names a template parameter or
 its terminal name is dependent.
 
 \begin{addedblock}
+A deferred template argument \iref{temp.arg.universal} is dependent
+if it is type-dependent or value-dependent, or
+if it names a member of the current instantiation or a member of a dependent type.
+
 A universal template argument is dependent.
 \end{addedblock}
+
+
+
+\rSec1[temp.fct.spec]{Function template specializations}
+\rSec2[temp.deduct]{Template argument deduction}
+\rSec3[temp.deduct.partial]{Deducing template arguments during partial ordering}
+
+\pnum
+If, for a given type, the
+types are identical after the transformations above
+and both \tcode{P} and \tcode{A} were reference types (before being replaced with the
+type referred to above):
+\begin{itemize}
+    \item if the type from the argument template was an lvalue reference and the type
+    from the parameter template was not,
+    the parameter type is not considered to be
+    at least as specialized as the argument type; otherwise,
+    \item if the type from
+    the argument template is more cv-qualified than the type from the
+    parameter template (as described above),
+    the parameter type is not considered to be
+    at least as specialized as the argument type.
+\end{itemize}
+\begin{addedblock}
+    \pnum
+    If, for a given pair of corresponding template parameters of the two templates,
+    one is a universal template parameter,
+    that template parameter is not considered to be
+    at least as specialized as the other
+    %; otherwise, each is considered to be
+    %at least as specialized as the other
+    .
+\end{addedblock}
+
+\pnum
+\indextext{at least as specialized as|see{more specialized}}%
+Function template \tcode{F}
+is \defnx{at least as specialized as}{more specialized}
+function template \tcode{G} if,
+for each pair of types used to determine the ordering,
+the type from \tcode{F}
+is at least as specialized as
+the type from \tcode{G}\added{, and,
+    for each pair of corresponding template parameters
+    that are not used in those types,
+    the template parameter from \tcode{F}
+    is at least as specialized as
+    the template parameter from \tcode{G}}.
+\tcode{F}
+is \defnx{more specialized than}{more specialized!function template}
+\tcode{G} if
+\tcode{F}
+is at least as specialized as
+\tcode{G} and
+\tcode{G}
+is not at least as specialized as
+\tcode{F}.
+%\begin{addedblock}
+%\begin{example}
+%\begin{codeblock}
+%    template<universal template U> int f();         // \#1
+%    template<class T> int f();                      // \#2
+%    template<auto V> int f();                       // \#3
+%    int i = f<int>();                               // calls \#2
+%    int j = f<0>();                                 // calls \#3
+%\end{codeblock}
+%\end{example}
+%\end{addedblock}
+\pnum
+If, after considering the above, function template \tcode{F}
+is at least as specialized as function template \tcode{G} and vice-versa, and
+if \tcode{G} has a trailing function parameter pack
+for which \tcode{F} does not have a corresponding parameter, and
+if \tcode{F} does not have a trailing function parameter pack,
+then \tcode{F} is more specialized than \tcode{G}.
+
+
+\rSec3[temp.deduct.type]{Deducing template arguments from a type}
+\pnum
+Template arguments can be deduced in several different contexts, but
+in each case a type that is specified in terms of template parameters
+(call it
+\tcode{P})
+is compared with an actual type (call it
+\tcode{A}),
+and an attempt is made to find template argument values (a type for a type
+parameter, a value for a constant template parameter, \removed{or} a template for a
+template template parameter\added{, or any template argument\iref{temp.arg.universal}
+    for a universal template parameter}) that will make
+\tcode{P},
+after substitution of the deduced values (call it the deduced
+\tcode{A}),
+compatible with
+\tcode{A}.
+\ednote{[...]}
+\pnum
+The non-deduced contexts are:
+\begin{itemize}
+    \item
+    \ednote{[...]}
+    \item
+    A constant template argument\added{, a deferred template argument,} or an array bound in which a subexpression
+    references a template parameter.
+    \item
+    \ednote{[...]}
+\end{itemize}
+\ednote{[...]}
+\pnum
+A type template argument \tcode{T},
+a constant template argument \tcode{i},
+a template template argument \tcode{TT}
+denoting a class template or an alias template, \removed{or}
+a template template argument \tcode{VV}
+denoting a variable template or a concept\added{, or
+    a universal template argument \tcode{U}}
+can be deduced if
+\tcode{P}
+and
+\tcode{A}
+have one of the following forms:
+\begin{codeblock}
+    @\opt{\cv{}}@ T
+    T*
+    T&
+    T&&
+    @\opt{T}@[@\opt{i}@]
+    @\opt{T}@(@\opt{T}@) noexcept(@\opt{i}@)
+    @\opt{T}@ @\opt{T}@::*
+    @\opt{TT}@<T>
+    @\opt{TT}@<i>
+    @\opt{TT}@<TT>
+    @\opt{TT}@<VV>
+    @\added{\opt{TT}<U>}@
+    @\opt{TT}@<>
+\end{codeblock}
+where
+\begin{itemize}
+    \item
+    \tcode{\opt{T}} represents a type or parameter-type-list that either
+    satisfies these rules recursively,
+    is a non-deduced context in \tcode{P} or \tcode{A}, or
+    is the same non-dependent type in \tcode{P} and \tcode{A},
+    \item
+    \tcode{\opt{i}} represents an expression that either
+    is an \tcode{i},
+    is value-dependent in \tcode{P} or \tcode{A}, or
+    has the same constant value in \tcode{P} and \tcode{A},
+    \item
+    \tcode{\opt{TT}} represents either a class template or
+    a template template parameter, and
+    \item
+    \tcode{\keyword{noexcept}(\opt{i})} represents an
+    exception specification\iref{except.spec}
+    in which the (possibly-implicit, see~\ref{dcl.fct})
+    \grammarterm{noexcept-specifier}'s operand
+    satisfies the rules for an \tcode{\opt{i}} above.
+\end{itemize}
+\begin{note}
+    If a type matches such a form but contains no
+    \tcode{T}s, \tcode{i}s, or \tcode{TT}s, deduction is not possible.
+\end{note}
+Similarly,
+\tcode{<$X$>} represents template argument lists where
+at least one argument contains an $X$, where
+$X$ is one of \tcode{T}, \tcode{i}, \tcode{TT}, \removed{or} \tcode{VV}\added{, or \tcode{U}};
+and
+\tcode{<>}
+represents template argument lists where no argument contains a
+\tcode{T}, an \tcode{i}, a \tcode{TT}, \removed{or} a \tcode{VV}\added{, or a \tcode{U}}.
+\pnum
+If \tcode{P} has a form that contains
+\tcode{<T>}, \tcode{<i>}, \tcode{<TT>}, \removed{or} \tcode{<VV>}\added{, or \tcode{<U>}},
+then each argument $\mathtt{P}_i$ of the
+respective template argument list of \tcode{P} is compared with the
+corresponding argument $\mathtt{A}_i$ of the corresponding
+template argument list of \tcode{A}.
+
+
+\ednote{[...]}
+
+\pnum
+If \tcode{P} has a form that contains \tcode{<i>}\added{ and
+    the corresponding template argument of \tcode{A}
+    is not a deferred template argument \iref{temp.arg.universal}},
+deduction fails unless the type of \tcode{i} is the same as that
+of the corresponding template parameter
+\tcode{p} in the specialization (from \tcode{A})
+of the template named by the enclosing \grammarterm{simple-template-id} or
+\grammarterm{splice-specialization-specifier};
+if the declared type of \tcode{i} contains a placeholder type,
+the corresponding template argument for the purposes of
+placeholder type deduction \iref{dcl.type.auto.deduct}
+is an \grammarterm{id-expression} for \tcode{p}.
+
+\ednote{[...]}
+
+
+\begin{addedblock}
+\pnum
+When matching a partial specialization \iref{temp.spec.partial.match},
+if a template argument $E$ of the specialization being matched
+is a deferred template argument \iref{temp.arg.universal} and
+the corresponding template argument of the partial specialization
+is \tcode{i}
+% or a pack expansion whose pattern is \tcode{i},
+then, instead of the rules above for \tcode{<i>},
+the template argument deduced for \tcode{i} is $E$;
+deduction fails unless $E$ would be a valid template argument for \tcode{i} \iref{temp.arg.nontype},
+and the deduced \tcode{A} is considered compatible with \tcode{A}.
+\begin{example}
+\begin{codeblock}
+    template<universal template> struct K { static constexpr int v = 0; };
+    template<auto V> struct K<V> { static constexpr int v = 1; };
+    template<int& R> struct K<R> { static constexpr int v = 2; };
+    template<long L> void f(K<L>);
+    constexpr int c = 24;
+    int x;
+    static_assert(K<c>::v == 1);    // \tcode{V} is \tcode{24}
+    static_assert(K<x>::v == 2);    // \tcode{R} refers to \tcode{x}
+    static_assert(K<42>::v == 1);
+    void g() {
+        f(K<c>());                    // error: deduction fails
+    }
+\end{codeblock}
+\end{example}
+\end{addedblock}
+
 
 \section{Acknowledgments}
 
