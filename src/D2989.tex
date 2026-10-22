@@ -40,7 +40,7 @@ for limited benefits. In this paper, we propose a much simpler subset of the fea
 
 \begin{itemize}
   \item Add wording
-  \item Rewrite the sections on UTPs in concept definitions
+  \item Rewrite the section on UTPs in concept definitions
   \item Add a future work section.
 \end{itemize}
 
@@ -362,8 +362,8 @@ Alias<B, i> a3;   // ok B<int&>
 
 To achieve this behavior, \grammarterm{id-expression}{s} bound to a universal template parameter behave as sort of symbolic references to
 the variable they denote, a bit like structured binding of aggregates.
-This allows ""perfect forwarding"" of variables through universal parameters.
-To match the behavior of decltype, this models applies to id-expressions and member access expressions
+This allows "perfect forwarding" of variables through universal parameters.
+To match the behavior of \tcode{decltype}, this model applies to \grammarterm{id-expression}{s} and member access expressions.
 
 This last option is the one we propose.
 
@@ -438,18 +438,18 @@ so we rejected that approach as it would add additional complexity we consider u
 We talked to Itanium ABI people (thanks Richard!), and the current proposal will require new mangling (for universal template parameters and symbolic variables, and maybe injected class names depending on the direction we choose). These new mangling do not pose particular challenges.
 \subsection{Concepts}
 
-A previous version of this paper claimed we lack motivations for concepts to support universal template parameters.
+A previous version of this paper claimed we lacked motivation for concepts to support universal template parameters.
 Playing a bit more with the feature, there seem to be valid use cases. Consider the following example:
 
 \begin{colorblock}
-template <universal temmplate K,
+template <universal template K,
           class... Types>
-concept VariantKey = requires {std::get<K>{declval(std::variant<Types...>)};
+concept VariantKey = requires { std::get<K>(std::declval<std::variant<Types...>>()); };
 \end{colorblock}
 
-Despite that, we are not proposing universal template in concepts yet.
-Indeed, invalid substitution in concepts-ids during normalizations are IFDND, and that would madke it too easy to write invalid code.
-Before we can allow UTPs in concepts definition, we should relax or refine that restriction.
+Despite that, we are not proposing universal template parameters in concepts yet.
+Indeed, invalid substitutions in concept-ids during normalization are IFNDR, and that would make it too easy to write invalid code.
+Before we can allow UTPs in concept definitions, we should relax or refine that restriction.
 
 \begin{colorblock}
 
@@ -742,11 +742,11 @@ We should also progress \paper{P2841R0}, first since we intend for concepts and 
 There is a better order of operation, especially for ease of specification.
 
 
-\section{Future works}
+\section{Future work}
 
 The library part of this feature will be explored in a separate paper.
-A few others bits (pack indexing for universal template parametersm, whether we should allow reflecting on uyniversal template parameters,
-universal template parameters as concept definition parameters) are also leff for future papers.
+A few other bits (pack indexing for universal template parameters, whether we should allow reflecting on universal template parameters,
+and universal template parameters as concept definition parameters) are also left for future papers.
 
 
 \section{Wording}
@@ -831,7 +831,7 @@ those of its \grammarterm{nested-name-specifier} (if any).
     \grammarterm{concept-tt-parameter}
     can be the product of replacing a
     \tcode{>>} token by two consecutive \tcode{>}
-    tokens\iref{temp.names}.
+    tokens \iref{temp.names}.
 \end{note}
 
 \pnum
@@ -875,14 +875,14 @@ if any, shall not be dependent.
 
 \pnum
 A concept template parameter shall not have
-associated constraints\iref{temp.constr.decl}.
+associated constraints \iref{temp.constr.decl}.
 
 \pnum
 If a \grammarterm{template-parameter} is
-a \grammarterm{parameter-declaration} that declares a pack\iref{dcl.fct}, or
+a \grammarterm{parameter-declaration} that declares a pack \iref{dcl.fct}, or
 otherwise has an ellipsis prior to its optional \grammarterm{identifier},
 then the \grammarterm{template-parameter}
-declares a template parameter pack\iref{temp.variadic}.
+declares a template parameter pack \iref{temp.variadic}.
 A template parameter pack that is a \grammarterm{parameter-declaration} whose type
 contains one or more unexpanded packs is a pack expansion. Similarly,
 a template parameter pack that is a template template parameter with a
@@ -950,7 +950,7 @@ declaration.
 
 \pnum
 The \grammarterm{identifier} in
-a \grammarterm{template-parameter} denoting a type \added{, universal parameter,} or template
+a \grammarterm{template-parameter} denoting a type\added{, universal template parameter,} or template
 is not looked up.
 An \grammarterm{identifier} that does not follow an ellipsis
 is defined to be
@@ -973,7 +973,7 @@ in the scope of the template declaration.
 \rSec1[temp.names]{Names of template specializations}
 
 \pnum
-A template specialization\iref{temp.spec} can be referred to by a
+A template specialization \iref{temp.spec} can be referred to by a
 \grammarterm{template-id}:
 
 \begin{bnf}
@@ -1063,7 +1063,7 @@ parameter declared by the template in its
 \ednote{The pre-existing wording seems somewhat vague.}
 
 When the parameter declared by the template is a template
-parameter pack\iref{temp.variadic}, it will correspond to zero or more
+parameter pack \iref{temp.variadic}, it will correspond to zero or more
 \grammarterm{template-argument}{s}.
 \begin{example}
     \begin{codeblock}
@@ -1094,7 +1094,7 @@ a template argument list in which the $n^\text{th}$ template argument
 has the value of
 the $n^\text{th}$ template parameter of the \grammarterm{template-head}.
 If the $n^\text{th}$ template parameter is
-a template parameter pack\iref{temp.variadic},
+a template parameter pack \iref{temp.variadic},
 the $n^\text{th}$ template argument is a pack expansion
 whose pattern is the name of the template parameter pack.
 
@@ -1106,7 +1106,7 @@ the \grammarterm{identifier} is looked up
 and its meaning is determined as follows:
 \begin{itemize}
     \item
-    If lookup finds an injected-class-name\iref{temp.local}, then:
+    If lookup finds an injected-class-name \iref{temp.local}, then:
     \begin{itemize}
         \item
         When $A$ is for a type template template parameter,
@@ -1118,7 +1118,7 @@ and its meaning is determined as follows:
     Otherwise, if lookup finds a template,
     $A$ denotes that template.
 \begin{addedblock}
-   \item Otherwise, if lookup finds a universal template parameter, $A$ denotes that \grammarterm{universal-argument-name}.
+   \item Otherwise, if lookup finds a universal template parameter, $A$ denotes that universal template parameter.
 \end{addedblock}
     \item
     Otherwise, if lookup finds a type alias or a type,
@@ -1216,7 +1216,7 @@ brackets shall still be used as the
 \end{example}
 
 \pnum
-An explicit destructor call\iref{class.dtor} for an object that has a type
+An explicit destructor call \iref{class.dtor} for an object that has a type
 that is a class template specialization may explicitly specify the
 \grammarterm{template-argument}{s}.
 \begin{example}
@@ -1257,7 +1257,7 @@ When a \grammarterm{simple-template-id} or
 \grammarterm{splice-specialization-specifier}
 does not designate a function,
 a default \grammarterm{template-argument} is
-implicitly instantiated\iref{temp.inst}
+implicitly instantiated \iref{temp.inst}
 when the value of that default argument is needed.
 \begin{example}
     \begin{codeblock}
@@ -1269,7 +1269,7 @@ when the value of that default argument is needed.
 
 \pnum
 A \grammarterm{template-argument} followed by an ellipsis is
-a pack expansion\iref{temp.variadic}.
+a pack expansion \iref{temp.variadic}.
 
 \rSec2[temp.arg.type]{Type template arguments}
 
@@ -1278,7 +1278,7 @@ A
 \grammarterm{template-argument}
 for a type template parameter
 shall be a
-\grammarterm{type-id} or a \tcode{universal-argument-name}.
+\grammarterm{type-id} or a \grammarterm{universal-argument-name}.
 
 \pnum
 \begin{example}
@@ -1311,7 +1311,7 @@ shall be a
 
 \end{example}
 \begin{note}
-    A template type argument can be an incomplete type\iref{term.incomplete.type}.
+    A template type argument can be an incomplete type \iref{term.incomplete.type}.
 \end{note}
 
 
@@ -1325,7 +1325,7 @@ shall be such that the invented declaration
     T x = @$E$@ ;
 \end{codeblock}
 satisfies the semantic constraints for the definition of
-a \tcode{constexpr} variable with static storage duration\iref{dcl.constexpr}
+a \tcode{constexpr} variable with static storage duration \iref{dcl.constexpr}%
 %\added{,unless $E$ is a \grammarterm{universal-argument-name}}
 .
 
@@ -1366,11 +1366,11 @@ matches the corresponding template parameter declared in the
 \grammarterm{template-head} of \tcode{P}.
 Two template parameters match if they are of the same kind,
 for constant template parameters, their types are
-equivalent\iref{temp.over.link}, and for template template parameters,
+equivalent \iref{temp.over.link}, and for template template parameters,
 each of their corresponding template parameters matches, recursively.
 When \tcode{P}'s \grammarterm{template-head} contains a \grammarterm{template-parameter}
 that declares a template parameter
-pack\iref{temp.variadic}, the template parameter pack will match zero or more template
+pack \iref{temp.variadic}, the template parameter pack will match zero or more template
 parameters or template parameter packs declared in the \grammarterm{template-head} of
 \tcode{A} with the same type and form as the template parameter pack declared in \tcode{P}
 (ignoring whether those template parameters are template parameter packs).
@@ -1424,7 +1424,7 @@ the function template corresponding to \tcode{P}
 is at least as specialized as
 the function template corresponding to \tcode{A}
 according to the partial ordering rules
-for function templates\iref{temp.func.order}.
+for function templates \iref{temp.func.order}.
 Given an invented class template \tcode{X}
 with the \grammarterm{template-head} of \tcode{A} (including default arguments
 and \grammarterm{requires-clause}, if any):
@@ -1445,7 +1445,7 @@ a corresponding \grammarterm{template-argument} \tcode{AA} is formed\removed{.}\
 \begin{itemize}
     \item
     If \tcode{PP} declares a template parameter pack,
-    \removed{then} \tcode{AA} is the pack expansion \tcode{PP...}\iref{temp.variadic}\removed{;}\added{.}
+    \removed{then} \tcode{AA} is the pack expansion \tcode{PP...} \iref{temp.variadic}\removed{;}\added{.}
     \item
     \added{Otherwise, if \tcode{PP} declares a universal template parameter,
         \tcode{AA} is a \grammarterm{universal-argument-name} naming \tcode{PP}.}
@@ -1457,13 +1457,13 @@ If the rewrite produces an invalid type,
 then \tcode{P} is not at least as specialized as \tcode{A}.
 %\added{In this determination,
 %    a template parameter of any kind can be deduced
-%    from a synthesized universal template argument\iref{temp.func.order}
+%    from a synthesized universal template argument \iref{temp.func.order}
 %    as if it were a universal template parameter.}
 
 
 
 \begin{addedblock}
-\rSec2[temp.arg.universal]{Universal Template Arguments}
+\rSec2[temp.arg.universal]{Universal template arguments}
 
 %A \tcode{universal-argument-name}, and any argument that would be valid for a type template parameter, constant template parameter,
 %or template template parameter match the form of a universal template parameter.
@@ -1485,7 +1485,7 @@ the template argument for $P$ is that template.
 \item
 Otherwise, if $A$ is an unparenthesized \grammarterm{id-expression} that does not name a constant template parameter
 or an unparenthesized class member access \iref{expr.ref},
-$A$ is a \defnadj{deferred}{template argument} , and
+$A$ is a \defnadj{deferred}{template argument}, and
 the template argument for $P$ is $A$.
 \item
 Otherwise, if $A$ is a constant template argument,
@@ -1511,7 +1511,7 @@ is interpreted as
     \item
     a \grammarterm{template-argument-name} denoting $X$, if $X$ is a template,
     \item
-    $X$ %, with the meaning it has where it appears,
+    $X$, % with the meaning it has where it appears,
     if $X$ is a deferred template argument, and
     \item
     an \grammarterm{id-expression} naming an invented constant template parameter
@@ -1540,7 +1540,7 @@ are the same type, and
 
 \item
 the template parameter values determined by
-their corresponding constant template arguments\iref{temp.arg.nontype}
+their corresponding constant template arguments \iref{temp.arg.nontype}
 are template-argument-equivalent (see below), \removed{and}
 
 \item
@@ -1664,7 +1664,7 @@ otherwise be ill-formed or would result in an ambiguity in the grammar.
 To produce the transformed template, for each
 type, constant,
 type template, variable template, \removed{or} concept\added{, or universal}
-template parameter (including template parameter packs\iref{temp.variadic}
+template parameter (including template parameter packs \iref{temp.variadic}
 thereof) synthesize a unique type, value, class template,
 variable template, \removed{or} concept\added{, or universal template argument},
 respectively, and substitute it for each occurrence of that parameter
@@ -1760,7 +1760,7 @@ type referred to above):
     If, for a given pair of corresponding template parameters of the two templates,
     one is a universal template parameter,
     that template parameter is not considered to be
-    at least as specialized as the other
+    at least as specialized as the other%
     %; otherwise, each is considered to be
     %at least as specialized as the other
     .
@@ -1819,7 +1819,7 @@ is compared with an actual type (call it
 \tcode{A}),
 and an attempt is made to find template argument values (a type for a type
 parameter, a value for a constant template parameter, \removed{or} a template for a
-template template parameter\added{, or any template argument\iref{temp.arg.universal}
+template template parameter\added{, or any template argument \iref{temp.arg.universal}
     for a universal template parameter}) that will make
 \tcode{P},
 after substitution of the deduced values (call it the deduced
@@ -1884,8 +1884,8 @@ where
     a template template parameter, and
     \item
     \tcode{\keyword{noexcept}(\opt{i})} represents an
-    exception specification\iref{except.spec}
-    in which the (possibly-implicit, see~\ref{dcl.fct})
+    exception specification \iref{except.spec}
+    in which the (possibly-implicit, see\ref{dcl.fct})
     \grammarterm{noexcept-specifier}'s operand
     satisfies the rules for an \tcode{\opt{i}} above.
 \end{itemize}
@@ -1935,7 +1935,7 @@ When matching a partial specialization \iref{temp.spec.partial.match},
 if a template argument $E$ of the specialization being matched
 is a deferred template argument \iref{temp.arg.universal} and
 the corresponding template argument of the partial specialization
-is \tcode{i}
+is \tcode{i},
 % or a pack expansion whose pattern is \tcode{i},
 then, instead of the rules above for \tcode{<i>},
 the template argument deduced for \tcode{i} is $E$;
