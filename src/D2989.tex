@@ -98,9 +98,9 @@ Indeed, std::get has multiple overloads with types and non-types template parame
 
 \begin{colorblock}
 template<std::size_t I, class... Types >
-const auto & get( const tuple<Types...>& t ) noexcept;
+const tuple_element_t<I, tuple<Types...>> & get( const tuple<Types...>& t ) noexcept;
 template<class T, class... Types >
-const auto & get( const tuple<Types...>& t ) noexcept;
+const T & get( const tuple<Types...>& t ) noexcept;
 
 int main() {
     std::tuple t{1, 2.0};
@@ -238,7 +238,7 @@ struct S {};
 template <universal template U, template <universal template> typename T>
 void f(T<U> x);
 
-using A = S<int>; // T deduces to int
+using A = S<int>; // U deduces to int
 void h1() {
   f(A{}); // calls f<int, S>
 }
@@ -251,10 +251,10 @@ is deduced to be a template (or concept) template parameter with the same templa
 
 \begin{colorblock}
 // S and f from the previous section
-using B = S<std::pair>; // T is compared against template <typename T, typename U> struct pair;
-using C = S<std::conditional_t>; // T is a type-alias std::conditional_t
-using D = S<std::regular>; // T is a concept-name std::regular
-using E = S<std::is_same_v>; // T is a variable-template std::is_same_v
+using B = S<std::pair>; // U is compared against template <typename T, typename U> struct pair
+using C = S<std::conditional_t>; // U is a type-alias std::conditional_t
+using D = S<std::regular>; // U is a concept-name std::regular
+using E = S<std::is_same_v>; // U is a variable-template std::is_same_v
 
 void h2() {
   f(B{}); // calls f<std::pair, S>
@@ -282,12 +282,12 @@ Consequently, the following would be ill-formed:
 
 \begin{colorblock}
 template <int&> struct A { };
-template <universal template U> B : A<U> { };
+template <universal template U> struct B : A<U> { };
 int x;
 B<x> b1;
 \end{colorblock}
 
-And it makes partial specialization somewhat subtle:
+And it makes specialization somewhat subtle:
 
 \begin{colorblock}
 static constexpr int a = 0;
@@ -299,12 +299,12 @@ struct S { // #1
 
 template <>
 struct S<a> { // #2
-    static constexpr int universal = 1;
+    static constexpr int value = 1;
 };
 
 void test() {
-    static_assert(S<a>::i   == 1);  // a is deduced as int
-    static_assert(S<(a)>::i == 0); //  (a) is deduced as const int& and #2 is specialized for int, so #1 is picked
+    static_assert(S<a>::value   == 1);  // a is deduced as int
+    static_assert(S<(a)>::value == 0); //  (a) is deduced as const int& and #2 is specialized for int, so #1 is picked
 }
 \end{colorblock}
 
@@ -321,9 +321,9 @@ struct Foo : Z<U> { };
 
 int x;
 Foo<A, x> b1; // Ok: type of U is int&, instantiate A<int&>
-Foo<B, x> b1; // Ok: type of U is int&, instantiate B<int>
-Foo<C, x> b1; // Unexpected: type of U is int&, instantiate C<int&>,
-              // wheras C<x> would be ill-formed.
+Foo<B, x> b2; // Ill-formed, like B<x>: x is not a constant expression
+Foo<C, x> b3; // Unexpected: type of U is int&, instantiate C<int&>,
+              // whereas C<x> would be ill-formed.
 \end{colorblock}
 
 
@@ -414,23 +414,25 @@ struct S {
 };
 \end{colorblock}
 
-In the presence of a class nested in an anonymous class, this will not work.
+In the presence of a class nested in an unnamed class, this will not work.
 e.g
 
 \begin{colorblock}
 struct {
     template <typename T>
     struct K {
-        template <typename>
-        using K2 = K;
-        void f</*???*/>(); // no way to qualify K
-        void f<K2>(); // ok (K2 denotes a class template)
+        template <typename U>
+        using K2 = K<U>;
+        void g() {
+            f</*???*/>(); // no way to qualify K
+            f<K2>(); // ok (K2 is an alias template for K)
+        }
     };
 } x;
 \end{colorblock}
 
 We did consider a disambiguation syntax, however qualifying the name works in the overwhelming majority of cases,
-and there are workaround (using an alias template) in the fringe "class template nested in an anonymous class" case,
+and there are workaround (using an alias template) in the fringe "class template nested in an unnamed class" case,
 so we rejected that approach as it would add additional complexity we consider unnecessary.
 
 \subsection{ABI implications}
@@ -454,7 +456,7 @@ Before we can allow UTPs in concept definitions, we should relax or refine that 
 \begin{colorblock}
 
 template<class> concept T = true;
-template<universal template U> concept C = is_type_v<U> && T<U>;
+template<universal template U> concept C = is_typename_v<U> && T<U>;
 template<auto V> concept A = C<V>;   // IFNDR
 \end{colorblock}
 
@@ -565,7 +567,7 @@ template <universal template T>
 using as_type_t = as_type<T>::type;
 
 template<universal template U>
-constexpr auto as_value_v = delete;
+constexpr auto as_value_v = /*delete*/0;
 template<decltype(auto) V>
 constexpr decltype(auto) as_value_v<V> = V;
 \end{colorblock}
@@ -576,7 +578,7 @@ These would allow extracting a type/value from a UTTP:
 template <universal template U>
 constexpr auto test() {
     if constexpr(is_typename_v<U>) {
-        using a =  as_type<int>::type; // ok
+        using a = as_type<U>::type; // ok
         return a{42};
     }
     else if constexpr(is_nttp_v<U>) {
